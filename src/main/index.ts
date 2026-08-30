@@ -2,20 +2,13 @@ import { app, shell, BrowserWindow } from 'electron';
 import { PetRuntime } from './pet/petRuntime';
 import { join } from 'path';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
-import icon from '../../resources/icon.png?asset';
 import { sendPetState } from './ipc/petIpc';
 import { registerAgentIpc } from './ipc/agentIpc';
+import { createPetWindow } from './window/petWindow';
 
 function createWindow(): void {
   // Create the browser window.
-  const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
-    show: false,
-    autoHideMenuBar: true,
-    ...(process.platform === 'linux' ? { icon } : {}),
-    webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: false },
-  });
+  const mainWindow = createPetWindow();
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show();
