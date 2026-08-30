@@ -68,7 +68,7 @@ export function PixiPetCanvas({ activity = 'idle' }: Props): React.JSX.Element {
           Math.min(
             PET_WINDOW_SIZE.width / ROBOT_DESIGN_SIZE.width,
             PET_WINDOW_SIZE.height / ROBOT_DESIGN_SIZE.height,
-          ) * 0.8,
+          ) * 0.6,
         );
         pet.position.set(PET_WINDOW_SIZE.width / 2, PET_WINDOW_SIZE.height / 2);
 
@@ -107,5 +107,6 @@ export function PixiPetCanvas({ activity = 'idle' }: Props): React.JSX.Element {
       ref={hostRef}
       style={{ width: '100%', height: '100%', overflow: 'hidden', background: 'transparent' }}
     />
+    // <div></div>
   );
 }

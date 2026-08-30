@@ -7,30 +7,12 @@ import { registerAgentIpc } from './ipc/agentIpc';
 import { createPetWindow } from './window/petWindow';
 import { registerWindowIpc } from './ipc/windowIpc';
 
-function createWindow(): void {
+function createWindow(): BrowserWindow {
   // Create the browser window.
   const mainWindow = createPetWindow();
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show();
-    const petRuntime = new PetRuntime((state) => {
-      sendPetState(mainWindow, state);
-    });
-
-    setTimeout(() => {
-      petRuntime.dispatch({ type: 'agent_started' });
-    }, 2000);
-
-    setTimeout(() => {
-      petRuntime.dispatch({ type: 'tool_started', tool: 'read' });
-    }, 5000);
-
-    setTimeout(() => {
-      petRuntime.dispatch({ type: 'approval_required', message: '允许执行命令吗？' });
-    }, 8000);
-    setTimeout(() => {
-      petRuntime.dispatch({ type: 'agent_completed' });
-    }, 11000);
   });
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -45,6 +27,7 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
   }
+  return mainWindow;
 }
 
 // This method will be called when Electron has finished
@@ -53,6 +36,10 @@ function createWindow(): void {
 app.whenReady().then(() => {
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron');
+  const mainWindow = createWindow();
+  const petRuntime = new PetRuntime((state) => {
+    sendPetState(mainWindow, state);
+  });
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
@@ -63,8 +50,7 @@ app.whenReady().then(() => {
 
   // IPC test
 
-  createWindow();
-  registerAgentIpc();
+  registerAgentIpc({ petRuntime });
   registerWindowIpc();
 
   app.on('activate', function () {

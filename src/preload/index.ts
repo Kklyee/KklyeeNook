@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import { electronAPI } from '@electron-toolkit/preload';
 import type { PetState } from '@/shared/pet/petState';
 import { IPC_CHANNELS } from '@/shared/ipc/channels';
+import { AgentEvent } from '@/shared/agent/agentEvent';
 
 const api = {
   onPetState(callback: (state: PetState) => void) {
@@ -11,6 +12,17 @@ const api = {
     ipcRenderer.on(IPC_CHANNELS.PET_STATE_CHANGED, listener);
     return () => {
       ipcRenderer.removeListener(IPC_CHANNELS.PET_STATE_CHANGED, listener);
+    };
+  },
+
+  onAgentEvent(callback: (agentEvent: AgentEvent) => void) {
+    const listener = (_event: IpcRendererEvent, agentEvent: AgentEvent) => {
+      callback(agentEvent);
+    };
+
+    ipcRenderer.on(IPC_CHANNELS.AGENT_EVENT, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.AGENT_EVENT, listener);
     };
   },
 

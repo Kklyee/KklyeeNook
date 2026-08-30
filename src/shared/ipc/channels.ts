@@ -3,4 +3,5 @@ export const IPC_CHANNELS = {
   AGENT_SUBMIT_PROMPT: 'agent:submit-prompt',
   WINDOW_GET_POSITION: 'window:get-position',
   WINDOW_SET_POSITION: 'window:set-position',
+  AGENT_EVENT: 'agent:event',
 } as const;

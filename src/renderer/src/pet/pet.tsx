@@ -7,7 +7,7 @@ import { PixiPetCanvas } from './PixiPetCanvas';
 import { usePetDrag } from './hooks/usePetDrag';
 
 export function Pet() {
-  const [petState, _] = useState<PetState>({ activity: 'idle' });
+  const [petState, setPetState] = useState<PetState>({ activity: 'idle' });
   const [inputOpen, setInputOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
@@ -22,7 +22,12 @@ export function Pet() {
     },
   });
 
-  useEffect(() => {}, []);
+  useEffect(() => {
+    window.api.onPetState((state) => {
+      console.log('Received pet state:', state);
+      setPetState(state);
+    });
+  }, []);
 
   /*
    * 点击 QuickInput 以外区域时关闭
@@ -57,7 +62,7 @@ export function Pet() {
         width: '100%',
         height: '100%',
         overflow: 'hidden',
-        background: 'blue',
+        background: 'transparent',
       }}
     >
       {inputOpen && (

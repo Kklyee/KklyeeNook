@@ -1,41 +1,28 @@
-import { Assets, Container, Sprite, Texture } from "pixi.js";
+import { Assets, Container, Sprite, Texture } from 'pixi.js';
 
-import headUrl from "../assets/robot/headBase.png";
-import bodyUrl from "../assets/robot/body.png";
+import headUrl from '../assets/robot/headBase.png';
+import bodyUrl from '../assets/robot/body.png';
 
-import armLeftUrl from "../assets/robot/armLeft.png";
-import armRightUrl from "../assets/robot/armRight.png";
+import armLeftUrl from '../assets/robot/armLeft.png';
+import armRightUrl from '../assets/robot/armRight.png';
 
-import legLeftUrl from "../assets/robot/legLeft.png";
-import legRightUrl from "../assets/robot/legRight.png";
+import legLeftUrl from '../assets/robot/legLeft.png';
+import legRightUrl from '../assets/robot/legRight.png';
 
-import eyeLeftUrl from "../assets/robot/eyeLeft.png";
-import eyeRightUrl from "../assets/robot/eyeRight.png";
-import mouthUrl from "../assets/robot/mouth.png";
+import eyeLeftUrl from '../assets/robot/eyeLeft.png';
+import eyeRightUrl from '../assets/robot/eyeRight.png';
+import mouthUrl from '../assets/robot/mouth.png';
 
-import chestRingUrl from "../assets/robot/chestRing.png";
-import chestGlowUrl from "../assets/robot/chestGlow.png";
+import chestRingUrl from '../assets/robot/chestRing.png';
+import chestGlowUrl from '../assets/robot/chestGlow.png';
 
-export type PetActivity = "idle" | "thinking" | "working" | "waiting" | "success" | "error";
+export type PetActivity = 'idle' | 'thinking' | 'working' | 'waiting' | 'success' | 'error';
 
-const LIGHT_COLOR = {
-  blue: 0x4da6ff,
-  yellow: 0xffc83d,
-  green: 0x43d17d,
-  red: 0xff5252,
-};
+const LIGHT_COLOR = { blue: 0x4da6ff, yellow: 0xffc83d, green: 0x43d17d, red: 0xff5252 };
 
-export const ROBOT_DESIGN_SIZE = {
-  width: 580,
-  height: 900,
-};
+export const ROBOT_DESIGN_SIZE = { width: 580, height: 900 };
 
-type VisibleBounds = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
+type VisibleBounds = { x: number; y: number; width: number; height: number };
 
 const VISIBLE_BOUNDS = {
   head: { x: 58, y: 64, width: 1332, height: 942 },
@@ -56,28 +43,19 @@ const ARM_BASE_ROTATION = 0.06;
 
 export class RobotPet extends Container {
   private rig = new Container();
-
   private head = new Container();
-
   private leftArm = new Container();
   private rightArm = new Container();
-
   private leftLeg = new Container();
   private rightLeg = new Container();
-
   private eyeLeft!: Sprite;
   private eyeRight!: Sprite;
   private mouth!: Sprite;
-
   private chestGlow!: Sprite;
-
-  private activity: PetActivity = "idle";
-
+  private activity: PetActivity = 'idle';
   private elapsed = 0;
-
   private blinkTimer = 2000;
   private blinkProgress = -1;
-
   private eyeLeftBaseScaleY = 1;
   private eyeRightBaseScaleY = 1;
 
@@ -282,21 +260,21 @@ export class RobotPet extends Container {
     this.activity = activity;
 
     switch (activity) {
-      case "idle":
-      case "thinking":
-      case "working":
+      case 'idle':
+      case 'thinking':
+      case 'working':
         this.chestGlow.tint = LIGHT_COLOR.blue;
         break;
 
-      case "waiting":
+      case 'waiting':
         this.chestGlow.tint = LIGHT_COLOR.yellow;
         break;
 
-      case "success":
+      case 'success':
         this.chestGlow.tint = LIGHT_COLOR.green;
         break;
 
-      case "error":
+      case 'error':
         this.chestGlow.tint = LIGHT_COLOR.red;
         break;
     }
@@ -338,27 +316,27 @@ export class RobotPet extends Container {
     // ============================
 
     switch (this.activity) {
-      case "idle":
+      case 'idle':
         this.animateIdle();
         break;
 
-      case "thinking":
+      case 'thinking':
         this.animateThinking();
         break;
 
-      case "working":
+      case 'working':
         this.animateWorking();
         break;
 
-      case "waiting":
+      case 'waiting':
         this.animateWaiting();
         break;
 
-      case "success":
+      case 'success':
         this.animateSuccess();
         break;
 
-      case "error":
+      case 'error':
         this.animateError();
         break;
     }
@@ -415,7 +393,7 @@ export class RobotPet extends Container {
   }
 
   private animateThinking(): void {
-    this.head.rotation = 0.06 + Math.sin(this.elapsed / 700) * 0.015;
+    this.head.rotation = 0.06 + Math.sin(this.elapsed / 700) * 0.15;
 
     this.chestGlow.alpha = 0.55 + Math.sin(this.elapsed / 320) * 0.3;
   }
@@ -425,13 +403,13 @@ export class RobotPet extends Container {
      * 两只手交替动
      */
 
-    const swing = Math.sin(this.elapsed / 170) * 0.08;
+    const swing = Math.sin(this.elapsed / 170) * 0.2;
 
     this.leftArm.rotation = ARM_BASE_ROTATION + swing;
 
     this.rightArm.rotation = -ARM_BASE_ROTATION - swing;
 
-    this.chestGlow.alpha = 0.7 + Math.sin(this.elapsed / 220) * 0.22;
+    this.chestGlow.alpha = 0.7 + Math.sin(this.elapsed / 220) * 0.4;
   }
 
   private animateWaiting(): void {
@@ -445,7 +423,7 @@ export class RobotPet extends Container {
      * 微微歪头看用户
      */
 
-    this.head.rotation = 0.045;
+    this.head.rotation = 0.45;
   }
 
   private animateSuccess(): void {
@@ -459,6 +437,10 @@ export class RobotPet extends Container {
     this.rightArm.rotation = -ARM_BASE_ROTATION + 0.24;
 
     this.chestGlow.alpha = 0.85 + Math.sin(this.elapsed / 150) * 0.15;
+
+    setTimeout(() => {
+      this.setActivity('idle');
+    }, 3000);
   }
 
   private animateError(): void {
