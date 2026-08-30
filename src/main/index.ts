@@ -5,6 +5,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import { sendPetState } from './ipc/petIpc';
 import { registerAgentIpc } from './ipc/agentIpc';
 import { createPetWindow } from './window/petWindow';
+import { registerWindowIpc } from './ipc/windowIpc';
 
 function createWindow(): void {
   // Create the browser window.
@@ -64,6 +65,7 @@ app.whenReady().then(() => {
 
   createWindow();
   registerAgentIpc();
+  registerWindowIpc();
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

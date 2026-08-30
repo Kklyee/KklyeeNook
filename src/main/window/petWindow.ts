@@ -1,7 +1,8 @@
 import { BrowserWindow } from 'electron';
 import path from 'path';
-const preloadPath = path.join(__dirname, '../../preload/index.js');
+const preloadPath = path.join(__dirname, '../preload/index.js');
 
+console.log('preloadPath', preloadPath);
 export function createPetWindow(): BrowserWindow {
   const petWindow = new BrowserWindow({
     width: 320,

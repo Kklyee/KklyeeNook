@@ -4,13 +4,23 @@ import type { PetState } from '@/shared/pet/petState';
 
 import { QuickInput } from '../chat/components/QuickInput';
 import { PixiPetCanvas } from './PixiPetCanvas';
+import { usePetDrag } from './hooks/usePetDrag';
 
 export function Pet() {
   const [petState, _] = useState<PetState>({ activity: 'idle' });
   const [inputOpen, setInputOpen] = useState(false);
-
   const rootRef = useRef<HTMLDivElement>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
+
+  const petDrag = usePetDrag({
+    onClick: () => {
+      setInputOpen(true);
+    },
+
+    onDragStart: () => {
+      setInputOpen(false);
+    },
+  });
 
   useEffect(() => {}, []);
 
@@ -47,7 +57,7 @@ export function Pet() {
         width: '100%',
         height: '100%',
         overflow: 'hidden',
-        background: 'transparent',
+        background: 'blue',
       }}
     >
       {inputOpen && (
@@ -56,7 +66,7 @@ export function Pet() {
           style={{
             position: 'absolute',
             left: '50%',
-            bottom: '78%',
+            top: 20,
             transform: 'translateX(-50%)',
             zIndex: 10,
           }}
@@ -70,10 +80,11 @@ export function Pet() {
       )}
 
       <div
-        style={{ position: 'absolute', inset: 0, cursor: 'pointer' }}
-        onClick={() => {
-          setInputOpen(true);
-        }}
+        style={{ position: 'absolute', inset: 0, cursor: 'pointer', touchAction: 'none' }}
+        onPointerDown={petDrag.onPointerDown}
+        onPointerMove={petDrag.onPointerMove}
+        onPointerUp={petDrag.onPointerUp}
+        onPointerCancel={petDrag.onPointerCancel}
       >
         <PixiPetCanvas activity={petState.activity} />
       </div>

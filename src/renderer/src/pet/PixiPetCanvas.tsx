@@ -6,6 +6,8 @@ import { PetActivity, ROBOT_DESIGN_SIZE, RobotPet } from './robotPet';
 
 type Props = { activity?: PetActivity };
 
+const PET_WINDOW_SIZE = { width: 320, height: 420 };
+
 export function PixiPetCanvas({ activity = 'idle' }: Props): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null);
   const petRef = useRef<RobotPet | null>(null);
@@ -19,7 +21,6 @@ export function PixiPetCanvas({ activity = 'idle' }: Props): React.JSX.Element {
     let destroyed = false;
     let initialized = false;
     let pet: RobotPet | null = null;
-    let resizeObserver: ResizeObserver | undefined;
 
     const app = new Application();
 
@@ -30,7 +31,8 @@ export function PixiPetCanvas({ activity = 'idle' }: Props): React.JSX.Element {
     async function start(): Promise<void> {
       try {
         await app.init({
-          resizeTo: hostElement,
+          width: PET_WINDOW_SIZE.width,
+          height: PET_WINDOW_SIZE.height,
           backgroundAlpha: 0,
           antialias: true,
           autoDensity: true,
@@ -62,31 +64,13 @@ export function PixiPetCanvas({ activity = 'idle' }: Props): React.JSX.Element {
         pet.setActivity(activityRef.current);
         app.stage.addChild(pet);
 
-        /*
-         * Canvas 尺寸变化时
-         * 自动调整机器人大小和位置
-         */
-
-        const layout = (): void => {
-          if (!pet) return;
-
-          const width = hostElement.clientWidth;
-          const height = hostElement.clientHeight;
-          if (width <= 0 || height <= 0) {
-            return;
-          }
-
-          pet.scale.set(
-            Math.min(width / ROBOT_DESIGN_SIZE.width, height / ROBOT_DESIGN_SIZE.height) * 0.4,
-          );
-          pet.position.set(width / 2, height / 2);
-        };
-
-        layout();
-
-        resizeObserver = new ResizeObserver(layout);
-
-        resizeObserver.observe(hostElement);
+        pet.scale.set(
+          Math.min(
+            PET_WINDOW_SIZE.width / ROBOT_DESIGN_SIZE.width,
+            PET_WINDOW_SIZE.height / ROBOT_DESIGN_SIZE.height,
+          ) * 0.8,
+        );
+        pet.position.set(PET_WINDOW_SIZE.width / 2, PET_WINDOW_SIZE.height / 2);
 
         /*
          * Pixi animation loop
@@ -104,9 +88,6 @@ export function PixiPetCanvas({ activity = 'idle' }: Props): React.JSX.Element {
 
     return () => {
       destroyed = true;
-
-      resizeObserver?.disconnect();
-
       petRef.current = null;
 
       if (initialized) {
@@ -124,12 +105,7 @@ export function PixiPetCanvas({ activity = 'idle' }: Props): React.JSX.Element {
   return (
     <div
       ref={hostRef}
-      style={{
-        width: '100%',
-        height: '100%',
-        overflow: 'hidden',
-        background: 'transparent',
-      }}
+      style={{ width: '100%', height: '100%', overflow: 'hidden', background: 'transparent' }}
     />
   );
 }

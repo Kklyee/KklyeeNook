@@ -13,7 +13,6 @@ export function QuickInput({ onClose }: QuickInputProps) {
 
   const handleSubmit = async () => {
     const value = prompt.trim();
-
     if (!value || submitPrompt.isPending) {
       return;
     }

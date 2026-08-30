@@ -17,6 +17,14 @@ const api = {
   async submitPrompt(prompt: string) {
     return await ipcRenderer.invoke(IPC_CHANNELS.AGENT_SUBMIT_PROMPT, prompt);
   },
+
+  getWindowPosition() {
+    return ipcRenderer.invoke(IPC_CHANNELS.WINDOW_GET_POSITION) as Promise<[number, number]>;
+  },
+
+  setWindowPosition(x: number, y: number) {
+    ipcRenderer.send(IPC_CHANNELS.WINDOW_SET_POSITION, x, y);
+  },
 };
 
 if (process.contextIsolated) {
