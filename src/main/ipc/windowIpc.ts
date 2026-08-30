@@ -13,7 +13,6 @@ export function registerWindowIpc() {
 
     const { x, y, width, height } = window.getBounds();
     dragWindowSizes.set(window, { width, height });
-
     return [x, y] as [number, number];
   });
 

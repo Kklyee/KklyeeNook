@@ -8,10 +8,8 @@ export function usePetDrag({ onClick, onDragStart, onDragEnd }: Options = {}) {
   const dragRef = useRef({
     active: false,
     dragging: false,
-
     startPointerX: 0,
     startPointerY: 0,
-
     startWindowX: 0,
     startWindowY: 0,
   });
