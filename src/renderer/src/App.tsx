@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { Pet } from './pet/Pet';
+import { AssistantRuntime } from './chat/runtime/AssistantRuntimeProvider';
+import { ChatPanel } from './chat/components/ChatPannel';
 
 function App(): React.JSX.Element {
   useEffect(() => {
@@ -9,7 +10,9 @@ function App(): React.JSX.Element {
   }, []);
   return (
     <main className="pet-demo">
-      <Pet />
+      <AssistantRuntime>
+        <ChatPanel />
+      </AssistantRuntime>
     </main>
   );
 }

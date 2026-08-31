@@ -1,11 +1,5 @@
 {
   "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
   "include": ["src/renderer/src/**/*", "src/preload/*.d.ts", "src/shared/**/*"],
-  "compilerOptions": {
-    "composite": true,
-    "jsx": "react-jsx",
-    "paths": {
-      "@/*": ["./src/*"]
-    }
-  }
+  "compilerOptions": { "composite": true, "jsx": "react-jsx", "paths": { "@/*": ["./src/*"] } }
 }
