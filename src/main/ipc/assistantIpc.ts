@@ -28,7 +28,6 @@ export function registerAssistantIpc({ mainWindow, petRuntime, agent }: Options)
     }
 
     port.start()
-
     const abortController = new AbortController()
 
     /*
@@ -38,6 +37,7 @@ export function registerAssistantIpc({ mainWindow, petRuntime, agent }: Options)
      * ↓
      * Main abort
      */
+
     port.once('close', () => {
       abortController.abort()
     })
@@ -61,31 +61,44 @@ export function registerAssistantIpc({ mainWindow, petRuntime, agent }: Options)
       lastUserMessage.content,
 
       (agentEvent) => {
-        /*
-         * 第一条分支：
-         * 驱动宠物 + 全局 AgentEvent
-         */
+        // 驱动宠物 + 全局 AgentEvent
         emitAgentEvent(mainWindow, petRuntime, agentEvent)
 
-        /*
-         * 第二条分支：
-         * 转换成 assistant-ui stream
-         */
+        // 转换成 assistant-ui stream
+
         switch (agentEvent.type) {
           case 'text_delta':
             send({ type: 'delta', text: agentEvent.text })
             break
 
-          case 'agent_completed':
-            send({ type: 'done' })
-
-            port.close()
+          case 'tool_started':
+            send({
+              type: 'tool_start',
+              toolCallId: agentEvent.toolCallId,
+              toolName: agentEvent.tool,
+              args: agentEvent.args,
+            })
             break
 
-          case 'agent_failed':
-            send({ type: 'error', message: agentEvent.error })
+          case 'tool_updated':
+            send({
+              type: 'tool_update',
+              toolCallId: agentEvent.toolCallId,
+              partialResult: agentEvent.partialResult,
+            })
+            break
 
-            port.close()
+          case 'tool_finished':
+            send({
+              type: 'tool_end',
+              toolCallId: agentEvent.toolCallId,
+              result: agentEvent.result,
+              success: agentEvent.success,
+            })
+            break
+
+          case 'agent_completed':
+            send({ type: 'done' })
             break
         }
       },

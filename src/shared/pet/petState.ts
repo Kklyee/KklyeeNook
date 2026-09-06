@@ -1,5 +1,10 @@
-export type PetActivity = 'idle' | 'thinking' | 'working' | 'waiting' | 'error' | 'success';
+export type PetAction = 'none' | 'reading' | 'typing' | 'terminal' | 'searching'
 
-export type PetState = { activity: PetActivity; currentTool?: string; message?: string };
+export interface PetState {
+  activity: 'idle' | 'thinking' | 'working' | 'waiting' | 'success' | 'error'
 
-export const initialPetState: PetState = { activity: 'idle' };
+  action?: PetAction
+
+  currentTool?: string
+  message?: string
+}

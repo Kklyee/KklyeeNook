@@ -17,10 +17,29 @@ export function convertPIEvent(event: PIAgentEvent): AgentEvent | undefined {
     }
 
     case 'tool_execution_start':
-      return { type: 'tool_started', tool: event.toolName }
+      return {
+        type: 'tool_started',
+        toolCallId: event.toolCallId,
+        tool: event.toolName,
+        args: event.args,
+      }
+
+    case 'tool_execution_update':
+      return {
+        type: 'tool_updated',
+        toolCallId: event.toolCallId,
+        tool: event.toolName,
+        partialResult: event.partialResult,
+      }
 
     case 'tool_execution_end':
-      return { type: 'tool_finished', tool: event.toolName, success: !event.isError }
+      return {
+        type: 'tool_finished',
+        toolCallId: event.toolCallId,
+        tool: event.toolName,
+        result: event.result,
+        success: !event.isError,
+      }
 
     default:
       return undefined

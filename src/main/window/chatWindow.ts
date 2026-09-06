@@ -1,10 +1,10 @@
-import { BrowserWindow } from 'electron';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { BrowserWindow } from 'electron'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-const preloadPath = path.join(__dirname, '../preload/index.js');
+const preloadPath = path.join(__dirname, '../preload/index.js')
 
 export function createChatWindow(): BrowserWindow {
   return new BrowserWindow({
@@ -12,7 +12,8 @@ export function createChatWindow(): BrowserWindow {
     height: 700,
     minWidth: 480,
     minHeight: 560,
+    frame: false,
     show: false,
     webPreferences: { preload: preloadPath, contextIsolation: true, sandbox: false },
-  });
+  })
 }

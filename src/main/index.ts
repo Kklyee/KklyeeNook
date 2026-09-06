@@ -78,7 +78,7 @@ function createWindows(agent: PIAgentAdapter): void {
         sendPetState(petWindow, state)
       }
     })
-    registerAgentIpc({ petRuntime })
+    registerAgentIpc({ agent, petRuntime })
   }
   registerWindowIpc()
   registerAssistantIpc({ mainWindow: chatWindow, petRuntime, agent })
