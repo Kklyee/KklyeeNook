@@ -4,7 +4,7 @@
   "description": "An Electron application with React and TypeScript",
   "homepage": "https://electron-vite.org",
   "author": "example.com",
-  "main": "./out/main/index.js",
+  "main": "./out/main/index.mjs",
   "scripts": {
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
@@ -24,6 +24,9 @@
     "@assistant-ui/react": "^0.15.17",
     "@assistant-ui/react-markdown": "^0.14.13",
     "@base-ui/react": "^1.7.0",
+    "@earendil-works/pi-agent-core": "^0.84.4",
+    "@earendil-works/pi-ai": "^0.84.4",
+    "@earendil-works/pi-coding-agent": "^0.84.4",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@tailwindcss/vite": "^4.3.3",

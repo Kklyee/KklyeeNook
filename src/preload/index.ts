@@ -3,6 +3,7 @@ import { electronAPI } from '@electron-toolkit/preload';
 import type { PetState } from '@/shared/pet/petState';
 import { IPC_CHANNELS } from '@/shared/ipc/channels';
 import { AgentEvent } from '@/shared/agent/agentEvent';
+import { ChatRequest, ChatStreamEvent } from '@/shared/chat/chatEvent';
 
 const api = {
   onPetState(callback: (state: PetState) => void) {
@@ -36,6 +37,26 @@ const api = {
 
   setWindowPosition(x: number, y: number) {
     ipcRenderer.send(IPC_CHANNELS.WINDOW_SET_POSITION, x, y);
+  },
+
+  streamChat(request: ChatRequest, onEvent: (event: ChatStreamEvent) => void) {
+    const { port1, port2 } = new MessageChannel();
+
+    const handleMessage = (event: MessageEvent<ChatStreamEvent>) => {
+      onEvent(event.data);
+    };
+    port1.addEventListener('message', handleMessage);
+    port1.start();
+    ipcRenderer.postMessage(IPC_CHANNELS.ASSISTANT_STREAM, request, [port2]);
+
+    let stopped = false;
+
+    return () => {
+      if (stopped) return;
+      stopped = true;
+      port1.removeEventListener('message', handleMessage);
+      port1.close();
+    };
   },
 };
 

@@ -1,8 +1,10 @@
-import { BrowserWindow } from 'electron';
-import path from 'path';
-const preloadPath = path.join(__dirname, '../preload/index.js');
+import { BrowserWindow } from 'electron'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-console.log('preloadPath', preloadPath);
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const preloadPath = path.join(__dirname, '../preload/index.js')
+
 export function createPetWindow(): BrowserWindow {
   const petWindow = new BrowserWindow({
     width: 320,
@@ -13,6 +15,6 @@ export function createPetWindow(): BrowserWindow {
     alwaysOnTop: true,
     backgroundColor: '#00000000',
     webPreferences: { preload: preloadPath, contextIsolation: true, sandbox: false },
-  });
-  return petWindow;
+  })
+  return petWindow
 }

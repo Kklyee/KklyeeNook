@@ -8,7 +8,9 @@ function sleep(ms: number) {
   });
 }
 
-export async function runFakeAgent(prompt: string, emit: Emit) {
+export async function runFakeAgent(prompt: string, emit: Emit, signal?: AbortSignal) {
+  signal?.throwIfAborted();
+
   console.log('run agent');
   emit({ type: 'agent_started' });
 
