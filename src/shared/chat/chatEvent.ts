@@ -9,9 +9,15 @@ export type ChatStreamEvent =
   | { type: 'tool_start'; toolCallId: string; toolName: string; args: unknown }
   | { type: 'tool_update'; toolCallId: string; partialResult: unknown }
   | { type: 'tool_end'; toolCallId: string; result: unknown; success: boolean }
+  | { type: 'aborted' }
   | { type: 'done' }
   | { type: 'error'; message: string }
 
+export type ChatStreamControl = { type: 'abort' }
+
 export interface AssistantStreamApi {
-  streamChat(request: ChatRequest, onEvent: (event: ChatStreamEvent) => void): () => void
+  streamChat(
+    request: ChatRequest,
+    onEvent: (event: ChatStreamEvent) => void,
+  ): () => void
 }

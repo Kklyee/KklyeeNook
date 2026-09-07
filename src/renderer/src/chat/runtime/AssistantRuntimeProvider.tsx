@@ -79,7 +79,7 @@ const ipcChatModel: ChatModelAdapter = {
                 controller.enqueue(event)
                 break
             }
-          },
+          }
         )
 
         const onAbort = () => {

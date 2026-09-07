@@ -1,6 +1,6 @@
 import { BrowserWindow, ipcMain, type IpcMainEvent } from 'electron'
 
-import { type ChatRequest, type ChatStreamEvent } from '@/shared/chat/chatEvent'
+import { ChatStreamControl, type ChatRequest, type ChatStreamEvent } from '@/shared/chat/chatEvent'
 
 import type { PetRuntime } from '@/main/pet/petRuntime'
 
@@ -17,7 +17,6 @@ interface Options {
 export function registerAssistantIpc({ mainWindow, petRuntime, agent }: Options) {
   const handleStream = (event: IpcMainEvent, request: ChatRequest) => {
     const [port] = event.ports
-
     if (!port) {
       return
     }
@@ -27,7 +26,6 @@ export function registerAssistantIpc({ mainWindow, petRuntime, agent }: Options)
       return
     }
 
-    port.start()
     const abortController = new AbortController()
 
     /*
@@ -41,6 +39,15 @@ export function registerAssistantIpc({ mainWindow, petRuntime, agent }: Options)
     port.once('close', () => {
       abortController.abort()
     })
+
+    port.on('message', (event) => {
+      const message = event.data as ChatStreamControl
+
+      if (message.type === 'abort') {
+        abortController.abort()
+      }
+    })
+    port.start()
 
     const send = (message: ChatStreamEvent) => {
       port.postMessage(message)
@@ -95,6 +102,9 @@ export function registerAssistantIpc({ mainWindow, petRuntime, agent }: Options)
               result: agentEvent.result,
               success: agentEvent.success,
             })
+            break
+          case 'agent_aborted':
+            send({ type: 'aborted' })
             break
 
           case 'agent_completed':

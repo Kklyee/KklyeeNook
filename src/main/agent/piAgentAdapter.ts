@@ -1,5 +1,6 @@
 import {
   createAgentSession,
+  DefaultResourceLoader,
   ModelRuntime,
   SessionManager,
   type AgentSession,
@@ -10,7 +11,15 @@ import type { AgentConfigStore } from '@/main/settings/agentConfigStore'
 import type { CredentialStore } from '@/main/settings/credentialStore'
 import { convertPIEvent } from './PIEventAdapter'
 import { resolveBuiltinTools } from '../tools/toolRegistry'
+import { ApprovalService } from '../approval/approvalService'
+import { ApprovalPolicy } from '../approval/approvalPolicy'
+import { createApprovalExtension } from '../approval/approvalExtension'
 type Emit = (event: AgentEvent) => void
+
+interface PIAgentApprovalDeps {
+  approvalService: ApprovalService
+  approvalPolicy: ApprovalPolicy
+}
 
 export class PIAgentAdapter {
   private session: AgentSession | null = null
@@ -18,6 +27,7 @@ export class PIAgentAdapter {
   constructor(
     private readonly configStore: AgentConfigStore,
     private readonly credentialStore: CredentialStore,
+    private readonly approval: PIAgentApprovalDeps,
   ) {}
 
   async initialize() {
@@ -70,12 +80,21 @@ export class PIAgentAdapter {
       const cwd = config.cwd ?? process.cwd()
       const tools = resolveBuiltinTools(config.tools.enabled)
 
+      const resourceLoader = new DefaultResourceLoader({
+        cwd,
+        agentDir: cwd,
+        extensionFactories: [
+          createApprovalExtension(this.approval.approvalService, this.approval.approvalPolicy),
+        ],
+      })
+
       const { session } = await createAgentSession({
         cwd,
         modelRuntime,
         model,
         thinkingLevel: thinkingLevel ?? 'medium',
         tools,
+        resourceLoader,
         sessionManager: SessionManager.inMemory(cwd),
       })
       this.session = session
