@@ -3,11 +3,14 @@ import type { ReactNode } from 'react'
 import {
   AssistantRuntimeProvider,
   useLocalRuntime,
+  AuiConfig,
+  Tools,
   type ChatModelAdapter,
   type ToolCallMessagePart,
 } from '@assistant-ui/react'
 
 import type { ChatMessage, ChatStreamEvent } from '@/shared/chat/chatEvent'
+import { piToolkit } from '../tools/ToolKit'
 
 const ipcChatModel: ChatModelAdapter = {
   async *run({ messages, abortSignal }) {
@@ -15,8 +18,8 @@ const ipcChatModel: ChatModelAdapter = {
 
     // assistant-ui Message -> 应用自定义 ChatMessage
     const serializedMessages: ChatMessage[] = []
-    let fullText = ''
-    const toolCalls = new Map<string, ToolCallMessagePart>()
+    const contentParts: Array<{ type: 'text'; text: string } | ToolCallMessagePart> = []
+    const toolCallIndices = new Map<string, number>()
 
     for (const message of messages) {
       if (message.role !== 'user' && message.role !== 'assistant') {
@@ -111,14 +114,25 @@ const ipcChatModel: ChatModelAdapter = {
         }
 
         switch (event.type) {
-          case 'delta':
-            fullText += event.text
+          case 'delta': {
+            const lastPart = contentParts.at(-1)
+
+            if (lastPart?.type === 'text') {
+              contentParts[contentParts.length - 1] = {
+                ...lastPart,
+                text: lastPart.text + event.text,
+              }
+            } else {
+              contentParts.push({ type: 'text', text: event.text })
+            }
             break
+          }
 
           case 'tool_start': {
             const argsText = JSON.stringify(event.args ?? {}) ?? '{}'
 
-            toolCalls.set(event.toolCallId, {
+            toolCallIndices.set(event.toolCallId, contentParts.length)
+            contentParts.push({
               type: 'tool-call',
               toolCallId: event.toolCallId,
               toolName: event.toolName,
@@ -129,14 +143,15 @@ const ipcChatModel: ChatModelAdapter = {
           }
 
           case 'tool_end': {
-            const toolCall = toolCalls.get(event.toolCallId)
+            const toolCallIndex = toolCallIndices.get(event.toolCallId)
+            const toolCall = toolCallIndex === undefined ? undefined : contentParts[toolCallIndex]
 
-            if (toolCall) {
-              toolCalls.set(event.toolCallId, {
+            if (toolCallIndex !== undefined && toolCall?.type === 'tool-call') {
+              contentParts[toolCallIndex] = {
                 ...toolCall,
                 result: event.result,
                 isError: !event.success,
-              })
+              }
             }
             break
           }
@@ -149,13 +164,7 @@ const ipcChatModel: ChatModelAdapter = {
             continue
         }
 
-        yield {
-          content: [
-            ...(fullText ? [{ type: 'text' as const, text: fullText }] : []),
-
-            ...Array.from(toolCalls.values()),
-          ],
-        }
+        yield { content: [...contentParts] }
       }
     } finally {
       removeAbortListener?.()
@@ -168,6 +177,11 @@ const ipcChatModel: ChatModelAdapter = {
 
 export function AssistantRuntime({ children }: { children: ReactNode }) {
   const runtime = useLocalRuntime(ipcChatModel)
+  const config = AuiConfig({ tools: Tools({ toolkit: piToolkit }) })
 
-  return <AssistantRuntimeProvider runtime={runtime}>{children}</AssistantRuntimeProvider>
+  return (
+    <AssistantRuntimeProvider runtime={runtime} config={config}>
+      {children}
+    </AssistantRuntimeProvider>
+  )
 }

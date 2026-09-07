@@ -10,7 +10,6 @@ import type { AgentConfigStore } from '@/main/settings/agentConfigStore'
 import type { CredentialStore } from '@/main/settings/credentialStore'
 import { convertPIEvent } from './PIEventAdapter'
 import { resolveBuiltinTools } from '../tools/toolRegistry'
-
 type Emit = (event: AgentEvent) => void
 
 export class PIAgentAdapter {
