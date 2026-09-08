@@ -105,6 +105,7 @@ export class PIAgentAdapter implements AgentRuntime {
       console.log('[PIAgentAdapter] tools:', tools)
     } catch (e) {
       console.error('[PIAgentAdapter] failed to create session:', e)
+      throw e
     }
   }
 
@@ -115,30 +116,39 @@ export class PIAgentAdapter implements AgentRuntime {
     return this.session
   }
   async run(prompt: string, emit: Emit, signal?: AbortSignal) {
-    await this.initialize()
-    const session = this.getSession()
-
-    const unsubscribe = session.subscribe((piEvent) => {
-      const agentEvent = convertPIEvent(piEvent)
-
-      if (agentEvent) {
-        emit(agentEvent)
-      }
-    })
+    let session: AgentSession | undefined
+    let unsubscribe: (() => void) | undefined
+    let terminalEventReceived = false
 
     const handleAbort = () => {
-      session.agent.abort()
+      session?.agent.abort()
     }
-    if (signal?.aborted) {
-      unsubscribe()
-      emit({ type: 'agent_aborted' })
-      return
-    }
-
-    signal?.addEventListener('abort', handleAbort, { once: true })
 
     try {
+      await this.initialize()
+      session = this.getSession()
+      unsubscribe = session.subscribe((piEvent) => {
+        const agentEvent = convertPIEvent(piEvent)
+
+        if (agentEvent) {
+          if (agentEvent.type === 'agent_failed' || agentEvent.type === 'agent_aborted') {
+            terminalEventReceived = true
+          }
+          emit(agentEvent)
+        }
+      })
+
+      if (signal?.aborted) {
+        emit({ type: 'agent_aborted' })
+        return
+      }
+
+      signal?.addEventListener('abort', handleAbort, { once: true })
       await session.prompt(prompt)
+
+      if (terminalEventReceived) {
+        return
+      }
 
       if (signal?.aborted) {
         emit({ type: 'agent_aborted' })
@@ -154,7 +164,7 @@ export class PIAgentAdapter implements AgentRuntime {
 
       emit({ type: 'agent_failed', error: error instanceof Error ? error.message : String(error) })
     } finally {
-      unsubscribe()
+      unsubscribe?.()
       signal?.removeEventListener('abort', handleAbort)
     }
   }

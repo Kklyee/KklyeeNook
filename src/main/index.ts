@@ -18,6 +18,7 @@ import { ApprovalService } from './approval/approvalService'
 import { registerApprovalIpc } from './ipc/approvalIpc'
 import { registerSettingsIpc } from './ipc/settingsIpc'
 import { AgentService } from './agent/agentService'
+import { registerAgentSessionIpc } from './ipc/agentSessionIpc'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -94,6 +95,7 @@ function createWindows(agentService: AgentService): void {
   registerWindowIpc()
   registerAssistantIpc({ mainWindow: chatWindow, petRuntime, agentService })
   registerApprovalIpc(chatWindow, approvalService)
+  registerAgentSessionIpc(agentService)
 }
 
 app.whenReady().then(() => {

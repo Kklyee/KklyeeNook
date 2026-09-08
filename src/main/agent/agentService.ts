@@ -7,6 +7,7 @@ import { getAgentRunPatch } from './agentRunState'
 
 import { AgentEventEnvelope } from './agentEventEnvelope'
 import { AgentEvent } from '@/shared/agent/agentEvent'
+import { AgentSessionSummary } from '@/shared/agent/agentSession'
 
 export interface AgentRunHandle {
   run: AgentRun
@@ -20,10 +21,10 @@ export class AgentService {
 
   constructor(private readonly runtime: AgentRuntime) {}
 
-  createSession(): AgentSession {
-    const session = new AgentSession(randomUUID())
+  createSession(title?: string): AgentSessionSummary {
+    const session = new AgentSession(randomUUID(), title)
     this.sessions.set(session.id, session)
-    return session
+    return session.toSummary()
   }
 
   getSession(sessionId: string): AgentSession | undefined {
@@ -32,6 +33,12 @@ export class AgentService {
 
   getSessions(): AgentSession[] {
     return Array.from(this.sessions.values())
+  }
+
+  listSessions(): AgentSessionSummary[] {
+    return Array.from(this.sessions.values())
+      .map((session) => session.toSummary())
+      .sort((a, b) => b.updatedAt - a.updatedAt)
   }
 
   async prompt(sessionId: string, prompt: string): Promise<AgentRun> {
@@ -109,10 +116,8 @@ export class AgentService {
         run.status !== 'failed' &&
         run.status !== 'aborted'
       ) {
-        session.updateRun(runId, {
-          status: 'failed',
-          startedAt: run.startedAt,
-          completedAt: Date.now(),
+        this.handleAgentEvent(session, runId, {
+          type: 'agent_failed',
           error: error instanceof Error ? error.message : String(error),
         })
       }

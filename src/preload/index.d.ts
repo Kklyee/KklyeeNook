@@ -15,6 +15,8 @@ interface API {
   streamChat(request: ChatRequest, onEvent: (event: ChatStreamEvent) => void): () => void
   onApprovalRequested(callback: (request: ApprovalRequest) => void): () => void
   respondApproval(response: ApprovalResponse): void
+  createAgentSession(request: CreateAgentSessionRequest): Promise<AgentSessionSummary>
+  listAgentSessions(): Promise<AgentSessionSummary[]>
 }
 
 declare global {

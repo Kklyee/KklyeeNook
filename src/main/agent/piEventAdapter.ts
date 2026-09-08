@@ -16,6 +16,33 @@ export function convertPIEvent(event: PIAgentEvent): AgentEvent | undefined {
       return undefined
     }
 
+    case 'agent_end': {
+      if (event.willRetry) {
+        return undefined
+      }
+
+      const finalAssistantMessage = [...event.messages]
+        .reverse()
+        .find((message) => message.role === 'assistant')
+
+      if (!finalAssistantMessage) {
+        return undefined
+      }
+
+      if (finalAssistantMessage.stopReason === 'aborted') {
+        return { type: 'agent_aborted' }
+      }
+
+      if (finalAssistantMessage.stopReason === 'error') {
+        return {
+          type: 'agent_failed',
+          error: finalAssistantMessage.errorMessage ?? '模型请求失败',
+        }
+      }
+
+      return undefined
+    }
+
     case 'tool_execution_start':
       return {
         type: 'tool_started',

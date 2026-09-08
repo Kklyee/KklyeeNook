@@ -76,6 +76,10 @@ const ipcChatModel: ChatModelAdapter = {
                 fail(new Error(event.message))
                 break
 
+              case 'aborted':
+                close()
+                break
+
               default:
                 controller.enqueue(event)
                 break
@@ -160,6 +164,7 @@ const ipcChatModel: ChatModelAdapter = {
           case 'tool_update':
             continue
 
+          case 'aborted':
           case 'done':
           case 'error':
             continue

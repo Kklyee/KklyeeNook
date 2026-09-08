@@ -49,11 +49,13 @@ export function registerAssistantIpc({ mainWindow, petRuntime, agentService }: O
     const send = (message: ChatStreamEvent) => {
       port.postMessage(message)
     }
+    console.log(request.messages)
 
     const lastUserMessage = [...request.messages]
       .reverse()
       .find((message) => message.role === 'user')
 
+    console.log('Last user message:', lastUserMessage)
     if (!lastUserMessage) {
       send({ type: 'error', message: '没有找到用户消息' })
 
@@ -66,7 +68,6 @@ export function registerAssistantIpc({ mainWindow, petRuntime, agentService }: O
       lastUserMessage.content,
       abortController.signal,
     )
-
     const unsubscribe = agentService.subscribe((envelope) => {
       if (envelope.runId !== handle.run.id) {
         return

@@ -8,4 +8,6 @@ export const IPC_CHANNELS = {
   ASSISTANT_STREAM: 'assistant:stream',
   APPROVAL_REQUEST: 'approval:request',
   APPROVAL_RESPOND: 'approval:respond',
+  AGENT_SESSION_CREATE: 'agent-session:create',
+  AGENT_SESSION_LIST: 'agent-session:list',
 } as const

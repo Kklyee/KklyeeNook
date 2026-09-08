@@ -6,6 +6,7 @@ import { AgentEvent } from '@/shared/agent/agentEvent'
 import { ChatRequest, ChatStreamEvent } from '@/shared/chat/chatEvent'
 import { ApprovalRequest, ApprovalResponse } from '@/shared/approval/approvalTypes'
 import type { AgentSettingsSnapshot } from '@/shared/agent/agentSettings'
+import { AgentSessionSummary, CreateAgentSessionRequest } from '@/shared/agent/agentSession'
 
 const api = {
   getAgentSettings(): Promise<AgentSettingsSnapshot> {
@@ -78,6 +79,14 @@ const api = {
 
   respondApproval(response: ApprovalResponse) {
     ipcRenderer.send(IPC_CHANNELS.APPROVAL_RESPOND, response)
+  },
+
+  createAgentSession(request: CreateAgentSessionRequest): Promise<AgentSessionSummary> {
+    return ipcRenderer.invoke(IPC_CHANNELS.AGENT_SESSION_CREATE, request)
+  },
+
+  listAgentSessions(): Promise<AgentSessionSummary[]> {
+    return ipcRenderer.invoke(IPC_CHANNELS.AGENT_SESSION_LIST)
   },
 }
 
