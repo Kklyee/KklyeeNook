@@ -77,7 +77,7 @@ function createWindows(agent: PIAgentAdapter): void {
     chatWindow.show()
   })
 
-  loadRenderer(petWindow, 'pet')
+  // loadRenderer(petWindow, 'pet')
   loadRenderer(chatWindow, 'chat')
 
   if (!petRuntime) {

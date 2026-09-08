@@ -17,7 +17,7 @@ function App(): React.JSX.Element {
   }
 
   return (
-    <main className="h-full w-full ">
+    <main className="bg-background text-foreground h-full w-full">
       <AssistantRuntime>
         <ChatPanel />
       </AssistantRuntime>

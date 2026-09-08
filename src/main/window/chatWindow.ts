@@ -12,7 +12,6 @@ export function createChatWindow(): BrowserWindow {
     height: 700,
     minWidth: 480,
     minHeight: 560,
-    frame: false,
     show: false,
     webPreferences: { preload: preloadPath, contextIsolation: true, sandbox: false },
   })
