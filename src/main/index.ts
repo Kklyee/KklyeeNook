@@ -13,11 +13,11 @@ import { registerAssistantIpc } from './ipc/assistantIpc'
 import { createAgent } from './agent/createAgent'
 import { MemoryCredentialStore } from './settings/credentialStore'
 import { AgentConfig } from '@/shared/agent/agentConfig'
-import { PIAgentAdapter } from './agent/PIAgentAdapter'
 import { ApprovalPolicy } from './approval/approvalPolicy'
 import { ApprovalService } from './approval/approvalService'
 import { registerApprovalIpc } from './ipc/approvalIpc'
 import { registerSettingsIpc } from './ipc/settingsIpc'
+import { AgentService } from './agent/agentService'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -43,7 +43,8 @@ async function bootstrap() {
       approvalService,
       approvalPolicy,
     })
-    createWindows(piAgent)
+    const agentService = new AgentService(piAgent)
+    createWindows(agentService)
   } catch (error) {
     console.error('[bootstrap] failed:', error)
   }
@@ -66,7 +67,7 @@ function loadRenderer(window: BrowserWindow, windowType: 'pet' | 'chat'): void {
   }
 }
 
-function createWindows(agent: PIAgentAdapter): void {
+function createWindows(agentService: AgentService): void {
   let petRuntime: PetRuntime | null = null
   let petWindow: BrowserWindow | null = createPetWindow()
   const chatWindow = createChatWindow()
@@ -88,10 +89,10 @@ function createWindows(agent: PIAgentAdapter): void {
         sendPetState(petWindow, state)
       }
     })
-    registerAgentIpc({ agent, petRuntime })
+    registerAgentIpc({ agentService, petRuntime })
   }
   registerWindowIpc()
-  registerAssistantIpc({ mainWindow: chatWindow, petRuntime, agent })
+  registerAssistantIpc({ mainWindow: chatWindow, petRuntime, agentService })
   registerApprovalIpc(chatWindow, approvalService)
 }
 

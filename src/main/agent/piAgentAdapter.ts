@@ -14,6 +14,7 @@ import { resolveBuiltinTools } from '../tools/toolRegistry'
 import { ApprovalService } from '../approval/approvalService'
 import { ApprovalPolicy } from '../approval/approvalPolicy'
 import { createApprovalExtension } from '../approval/approvalExtension'
+import { AgentRuntime } from './agentRuntime'
 type Emit = (event: AgentEvent) => void
 
 interface PIAgentApprovalDeps {
@@ -21,7 +22,7 @@ interface PIAgentApprovalDeps {
   approvalPolicy: ApprovalPolicy
 }
 
-export class PIAgentAdapter {
+export class PIAgentAdapter implements AgentRuntime {
   private session: AgentSession | null = null
 
   constructor(

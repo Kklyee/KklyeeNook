@@ -2,9 +2,9 @@ import { AgentEvent } from '@/shared/agent/agentEvent'
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
 import { ipcMain, BrowserWindow } from 'electron'
 import { PetRuntime } from '../pet/petRuntime'
-import { PIAgentAdapter } from '../agent/PIAgentAdapter'
+import { AgentService } from '../agent/agentService'
 
-type Options = { agent: PIAgentAdapter; petRuntime: PetRuntime }
+type Options = { agentService: AgentService; petRuntime: PetRuntime }
 
 export function registerAgentIpc(_options: Options) {
   ipcMain.handle(IPC_CHANNELS.AGENT_SUBMIT_PROMPT, async (_event, prompt: string) => {

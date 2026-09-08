@@ -6,16 +6,19 @@ import type { PetRuntime } from '@/main/pet/petRuntime'
 
 import { emitAgentEvent } from '@/main/agent/agentEventDispatcher'
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
-import type { PIAgentAdapter } from '../agent/PIAgentAdapter'
+import { AgentService } from '../agent/agentService'
 
 interface Options {
   mainWindow: BrowserWindow
   petRuntime: PetRuntime
-  agent: PIAgentAdapter
+  agentService: AgentService
 }
 
-export function registerAssistantIpc({ mainWindow, petRuntime, agent }: Options) {
+export function registerAssistantIpc({ mainWindow, petRuntime, agentService }: Options) {
+  const chatSession = agentService.createSession()
+
   const handleStream = (event: IpcMainEvent, request: ChatRequest) => {
+    let finished = false
     const [port] = event.ports
     if (!port) {
       return
@@ -28,16 +31,10 @@ export function registerAssistantIpc({ mainWindow, petRuntime, agent }: Options)
 
     const abortController = new AbortController()
 
-    /*
-     * assistant-ui Stop
-     * ↓
-     * preload 关闭 port
-     * ↓
-     * Main abort
-     */
-
     port.once('close', () => {
-      abortController.abort()
+      if (!finished) {
+        abortController.abort()
+      }
     })
 
     port.on('message', (event) => {
@@ -64,58 +61,74 @@ export function registerAssistantIpc({ mainWindow, petRuntime, agent }: Options)
       return
     }
 
-    void agent.run(
+    const handle = agentService.startRun(
+      chatSession.id,
       lastUserMessage.content,
-
-      (agentEvent) => {
-        // 驱动宠物 + 全局 AgentEvent
-        emitAgentEvent(mainWindow, petRuntime, agentEvent)
-
-        // 转换成 assistant-ui stream
-
-        switch (agentEvent.type) {
-          case 'text_delta':
-            send({ type: 'delta', text: agentEvent.text })
-            break
-
-          case 'tool_started':
-            send({
-              type: 'tool_start',
-              toolCallId: agentEvent.toolCallId,
-              toolName: agentEvent.tool,
-              args: agentEvent.args,
-            })
-            break
-
-          case 'tool_updated':
-            send({
-              type: 'tool_update',
-              toolCallId: agentEvent.toolCallId,
-              partialResult: agentEvent.partialResult,
-            })
-            break
-
-          case 'tool_finished':
-            send({
-              type: 'tool_end',
-              toolCallId: agentEvent.toolCallId,
-              result: agentEvent.result,
-              success: agentEvent.success,
-            })
-            break
-          case 'agent_aborted':
-            send({ type: 'aborted' })
-            break
-
-          case 'agent_completed':
-            send({ type: 'done' })
-            break
-        }
-      },
-
       abortController.signal,
     )
+
+    const unsubscribe = agentService.subscribe((envelope) => {
+      if (envelope.runId !== handle.run.id) {
+        return
+      }
+
+      const agentEvent = envelope.event
+
+      emitAgentEvent(mainWindow, petRuntime, agentEvent)
+      switch (agentEvent.type) {
+        case 'text_delta':
+          send({ type: 'delta', text: agentEvent.text })
+          break
+
+        case 'tool_started':
+          send({
+            type: 'tool_start',
+            toolCallId: agentEvent.toolCallId,
+            toolName: agentEvent.tool,
+            args: agentEvent.args,
+          })
+          break
+
+        case 'tool_updated':
+          send({
+            type: 'tool_update',
+            toolCallId: agentEvent.toolCallId,
+            partialResult: agentEvent.partialResult,
+          })
+          break
+
+        case 'tool_finished':
+          send({
+            type: 'tool_end',
+            toolCallId: agentEvent.toolCallId,
+            result: agentEvent.result,
+            success: agentEvent.success,
+          })
+          break
+
+        case 'agent_completed':
+          send({ type: 'done' })
+          break
+
+        case 'agent_aborted':
+          send({ type: 'aborted' })
+          break
+
+        case 'agent_failed':
+          send({ type: 'error', message: agentEvent.error })
+          break
+      }
+    })
+
+    void handle.completion.finally(() => {
+      finished = true
+      unsubscribe()
+      try {
+        port.close()
+      } catch {}
+    })
   }
+
   ipcMain.on(IPC_CHANNELS.ASSISTANT_STREAM, handleStream)
 
   mainWindow.once('closed', () => {
