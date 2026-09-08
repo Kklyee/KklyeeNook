@@ -14,6 +14,9 @@ import { createAgent } from './agent/createAgent'
 import { MemoryCredentialStore } from './settings/credentialStore'
 import { AgentConfig } from '@/shared/agent/agentConfig'
 import { PIAgentAdapter } from './agent/PIAgentAdapter'
+import { ApprovalPolicy } from './approval/approvalPolicy'
+import { ApprovalService } from './approval/approvalService'
+import { registerApprovalIpc } from './ipc/approvalIpc'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -24,6 +27,8 @@ const agentConfig: AgentConfig = {
 }
 
 const credentialStore = new MemoryCredentialStore()
+const approvalService = new ApprovalService()
+const approvalPolicy = new ApprovalPolicy()
 
 if (!process.env.API_KEY) {
   console.error(`请在 .env 中配置 ${agentConfig.model.provider} 的 API_KEY`)
@@ -33,7 +38,10 @@ if (!process.env.API_KEY) {
 credentialStore.setApiKey(agentConfig.model.provider, process.env.API_KEY)
 async function bootstrap() {
   try {
-    const piAgent = await createAgent(agentConfig, credentialStore)
+    const piAgent = await createAgent(agentConfig, credentialStore, {
+      approvalService,
+      approvalPolicy,
+    })
     createWindows(piAgent)
   } catch (error) {
     console.error('[bootstrap] failed:', error)
@@ -82,6 +90,7 @@ function createWindows(agent: PIAgentAdapter): void {
   }
   registerWindowIpc()
   registerAssistantIpc({ mainWindow: chatWindow, petRuntime, agent })
+  registerApprovalIpc(chatWindow, approvalService)
 }
 
 app.whenReady().then(() => {

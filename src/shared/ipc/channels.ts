@@ -5,4 +5,6 @@ export const IPC_CHANNELS = {
   WINDOW_SET_POSITION: 'window:set-position',
   AGENT_EVENT: 'agent:event',
   ASSISTANT_STREAM: 'assistant:stream',
-} as const;
+  APPROVAL_REQUEST: 'approval:request',
+  APPROVAL_RESPOND: 'approval:respond',
+} as const

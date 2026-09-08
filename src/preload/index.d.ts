@@ -7,10 +7,9 @@ interface API {
   submitPrompt(prompt: string): Promise<string>
   getWindowPosition(): Promise<[number, number]>
   setWindowPosition(x: number, y: number): void
-  streamChat(
-    request: ChatRequest,
-    onEvent: (event: ChatStreamEvent) => void,
-  ): () => void
+  streamChat(request: ChatRequest, onEvent: (event: ChatStreamEvent) => void): () => void
+  onApprovalRequested(callback: (request: ApprovalRequest) => void): () => void
+  respondApproval(response: ApprovalResponse): void
 }
 
 declare global {

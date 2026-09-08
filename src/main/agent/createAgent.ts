@@ -9,10 +9,12 @@ import { ApprovalPolicy } from '../approval/approvalPolicy'
 export async function createAgent(
   config: AgentConfig,
   credentialStore: CredentialStore,
+  {
+    approvalService,
+    approvalPolicy,
+  }: { approvalService: ApprovalService; approvalPolicy: ApprovalPolicy },
 ): Promise<PIAgentAdapter> {
   const configStore = new AgentConfigStore(config)
-  const approvalService = new ApprovalService()
-  const approvalPolicy = new ApprovalPolicy()
   const agent = new PIAgentAdapter(configStore, credentialStore, {
     approvalService,
     approvalPolicy,

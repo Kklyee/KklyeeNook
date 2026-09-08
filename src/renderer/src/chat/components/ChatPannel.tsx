@@ -1,9 +1,11 @@
-import { Thread } from '../../components/assistant-ui/elements/thread.aui';
+import { Thread } from '../../components/assistant-ui/elements/thread.aui'
+import { Approval } from '../approval/Approval'
 
 export function ChatPanel() {
   return (
-    <div className="w-full h-full bg-amber-50">
+    <div className="relative h-full w-full">
       <Thread />
+      <Approval />
     </div>
-  );
+  )
 }

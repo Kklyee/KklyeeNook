@@ -87,6 +87,7 @@ export class PIAgentAdapter {
           createApprovalExtension(this.approval.approvalService, this.approval.approvalPolicy),
         ],
       })
+      await resourceLoader.reload()
 
       const { session } = await createAgentSession({
         cwd,

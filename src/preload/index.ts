@@ -4,6 +4,7 @@ import type { PetState } from '@/shared/pet/petState'
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
 import { AgentEvent } from '@/shared/agent/agentEvent'
 import { ChatRequest, ChatStreamEvent } from '@/shared/chat/chatEvent'
+import { ApprovalRequest, ApprovalResponse } from '@/shared/approval/approvalTypes'
 
 const api = {
   onPetState(callback: (state: PetState) => void) {
@@ -39,10 +40,7 @@ const api = {
     ipcRenderer.send(IPC_CHANNELS.WINDOW_SET_POSITION, x, y)
   },
 
-  streamChat(
-    request: ChatRequest,
-    onEvent: (event: ChatStreamEvent) => void,
-  ) {
+  streamChat(request: ChatRequest, onEvent: (event: ChatStreamEvent) => void) {
     const { port1, port2 } = new MessageChannel()
 
     const handleMessage = (event: MessageEvent<ChatStreamEvent>) => {
@@ -60,6 +58,21 @@ const api = {
       port1.removeEventListener('message', handleMessage)
       port1.close()
     }
+  },
+
+  onApprovalRequested(callback: (request: ApprovalRequest) => void) {
+    const listener = (_event: IpcRendererEvent, request: ApprovalRequest) => {
+      callback(request)
+    }
+
+    ipcRenderer.on(IPC_CHANNELS.APPROVAL_REQUEST, listener)
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.APPROVAL_REQUEST, listener)
+    }
+  },
+
+  respondApproval(response: ApprovalResponse) {
+    ipcRenderer.send(IPC_CHANNELS.APPROVAL_RESPOND, response)
   },
 }
 

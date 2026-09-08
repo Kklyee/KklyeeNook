@@ -1,23 +1,43 @@
 import type { ApprovalRequest, ApprovalResponse } from '@/shared/approval/approvalTypes'
 
-type PendingApprovalRequest = { request: ApprovalRequest; resolve: (allowed: boolean) => void }
+type ApprovalListener = (request: ApprovalRequest) => void
+type PendingApproval = { request: ApprovalRequest; resolve: (allowed: boolean) => void }
 
 export class ApprovalService {
-  private pending = new Map<string, PendingApprovalRequest>()
+  private pending = new Map<string, PendingApproval>()
+  private listeners = new Set<ApprovalListener>()
 
-  async request(request: ApprovalRequest): Promise<boolean> {
-    return new Promise<boolean>((resolve) => {
-      this.pending.set(request.id, { request, resolve })
-    })
+  subscribe(listener: ApprovalListener): () => void {
+    this.listeners.add(listener)
+
+    return () => {
+      this.listeners.delete(listener)
+    }
   }
 
-  async respond(response: ApprovalResponse): Promise<void> {
+  private emitRequest(request: ApprovalRequest): void {
+    for (const listener of this.listeners) {
+      listener(request)
+    }
+  }
+
+  async request(request: ApprovalRequest): Promise<boolean> {
+    const promise = new Promise<boolean>((resolve) => {
+      this.pending.set(request.id, { request, resolve })
+    })
+
+    this.emitRequest(request)
+    return promise
+  }
+
+  respond(response: ApprovalResponse): void {
     const pending = this.pending.get(response.id)
+
     if (!pending) {
       return
     }
-    this.pending.delete(response.id)
 
+    this.pending.delete(response.id)
     pending.resolve(response.decision === 'allow')
   }
 }
