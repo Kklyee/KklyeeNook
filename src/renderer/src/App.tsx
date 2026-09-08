@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { AssistantRuntime } from './chat/runtime/AssistantRuntimeProvider'
-import { ChatPanel } from './chat/components/ChatPannel'
+import { AppShell } from './app/AppShell'
 import { Pet } from './pet/Pet'
 
 function App(): React.JSX.Element {
@@ -19,7 +19,7 @@ function App(): React.JSX.Element {
   return (
     <main className="bg-background text-foreground h-full w-full">
       <AssistantRuntime>
-        <ChatPanel />
+        <AppShell />
       </AssistantRuntime>
     </main>
   )

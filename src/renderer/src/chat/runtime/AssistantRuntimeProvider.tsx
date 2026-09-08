@@ -5,6 +5,7 @@ import {
   useLocalRuntime,
   AuiConfig,
   Tools,
+  Suggestions,
   type ChatModelAdapter,
   type ToolCallMessagePart,
 } from '@assistant-ui/react'
@@ -177,7 +178,14 @@ const ipcChatModel: ChatModelAdapter = {
 
 export function AssistantRuntime({ children }: { children: ReactNode }) {
   const runtime = useLocalRuntime(ipcChatModel)
-  const config = AuiConfig({ tools: Tools({ toolkit: piToolkit }) })
+  const config = AuiConfig({
+    tools: Tools({ toolkit: piToolkit }),
+    suggestions: Suggestions([
+      { title: '了解项目', label: '', prompt: '请阅读当前项目，介绍目录结构和主要模块，暂时不要修改文件。' },
+      { title: '解释代码', label: '', prompt: '请解释当前项目中 Agent 从接收消息到完成回复的流程，暂时不要修改文件。' },
+      { title: '整理文档', label: '', prompt: '请阅读项目并提出 README 的改进建议，等我确认后再修改。' },
+    ]),
+  })
 
   return (
     <AssistantRuntimeProvider runtime={runtime} config={config}>

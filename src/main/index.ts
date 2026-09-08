@@ -17,6 +17,7 @@ import { PIAgentAdapter } from './agent/PIAgentAdapter'
 import { ApprovalPolicy } from './approval/approvalPolicy'
 import { ApprovalService } from './approval/approvalService'
 import { registerApprovalIpc } from './ipc/approvalIpc'
+import { registerSettingsIpc } from './ipc/settingsIpc'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -69,6 +70,7 @@ function createWindows(agent: PIAgentAdapter): void {
   let petRuntime: PetRuntime | null = null
   let petWindow: BrowserWindow | null = createPetWindow()
   const chatWindow = createChatWindow()
+  registerSettingsIpc(chatWindow, agentConfig, credentialStore, approvalPolicy)
 
   petWindow.on('closed', () => {
     petWindow = null

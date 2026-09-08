@@ -6,7 +6,7 @@ import { PIAgentAdapter } from '../agent/PIAgentAdapter'
 
 type Options = { agent: PIAgentAdapter; petRuntime: PetRuntime }
 
-export function registerAgentIpc({ agent, petRuntime }: Options) {
+export function registerAgentIpc(_options: Options) {
   ipcMain.handle(IPC_CHANNELS.AGENT_SUBMIT_PROMPT, async (_event, prompt: string) => {
     console.log('Received prompt from renderer:', prompt)
     const window = BrowserWindow.fromWebContents(_event.sender)

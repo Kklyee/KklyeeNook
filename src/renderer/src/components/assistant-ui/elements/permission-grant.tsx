@@ -3,7 +3,7 @@
 import type { ComponentProps } from "react";
 import { KeyRoundIcon } from "lucide-react";
 import { cn } from "@/renderer/src/lib/utils";
-import { field, inkButton, mono, paper } from "./surfaces";
+import { field, inkButton, mono, paper } from "@/renderer/src/lib/surfaces";
 
 export type GrantScope = "session" | "always" | "denied";
 

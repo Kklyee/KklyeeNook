@@ -5,8 +5,13 @@ import { IPC_CHANNELS } from '@/shared/ipc/channels'
 import { AgentEvent } from '@/shared/agent/agentEvent'
 import { ChatRequest, ChatStreamEvent } from '@/shared/chat/chatEvent'
 import { ApprovalRequest, ApprovalResponse } from '@/shared/approval/approvalTypes'
+import type { AgentSettingsSnapshot } from '@/shared/agent/agentSettings'
 
 const api = {
+  getAgentSettings(): Promise<AgentSettingsSnapshot> {
+    return ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_GET)
+  },
+
   onPetState(callback: (state: PetState) => void) {
     const listener = (_event: IpcRendererEvent, state: PetState) => {
       callback(state)
