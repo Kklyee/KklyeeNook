@@ -3,13 +3,13 @@ import {
   DefaultResourceLoader,
   ModelRuntime,
   SessionManager,
-  type AgentSession,
+  type AgentSession as PiAgentSession,
 } from '@earendil-works/pi-coding-agent'
 
 import type { AgentEvent } from '@/shared/agent/agentEvent'
 import type { AgentConfigStore } from '@/main/settings/agentConfigStore'
 import type { CredentialStore } from '@/main/settings/credentialStore'
-import { convertPIEvent } from './PIEventAdapter'
+import { convertPIEvent } from './piEventAdapter'
 import { resolveBuiltinTools } from '../tools/toolRegistry'
 import { ApprovalService } from '../approval/approvalService'
 import { ApprovalPolicy } from '../approval/approvalPolicy'
@@ -23,7 +23,7 @@ interface PIAgentApprovalDeps {
 }
 
 export class PIAgentAdapter implements AgentRuntime {
-  private session: AgentSession | null = null
+  private session: PiAgentSession | null = null
 
   constructor(
     private readonly configStore: AgentConfigStore,
@@ -109,14 +109,14 @@ export class PIAgentAdapter implements AgentRuntime {
     }
   }
 
-  getSession(): AgentSession {
+  getSession(): PiAgentSession {
     if (!this.session) {
       throw new Error('Session is not initialized')
     }
     return this.session
   }
   async run(prompt: string, emit: Emit, signal?: AbortSignal) {
-    let session: AgentSession | undefined
+    let session: PiAgentSession | undefined
     let unsubscribe: (() => void) | undefined
     let terminalEventReceived = false
 

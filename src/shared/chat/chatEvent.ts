@@ -1,6 +1,7 @@
 export type ChatMessage = { role: 'user' | 'assistant'; content: string }
 
 export interface ChatRequest {
+  sessionId: string
   messages: ChatMessage[]
 }
 

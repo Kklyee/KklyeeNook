@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
 
 import {
   AssistantRuntimeProvider,
@@ -9,183 +9,206 @@ import {
   type ChatModelAdapter,
   type ToolCallMessagePart,
   useRemoteThreadListRuntime,
+  useAui,
 } from '@assistant-ui/react'
 
 import type { ChatMessage, ChatStreamEvent } from '@/shared/chat/chatEvent'
 import { piToolkit } from '../tools/ToolKit'
 import { agentThreadListAdapter } from './agentThreadListAdapter'
 
-const ipcChatModel: ChatModelAdapter = {
-  async *run({ messages, abortSignal }) {
-    abortSignal.throwIfAborted()
+type SessionResolver = () => Promise<string>
 
-    // assistant-ui Message -> 应用自定义 ChatMessage
-    const serializedMessages: ChatMessage[] = []
-    const contentParts: Array<{ type: 'text'; text: string } | ToolCallMessagePart> = []
-    const toolCallIndices = new Map<string, number>()
-
-    for (const message of messages) {
-      if (message.role !== 'user' && message.role !== 'assistant') {
-        continue
+function createChatModel(resolveSessionId: SessionResolver): ChatModelAdapter {
+  return {
+    async *run({ messages, abortSignal }) {
+      const sessionId = await resolveSessionId()
+      if (!sessionId) {
+        throw new Error('Missing unstable_threadId')
       }
 
-      const text = message.content
-        .flatMap((part) => {
-          if (part.type === 'text') {
-            return [part.text]
+      abortSignal.throwIfAborted()
+
+      // assistant-ui Message -> 应用自定义 ChatMessage
+      const serializedMessages: ChatMessage[] = []
+      const contentParts: Array<{ type: 'text'; text: string } | ToolCallMessagePart> = []
+      const toolCallIndices = new Map<string, number>()
+
+      for (const message of messages) {
+        if (message.role !== 'user' && message.role !== 'assistant') {
+          continue
+        }
+
+        const text = message.content
+          .flatMap((part) => {
+            if (part.type === 'text') {
+              return [part.text]
+            }
+            return []
+          })
+          .join('\n')
+
+        if (!text) continue
+
+        serializedMessages.push({ role: message.role, content: text })
+      }
+
+      // callback stream -> ReadableStream
+      let stop: (() => void) | undefined
+
+      let removeAbortListener: (() => void) | undefined
+
+      const stream = new ReadableStream<ChatStreamEvent>({
+        start(controller) {
+          let settled = false
+
+          const close = () => {
+            if (settled) return
+            settled = true
+            controller.close()
           }
 
-          return []
-        })
-        .join('\n')
+          const fail = (error: unknown) => {
+            if (settled) return
+            settled = true
+            controller.error(error)
+          }
 
-      if (!text) continue
+          stop = window.api.streamChat(
+            { messages: serializedMessages, sessionId },
 
-      serializedMessages.push({ role: message.role, content: text })
-    }
+            (event) => {
+              switch (event.type) {
+                case 'done':
+                  close()
+                  break
 
-    // callback stream -> ReadableStream
-    let stop: (() => void) | undefined
+                case 'error':
+                  fail(new Error(event.message))
+                  break
 
-    let removeAbortListener: (() => void) | undefined
+                case 'aborted':
+                  close()
+                  break
 
-    const stream = new ReadableStream<ChatStreamEvent>({
-      start(controller) {
-        let settled = false
+                default:
+                  controller.enqueue(event)
+                  break
+              }
+            },
+          )
 
-        const close = () => {
-          if (settled) return
-          settled = true
-          controller.close()
-        }
+          const onAbort = () => {
+            stop?.()
+            fail(abortSignal.reason)
+          }
 
-        const fail = (error: unknown) => {
-          if (settled) return
-          settled = true
-          controller.error(error)
-        }
+          abortSignal.addEventListener('abort', onAbort, { once: true })
+          removeAbortListener = () => {
+            abortSignal.removeEventListener('abort', onAbort)
+          }
 
-        stop = window.api.streamChat(
-          { messages: serializedMessages },
+          if (abortSignal.aborted) {
+            onAbort()
+          }
+        },
 
-          (event) => {
-            switch (event.type) {
-              case 'done':
-                close()
-                break
-
-              case 'error':
-                fail(new Error(event.message))
-                break
-
-              case 'aborted':
-                close()
-                break
-
-              default:
-                controller.enqueue(event)
-                break
-            }
-          },
-        )
-
-        const onAbort = () => {
+        cancel() {
           stop?.()
-          fail(abortSignal.reason)
-        }
+        },
+      })
 
-        abortSignal.addEventListener('abort', onAbort, { once: true })
-        removeAbortListener = () => {
-          abortSignal.removeEventListener('abort', onAbort)
-        }
+      // assistant-ui 要求：yield 的不是 delta，而是完整累计文本
+      const reader = stream.getReader()
 
-        if (abortSignal.aborted) {
-          onAbort()
-        }
-      },
+      try {
+        while (true) {
+          const { done, value: event } = await reader.read()
 
-      cancel() {
+          if (done) {
+            return
+          }
+
+          switch (event.type) {
+            case 'delta': {
+              const lastPart = contentParts.at(-1)
+
+              if (lastPart?.type === 'text') {
+                contentParts[contentParts.length - 1] = {
+                  ...lastPart,
+                  text: lastPart.text + event.text,
+                }
+              } else {
+                contentParts.push({ type: 'text', text: event.text })
+              }
+              break
+            }
+
+            case 'tool_start': {
+              const argsText = JSON.stringify(event.args ?? {}) ?? '{}'
+
+              toolCallIndices.set(event.toolCallId, contentParts.length)
+              contentParts.push({
+                type: 'tool-call',
+                toolCallId: event.toolCallId,
+                toolName: event.toolName,
+                args: JSON.parse(argsText),
+                argsText,
+              })
+              break
+            }
+
+            case 'tool_end': {
+              const toolCallIndex = toolCallIndices.get(event.toolCallId)
+              const toolCall = toolCallIndex === undefined ? undefined : contentParts[toolCallIndex]
+
+              if (toolCallIndex !== undefined && toolCall?.type === 'tool-call') {
+                contentParts[toolCallIndex] = {
+                  ...toolCall,
+                  result: event.result,
+                  isError: !event.success,
+                }
+              }
+              break
+            }
+
+            case 'tool_update':
+              continue
+
+            case 'aborted':
+            case 'done':
+            case 'error':
+              continue
+          }
+
+          yield { content: [...contentParts] }
+        }
+      } finally {
+        removeAbortListener?.()
         stop?.()
-      },
-    })
 
-    // assistant-ui 要求：yield 的不是 delta，而是完整累计文本
-    const reader = stream.getReader()
-
-    try {
-      while (true) {
-        const { done, value: event } = await reader.read()
-
-        if (done) {
-          return
-        }
-
-        switch (event.type) {
-          case 'delta': {
-            const lastPart = contentParts.at(-1)
-
-            if (lastPart?.type === 'text') {
-              contentParts[contentParts.length - 1] = {
-                ...lastPart,
-                text: lastPart.text + event.text,
-              }
-            } else {
-              contentParts.push({ type: 'text', text: event.text })
-            }
-            break
-          }
-
-          case 'tool_start': {
-            const argsText = JSON.stringify(event.args ?? {}) ?? '{}'
-
-            toolCallIndices.set(event.toolCallId, contentParts.length)
-            contentParts.push({
-              type: 'tool-call',
-              toolCallId: event.toolCallId,
-              toolName: event.toolName,
-              args: JSON.parse(argsText),
-              argsText,
-            })
-            break
-          }
-
-          case 'tool_end': {
-            const toolCallIndex = toolCallIndices.get(event.toolCallId)
-            const toolCall = toolCallIndex === undefined ? undefined : contentParts[toolCallIndex]
-
-            if (toolCallIndex !== undefined && toolCall?.type === 'tool-call') {
-              contentParts[toolCallIndex] = {
-                ...toolCall,
-                result: event.result,
-                isError: !event.success,
-              }
-            }
-            break
-          }
-
-          case 'tool_update':
-            continue
-
-          case 'aborted':
-          case 'done':
-          case 'error':
-            continue
-        }
-
-        yield { content: [...contentParts] }
+        reader.releaseLock()
       }
-    } finally {
-      removeAbortListener?.()
-      stop?.()
+    },
+  }
+}
 
-      reader.releaseLock()
-    }
-  },
+function useAgentThreadRuntime() {
+  const aui = useAui()
+  const chatModel = useMemo(
+    () =>
+      createChatModel(async () => {
+        const { remoteId } = await aui.threadListItem.initialize()
+        return remoteId
+      }),
+    [aui],
+  )
+
+  return useLocalRuntime(chatModel)
 }
 
 export function AssistantRuntime({ children }: { children: ReactNode }) {
   const runtime = useRemoteThreadListRuntime({
-    runtimeHook: () => useLocalRuntime(ipcChatModel),
+    runtimeHook: useAgentThreadRuntime,
     adapter: agentThreadListAdapter,
   })
 

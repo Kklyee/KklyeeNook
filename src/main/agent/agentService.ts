@@ -8,6 +8,7 @@ import { getAgentRunPatch } from './agentRunState'
 import { AgentEventEnvelope } from './agentEventEnvelope'
 import { AgentEvent } from '@/shared/agent/agentEvent'
 import { AgentSessionSummary } from '@/shared/agent/agentSession'
+import { AgentRuntimeFactory } from './agentRuntimeFactory'
 
 export interface AgentRunHandle {
   run: AgentRun
@@ -17,9 +18,10 @@ type AgentEventListener = (envelope: AgentEventEnvelope) => void
 
 export class AgentService {
   private readonly sessions = new Map<string, AgentSession>()
+  private readonly runtimes = new Map<string, AgentRuntime>()
   private readonly listeners = new Set<AgentEventListener>()
 
-  constructor(private readonly runtime: AgentRuntime) {}
+  constructor(private readonly runtimeFactory: AgentRuntimeFactory) {}
 
   createSession(title?: string): AgentSessionSummary {
     const session = new AgentSession(randomUUID(), title)
@@ -42,8 +44,15 @@ export class AgentService {
 
   deleteSession(sessionId: string): void {
     const session = this.sessions.get(sessionId)
+
     if (!session) {
       throw new Error(`AgentSession not found: ${sessionId}`)
+    }
+
+    const runtime = this.runtimes.get(sessionId)
+    if (runtime) {
+      runtime.dispose()
+      this.runtimes.delete(sessionId)
     }
     this.sessions.delete(sessionId)
   }
@@ -58,6 +67,18 @@ export class AgentService {
       .sort((a, b) => b.updatedAt - a.updatedAt)
   }
 
+  private getOrCreateRuntime(sessionId: string): AgentRuntime {
+    const existing = this.runtimes.get(sessionId)
+
+    if (existing) {
+      console.log('[AgentService] reuse runtime', { sessionId })
+      return existing
+    }
+    console.log('[AgentService] create runtime', { sessionId })
+    const runtime = this.runtimeFactory.create(sessionId)
+    this.runtimes.set(sessionId, runtime)
+    return runtime
+  }
   async prompt(sessionId: string, prompt: string): Promise<AgentRun> {
     const handle = this.startRun(sessionId, prompt)
 
@@ -115,10 +136,10 @@ export class AgentService {
     prompt: string,
     signal?: AbortSignal,
   ): Promise<AgentRun> {
+    const runtime = this.getOrCreateRuntime(session.id)
     try {
-      await this.runtime.run(
+      await runtime.run(
         prompt,
-
         (event) => {
           this.handleAgentEvent(session, runId, event)
         },
@@ -126,7 +147,6 @@ export class AgentService {
       )
     } catch (error) {
       const run = session.getRun(runId)
-
       if (
         run &&
         run.status !== 'completed' &&

@@ -1,8 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import type { PetState } from '@/shared/pet/petState'
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
-import { AgentEvent } from '@/shared/agent/agentEvent'
 import { ChatRequest, ChatStreamEvent } from '@/shared/chat/chatEvent'
 import { ApprovalRequest, ApprovalResponse } from '@/shared/approval/approvalTypes'
 import type { AgentSettingsSnapshot } from '@/shared/agent/agentSettings'
@@ -16,39 +14,6 @@ import {
 const api = {
   getAgentSettings(): Promise<AgentSettingsSnapshot> {
     return ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_GET)
-  },
-
-  onPetState(callback: (state: PetState) => void) {
-    const listener = (_event: IpcRendererEvent, state: PetState) => {
-      callback(state)
-    }
-    ipcRenderer.on(IPC_CHANNELS.PET_STATE_CHANGED, listener)
-    return () => {
-      ipcRenderer.removeListener(IPC_CHANNELS.PET_STATE_CHANGED, listener)
-    }
-  },
-
-  onAgentEvent(callback: (agentEvent: AgentEvent) => void) {
-    const listener = (_event: IpcRendererEvent, agentEvent: AgentEvent) => {
-      callback(agentEvent)
-    }
-
-    ipcRenderer.on(IPC_CHANNELS.AGENT_EVENT, listener)
-    return () => {
-      ipcRenderer.removeListener(IPC_CHANNELS.AGENT_EVENT, listener)
-    }
-  },
-
-  async submitPrompt(prompt: string) {
-    return await ipcRenderer.invoke(IPC_CHANNELS.AGENT_SUBMIT_PROMPT, prompt)
-  },
-
-  getWindowPosition() {
-    return ipcRenderer.invoke(IPC_CHANNELS.WINDOW_GET_POSITION) as Promise<[number, number]>
-  },
-
-  setWindowPosition(x: number, y: number) {
-    ipcRenderer.send(IPC_CHANNELS.WINDOW_SET_POSITION, x, y)
   },
 
   streamChat(request: ChatRequest, onEvent: (event: ChatStreamEvent) => void) {
@@ -100,7 +65,7 @@ const api = {
 
   deleteAgentSession(request: DeleteAgentSessionRequest): Promise<void> {
     return ipcRenderer.invoke(IPC_CHANNELS.AGENT_SESSION_DELETE, request)
-  }
+  },
 }
 
 if (process.contextIsolated) {

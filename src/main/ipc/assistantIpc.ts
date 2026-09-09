@@ -2,21 +2,15 @@ import { BrowserWindow, ipcMain, type IpcMainEvent } from 'electron'
 
 import { ChatStreamControl, type ChatRequest, type ChatStreamEvent } from '@/shared/chat/chatEvent'
 
-import type { PetRuntime } from '@/main/pet/petRuntime'
-
-import { emitAgentEvent } from '@/main/agent/agentEventDispatcher'
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
-import { AgentService } from '../agent/agentService'
+import { AgentRunHandle, AgentService } from '../agent/agentService'
 
 interface Options {
   mainWindow: BrowserWindow
-  petRuntime: PetRuntime
   agentService: AgentService
 }
 
-export function registerAssistantIpc({ mainWindow, petRuntime, agentService }: Options) {
-  const chatSession = agentService.createSession()
-
+export function registerAssistantIpc({ mainWindow, agentService }: Options) {
   const handleStream = (event: IpcMainEvent, request: ChatRequest) => {
     let finished = false
     const [port] = event.ports
@@ -49,13 +43,11 @@ export function registerAssistantIpc({ mainWindow, petRuntime, agentService }: O
     const send = (message: ChatStreamEvent) => {
       port.postMessage(message)
     }
-    console.log(request.messages)
 
     const lastUserMessage = [...request.messages]
       .reverse()
       .find((message) => message.role === 'user')
 
-    console.log('Last user message:', lastUserMessage)
     if (!lastUserMessage) {
       send({ type: 'error', message: '没有找到用户消息' })
 
@@ -63,19 +55,29 @@ export function registerAssistantIpc({ mainWindow, petRuntime, agentService }: O
       return
     }
 
-    const handle = agentService.startRun(
-      chatSession.id,
-      lastUserMessage.content,
-      abortController.signal,
-    )
+    let handle: AgentRunHandle
+    try {
+      console.log('[assistantIpc] start run', { sessionId: request.sessionId })
+      handle = agentService.startRun(
+        request.sessionId,
+        lastUserMessage.content,
+        abortController.signal,
+      )
+    } catch (e) {
+      finished = true
+
+      send({ type: 'error', message: e instanceof Error ? e.message : String(e) })
+
+      port.close()
+      return
+    }
     const unsubscribe = agentService.subscribe((envelope) => {
-      if (envelope.runId !== handle.run.id) {
+      if (envelope.sessionId !== request.sessionId || envelope.runId !== handle.run.id) {
         return
       }
 
       const agentEvent = envelope.event
 
-      emitAgentEvent(mainWindow, petRuntime, agentEvent)
       switch (agentEvent.type) {
         case 'text_delta':
           send({ type: 'delta', text: agentEvent.text })
