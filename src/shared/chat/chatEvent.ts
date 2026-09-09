@@ -16,8 +16,5 @@ export type ChatStreamEvent =
 export type ChatStreamControl = { type: 'abort' }
 
 export interface AssistantStreamApi {
-  streamChat(
-    request: ChatRequest,
-    onEvent: (event: ChatStreamEvent) => void,
-  ): () => void
+  streamChat(request: ChatRequest, onEvent: (event: ChatStreamEvent) => void): () => void
 }

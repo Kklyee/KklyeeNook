@@ -17,6 +17,8 @@ interface API {
   respondApproval(response: ApprovalResponse): void
   createAgentSession(request: CreateAgentSessionRequest): Promise<AgentSessionSummary>
   listAgentSessions(): Promise<AgentSessionSummary[]>
+  renameAgentSession(request: RenameAgentSessionRequest): Promise<AgentSessionSummary>
+  deleteAgentSession(request: DeleteAgentSessionRequest): Promise<void>
 }
 
 declare global {

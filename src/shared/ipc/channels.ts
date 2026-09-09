@@ -10,4 +10,6 @@ export const IPC_CHANNELS = {
   APPROVAL_RESPOND: 'approval:respond',
   AGENT_SESSION_CREATE: 'agent-session:create',
   AGENT_SESSION_LIST: 'agent-session:list',
+  AGENT_SESSION_RENAME: 'agent-session:rename',
+  AGENT_SESSION_DELETE: 'agent-session:delete',
 } as const

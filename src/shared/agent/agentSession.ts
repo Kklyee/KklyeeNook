@@ -9,3 +9,12 @@ export interface AgentSessionSummary {
 export interface CreateAgentSessionRequest {
   title?: string
 }
+
+export interface RenameAgentSessionRequest {
+  sessionId: string
+  title: string
+}
+
+export interface DeleteAgentSessionRequest {
+  sessionId: string
+}

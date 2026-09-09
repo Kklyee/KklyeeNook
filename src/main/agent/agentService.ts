@@ -31,6 +31,23 @@ export class AgentService {
     return this.sessions.get(sessionId)
   }
 
+  renameSession(sessionId: string, newTitle: string): AgentSessionSummary {
+    const session = this.sessions.get(sessionId)
+    if (!session) {
+      throw new Error(`AgentSession not found: ${sessionId}`)
+    }
+    session.rename(newTitle)
+    return session.toSummary()
+  }
+
+  deleteSession(sessionId: string): void {
+    const session = this.sessions.get(sessionId)
+    if (!session) {
+      throw new Error(`AgentSession not found: ${sessionId}`)
+    }
+    this.sessions.delete(sessionId)
+  }
+
   getSessions(): AgentSession[] {
     return Array.from(this.sessions.values())
   }

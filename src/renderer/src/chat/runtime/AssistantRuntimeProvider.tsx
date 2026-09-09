@@ -8,10 +8,12 @@ import {
   Suggestions,
   type ChatModelAdapter,
   type ToolCallMessagePart,
+  useRemoteThreadListRuntime,
 } from '@assistant-ui/react'
 
 import type { ChatMessage, ChatStreamEvent } from '@/shared/chat/chatEvent'
 import { piToolkit } from '../tools/ToolKit'
+import { agentThreadListAdapter } from './agentThreadListAdapter'
 
 const ipcChatModel: ChatModelAdapter = {
   async *run({ messages, abortSignal }) {
@@ -84,7 +86,7 @@ const ipcChatModel: ChatModelAdapter = {
                 controller.enqueue(event)
                 break
             }
-          }
+          },
         )
 
         const onAbort = () => {
@@ -182,13 +184,29 @@ const ipcChatModel: ChatModelAdapter = {
 }
 
 export function AssistantRuntime({ children }: { children: ReactNode }) {
-  const runtime = useLocalRuntime(ipcChatModel)
+  const runtime = useRemoteThreadListRuntime({
+    runtimeHook: () => useLocalRuntime(ipcChatModel),
+    adapter: agentThreadListAdapter,
+  })
+
   const config = AuiConfig({
     tools: Tools({ toolkit: piToolkit }),
     suggestions: Suggestions([
-      { title: '了解项目', label: '', prompt: '请阅读当前项目，介绍目录结构和主要模块，暂时不要修改文件。' },
-      { title: '解释代码', label: '', prompt: '请解释当前项目中 Agent 从接收消息到完成回复的流程，暂时不要修改文件。' },
-      { title: '整理文档', label: '', prompt: '请阅读项目并提出 README 的改进建议，等我确认后再修改。' },
+      {
+        title: '了解项目',
+        label: '',
+        prompt: '请阅读当前项目，介绍目录结构和主要模块，暂时不要修改文件。',
+      },
+      {
+        title: '解释代码',
+        label: '',
+        prompt: '请解释当前项目中 Agent 从接收消息到完成回复的流程，暂时不要修改文件。',
+      },
+      {
+        title: '整理文档',
+        label: '',
+        prompt: '请阅读项目并提出 README 的改进建议，等我确认后再修改。',
+      },
     ]),
   })
 

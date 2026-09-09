@@ -45,6 +45,9 @@ async function bootstrap() {
       approvalPolicy,
     })
     const agentService = new AgentService(piAgent)
+    agentService.createSession('Agent Runtime')
+
+    agentService.createSession('Approval Test')
     createWindows(agentService)
   } catch (error) {
     console.error('[bootstrap] failed:', error)

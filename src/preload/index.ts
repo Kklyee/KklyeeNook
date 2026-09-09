@@ -6,7 +6,12 @@ import { AgentEvent } from '@/shared/agent/agentEvent'
 import { ChatRequest, ChatStreamEvent } from '@/shared/chat/chatEvent'
 import { ApprovalRequest, ApprovalResponse } from '@/shared/approval/approvalTypes'
 import type { AgentSettingsSnapshot } from '@/shared/agent/agentSettings'
-import { AgentSessionSummary, CreateAgentSessionRequest } from '@/shared/agent/agentSession'
+import {
+  AgentSessionSummary,
+  CreateAgentSessionRequest,
+  DeleteAgentSessionRequest,
+  RenameAgentSessionRequest,
+} from '@/shared/agent/agentSession'
 
 const api = {
   getAgentSettings(): Promise<AgentSettingsSnapshot> {
@@ -88,6 +93,14 @@ const api = {
   listAgentSessions(): Promise<AgentSessionSummary[]> {
     return ipcRenderer.invoke(IPC_CHANNELS.AGENT_SESSION_LIST)
   },
+
+  renameAgentSession(request: RenameAgentSessionRequest): Promise<AgentSessionSummary> {
+    return ipcRenderer.invoke(IPC_CHANNELS.AGENT_SESSION_RENAME, request)
+  },
+
+  deleteAgentSession(request: DeleteAgentSessionRequest): Promise<void> {
+    return ipcRenderer.invoke(IPC_CHANNELS.AGENT_SESSION_DELETE, request)
+  }
 }
 
 if (process.contextIsolated) {
