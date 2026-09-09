@@ -1,6 +1,11 @@
 import type { ElectronAPI } from '@electron-toolkit/preload'
 import type { AgentSettingsSnapshot } from '@/shared/agent/agentSettings'
-import type { AgentEvent } from '@/shared/agent/agentEvent'
+import type {
+  AgentSessionSummary,
+  CreateAgentSessionRequest,
+  DeleteAgentSessionRequest,
+  RenameAgentSessionRequest,
+} from '@/shared/agent/agentSession'
 import type { ChatRequest, ChatStreamEvent } from '@/shared/chat/chatEvent'
 import type { ApprovalRequest, ApprovalResponse } from '@/shared/approval/approvalTypes'
 

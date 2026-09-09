@@ -8,7 +8,7 @@ import { getAgentRunPatch } from './agentRunState'
 import { AgentEventEnvelope } from './agentEventEnvelope'
 import { AgentEvent } from '@/shared/agent/agentEvent'
 import { AgentSessionSummary } from '@/shared/agent/agentSession'
-import { AgentRuntimeFactory } from './agentRuntimeFactory'
+import type { AgentRuntimeFactory } from './agentRuntime'
 
 export interface AgentRunHandle {
   run: AgentRun

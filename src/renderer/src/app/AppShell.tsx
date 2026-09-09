@@ -1,16 +1,16 @@
-import { ChatPanel } from '../chat/components/ChatPannel'
-import { Approval } from '../chat/approval/Approval'
+import { ApprovalPrompt } from '../features/approval/ApprovalPrompt'
+import { ChatPanel } from '../features/chat/ChatPanel'
+import { ThreadSidebar } from '../features/chat/ThreadSidebar'
 import { SidebarInset, SidebarProvider } from '../components/ui/sidebar'
-import { ThreadListSidebar } from '../components/assistant-ui/elements/threadlist-sidebar.aui'
 
 export function AppShell() {
   return (
     <SidebarProvider>
-      <ThreadListSidebar collapsible="icon" />
+      <ThreadSidebar collapsible="icon" />
       <SidebarInset>
         <ChatPanel />
       </SidebarInset>
-      <Approval />
+      <ApprovalPrompt />
     </SidebarProvider>
   )
 }
