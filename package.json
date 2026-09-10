@@ -18,7 +18,10 @@
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build && electron-builder --win",
     "build:mac": "electron-vite build && electron-builder --mac",
-    "build:linux": "electron-vite build && electron-builder --linux"
+    "build:linux": "electron-vite build && electron-builder --linux",
+    "db:generate": "drizzle-kit generate",
+    "db:check": "drizzle-kit check",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@assistant-ui/react": "^0.15.17",
@@ -29,11 +32,14 @@
     "@earendil-works/pi-coding-agent": "^0.84.4",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "@libsql/client": "^0.18.0",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/react-query": "^5.102.8",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cn": "^0.2.6",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^1.0.0-rc.4",
     "lucide-react": "^1.37.0",
     "pixi.js": "^8.20.1",
     "remark-gfm": "^4.0.1",
@@ -50,6 +56,7 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "drizzle-kit": "^1.0.0-rc.4",
     "electron": "^39.2.6",
     "electron-builder": "^26.0.12",
     "electron-vite": "^5.0.0",
@@ -57,6 +64,7 @@
     "oxlint": "^1.80.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
+    "tsx": "^4.23.13",
     "typescript": "^5.9.3",
     "vite": "^7.2.6"
   }

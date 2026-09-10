@@ -9,3 +9,4 @@ docs
 .tmp*
 .env
 .env*
+dev.db*

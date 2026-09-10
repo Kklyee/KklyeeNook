@@ -1,4 +1,5 @@
 import type { AgentConfig } from '@/shared/agent/agentConfig'
+import { app } from 'electron'
 import { AgentService } from '../agent/agentService'
 import { registerAgentSessionIpc } from '../agent/ipc/agentSessionIpc'
 import { registerAssistantIpc } from '../agent/ipc/assistantIpc'
@@ -6,6 +7,8 @@ import { createPiAgentRuntimeFactory } from '../agent/pi/createPiAgentRuntime'
 import { registerApprovalIpc } from '../approval/approvalIpc'
 import { ApprovalPolicy } from '../approval/approvalPolicy'
 import { ApprovalService } from '../approval/approvalService'
+import { connectDatabase } from '../db/client'
+import { getDatabasePath, getDatabaseUrl } from '../db/databasePath'
 import { createChatWindow } from '../electron/chatWindow'
 import { registerWindowIpc } from '../electron/windowIpc'
 import { AgentConfigStore } from '../settings/agentConfigStore'
@@ -29,6 +32,10 @@ export async function bootstrap(): Promise<void> {
   const credentialStore = new MemoryCredentialStore()
   const approvalService = new ApprovalService()
   const approvalPolicy = new ApprovalPolicy()
+  const databaseConnection = await connectDatabase(getDatabaseUrl())
+
+  app.once('will-quit', databaseConnection.close)
+  console.log('[database] connected:', getDatabasePath())
 
   credentialStore.setApiKey(agentConfig.model.provider, apiKey)
 
