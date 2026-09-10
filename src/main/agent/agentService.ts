@@ -78,11 +78,8 @@ export class AgentService {
   }
 
   async listSessions(): Promise<AgentSessionSummary[]> {
-    const sessions = await this.sessionRepo.findAll()
-    return sessions
-      .map(({ id, title, createdAt, updatedAt }) =>
-        new AgentSession(id, title, { createdAt, updatedAt }).toSummary(),
-      )
+    return Array.from(this.sessions.values())
+      .map((session) => session.toSummary())
       .sort((a, b) => b.updatedAt - a.updatedAt)
   }
 

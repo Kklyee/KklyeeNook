@@ -10,14 +10,12 @@ export async function connectDatabase(url: string) {
   const database = createDatabase(url)
 
   try {
+    await database.$client.execute('PRAGMA foreign_keys = ON')
     await database.$client.execute('select 1')
   } catch (error) {
     database.$client.close()
     throw error
   }
 
-  return {
-    database,
-    close: () => database.$client.close(),
-  }
+  return { database, close: () => database.$client.close() }
 }

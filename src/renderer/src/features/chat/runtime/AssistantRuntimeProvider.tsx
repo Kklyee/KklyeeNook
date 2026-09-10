@@ -11,19 +11,31 @@ import {
 import { assistantToolkit } from '../tools/AssistantToolkit'
 import { createChatModelAdapter } from './chatModelAdapter'
 import { threadListAdapter } from './threadListAdapter'
+import { createThreadHistoryAdapter } from './threadHistoryAdapter'
 
 function useAgentThreadRuntime() {
   const aui = useAui()
-  const chatModel = useMemo(
-    () =>
-      createChatModelAdapter(async () => {
-        const { remoteId } = await aui.threadListItem.initialize()
-        return remoteId
-      }),
+
+  const resolveSessionId = useMemo(
+    () => async () => {
+      const { remoteId } = await aui.threadListItem.initialize()
+      return remoteId
+    },
     [aui],
   )
 
-  return useLocalRuntime(chatModel)
+  const chatModel = useMemo(() => createChatModelAdapter(resolveSessionId), [resolveSessionId])
+
+  const history = useMemo(
+    () =>
+      createThreadHistoryAdapter({
+        getSessionId: () => aui.threadListItem.getState().remoteId,
+        ensureSessionId: resolveSessionId,
+      }),
+    [aui, resolveSessionId],
+  )
+
+  return useLocalRuntime(chatModel, { adapters: { history } })
 }
 
 export function AssistantRuntime({ children }: { children: ReactNode }) {

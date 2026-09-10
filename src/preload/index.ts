@@ -10,6 +10,7 @@ import {
   DeleteAgentSessionRequest,
   RenameAgentSessionRequest,
 } from '@/shared/agent/agentSession'
+import { AgentMessageSnapshot, LoadAgentMessagesRequest } from '@/shared/chat/chatHistory'
 
 const api = {
   getAgentSettings(): Promise<AgentSettingsSnapshot> {
@@ -65,6 +66,14 @@ const api = {
 
   deleteAgentSession(request: DeleteAgentSessionRequest): Promise<void> {
     return ipcRenderer.invoke(IPC_CHANNELS.AGENT_SESSION_DELETE, request)
+  },
+
+  loadAgentMessages(request: LoadAgentMessagesRequest): Promise<AgentMessageSnapshot[]> {
+    return ipcRenderer.invoke(IPC_CHANNELS.AGENT_MESSAGE_LIST, request)
+  },
+
+  saveAgentMessage(message: AgentMessageSnapshot): Promise<void> {
+    return ipcRenderer.invoke(IPC_CHANNELS.AGENT_MESSAGE_SAVE, message)
   },
 }
 

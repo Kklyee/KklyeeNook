@@ -8,6 +8,7 @@ import type {
 } from '@/shared/agent/agentSession'
 import type { ChatRequest, ChatStreamEvent } from '@/shared/chat/chatEvent'
 import type { ApprovalRequest, ApprovalResponse } from '@/shared/approval/approvalTypes'
+import { AgentMessageSnapshot, LoadAgentMessagesRequest } from '../shared/chat/chatHistory'
 
 interface API {
   getAgentSettings(): Promise<AgentSettingsSnapshot>
@@ -18,6 +19,8 @@ interface API {
   listAgentSessions(): Promise<AgentSessionSummary[]>
   renameAgentSession(request: RenameAgentSessionRequest): Promise<AgentSessionSummary>
   deleteAgentSession(request: DeleteAgentSessionRequest): Promise<void>
+  loadAgentMessages(request: LoadAgentMessagesRequest): Promise<AgentMessageSnapshot[]>
+  saveAgentMessage(message: AgentMessageSnapshot): Promise<void>
 }
 
 declare global {

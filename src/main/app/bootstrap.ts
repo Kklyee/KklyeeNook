@@ -16,6 +16,9 @@ import { MemoryCredentialStore } from '../settings/credentialStore'
 import { registerSettingsIpc } from '../settings/settingsIpc'
 import { loadRenderer } from './loadRenderer'
 import { DrizzleAgentSessionRepo } from '../db/repo/agentSessionRepo'
+import { DrizzleAgentMessageRepo } from '../db/repo/agentMessageRepo'
+import { AgentMessageService } from '../agent/agentMessageService'
+import { registerAgentMessageIpc } from '../agent/ipc/agentMessageIpc'
 
 export interface AppContext {
   dispose(): void
@@ -39,9 +42,6 @@ export async function bootstrap(): Promise<AppContext> {
   const approvalPolicy = new ApprovalPolicy()
   const { database: db, close: closeDb } = await connectDatabase(getDatabaseUrl())
 
-  app.once('will-quit', closeDb)
-  console.log('[database] connected:', getDatabasePath())
-
   credentialStore.setApiKey(agentConfig.model.provider, apiKey)
 
   const runtimeFactory = createPiAgentRuntimeFactory(
@@ -53,6 +53,10 @@ export async function bootstrap(): Promise<AppContext> {
 
   const sessionRepo = new DrizzleAgentSessionRepo(db)
   const agentService = new AgentService(runtimeFactory, sessionRepo)
+
+  const messageRepo = new DrizzleAgentMessageRepo(db)
+  const messageService = new AgentMessageService(messageRepo)
+  await agentService.initialize()
   const chatWindow = createChatWindow()
 
   registerSettingsIpc(chatWindow, agentConfig, credentialStore, approvalPolicy)
@@ -60,9 +64,11 @@ export async function bootstrap(): Promise<AppContext> {
   registerAssistantIpc({ mainWindow: chatWindow, agentService })
   registerApprovalIpc(chatWindow, approvalService)
   registerAgentSessionIpc(agentService)
+  registerAgentMessageIpc(messageService)
 
-  chatWindow.on('ready-to-show', () => chatWindow.show())
   loadRenderer(chatWindow, 'chat')
+  chatWindow.on('ready-to-show', () => chatWindow.show())
+  app.once('will-quit', closeDb)
 
   return {
     dispose() {
