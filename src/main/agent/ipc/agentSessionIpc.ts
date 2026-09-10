@@ -6,6 +6,7 @@ import {
   DeleteAgentSessionRequest,
   RenameAgentSessionRequest,
 } from '@/shared/agent/agentSession'
+import { LoadAgentRunsRequest } from '@/shared/agent/agentRun'
 
 export function registerAgentSessionIpc(agentService: AgentService) {
   ipcMain.handle(
@@ -34,10 +35,14 @@ export function registerAgentSessionIpc(agentService: AgentService) {
       return await agentService.deleteSession(request.sessionId)
     },
   )
+  ipcMain.handle(IPC_CHANNELS.AGENT_RUN_LIST, async (_event, request: LoadAgentRunsRequest) => {
+    return await agentService.listRuns(request.sessionId)
+  })
   return () => {
     ipcMain.removeHandler(IPC_CHANNELS.AGENT_SESSION_CREATE)
     ipcMain.removeHandler(IPC_CHANNELS.AGENT_SESSION_LIST)
     ipcMain.removeHandler(IPC_CHANNELS.AGENT_SESSION_RENAME)
     ipcMain.removeHandler(IPC_CHANNELS.AGENT_SESSION_DELETE)
+    ipcMain.removeHandler(IPC_CHANNELS.AGENT_RUN_LIST)
   }
 }

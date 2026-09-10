@@ -28,6 +28,10 @@ export class AgentSession {
     this.touch()
   }
 
+  restoreRun(run: AgentRun): void {
+    this.runs.set(run.id, run)
+  }
+
   getRun(runId: string): AgentRun | undefined {
     return this.runs.get(runId)
   }

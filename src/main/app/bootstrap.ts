@@ -8,7 +8,7 @@ import { registerApprovalIpc } from '../approval/approvalIpc'
 import { ApprovalPolicy } from '../approval/approvalPolicy'
 import { ApprovalService } from '../approval/approvalService'
 import { connectDatabase } from '../db/client'
-import { getDatabasePath, getDatabaseUrl } from '../db/databasePath'
+import { getDatabaseUrl, getMigrationsPath } from '../db/databasePath'
 import { createChatWindow } from '../electron/chatWindow'
 import { registerWindowIpc } from '../electron/windowIpc'
 import { AgentConfigStore } from '../settings/agentConfigStore'
@@ -21,6 +21,7 @@ import { AgentMessageService } from '../agent/agentMessageService'
 import { registerAgentMessageIpc } from '../agent/ipc/agentMessageIpc'
 import { DrizzleAgentRuntimeStateRepo } from '../db/repo/agentRuntimeStateRepo'
 import { join } from 'node:path'
+import { DrizzleAgentRunRepo } from '../db/repo/agentRunRepo'
 
 export interface AppContext {
   dispose(): void
@@ -42,7 +43,10 @@ export async function bootstrap(): Promise<AppContext> {
   const credentialStore = new MemoryCredentialStore()
   const approvalService = new ApprovalService()
   const approvalPolicy = new ApprovalPolicy()
-  const { database: db, close: closeDb } = await connectDatabase(getDatabaseUrl())
+  const { database: db, close: closeDb } = await connectDatabase(
+    getDatabaseUrl(),
+    getMigrationsPath(),
+  )
 
   credentialStore.setApiKey(agentConfig.model.provider, apiKey)
 
@@ -59,7 +63,8 @@ export async function bootstrap(): Promise<AppContext> {
   )
 
   const sessionRepo = new DrizzleAgentSessionRepo(db)
-  const agentService = new AgentService(runtimeFactory, sessionRepo)
+  const runRepo = new DrizzleAgentRunRepo(db)
+  const agentService = new AgentService(runtimeFactory, sessionRepo, runRepo)
 
   const messageRepo = new DrizzleAgentMessageRepo(db)
   const messageService = new AgentMessageService(messageRepo)

@@ -1,10 +1,9 @@
+import { expect, test } from 'vitest'
+
 import { ApprovalService } from './approvalService'
 
-const approvalService = new ApprovalService()
-
-async function testApprovalService() {
-  console.log('准备请求 approval')
-
+test('resolves an approval request after the user responds', async () => {
+  const approvalService = new ApprovalService()
   const resultPromise = approvalService.request({
     id: 'test-1',
     toolCallId: 'call-1',
@@ -12,16 +11,7 @@ async function testApprovalService() {
     args: { path: 'hello.txt', content: 'hello' },
   })
 
-  console.log('Approval 已创建，现在应该处于等待状态')
+  approvalService.respond({ id: 'test-1', decision: 'allow' })
 
-  setTimeout(() => {
-    console.log('模拟用户点击 Allow')
-
-    approvalService.respond({ id: 'test-1', decision: 'allow' })
-  }, 2000)
-
-  const allowed = await resultPromise
-  console.log('Approval result:', allowed)
-}
-
-void testApprovalService()
+  await expect(resultPromise).resolves.toBe(true)
+})

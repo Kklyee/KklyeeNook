@@ -10,6 +10,7 @@ import { AgentEvent } from '@/shared/agent/agentEvent'
 import { AgentSessionSummary } from '@/shared/agent/agentSession'
 import type { AgentRuntimeFactory } from './agentRuntime'
 import { AgentSessionRepo } from '../db/repo/agentSessionRepo'
+import { AgentRunRepo } from '../db/repo/agentRunRepo'
 
 export interface AgentRunHandle {
   run: AgentRun
@@ -21,19 +22,27 @@ export class AgentService {
   private readonly sessions = new Map<string, AgentSession>()
   private readonly runtimes = new Map<string, AgentRuntime>()
   private readonly listeners = new Set<AgentEventListener>()
+  private readonly runPersistence = new Map<string, Promise<void>>()
 
   constructor(
     private readonly runtimeFactory: AgentRuntimeFactory,
     private readonly sessionRepo: AgentSessionRepo,
+    private readonly runRepo: AgentRunRepo,
   ) {}
 
   async initialize(): Promise<void> {
+    await this.runRepo.markActiveAsInterrupted(Date.now())
     const records = await this.sessionRepo.findAll()
 
     for (const record of records) {
       const { id, title, createdAt, updatedAt } = record
       const session = new AgentSession(id, title, { createdAt, updatedAt })
       this.sessions.set(id, session)
+    }
+
+    const runs = await this.runRepo.findAll()
+    for (const run of runs) {
+      this.sessions.get(run.sessionId)?.restoreRun(run)
     }
   }
   async createSession(title?: string): Promise<AgentSessionSummary> {
@@ -106,11 +115,30 @@ export class AgentService {
     if (!run) {
       return
     }
-    const patch = getAgentRunPatch(run, event)
+    const timestamp = Date.now()
+    const patch = getAgentRunPatch(run, event, timestamp)
     if (patch) {
-      session.updateRun(runId, patch)
+      const updatedRun = session.updateRun(runId, { ...patch, updatedAt: timestamp })
+      void this.queueRunSave(updatedRun).catch((error) => {
+        console.error('[AgentService] failed to persist run:', error)
+      })
     }
-    this.publish({ sessionId: session.id, runId, timestamp: Date.now(), event })
+    this.publish({ sessionId: session.id, runId, timestamp, event })
+  }
+
+  async listRuns(sessionId: string): Promise<AgentRun[]> {
+    if (!this.sessions.has(sessionId)) {
+      throw new Error(`AgentSession not found: ${sessionId}`)
+    }
+
+    const pendingWrites = this.sessions
+      .get(sessionId)!
+      .getRuns()
+      .map((run) => this.runPersistence.get(run.id))
+      .filter((write): write is Promise<void> => write !== undefined)
+
+    await Promise.all(pendingWrites)
+    return this.runRepo.findBySessionId(sessionId)
   }
   subscribe(listener: AgentEventListener): () => void {
     this.listeners.add(listener)
@@ -137,13 +165,33 @@ export class AgentService {
       throw new Error(`AgentSession not found: ${sessionId}`)
     }
 
-    const run: AgentRun = { id: randomUUID(), sessionId, status: 'created', startedAt: Date.now() }
+    const now = Date.now()
+    const run: AgentRun = {
+      id: randomUUID(),
+      sessionId,
+      status: 'running',
+      createdAt: now,
+      updatedAt: now,
+      startedAt: now,
+    }
     session.addRun(run)
-    const completion = Promise.resolve().then(() =>
+    const completion = this.queueRunSave(run).then(() =>
       this.executeRun(session, run.id, prompt, signal),
     )
 
+    void completion.then(
+      () => this.runPersistence.delete(run.id),
+      () => this.runPersistence.delete(run.id),
+    )
+
     return { run, completion }
+  }
+
+  private queueRunSave(run: AgentRun): Promise<void> {
+    const previousWrite = this.runPersistence.get(run.id) ?? Promise.resolve()
+    const nextWrite = previousWrite.then(() => this.runRepo.save(run))
+    this.runPersistence.set(run.id, nextWrite)
+    return nextWrite
   }
 
   private async executeRun(
@@ -174,6 +222,11 @@ export class AgentService {
           error: error instanceof Error ? error.message : String(error),
         })
       }
+    }
+
+    const pendingWrite = this.runPersistence.get(runId)
+    if (pendingWrite) {
+      await pendingWrite
     }
 
     const finalRun = session.getRun(runId)

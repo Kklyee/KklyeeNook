@@ -11,6 +11,7 @@ import {
   RenameAgentSessionRequest,
 } from '@/shared/agent/agentSession'
 import { AgentMessageSnapshot, LoadAgentMessagesRequest } from '@/shared/chat/chatHistory'
+import { AgentRun, LoadAgentRunsRequest } from '@/shared/agent/agentRun'
 
 const api = {
   getAgentSettings(): Promise<AgentSettingsSnapshot> {
@@ -66,6 +67,10 @@ const api = {
 
   deleteAgentSession(request: DeleteAgentSessionRequest): Promise<void> {
     return ipcRenderer.invoke(IPC_CHANNELS.AGENT_SESSION_DELETE, request)
+  },
+
+  listAgentRuns(request: LoadAgentRunsRequest): Promise<AgentRun[]> {
+    return ipcRenderer.invoke(IPC_CHANNELS.AGENT_RUN_LIST, request)
   },
 
   loadAgentMessages(request: LoadAgentMessagesRequest): Promise<AgentMessageSnapshot[]> {

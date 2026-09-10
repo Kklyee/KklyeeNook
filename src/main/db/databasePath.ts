@@ -13,3 +13,7 @@ export function getDatabasePath(): string {
 export function getDatabaseUrl(): string {
   return pathToFileURL(getDatabasePath()).href
 }
+
+export function getMigrationsPath(): string {
+  return app.isPackaged ? join(process.resourcesPath, 'drizzle') : join(app.getAppPath(), 'drizzle')
+}
