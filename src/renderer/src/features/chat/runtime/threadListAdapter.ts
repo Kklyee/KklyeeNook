@@ -1,7 +1,6 @@
 import type { RemoteThreadListAdapter } from '@assistant-ui/react'
+import { createAssistantStream } from 'assistant-stream'
 import type { AgentSessionSummary } from '@/shared/agent/agentSession'
-
-// type RemoteThreadMetadata = Awaited<ReturnType<RemoteThreadListAdapter['list']>>['threads'][number]
 
 function toRemoteThreadMetadata(session: AgentSessionSummary) {
   return {
@@ -54,8 +53,16 @@ export const threadListAdapter = {
     throw new Error('Thread unarchive is not implemented yet')
   },
 
-  async generateTitle() {
-    throw new Error('Thread title generation is not implemented yet')
+  async generateTitle(remoteId, messages) {
+    const firstUserMessage = messages.find((message) => message.role === 'user')
+    const text = firstUserMessage?.content.find((part) => part.type === 'text')?.text.trim()
+    const title = !text ? 'New Task' : text.length > 50 ? `${text.slice(0, 47)}...` : text
+
+    await window.api.renameAgentSession({ sessionId: remoteId, title })
+
+    return createAssistantStream((controller) => {
+      controller.appendText(title)
+    })
   },
 } satisfies Pick<
   RemoteThreadListAdapter,
