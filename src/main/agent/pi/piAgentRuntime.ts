@@ -15,6 +15,8 @@ import type { ApprovalPolicy } from '@/main/approval/approvalPolicy'
 import { createPiApprovalExtension } from '@/main/approval/piApprovalExtension'
 import type { AgentRuntime } from '../agentRuntime'
 import { convertPiEvent } from './piEventAdapter'
+import { AgentRuntimeStateRepo } from '@/main/db/repo/agentRuntimeStateRepo'
+import { existsSync } from 'node:fs'
 type Emit = (event: AgentEvent) => void
 
 interface PIAgentApprovalDeps {
@@ -26,9 +28,12 @@ export class PiAgentRuntime implements AgentRuntime {
   private session: PiAgentSession | null = null
 
   constructor(
+    private readonly sessionId: string,
     private readonly configStore: AgentConfigStore,
     private readonly credentialStore: CredentialStore,
     private readonly approval: PIAgentApprovalDeps,
+    private readonly runtimeStateRepo: AgentRuntimeStateRepo,
+    private readonly sessionDir: string,
   ) {}
 
   async initialize() {
@@ -89,7 +94,7 @@ export class PiAgentRuntime implements AgentRuntime {
         ],
       })
       await resourceLoader.reload()
-
+      const sessionManager = await this.createSessionManager(cwd)
       const { session } = await createAgentSession({
         cwd,
         modelRuntime,
@@ -97,12 +102,31 @@ export class PiAgentRuntime implements AgentRuntime {
         thinkingLevel: thinkingLevel ?? 'medium',
         tools,
         resourceLoader,
-        sessionManager: SessionManager.inMemory(cwd),
+        sessionManager,
       })
       this.session = session
+      if (session.sessionId !== this.sessionId) {
+        session.dispose()
+        throw new Error(
+          `Pi session ID mismatch: expected ${this.sessionId}, got ${session.sessionId}`,
+        )
+      }
+
+      const resumeRef = session.sessionFile
+
+      if (!resumeRef) {
+        session.dispose()
+        throw new Error('Persistent Pi session did not provide a session file')
+      }
+
+      await this.runtimeStateRepo.save({
+        sessionId: this.sessionId,
+        runtimeKind: 'pi',
+        resumeRef,
+        updatedAt: Date.now(),
+      })
       console.log('[PiAgentRuntime] session created')
       console.log('[PiAgentRuntime] model:', `${provider}/${modelID}`)
-      console.log('[PiAgentRuntime] tools:', tools)
     } catch (e) {
       console.error('[PiAgentRuntime] failed to create session:', e)
       throw e
@@ -176,5 +200,42 @@ export class PiAgentRuntime implements AgentRuntime {
   dispose() {
     this.session?.dispose()
     this.session = null
+  }
+
+  private async createSessionManager(cwd: string): Promise<SessionManager> {
+    const state = await this.runtimeStateRepo.findBySessionId(this.sessionId)
+
+    if (!state) {
+      console.log('[PiAgentRuntime] create persistent session', { sessionId: this.sessionId })
+      return SessionManager.create(cwd, this.sessionDir, { id: this.sessionId })
+    }
+
+    if (state.runtimeKind !== 'pi') {
+      throw new Error(`Unsupported runtime kind: ${state.runtimeKind}`)
+    }
+
+    if (!existsSync(state.resumeRef)) {
+      console.warn('[PiAgentRuntime] resume file missing, creating a new Pi session', {
+        sessionId: this.sessionId,
+        resumeRef: state.resumeRef,
+      })
+
+      return SessionManager.create(cwd, this.sessionDir, { id: this.sessionId })
+    }
+
+    console.log('[PiAgentRuntime] resume persistent session', {
+      sessionId: this.sessionId,
+      resumeRef: state.resumeRef,
+    })
+
+    const manager = SessionManager.open(state.resumeRef, this.sessionDir, cwd)
+
+    if (manager.getSessionId() !== this.sessionId) {
+      throw new Error(
+        `Pi session mismatch: expected ${this.sessionId}, got ${manager.getSessionId()}`,
+      )
+    }
+
+    return manager
   }
 }

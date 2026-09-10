@@ -19,6 +19,8 @@ import { DrizzleAgentSessionRepo } from '../db/repo/agentSessionRepo'
 import { DrizzleAgentMessageRepo } from '../db/repo/agentMessageRepo'
 import { AgentMessageService } from '../agent/agentMessageService'
 import { registerAgentMessageIpc } from '../agent/ipc/agentMessageIpc'
+import { DrizzleAgentRuntimeStateRepo } from '../db/repo/agentRuntimeStateRepo'
+import { join } from 'node:path'
 
 export interface AppContext {
   dispose(): void
@@ -44,11 +46,16 @@ export async function bootstrap(): Promise<AppContext> {
 
   credentialStore.setApiKey(agentConfig.model.provider, apiKey)
 
+  const runtimeStateRepo = new DrizzleAgentRuntimeStateRepo(db)
+  const sessionDir = join(app.getAppPath(), '.pi-sessions')
+
   const runtimeFactory = createPiAgentRuntimeFactory(
     configStore,
     credentialStore,
     approvalService,
     approvalPolicy,
+    runtimeStateRepo,
+    sessionDir,
   )
 
   const sessionRepo = new DrizzleAgentSessionRepo(db)
