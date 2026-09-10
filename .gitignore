@@ -10,3 +10,5 @@ docs
 .env
 .env*
 dev.db*
+kklyeenook.db*
+data/kklyeenook.db*

@@ -1,9 +1,13 @@
 import { app } from 'electron'
+import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 export function getDatabasePath(): string {
-  return join(app.getPath('userData'), 'kklyeenook.db')
+  const databaseDirectory = join(app.getAppPath(), 'data')
+  mkdirSync(databaseDirectory, { recursive: true })
+
+  return join(databaseDirectory, 'kklyeenook.db')
 }
 
 export function getDatabaseUrl(): string {

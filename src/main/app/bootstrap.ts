@@ -15,6 +15,11 @@ import { AgentConfigStore } from '../settings/agentConfigStore'
 import { MemoryCredentialStore } from '../settings/credentialStore'
 import { registerSettingsIpc } from '../settings/settingsIpc'
 import { loadRenderer } from './loadRenderer'
+import { DrizzleAgentSessionRepo } from '../db/repo/agentSessionRepo'
+
+export interface AppContext {
+  dispose(): void
+}
 
 const agentConfig: AgentConfig = {
   model: { provider: 'deepseek', modelID: 'deepseek-v4-flash', thinkingLevel: 'off' },
@@ -22,7 +27,7 @@ const agentConfig: AgentConfig = {
   cwd: process.cwd(),
 }
 
-export async function bootstrap(): Promise<void> {
+export async function bootstrap(): Promise<AppContext> {
   const apiKey = process.env.API_KEY
   if (!apiKey) {
     throw new Error(`请在 .env 中配置 ${agentConfig.model.provider} 的 API_KEY`)
@@ -32,9 +37,9 @@ export async function bootstrap(): Promise<void> {
   const credentialStore = new MemoryCredentialStore()
   const approvalService = new ApprovalService()
   const approvalPolicy = new ApprovalPolicy()
-  const databaseConnection = await connectDatabase(getDatabaseUrl())
+  const { database: db, close: closeDb } = await connectDatabase(getDatabaseUrl())
 
-  app.once('will-quit', databaseConnection.close)
+  app.once('will-quit', closeDb)
   console.log('[database] connected:', getDatabasePath())
 
   credentialStore.setApiKey(agentConfig.model.provider, apiKey)
@@ -45,7 +50,9 @@ export async function bootstrap(): Promise<void> {
     approvalService,
     approvalPolicy,
   )
-  const agentService = new AgentService(runtimeFactory)
+
+  const sessionRepo = new DrizzleAgentSessionRepo(db)
+  const agentService = new AgentService(runtimeFactory, sessionRepo)
   const chatWindow = createChatWindow()
 
   registerSettingsIpc(chatWindow, agentConfig, credentialStore, approvalPolicy)
@@ -56,4 +63,10 @@ export async function bootstrap(): Promise<void> {
 
   chatWindow.on('ready-to-show', () => chatWindow.show())
   loadRenderer(chatWindow, 'chat')
+
+  return {
+    dispose() {
+      closeDb()
+    },
+  }
 }

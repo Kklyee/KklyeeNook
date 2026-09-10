@@ -1,25 +1,30 @@
 import { AgentSessionSummary } from '@/shared/agent/agentSession'
 import type { AgentRun } from '../../shared/agent/agentRun'
+import { AgentSessionRecord } from '../db/repo/agentSessionRepo'
+
+interface AgentSessionTimestamps {
+  createdAt: number
+  updatedAt: number
+}
 
 export class AgentSession {
   readonly id: string
   readonly createdAt: number
-  private title: string
-  private updatedAt: number
+  title: string
+  updatedAt: number
 
   private runs = new Map<string, AgentRun>()
 
-  constructor(id: string, title: string = 'New Task') {
+  constructor(id: string, title: string = 'New Task', timestamp?: AgentSessionTimestamps) {
     this.id = id
-    const now = Date.now()
-    this.createdAt = now
-    this.updatedAt = now
     this.title = title
+    const now = Date.now()
+    this.createdAt = timestamp?.createdAt ?? now
+    this.updatedAt = timestamp?.updatedAt ?? now
   }
 
   addRun(run: AgentRun): void {
     this.runs.set(run.id, run)
-
     this.touch()
   }
 
@@ -80,5 +85,9 @@ export class AgentSession {
       updatedAt: this.updatedAt,
       activeRunId: activeRun?.id,
     }
+  }
+
+  toRecord(): AgentSessionRecord {
+    return { id: this.id, title: this.title, createdAt: this.createdAt, updatedAt: this.updatedAt }
   }
 }

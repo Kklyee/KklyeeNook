@@ -11,27 +11,27 @@ export function registerAgentSessionIpc(agentService: AgentService) {
   ipcMain.handle(
     IPC_CHANNELS.AGENT_SESSION_CREATE,
     async (_event, request: CreateAgentSessionRequest) => {
-      const session = agentService.createSession(request.title)
+      const session = await agentService.createSession(request.title)
       return session
     },
   )
 
   ipcMain.handle(IPC_CHANNELS.AGENT_SESSION_LIST, async () => {
-    return agentService.listSessions()
+    return await agentService.listSessions()
   })
 
   ipcMain.handle(
     IPC_CHANNELS.AGENT_SESSION_RENAME,
 
-    (_event, request: RenameAgentSessionRequest) => {
-      return agentService.renameSession(request.sessionId, request.title)
+    async (_event, request: RenameAgentSessionRequest) => {
+      return await agentService.renameSession(request.sessionId, request.title)
     },
   )
 
   ipcMain.handle(
     IPC_CHANNELS.AGENT_SESSION_DELETE,
-    (_event, request: DeleteAgentSessionRequest) => {
-      return agentService.deleteSession(request.sessionId)
+    async (_event, request: DeleteAgentSessionRequest) => {
+      return await agentService.deleteSession(request.sessionId)
     },
   )
   return () => {

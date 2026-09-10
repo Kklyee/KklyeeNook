@@ -9,6 +9,7 @@ import { AgentEventEnvelope } from './agentEventEnvelope'
 import { AgentEvent } from '@/shared/agent/agentEvent'
 import { AgentSessionSummary } from '@/shared/agent/agentSession'
 import type { AgentRuntimeFactory } from './agentRuntime'
+import { AgentSessionRepo } from '../db/repo/agentSessionRepo'
 
 export interface AgentRunHandle {
   run: AgentRun
@@ -21,10 +22,23 @@ export class AgentService {
   private readonly runtimes = new Map<string, AgentRuntime>()
   private readonly listeners = new Set<AgentEventListener>()
 
-  constructor(private readonly runtimeFactory: AgentRuntimeFactory) {}
+  constructor(
+    private readonly runtimeFactory: AgentRuntimeFactory,
+    private readonly sessionRepo: AgentSessionRepo,
+  ) {}
 
-  createSession(title?: string): AgentSessionSummary {
+  async initialize(): Promise<void> {
+    const records = await this.sessionRepo.findAll()
+
+    for (const record of records) {
+      const { id, title, createdAt, updatedAt } = record
+      const session = new AgentSession(id, title, { createdAt, updatedAt })
+      this.sessions.set(id, session)
+    }
+  }
+  async createSession(title?: string): Promise<AgentSessionSummary> {
     const session = new AgentSession(randomUUID(), title)
+    await this.sessionRepo.save(session.toRecord())
     this.sessions.set(session.id, session)
     return session.toSummary()
   }
@@ -33,27 +47,29 @@ export class AgentService {
     return this.sessions.get(sessionId)
   }
 
-  renameSession(sessionId: string, newTitle: string): AgentSessionSummary {
+  async renameSession(sessionId: string, newTitle: string): Promise<AgentSessionSummary> {
     const session = this.sessions.get(sessionId)
     if (!session) {
       throw new Error(`AgentSession not found: ${sessionId}`)
     }
     session.rename(newTitle)
+    await this.sessionRepo.save(session.toRecord())
+
     return session.toSummary()
   }
 
-  deleteSession(sessionId: string): void {
+  async deleteSession(sessionId: string): Promise<void> {
     const session = this.sessions.get(sessionId)
-
     if (!session) {
       throw new Error(`AgentSession not found: ${sessionId}`)
     }
-
+    await this.sessionRepo.delete(sessionId)
     const runtime = this.runtimes.get(sessionId)
     if (runtime) {
       runtime.dispose()
       this.runtimes.delete(sessionId)
     }
+
     this.sessions.delete(sessionId)
   }
 
@@ -61,9 +77,12 @@ export class AgentService {
     return Array.from(this.sessions.values())
   }
 
-  listSessions(): AgentSessionSummary[] {
-    return Array.from(this.sessions.values())
-      .map((session) => session.toSummary())
+  async listSessions(): Promise<AgentSessionSummary[]> {
+    const sessions = await this.sessionRepo.findAll()
+    return sessions
+      .map(({ id, title, createdAt, updatedAt }) =>
+        new AgentSession(id, title, { createdAt, updatedAt }).toSummary(),
+      )
       .sort((a, b) => b.updatedAt - a.updatedAt)
   }
 
