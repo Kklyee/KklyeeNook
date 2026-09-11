@@ -11,6 +11,8 @@ import { AgentSessionSummary } from '@/shared/agent/agentSession'
 import type { AgentRuntimeFactory } from './agentRuntime'
 import { AgentSessionRepo } from '../db/repo/agentSessionRepo'
 import { AgentRunRepo } from '../db/repo/agentRunRepo'
+import type { AgentExecutionRecord } from '@/shared/agent/agentExecutionRecord'
+import type { AgentExecutionRecordRepo } from '../db/repo/agentExecutionRecordRepo'
 
 export interface AgentRunHandle {
   run: AgentRun
@@ -28,6 +30,7 @@ export class AgentService {
     private readonly runtimeFactory: AgentRuntimeFactory,
     private readonly sessionRepo: AgentSessionRepo,
     private readonly runRepo: AgentRunRepo,
+    private readonly executionRecordRepo: AgentExecutionRecordRepo,
   ) {}
 
   async initialize(): Promise<void> {
@@ -116,14 +119,19 @@ export class AgentService {
       return
     }
     const timestamp = Date.now()
+    const envelope = { sessionId: session.id, runId, timestamp, event }
     const patch = getAgentRunPatch(run, event, timestamp)
+    let updatedRun: AgentRun | undefined
     if (patch) {
-      const updatedRun = session.updateRun(runId, { ...patch, updatedAt: timestamp })
-      void this.queueRunSave(updatedRun).catch((error) => {
-        console.error('[AgentService] failed to persist run:', error)
-      })
+      updatedRun = session.updateRun(runId, { ...patch, updatedAt: timestamp })
     }
-    this.publish({ sessionId: session.id, runId, timestamp, event })
+    void this.queuePersistence(runId, async () => {
+      await this.executionRecordRepo.append(envelope)
+      if (updatedRun) await this.runRepo.save(updatedRun)
+    }).catch((error) => {
+      console.error('[AgentService] failed to persist execution event:', error)
+    })
+    this.publish(envelope)
   }
 
   async listRuns(sessionId: string): Promise<AgentRun[]> {
@@ -139,6 +147,12 @@ export class AgentService {
 
     await Promise.all(pendingWrites)
     return this.runRepo.findBySessionId(sessionId)
+  }
+
+  async listExecutionRecords(runId: string): Promise<AgentExecutionRecord[]> {
+    const pendingWrite = this.runPersistence.get(runId)
+    if (pendingWrite) await pendingWrite
+    return this.executionRecordRepo.findByRunId(runId)
   }
   subscribe(listener: AgentEventListener): () => void {
     this.listeners.add(listener)
@@ -175,7 +189,9 @@ export class AgentService {
       startedAt: now,
     }
     session.addRun(run)
-    const completion = this.queueRunSave(run).then(() =>
+    const initialSave = this.queueRunSave(run)
+    this.handleAgentEvent(session, run.id, { type: 'user_message', text: prompt })
+    const completion = initialSave.then(() =>
       this.executeRun(session, run.id, prompt, signal),
     )
 
@@ -188,9 +204,13 @@ export class AgentService {
   }
 
   private queueRunSave(run: AgentRun): Promise<void> {
-    const previousWrite = this.runPersistence.get(run.id) ?? Promise.resolve()
-    const nextWrite = previousWrite.then(() => this.runRepo.save(run))
-    this.runPersistence.set(run.id, nextWrite)
+    return this.queuePersistence(run.id, () => this.runRepo.save(run))
+  }
+
+  private queuePersistence(runId: string, operation: () => Promise<void>): Promise<void> {
+    const previousWrite = this.runPersistence.get(runId) ?? Promise.resolve()
+    const nextWrite = previousWrite.then(operation)
+    this.runPersistence.set(runId, nextWrite)
     return nextWrite
   }
 

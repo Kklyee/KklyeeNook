@@ -65,7 +65,7 @@ export function convertPiEvent(event: PIAgentEvent): AgentEvent | undefined {
         toolCallId: event.toolCallId,
         tool: event.toolName,
         result: event.result,
-        success: !event.isError,
+        success: event.isError !== true,
       }
 
     default:

@@ -19,6 +19,10 @@ export function getAgentRunPatch(
   }
 
   switch (event.type) {
+    case 'user_message':
+    case 'system_prompt':
+      return undefined
+
     case 'agent_started':
       if (run.status === 'running') return undefined
       return { status: 'running', startedAt: run.startedAt ?? timestamp }
@@ -33,6 +37,10 @@ export function getAgentRunPatch(
     case 'approval_required':
       if (run.status === 'waiting') return undefined
       return { status: 'waiting' }
+
+    case 'approval_resolved':
+      if (run.status === 'running') return undefined
+      return { status: 'running' }
 
     case 'agent_completed':
       return { status: 'completed', completedAt: timestamp }

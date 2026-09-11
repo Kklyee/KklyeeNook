@@ -1,4 +1,6 @@
 export type AgentEvent =
+  | { type: 'user_message'; text: string }
+  | { type: 'system_prompt'; text: string }
   | { type: 'agent_started' }
   | { type: 'text_delta'; text: string }
   | { type: 'tool_started'; toolCallId: string; tool: string; args: unknown }
@@ -10,6 +12,12 @@ export type AgentEvent =
       toolCallId: string
       tool: string
       args: unknown
+    }
+  | {
+      type: 'approval_resolved'
+      approvalId: string
+      toolCallId: string
+      decision: 'allow' | 'deny'
     }
   | { type: 'agent_completed' }
   | { type: 'agent_failed'; error: string }

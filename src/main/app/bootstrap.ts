@@ -22,6 +22,7 @@ import { registerAgentMessageIpc } from '../agent/ipc/agentMessageIpc'
 import { DrizzleAgentRuntimeStateRepo } from '../db/repo/agentRuntimeStateRepo'
 import { join } from 'node:path'
 import { DrizzleAgentRunRepo } from '../db/repo/agentRunRepo'
+import { DrizzleAgentExecutionRecordRepo } from '../db/repo/agentExecutionRecordRepo'
 
 export interface AppContext {
   dispose(): void
@@ -64,7 +65,8 @@ export async function bootstrap(): Promise<AppContext> {
 
   const sessionRepo = new DrizzleAgentSessionRepo(db)
   const runRepo = new DrizzleAgentRunRepo(db)
-  const agentService = new AgentService(runtimeFactory, sessionRepo, runRepo)
+  const executionRecordRepo = new DrizzleAgentExecutionRecordRepo(db)
+  const agentService = new AgentService(runtimeFactory, sessionRepo, runRepo, executionRecordRepo)
 
   const messageRepo = new DrizzleAgentMessageRepo(db)
   const messageService = new AgentMessageService(messageRepo)

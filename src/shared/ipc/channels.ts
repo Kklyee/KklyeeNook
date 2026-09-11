@@ -10,6 +10,7 @@ export const IPC_CHANNELS = {
   AGENT_SESSION_RENAME: 'agent-session:rename',
   AGENT_SESSION_DELETE: 'agent-session:delete',
   AGENT_RUN_LIST: 'agent-run:list',
+  AGENT_EXECUTION_RECORD_LIST: 'agent-execution-record:list',
   AGENT_MESSAGE_LIST: 'agent-message:list',
   AGENT_MESSAGE_SAVE: 'agent-message:save',
 } as const

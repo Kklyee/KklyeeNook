@@ -26,6 +26,7 @@ interface PIAgentApprovalDeps {
 
 export class PiAgentRuntime implements AgentRuntime {
   private session: PiAgentSession | null = null
+  private activeEmit: Emit | undefined
 
   constructor(
     private readonly sessionId: string,
@@ -90,7 +91,11 @@ export class PiAgentRuntime implements AgentRuntime {
         cwd,
         agentDir: cwd,
         extensionFactories: [
-          createPiApprovalExtension(this.approval.approvalService, this.approval.approvalPolicy),
+          createPiApprovalExtension(
+            this.approval.approvalService,
+            this.approval.approvalPolicy,
+            (event) => this.activeEmit?.(event),
+          ),
         ],
       })
       await resourceLoader.reload()
@@ -149,8 +154,10 @@ export class PiAgentRuntime implements AgentRuntime {
     }
 
     try {
+      this.activeEmit = emit
       await this.initialize()
       session = this.getSession()
+      emit({ type: 'system_prompt', text: session.systemPrompt })
       unsubscribe = session.subscribe((piEvent) => {
         const agentEvent = convertPiEvent(piEvent)
 
@@ -188,6 +195,7 @@ export class PiAgentRuntime implements AgentRuntime {
 
       emit({ type: 'agent_failed', error: error instanceof Error ? error.message : String(error) })
     } finally {
+      this.activeEmit = undefined
       unsubscribe?.()
       signal?.removeEventListener('abort', handleAbort)
     }

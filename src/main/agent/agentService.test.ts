@@ -6,6 +6,8 @@ import type { AgentRuntime, AgentRuntimeFactory } from './agentRuntime'
 import { AgentService } from './agentService'
 import type { AgentRunRepo } from '../db/repo/agentRunRepo'
 import type { AgentSessionRecord, AgentSessionRepo } from '../db/repo/agentSessionRepo'
+import type { AgentEventEnvelope } from './agentEventEnvelope'
+import type { AgentExecutionRecordRepo } from '../db/repo/agentExecutionRecordRepo'
 
 class MemorySessionRepo implements AgentSessionRepo {
   constructor(private readonly records: AgentSessionRecord[]) {}
@@ -67,6 +69,20 @@ class MemoryRunRepo implements AgentRunRepo {
   }
 }
 
+class MemoryExecutionRecordRepo implements AgentExecutionRecordRepo {
+  readonly records: AgentEventEnvelope[] = []
+
+  async append(envelope: AgentEventEnvelope) {
+    this.records.push(envelope)
+  }
+
+  async findByRunId(runId: string) {
+    return this.records
+      .filter((record) => record.runId === runId)
+      .map((record, index) => ({ id: index + 1, ...record }))
+  }
+}
+
 const sessionRecord: AgentSessionRecord = {
   id: 'session-1',
   title: 'Test session',
@@ -89,7 +105,12 @@ test('initialize recovers active runs and restores run history', async () => {
       throw new Error('runtime should not be created during recovery')
     },
   }
-  const service = new AgentService(runtimeFactory, new MemorySessionRepo([sessionRecord]), runRepo)
+  const service = new AgentService(
+    runtimeFactory,
+    new MemorySessionRepo([sessionRecord]),
+    runRepo,
+    new MemoryExecutionRecordRepo(),
+  )
 
   await service.initialize()
 
@@ -104,6 +125,7 @@ test('initialize recovers active runs and restores run history', async () => {
 
 test('persists a run before execution and serializes status changes', async () => {
   const runRepo = new MemoryRunRepo()
+  const executionRecordRepo = new MemoryExecutionRecordRepo()
   const runtime: AgentRuntime = {
     async run(_prompt: string, emit: (event: AgentEvent) => void) {
       expect(Array.from(runRepo.runs.values())[0]?.status).toBe('running')
@@ -124,6 +146,7 @@ test('persists a run before execution and serializes status changes', async () =
     { create: () => runtime },
     new MemorySessionRepo([sessionRecord]),
     runRepo,
+    executionRecordRepo,
   )
   await service.initialize()
 
@@ -133,4 +156,7 @@ test('persists a run before execution and serializes status changes', async () =
   expect(finalRun.completedAt).toBeDefined()
   expect(runRepo.savedStatuses).toEqual(['running', 'waiting', 'running', 'completed'])
   expect(runRepo.runs.get(finalRun.id)?.status).toBe('completed')
+  expect((await service.listExecutionRecords(finalRun.id)).map((record) => record.event.type)).toEqual(
+    ['user_message', 'agent_started', 'approval_required', 'tool_started', 'agent_completed'],
+  )
 })

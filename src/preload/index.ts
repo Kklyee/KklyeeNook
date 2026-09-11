@@ -12,6 +12,10 @@ import {
 } from '@/shared/agent/agentSession'
 import { AgentMessageSnapshot, LoadAgentMessagesRequest } from '@/shared/chat/chatHistory'
 import { AgentRun, LoadAgentRunsRequest } from '@/shared/agent/agentRun'
+import type {
+  AgentExecutionRecord,
+  LoadAgentExecutionRecordsRequest,
+} from '@/shared/agent/agentExecutionRecord'
 
 const api = {
   getAgentSettings(): Promise<AgentSettingsSnapshot> {
@@ -71,6 +75,12 @@ const api = {
 
   listAgentRuns(request: LoadAgentRunsRequest): Promise<AgentRun[]> {
     return ipcRenderer.invoke(IPC_CHANNELS.AGENT_RUN_LIST, request)
+  },
+
+  listAgentExecutionRecords(
+    request: LoadAgentExecutionRecordsRequest,
+  ): Promise<AgentExecutionRecord[]> {
+    return ipcRenderer.invoke(IPC_CHANNELS.AGENT_EXECUTION_RECORD_LIST, request)
   },
 
   loadAgentMessages(request: LoadAgentMessagesRequest): Promise<AgentMessageSnapshot[]> {

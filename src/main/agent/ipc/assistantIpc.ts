@@ -80,6 +80,11 @@ export function registerAssistantIpc({ mainWindow, agentService }: Options) {
       const agentEvent = envelope.event
 
       switch (agentEvent.type) {
+        case 'user_message':
+        case 'system_prompt':
+        case 'approval_resolved':
+          break
+
         case 'text_delta':
           send({ type: 'delta', text: agentEvent.text })
           break
