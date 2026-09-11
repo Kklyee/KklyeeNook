@@ -1,5 +1,6 @@
 export const IPC_CHANNELS = {
   SETTINGS_GET: 'settings:get',
+  PERMISSION_GRANT_DELETE: 'permission-grant:delete',
   WINDOW_GET_POSITION: 'window:get-position',
   WINDOW_SET_POSITION: 'window:set-position',
   ASSISTANT_STREAM: 'assistant:stream',

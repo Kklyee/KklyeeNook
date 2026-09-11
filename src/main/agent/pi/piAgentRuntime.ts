@@ -98,6 +98,7 @@ export class PiAgentRuntime implements AgentRuntime {
         agentDir: cwd,
         extensionFactories: [
           createPiApprovalExtension(
+            this.sessionId,
             this.approval.approvalService,
             this.approval.approvalPolicy,
             (event) => this.activeEmit?.(event),

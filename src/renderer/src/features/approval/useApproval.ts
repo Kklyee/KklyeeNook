@@ -2,12 +2,24 @@ import { useCallback, useEffect, useState } from 'react'
 
 import type { ApprovalRequest, ApprovalResponse } from '@/shared/approval/approvalTypes'
 
+type ApprovalQueueState = ApprovalRequest[] | ApprovalRequest | null | undefined
+
+export function normalizeApprovalRequests(value: ApprovalQueueState): ApprovalRequest[] {
+  if (Array.isArray(value)) return value
+  return value && typeof value.id === 'string' ? [value] : []
+}
+
 export function useApproval() {
-  const [request, setRequest] = useState<ApprovalRequest | null>(null)
+  const [requests, setRequests] = useState<ApprovalQueueState>([])
+  const request = normalizeApprovalRequests(requests)[0] ?? null
 
   useEffect(() => {
     return window.api.onApprovalRequested((request) => {
-      setRequest(request)
+      setRequests((current) =>
+        normalizeApprovalRequests(current).some((candidate) => candidate.id === request.id)
+          ? current
+          : [...normalizeApprovalRequests(current), request],
+      )
     })
   }, [])
 
@@ -18,7 +30,9 @@ export function useApproval() {
       }
 
       window.api.respondApproval({ id: request.id, decision })
-      setRequest(null)
+      setRequests((current) =>
+        normalizeApprovalRequests(current).filter((candidate) => candidate.id !== request.id),
+      )
     },
     [request],
   )
@@ -27,7 +41,7 @@ export function useApproval() {
     request,
     respond,
     clear() {
-      setRequest(null)
+      setRequests((current) => normalizeApprovalRequests(current).slice(1))
     },
   }
 }

@@ -7,7 +7,11 @@ import type {
   RenameAgentSessionRequest,
 } from '@/shared/agent/agentSession'
 import type { ChatRequest, ChatStreamEvent } from '@/shared/chat/chatEvent'
-import type { ApprovalRequest, ApprovalResponse } from '@/shared/approval/approvalTypes'
+import type {
+  ApprovalRequest,
+  ApprovalResponse,
+  DeletePermissionGrantRequest,
+} from '@/shared/approval/approvalTypes'
 import { AgentMessageSnapshot, LoadAgentMessagesRequest } from '../shared/chat/chatHistory'
 import type { AgentRun, LoadAgentRunsRequest } from '../shared/agent/agentRun'
 import type {
@@ -20,6 +24,7 @@ interface API {
   streamChat(request: ChatRequest, onEvent: (event: ChatStreamEvent) => void): () => void
   onApprovalRequested(callback: (request: ApprovalRequest) => void): () => void
   respondApproval(response: ApprovalResponse): void
+  deletePermissionGrant(request: DeletePermissionGrantRequest): Promise<void>
   createAgentSession(request: CreateAgentSessionRequest): Promise<AgentSessionSummary>
   listAgentSessions(): Promise<AgentSessionSummary[]>
   renameAgentSession(request: RenameAgentSessionRequest): Promise<AgentSessionSummary>

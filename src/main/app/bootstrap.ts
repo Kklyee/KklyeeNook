@@ -25,6 +25,7 @@ import { DrizzleAgentRunRepo } from '../db/repo/agentRunRepo'
 import { DrizzleAgentExecutionRecordRepo } from '../db/repo/agentExecutionRecordRepo'
 import { ToolRegistry } from '../tools/toolRegistry'
 import { registerPiBuiltinTools } from '../agent/pi/piBuiltinToolAdapter'
+import { DrizzlePermissionGrantRepo } from '../db/repo/permissionGrantRepo'
 
 export interface AppContext {
   dispose(): void
@@ -45,11 +46,12 @@ export async function bootstrap(): Promise<AppContext> {
   const configStore = new AgentConfigStore(agentConfig)
   const credentialStore = new MemoryCredentialStore()
   const approvalService = new ApprovalService()
-  const approvalPolicy = new ApprovalPolicy()
   const { database: db, close: closeDb } = await connectDatabase(
     getDatabaseUrl(),
     getMigrationsPath(),
   )
+  const permissionGrantRepo = new DrizzlePermissionGrantRepo(db)
+  const approvalPolicy = new ApprovalPolicy(permissionGrantRepo, agentConfig.cwd ?? process.cwd())
 
   credentialStore.setApiKey(agentConfig.model.provider, apiKey)
 

@@ -18,7 +18,13 @@ export function registerApprovalIpc(window: BrowserWindow, approvalService: Appr
   ipcMain.on(
     IPC_CHANNELS.APPROVAL_RESPOND,
 
-    (_event, response: ApprovalResponse) => {
+    (event, response: ApprovalResponse) => {
+      if (
+        event.sender !== window.webContents ||
+        event.senderFrame !== window.webContents.mainFrame
+      ) {
+        return
+      }
       approvalService.respond(response)
     },
   )

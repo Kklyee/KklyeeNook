@@ -1,3 +1,5 @@
+import type { PermissionGrant } from '../approval/approvalTypes'
+
 // Only public configuration crosses IPC. API keys stay in the main process.
 export interface AgentSettingsSnapshot {
   provider: string
@@ -6,4 +8,5 @@ export interface AgentSettingsSnapshot {
   cwd: string
   hasApiKey: boolean
   tools: Array<{ name: string; requiresApproval: boolean }>
+  permissionGrants: PermissionGrant[]
 }

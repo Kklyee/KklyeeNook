@@ -2,7 +2,11 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
 import { ChatRequest, ChatStreamEvent } from '@/shared/chat/chatEvent'
-import { ApprovalRequest, ApprovalResponse } from '@/shared/approval/approvalTypes'
+import {
+  ApprovalRequest,
+  ApprovalResponse,
+  DeletePermissionGrantRequest,
+} from '@/shared/approval/approvalTypes'
 import type { AgentSettingsSnapshot } from '@/shared/agent/agentSettings'
 import {
   AgentSessionSummary,
@@ -55,6 +59,10 @@ const api = {
 
   respondApproval(response: ApprovalResponse) {
     ipcRenderer.send(IPC_CHANNELS.APPROVAL_RESPOND, response)
+  },
+
+  deletePermissionGrant(request: DeletePermissionGrantRequest): Promise<void> {
+    return ipcRenderer.invoke(IPC_CHANNELS.PERMISSION_GRANT_DELETE, request)
   },
 
   createAgentSession(request: CreateAgentSessionRequest): Promise<AgentSessionSummary> {

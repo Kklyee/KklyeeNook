@@ -1,7 +1,11 @@
-import type { ApprovalRequest, ApprovalResponse } from '@/shared/approval/approvalTypes'
+import type {
+  ApprovalDecision,
+  ApprovalRequest,
+  ApprovalResponse,
+} from '@/shared/approval/approvalTypes'
 
 type ApprovalListener = (request: ApprovalRequest) => void
-type PendingApproval = { request: ApprovalRequest; resolve: (allowed: boolean) => void }
+type PendingApproval = { request: ApprovalRequest; resolve: (decision: ApprovalDecision) => void }
 
 export class ApprovalService {
   private pending = new Map<string, PendingApproval>()
@@ -21,8 +25,8 @@ export class ApprovalService {
     }
   }
 
-  async request(request: ApprovalRequest): Promise<boolean> {
-    const promise = new Promise<boolean>((resolve) => {
+  async request(request: ApprovalRequest): Promise<ApprovalDecision> {
+    const promise = new Promise<ApprovalDecision>((resolve) => {
       this.pending.set(request.id, { request, resolve })
     })
 
@@ -38,6 +42,6 @@ export class ApprovalService {
     }
 
     this.pending.delete(response.id)
-    pending.resolve(response.decision === 'allow')
+    pending.resolve(response.decision)
   }
 }
