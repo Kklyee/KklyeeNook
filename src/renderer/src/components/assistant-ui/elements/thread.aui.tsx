@@ -10,6 +10,11 @@ import { ThreadFollowupSuggestions } from '@/renderer/src/components/assistant-u
 import { Image } from '@/renderer/src/components/assistant-ui/elements/image'
 import { MarkdownText } from '@/renderer/src/components/assistant-ui/elements/markdown-text'
 import {
+  ComposerBar,
+  ComposerModelTrigger,
+  ComposerSend,
+} from '@/renderer/src/components/assistant-ui/elements/composer'
+import {
   Reasoning,
   ReasoningContent,
   ReasoningRoot,
@@ -85,6 +90,7 @@ export type ThreadComponents = {
 export type ThreadProps = {
   components?: ThreadComponents | undefined
   autoFocus?: boolean | undefined
+  modelName?: string | undefined
 }
 
 const EMPTY_COMPONENTS: ThreadComponents = {}
@@ -124,17 +130,25 @@ const ThreadHistorySkeleton: FC = () => (
   </div>
 )
 
-export const Thread: FC<ThreadProps> = ({ components = EMPTY_COMPONENTS, autoFocus = true }) => {
+export const Thread: FC<ThreadProps> = ({
+  components = EMPTY_COMPONENTS,
+  autoFocus = true,
+  modelName,
+}) => {
   const isEmpty = useAuiState(isNewChatView)
 
   return (
     <ThreadComponentsContext.Provider value={components}>
-      <ThreadRoot isEmpty={isEmpty} autoFocus={autoFocus} />
+      <ThreadRoot isEmpty={isEmpty} autoFocus={autoFocus} modelName={modelName} />
     </ThreadComponentsContext.Provider>
   )
 }
 
-const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({ isEmpty, autoFocus }) => {
+const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean; modelName?: string }> = ({
+  isEmpty,
+  autoFocus,
+  modelName,
+}) => {
   const { Welcome = ThreadWelcome } = useContext(ThreadComponentsContext)
 
   return (
@@ -177,7 +191,7 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({ isEmpty, aut
           >
             <ThreadScrollToBottom />
             <ThreadFollowupSuggestions />
-            <Composer autoFocus={autoFocus} />
+            <Composer autoFocus={autoFocus} modelName={modelName} />
             <AuiIf condition={(s) => isNewChatView(s) && s.composer.isEmpty}>
               <ThreadSuggestions />
             </AuiIf>
@@ -251,36 +265,36 @@ const ThreadSuggestionItem: FC = () => {
   )
 }
 
-const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
+const Composer: FC<{ autoFocus: boolean; modelName?: string }> = ({ autoFocus, modelName }) => {
   return (
     <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
       <ComposerPrimitive.AttachmentDropzone
-        render={
-          <div
-            data-slot="aui_composer-shell"
-            className="border-border/60 data-[dragging=true]:border-ring focus-within:border-border dark:border-muted-foreground/15 dark:focus-within:border-muted-foreground/30 flex w-full cursor-text flex-col gap-2 rounded-(--composer-radius) border bg-(--composer-bg) p-(--composer-padding) transition-[border-color] data-[dragging=true]:border-dashed data-[dragging=true]:bg-[color-mix(in_oklab,var(--color-accent)_50%,var(--color-background))]"
-          />
-        }
+        render={<ComposerBar data-slot="aui_composer-shell" className="max-w-none" />}
       >
         <ComposerAttachments />
         <ComposerPrimitive.Input
           placeholder="描述一个任务，或提出一个问题…"
-          className="aui-composer-input caret-primary placeholder:text-muted-foreground/60 max-h-48 min-h-10 w-full resize-none bg-transparent px-2.5 py-1 text-base leading-6 outline-none"
+          className="aui-composer-input placeholder:text-foreground/35 max-h-48 min-h-11 w-full resize-none bg-transparent px-3 py-1 text-[15px] leading-6 caret-blue-500 outline-none dark:caret-blue-400"
           rows={1}
           autoFocus={autoFocus}
           enterKeyHint="send"
           aria-label="Message input"
         />
-        <ComposerAction />
+        <ComposerAction modelName={modelName} />
       </ComposerPrimitive.AttachmentDropzone>
     </ComposerPrimitive.Root>
   )
 }
 
-const ComposerAction: FC = () => {
+const ComposerAction: FC<{ modelName?: string }> = ({ modelName }) => {
+  const canSend = useAuiState((s) => s.composer.canSend)
+
   return (
     <div className="aui-composer-action-wrapper relative flex items-center justify-between">
-      <ComposerAddAttachment />
+      <div className="flex items-center gap-1">
+        <ComposerAddAttachment />
+        <ComposerModelTrigger model={modelName ?? '读取模型…'} open={false} />
+      </div>
       <div className="flex items-center gap-1.5">
         <AuiIf condition={(s) => s.thread.capabilities.dictation}>
           <AuiIf condition={(s) => s.composer.dictation == null}>
@@ -321,15 +335,12 @@ const ComposerAction: FC = () => {
         <AuiIf condition={(s) => !s.thread.isRunning}>
           <ComposerPrimitive.Send
             render={
-              <TooltipIconButton
-                tooltip="Send message"
-                side="bottom"
-                type="button"
-                variant="default"
-                size="icon"
-                className="aui-composer-send size-7 rounded-full"
-                aria-label="Send message"
-              />
+                <ComposerSend
+                  streaming={false}
+                  idle={canSend}
+                  disabled={!canSend}
+                  className="aui-composer-send"
+                />
             }
           >
             <ArrowUpIcon className="aui-composer-send-icon size-4" />

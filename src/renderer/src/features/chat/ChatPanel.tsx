@@ -4,7 +4,7 @@ import { Thread } from '../../components/assistant-ui/elements/thread.aui'
 import { cn } from '@/renderer/src/lib/utils'
 import { RunHistoryPanel } from './RunHistoryPanel'
 
-export function ChatPanel() {
+export function ChatPanel({ modelName }: { modelName?: string }) {
   const [view, setView] = useState<'chat' | 'trace'>('chat')
   const sessionId = useAuiState((state) => state.threadListItem.remoteId)
 
@@ -20,7 +20,7 @@ export function ChatPanel() {
       </nav>
       {view === 'chat' ? (
         <div className="relative min-h-0 flex-1">
-          <Thread />
+          <Thread modelName={modelName} />
         </div>
       ) : (
         <RunHistoryPanel sessionId={sessionId} />
