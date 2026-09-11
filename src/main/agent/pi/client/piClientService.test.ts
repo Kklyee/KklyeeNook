@@ -36,6 +36,7 @@ function setup(running = false) {
     setThinkingLevel: vi.fn(),
     setSessionName: vi.fn(),
     respondToHostUiRequest: vi.fn(),
+    reloadConfiguration: vi.fn(),
     subscribe: vi.fn(() => () => undefined),
     subscribeClientEvents(listener) {
       clientListeners.add(listener)
@@ -61,7 +62,7 @@ function setup(running = false) {
     renameSession: vi.fn(),
     setSessionArchived: vi.fn(),
     deleteSession: vi.fn(),
-    recordActiveRunEvent: vi.fn(),
+    steerRun: vi.fn(),
     startRun: vi.fn(() => ({ run: {}, completion })),
     subscribe: vi.fn(() => () => undefined),
   } as unknown as AgentService
@@ -114,10 +115,7 @@ test('starts a product run for an idle thread and uses Pi queue while running', 
     content: 'follow up',
     streamingBehavior: 'steer',
   })
-  expect(running.agentService.recordActiveRunEvent).toHaveBeenCalledWith('session-1', {
-    type: 'user_message',
-    text: 'follow up',
-  })
+  expect(running.agentService.steerRun).toHaveBeenCalledWith('session-1', 'follow up')
 })
 
 test('initializes a new thread before synchronizing its generated title to Pi', async () => {

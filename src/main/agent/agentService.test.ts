@@ -1,4 +1,4 @@
-import { expect, test } from 'vitest'
+import { expect, test, vi } from 'vitest'
 
 import type { AgentEvent } from '@/shared/agent/agentEvent'
 import type { AgentRun } from '@/shared/agent/agentRun'
@@ -154,6 +154,57 @@ test('initialize recovers active runs and restores run history', async () => {
     { id: 'running-run', status: 'interrupted' },
   ])
   expect(service.getSession(sessionRecord.id)?.toSummary().activeRunId).toBeUndefined()
+})
+
+test('rejects steering when Pi has no active product run', async () => {
+  const service = new AgentService(
+    { create: () => ({ run: async () => undefined, dispose() {} }) },
+    new MemorySessionRepo([sessionRecord]),
+    new MemoryRunRepo(),
+    new MemoryExecutionRecordRepo(),
+    new MemoryArtifactRepo(),
+  )
+  await service.initialize()
+
+  expect(() => service.steerRun(sessionRecord.id, 'follow up')).toThrow(
+    'Pi runtime is active without an AgentRun',
+  )
+})
+
+test('records steering against the run during its startup window', async () => {
+  let finishRun: () => void = () => undefined
+  const initialFinishRun = finishRun
+  const executionRecordRepo = new MemoryExecutionRecordRepo()
+  const service = new AgentService(
+    {
+      create: () => ({
+        async run(_prompt, emit) {
+          await new Promise<void>((resolve) => {
+            finishRun = resolve
+          })
+          emit({ type: 'agent_completed' })
+        },
+        dispose() {},
+      }),
+    },
+    new MemorySessionRepo([sessionRecord]),
+    new MemoryRunRepo(),
+    executionRecordRepo,
+    new MemoryArtifactRepo(),
+  )
+  await service.initialize()
+
+  const handle = service.startRun(sessionRecord.id, 'first')
+  service.steerRun(sessionRecord.id, 'second')
+  await vi.waitFor(() => expect(finishRun).not.toBe(initialFinishRun))
+  finishRun()
+  await handle.completion
+
+  expect(
+    executionRecordRepo.records
+      .filter(({ event }) => event.type === 'user_message')
+      .map(({ event }) => (event.type === 'user_message' ? event.text : '')),
+  ).toEqual(['first', 'second'])
 })
 
 test('persists a run before execution and serializes status changes', async () => {

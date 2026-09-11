@@ -1,5 +1,7 @@
 export const IPC_CHANNELS = {
   SETTINGS_GET: 'settings:get',
+  SETTINGS_UPDATE: 'settings:update',
+  SETTINGS_SELECT_WORKSPACE: 'settings:select-workspace',
   PERMISSION_GRANT_DELETE: 'permission-grant:delete',
   WINDOW_GET_POSITION: 'window:get-position',
   WINDOW_SET_POSITION: 'window:set-position',

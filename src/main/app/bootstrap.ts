@@ -1,5 +1,5 @@
 import type { AgentConfig } from '@/shared/agent/agentConfig'
-import { app } from 'electron'
+import { app, safeStorage } from 'electron'
 import { AgentService } from '../agent/agentService'
 import { createPiAgentRuntimeFactory } from '../agent/pi/runtime/createPiAgentRuntime'
 import { ApprovalPolicy } from '../approval/approvalPolicy'
@@ -8,7 +8,7 @@ import { getDatabaseUrl, getMigrationsPath } from '../db/databasePath'
 import { createChatWindow } from '../electron/chatWindow'
 import { registerWindowIpc } from '../electron/windowIpc'
 import { AgentConfigStore } from '../settings/agentConfigStore'
-import { MemoryCredentialStore } from '../settings/credentialStore'
+import { PersistentCredentialStore } from '../settings/credentialStore'
 import { registerSettingsIpc } from '../settings/settingsIpc'
 import { loadRenderer } from './loadRenderer'
 import { DrizzleAgentSessionRepo } from '../db/repositories/agentSessionRepo'
@@ -35,33 +35,48 @@ export interface AppContext {
   dispose(): void
 }
 
-const agentConfig: AgentConfig = {
-  model: { provider: 'deepseek', modelID: 'deepseek-v4-flash', thinkingLevel: 'off' },
-  tools: { enabled: ['read', 'bash', 'edit', 'write', 'create_artifact'] },
-  cwd: process.cwd(),
-}
-
 export async function bootstrap(): Promise<AppContext> {
-  const apiKey = process.env.API_KEY
-  if (!apiKey) {
-    throw new Error(`请在 .env 中配置 ${agentConfig.model.provider} 的 API_KEY`)
+  const userDataPath = app.getPath('userData')
+  const defaultWorkspace = app.isPackaged ? app.getPath('documents') : app.getAppPath()
+  const defaultConfig: AgentConfig = {
+    model: {
+      provider: 'deepseek',
+      providerName: 'DeepSeek',
+      modelID: 'deepseek-v4-flash',
+      thinkingLevel: 'off',
+      contextWindow: 128_000,
+      maxTokens: 1_000,
+    },
+    tools: { enabled: ['read', 'bash', 'edit', 'write', 'create_artifact'] },
+    cwd: defaultWorkspace,
   }
 
-  const configStore = new AgentConfigStore(agentConfig)
-  const credentialStore = new MemoryCredentialStore()
+  const configStore = new AgentConfigStore(defaultConfig, join(userDataPath, 'agent-settings.json'))
+  const credentialStore = new PersistentCredentialStore(
+    join(userDataPath, 'agent-credentials.json'),
+    safeStorage,
+  )
+  const configuredProvider = configStore.get().model.provider
+  const apiKey = process.env.API_KEY
+  if (apiKey && !credentialStore.hasApiKey(configuredProvider)) {
+    credentialStore.setApiKey(configuredProvider, apiKey)
+  }
   const { database: db, close: closeDb } = await connectDatabase(
     getDatabaseUrl(),
     getMigrationsPath(),
   )
   const permissionGrantRepo = new DrizzlePermissionGrantRepo(db)
-  const approvalPolicy = new ApprovalPolicy(permissionGrantRepo, agentConfig.cwd ?? process.cwd())
-
-  credentialStore.setApiKey(agentConfig.model.provider, apiKey)
+  const workspace = () => {
+    const cwd = configStore.get().cwd
+    if (!cwd) throw new Error('Agent workspace is not configured')
+    return cwd
+  }
+  const approvalPolicy = new ApprovalPolicy(permissionGrantRepo, workspace)
 
   const runtimeStateRepo = new DrizzleAgentRuntimeStateRepo(db)
   const sessionDir = join(app.getPath('userData'), 'pi-sessions')
   const toolRegistry = new ToolRegistry()
-  registerPiBuiltinTools(toolRegistry, agentConfig.cwd ?? process.cwd())
+  registerPiBuiltinTools(toolRegistry, workspace())
   registerPiArtifactTool(toolRegistry)
 
   const piSessionHostManager = new PiSessionHostManager(
@@ -89,7 +104,7 @@ export async function bootstrap(): Promise<AppContext> {
     executionRecordRepo,
     artifactRepo,
   )
-  const artifactService = new ArtifactService(artifactRepo, agentConfig.cwd ?? process.cwd())
+  const artifactService = new ArtifactService(artifactRepo, workspace)
 
   await agentService.initialize()
   const messageProjection = new MessageProjectionService(new DrizzleAgentMessageRepo(db))
@@ -102,7 +117,9 @@ export async function bootstrap(): Promise<AppContext> {
   )
   const chatWindow = createChatWindow()
 
-  registerSettingsIpc(chatWindow, agentConfig, credentialStore, approvalPolicy)
+  registerSettingsIpc(chatWindow, configStore, credentialStore, approvalPolicy, () => {
+    piSessionHostManager.reloadConfiguration()
+  })
   registerWindowIpc()
   registerPiClientIpc(chatWindow, piClientService)
   registerAgentRunIpc(agentService)

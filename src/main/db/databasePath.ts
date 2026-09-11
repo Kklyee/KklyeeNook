@@ -4,7 +4,9 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 export function getDatabasePath(): string {
-  const databaseDirectory = join(app.getAppPath(), 'data')
+  const databaseDirectory = app.isPackaged
+    ? join(app.getPath('userData'), 'data')
+    : join(app.getAppPath(), 'data')
   mkdirSync(databaseDirectory, { recursive: true })
 
   return join(databaseDirectory, 'kklyeenook.db')

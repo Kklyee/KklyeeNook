@@ -19,6 +19,7 @@ import {
   type AgentSessionEvent,
   type ToolDefinition as PiToolDefinition,
 } from '@earendil-works/pi-coding-agent'
+import { getActiveModel, getSavedModels, type ModelConfig } from '@/shared/agent/agentConfig'
 
 import type { ApprovalPolicy } from '@/main/approval/approvalPolicy'
 import { createPiApprovalExtension } from '@/main/approval/piApprovalExtension'
@@ -48,6 +49,7 @@ export interface PiSessionHostLike {
   setThinkingLevel(level: PiThinkingLevel): void
   setSessionName(title: string): void
   respondToHostUiRequest(response: PiHostUiResponse): void
+  reloadConfiguration(): void
   subscribe(listener: PiSessionEventListener): () => void
   subscribeClientEvents(listener: PiSessionClientEventListener): () => void
   subscribeProductEvents(listener: PiSessionProductEventListener): () => void
@@ -141,51 +143,58 @@ export class PiSessionHost implements PiSessionHostLike {
 
   isRunning(): boolean {
     const session = this.session
-    return Boolean(session?.isStreaming || session?.isCompacting || session?.isRetrying)
+    return Boolean(
+      this.initializePromise ||
+      session?.isStreaming ||
+      session?.isCompacting ||
+      session?.isRetrying,
+    )
   }
 
   async sendMessage(input: PiSendMessageInput): Promise<void> {
-    await this.initialize()
-    const session = this.getSession()
-    const promptOptions: NonNullable<Parameters<PiAgentSession['prompt']>[1]> = {}
-    if (input.streamingBehavior) promptOptions.streamingBehavior = input.streamingBehavior
-    if (input.attachments?.length) promptOptions.images = input.attachments
-
-    let settle: (error?: unknown) => void = () => undefined
-    let settled = false
-    const accepted = new Promise<void>((resolve, reject) => {
-      settle = (error) => {
-        if (settled) return
-        settled = true
-        if (error) reject(error)
-        else resolve()
-      }
-    })
-    promptOptions.preflightResult = (success) => {
-      if (success) settle()
-    }
-
-    void session.prompt(input.content, promptOptions).then(
-      () => {
-        this.lastError = undefined
-        settle()
-      },
-      (error: unknown) => {
-        this.lastError = error instanceof Error ? error.message : String(error)
-        this.publishClientEvent({ type: 'error', error: this.lastError })
-        settle(error)
-      },
-    )
-    await accepted
+    await this.prompt(input, 'accepted')
   }
 
   async runMessage(input: PiSendMessageInput): Promise<void> {
+    await this.prompt(input, 'settled')
+  }
+
+  private async prompt(input: PiSendMessageInput, waitFor: 'accepted' | 'settled'): Promise<void> {
     await this.initialize()
     const options: NonNullable<Parameters<PiAgentSession['prompt']>[1]> = {}
     if (input.streamingBehavior) options.streamingBehavior = input.streamingBehavior
     if (input.attachments?.length) options.images = input.attachments
+
+    if (waitFor === 'accepted') {
+      let settle: (error?: unknown) => void = () => undefined
+      let settled = false
+      const accepted = new Promise<void>((resolve, reject) => {
+        settle = (error) => {
+          if (settled) return
+          settled = true
+          if (error) reject(error)
+          else resolve()
+        }
+      })
+      options.preflightResult = (success) => {
+        if (success) settle()
+      }
+      void this.executePrompt(input.content, options).then(
+        () => settle(),
+        (error: unknown) => settle(error),
+      )
+      return accepted
+    }
+
+    await this.executePrompt(input.content, options)
+  }
+
+  private async executePrompt(
+    content: string,
+    options: NonNullable<Parameters<PiAgentSession['prompt']>[1]>,
+  ): Promise<void> {
     try {
-      await this.getSession().prompt(input.content, options)
+      await this.getSession().prompt(content, options)
       this.lastError = undefined
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : String(error)
@@ -207,7 +216,9 @@ export class PiSessionHost implements PiSessionHostLike {
     const runtime = this.getModelRuntime()
     try {
       await runtime.refresh()
-    } catch {}
+    } catch (error) {
+      console.warn('[PiSessionHost] failed to refresh available models:', error)
+    }
     const models = runtime.getAvailableSnapshot()
     return (models.length ? models : runtime.getModels()).map((model) => ({
       provider: String(model.provider),
@@ -219,7 +230,13 @@ export class PiSessionHost implements PiSessionHostLike {
 
   async setModel(input: { provider: string; modelId: string }): Promise<void> {
     await this.initialize()
-    const model = this.getModelRuntime().getModel(input.provider, input.modelId)
+    const configured = getSavedModels(this.configStore.get()).find(
+      (item) => item.provider === input.provider && item.modelID === input.modelId,
+    )
+    if (!configured) throw new Error(`模型尚未配置: ${input.provider}/${input.modelId}`)
+    const runtime = this.getModelRuntime()
+    await this.configureModelRuntime(runtime, configured)
+    const model = runtime.getModel(input.provider, input.modelId)
     if (!model) throw new Error(`找不到模型: ${input.provider}/${input.modelId}`)
     await this.getSession().setModel(model)
     this.lastError = undefined
@@ -239,6 +256,11 @@ export class PiSessionHost implements PiSessionHostLike {
     }
   }
 
+  reloadConfiguration(): void {
+    if (this.isRunning()) throw new Error('Cannot change agent settings while a run is active')
+    this.resetSession()
+  }
+
   subscribe(listener: PiSessionEventListener): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
@@ -255,6 +277,13 @@ export class PiSessionHost implements PiSessionHostLike {
   }
 
   dispose(): void {
+    this.resetSession()
+    this.listeners.clear()
+    this.clientEventListeners.clear()
+    this.productEventListeners.clear()
+  }
+
+  private resetSession(): void {
     this.unsubscribeSession?.()
     this.unsubscribeSession = undefined
     this.uiBridge?.dispose()
@@ -262,9 +291,8 @@ export class PiSessionHost implements PiSessionHostLike {
     this.session?.dispose()
     this.session = null
     this.modelRuntime = null
-    this.listeners.clear()
-    this.clientEventListeners.clear()
-    this.productEventListeners.clear()
+    this.lastError = undefined
+    this.turnIndex = -1
   }
 
   private getSession(): PiAgentSession {
@@ -279,44 +307,18 @@ export class PiSessionHost implements PiSessionHostLike {
 
   private async createSession(): Promise<void> {
     const config = this.configStore.get()
-    const { provider, modelID, thinkingLevel, baseUrl } = config.model
-    const apiKey = this.credentialStore.getApiKey(provider)
-    if (!apiKey) throw new Error(`Provider "${provider}" 没有配置 API Key`)
+    const activeModel = getActiveModel(config)
+    const { provider, modelID, thinkingLevel } = activeModel
 
     let createdSession: PiAgentSession | undefined
     try {
       const modelRuntime = await ModelRuntime.create()
-      if (baseUrl) {
-        modelRuntime.registerProvider(provider, {
-          name: 'B.AI',
-          baseUrl,
-          api: 'openai-completions',
-          authHeader: true,
-          models: [
-            {
-              id: modelID,
-              name: modelID,
-              reasoning: false,
-              input: ['text'],
-              contextWindow: 128_000,
-              maxTokens: 1_000,
-              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-              samplingParams: { temperature: 0.7 },
-              compat: {
-                maxTokensField: 'max_tokens',
-                supportsUsageInStreaming: false,
-                supportsDeveloperRole: false,
-                supportsReasoningEffort: false,
-              },
-            },
-          ],
-        })
-      }
-      await modelRuntime.setRuntimeApiKey(provider, apiKey)
+      await this.configureModelRuntime(modelRuntime, activeModel)
       const model = modelRuntime.getModel(provider, modelID)
       if (!model) throw new Error(`找不到模型: ${provider}/${modelID}`)
 
-      const cwd = config.cwd ?? process.cwd()
+      const cwd = config.cwd
+      if (!cwd) throw new Error('Agent workspace is not configured')
       const tools = this.toolRegistry.resolve<PiToolDefinition<any, any, any>>(
         'pi',
         config.tools.enabled,
@@ -383,6 +385,49 @@ export class PiSessionHost implements PiSessionHostLike {
       this.uiBridge = null
       throw error
     }
+  }
+
+  private async configureModelRuntime(runtime: ModelRuntime, config: ModelConfig): Promise<void> {
+    const apiKey = this.credentialStore.getApiKey(config.provider)
+    if (!apiKey) throw new Error(`Provider "${config.provider}" 没有配置 API Key`)
+
+    runtime.unregisterProvider(config.provider)
+    if (config.baseUrl) {
+      const builtinModel =
+        !config.providerName && !config.contextWindow && !config.maxTokens
+          ? runtime.getModel(config.provider, config.modelID)
+          : undefined
+      runtime.registerProvider(
+        config.provider,
+        builtinModel
+          ? { baseUrl: config.baseUrl }
+          : {
+              name: config.providerName ?? config.provider,
+              baseUrl: config.baseUrl,
+              api: 'openai-completions',
+              authHeader: true,
+              models: [
+                {
+                  id: config.modelID,
+                  name: config.modelID,
+                  reasoning: false,
+                  input: ['text'],
+                  contextWindow: config.contextWindow ?? 128_000,
+                  maxTokens: config.maxTokens ?? 1_000,
+                  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+                  samplingParams: { temperature: 0.7 },
+                  compat: {
+                    maxTokensField: 'max_tokens',
+                    supportsUsageInStreaming: false,
+                    supportsDeveloperRole: false,
+                    supportsReasoningEffort: false,
+                  },
+                },
+              ],
+            },
+      )
+    }
+    await runtime.setRuntimeApiKey(config.provider, apiKey)
   }
 
   private onSessionEvent(event: AgentSessionEvent): void {

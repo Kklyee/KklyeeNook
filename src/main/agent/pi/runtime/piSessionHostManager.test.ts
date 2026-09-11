@@ -18,6 +18,7 @@ function createFakeHost(): PiSessionHostLike {
     setThinkingLevel: vi.fn(),
     setSessionName: vi.fn(),
     respondToHostUiRequest: vi.fn(),
+    reloadConfiguration: vi.fn(),
     subscribe: vi.fn(() => () => undefined),
     subscribeClientEvents: vi.fn(() => () => undefined),
     subscribeProductEvents: vi.fn(() => () => undefined),
@@ -62,4 +63,18 @@ test('disposes every owned host on shutdown', () => {
 
   expect(first.dispose).toHaveBeenCalledOnce()
   expect(second.dispose).toHaveBeenCalledOnce()
+})
+
+test('reloads idle hosts and refuses to split state from an active run', () => {
+  const idle = createFakeHost()
+  const active = createFakeHost()
+  vi.mocked(active.isRunning).mockReturnValue(true)
+  const manager = new PiSessionHostManager((sessionId) => (sessionId === 'idle' ? idle : active))
+  manager.getOrCreate('idle')
+  manager.reloadConfiguration()
+  expect(idle.reloadConfiguration).toHaveBeenCalledOnce()
+
+  manager.getOrCreate('active')
+  expect(() => manager.reloadConfiguration()).toThrow('当前 Agent 运行结束')
+  expect(active.reloadConfiguration).not.toHaveBeenCalled()
 })

@@ -92,10 +92,7 @@ export class PiClientService implements PiClient {
       await this.renameThread(threadId, title)
     }
     if (this.pendingRuns.has(threadId) || host.isRunning()) {
-      this.agentService.recordActiveRunEvent(threadId, {
-        type: 'user_message',
-        text: input.content,
-      })
+      this.agentService.steerRun(threadId, input.content)
       await host.sendMessage({ ...input, streamingBehavior: input.streamingBehavior ?? 'steer' })
       return
     }
@@ -322,6 +319,8 @@ export class PiClientService implements PiClient {
   private notify(listener: Listener, event: PiClientEvent): void {
     try {
       listener(event)
-    } catch {}
+    } catch (error) {
+      console.error('[PiClientService] listener failed:', error)
+    }
   }
 }

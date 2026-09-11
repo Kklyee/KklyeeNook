@@ -7,14 +7,10 @@ import { artifactText } from '@/shared/artifact/artifact'
 import type { ArtifactRepo } from '../db/repositories/artifactRepo'
 
 export class ArtifactService {
-  private readonly workspaceRoot: string
-
   constructor(
     private readonly repo: ArtifactRepo,
-    workspaceRoot: string,
-  ) {
-    this.workspaceRoot = resolve(workspaceRoot)
-  }
+    private readonly workspace: string | (() => string),
+  ) {}
 
   list(sessionId: string, runId?: string): Promise<Artifact[]> {
     return runId ? this.repo.findByRunId(runId) : this.repo.findBySessionId(sessionId)
@@ -53,8 +49,11 @@ export class ArtifactService {
   }
 
   private resolveWorkspacePath(path: string): string {
-    const target = resolve(this.workspaceRoot, path)
-    const pathFromRoot = relative(this.workspaceRoot, target)
+    const workspaceRoot = resolve(
+      typeof this.workspace === 'string' ? this.workspace : this.workspace(),
+    )
+    const target = resolve(workspaceRoot, path)
+    const pathFromRoot = relative(workspaceRoot, target)
     if (
       pathFromRoot === '..' ||
       pathFromRoot.startsWith(`..\\`) ||

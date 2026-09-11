@@ -1,6 +1,9 @@
 import type { ElectronAPI } from '@electron-toolkit/preload'
 import type { PiClient } from '@assistant-ui/react-pi'
-import type { AgentSettingsSnapshot } from '@/shared/agent/agentSettings'
+import type {
+  AgentSettingsSnapshot,
+  UpdateAgentSettingsRequest,
+} from '@/shared/agent/agentSettings'
 import type { DeletePermissionGrantRequest } from '@/shared/approval/approvalTypes'
 import type { AgentRun, LoadAgentRunsRequest } from '../shared/agent/agentRun'
 import type {
@@ -18,6 +21,8 @@ import type {
 interface API {
   pi: PiClient
   getAgentSettings(): Promise<AgentSettingsSnapshot>
+  updateAgentSettings(request: UpdateAgentSettingsRequest): Promise<AgentSettingsSnapshot>
+  selectAgentWorkspace(): Promise<string | null>
   deletePermissionGrant(request: DeletePermissionGrantRequest): Promise<void>
   listAgentRuns(request: LoadAgentRunsRequest): Promise<AgentRun[]>
   listAgentExecutionRecords(

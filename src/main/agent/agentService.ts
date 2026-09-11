@@ -96,10 +96,14 @@ export class AgentService {
     return session.toSummary()
   }
 
-  recordActiveRunEvent(sessionId: string, event: AgentEvent): void {
+  steerRun(sessionId: string, text: string): void {
     const session = this.sessions.get(sessionId)
     const runId = session?.toSummary().activeRunId
-    if (session && runId) this.handleAgentEvent(session, runId, event)
+    if (!session) throw new Error(`AgentSession not found: ${sessionId}`)
+    if (!runId) {
+      throw new Error(`Pi runtime is active without an AgentRun for session: ${sessionId}`)
+    }
+    this.handleAgentEvent(session, runId, { type: 'user_message', text })
   }
 
   getSessions(): AgentSession[] {

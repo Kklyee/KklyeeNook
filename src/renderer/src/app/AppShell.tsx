@@ -25,7 +25,7 @@ export function AppShell() {
         <SidebarProvider className="h-full min-h-0 overflow-hidden">
           <ThreadSidebar collapsible="icon" onOpenSettings={() => setView('settings')} />
           <SidebarInset className="min-h-0 overflow-hidden">
-            <ChatPanel modelName={settings?.modelID} />
+            <ChatPanel settings={settings} />
           </SidebarInset>
         </SidebarProvider>
       )}

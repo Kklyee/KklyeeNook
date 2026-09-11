@@ -9,11 +9,14 @@ import { File } from '@/renderer/src/features/artifacts/FilePreview'
 import { ThreadFollowupSuggestions } from '@/renderer/src/components/assistant-ui/elements/follow-up-suggestions.aui'
 import { Image } from '@/renderer/src/features/artifacts/ImagePreview'
 import { MarkdownText } from '@/renderer/src/components/assistant-ui/elements/markdown-text'
+import { ComposerBar, ComposerSend } from '@/renderer/src/components/assistant-ui/elements/composer'
 import {
-  ComposerBar,
-  ComposerModelTrigger,
-  ComposerSend,
-} from '@/renderer/src/components/assistant-ui/elements/composer'
+  ModelSelectorContent,
+  ModelSelectorRoot,
+  ModelSelectorTrigger,
+  ModelSelectorValue,
+  type ModelOption,
+} from '@/renderer/src/components/assistant-ui/elements/model-selector'
 import {
   Reasoning,
   ReasoningContent,
@@ -92,7 +95,12 @@ export type ThreadComponents = {
 export type ThreadProps = {
   components?: ThreadComponents | undefined
   autoFocus?: boolean | undefined
-  modelName?: string | undefined
+  modelSelector?: {
+    models: readonly ModelOption[]
+    value?: string
+    disabled?: boolean
+    onValueChange: (value: string) => void
+  }
 }
 
 const EMPTY_COMPONENTS: ThreadComponents = {}
@@ -135,22 +143,22 @@ const ThreadHistorySkeleton: FC = () => (
 export const Thread: FC<ThreadProps> = ({
   components = EMPTY_COMPONENTS,
   autoFocus = true,
-  modelName,
+  modelSelector,
 }) => {
   const isEmpty = useAuiState(isNewChatView)
 
   return (
     <ThreadComponentsContext.Provider value={components}>
-      <ThreadRoot isEmpty={isEmpty} autoFocus={autoFocus} modelName={modelName} />
+      <ThreadRoot isEmpty={isEmpty} autoFocus={autoFocus} modelSelector={modelSelector} />
     </ThreadComponentsContext.Provider>
   )
 }
 
-const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean; modelName?: string }> = ({
-  isEmpty,
-  autoFocus,
-  modelName,
-}) => {
+const ThreadRoot: FC<{
+  isEmpty: boolean
+  autoFocus: boolean
+  modelSelector?: ThreadProps['modelSelector']
+}> = ({ isEmpty, autoFocus, modelSelector }) => {
   const { Welcome = ThreadWelcome } = useContext(ThreadComponentsContext)
 
   return (
@@ -193,7 +201,7 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean; modelName?: string 
           >
             <ThreadScrollToBottom />
             <ThreadFollowupSuggestions />
-            <Composer autoFocus={autoFocus} modelName={modelName} />
+            <Composer autoFocus={autoFocus} modelSelector={modelSelector} />
             <AuiIf condition={(s) => isNewChatView(s) && s.composer.isEmpty}>
               <ThreadSuggestions />
             </AuiIf>
@@ -267,7 +275,10 @@ const ThreadSuggestionItem: FC = () => {
   )
 }
 
-const Composer: FC<{ autoFocus: boolean; modelName?: string }> = ({ autoFocus, modelName }) => {
+const Composer: FC<{ autoFocus: boolean; modelSelector?: ThreadProps['modelSelector'] }> = ({
+  autoFocus,
+  modelSelector,
+}) => {
   return (
     <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
       <ComposerPrimitive.AttachmentDropzone
@@ -282,20 +293,33 @@ const Composer: FC<{ autoFocus: boolean; modelName?: string }> = ({ autoFocus, m
           enterKeyHint="send"
           aria-label="Message input"
         />
-        <ComposerAction modelName={modelName} />
+        <ComposerAction modelSelector={modelSelector} />
       </ComposerPrimitive.AttachmentDropzone>
     </ComposerPrimitive.Root>
   )
 }
 
-const ComposerAction: FC<{ modelName?: string }> = ({ modelName }) => {
+const ComposerAction: FC<{ modelSelector?: ThreadProps['modelSelector'] }> = ({
+  modelSelector,
+}) => {
   const canSend = useAuiState((s) => s.composer.canSend)
 
   return (
     <div className="aui-composer-action-wrapper relative flex items-center justify-between">
       <div className="flex items-center gap-1">
         <ComposerAddAttachment />
-        <ComposerModelTrigger model={modelName ?? '读取模型…'} open={false} />
+        {modelSelector && modelSelector.models.length > 0 && (
+          <ModelSelectorRoot
+            models={modelSelector.models}
+            value={modelSelector.value}
+            onValueChange={modelSelector.onValueChange}
+          >
+            <ModelSelectorTrigger variant="ghost" size="sm" disabled={modelSelector.disabled}>
+              <ModelSelectorValue placeholder="选择模型" />
+            </ModelSelectorTrigger>
+            <ModelSelectorContent searchable />
+          </ModelSelectorRoot>
+        )}
       </div>
       <div className="flex items-center gap-1.5">
         <AuiIf condition={(s) => s.thread.capabilities.dictation}>
@@ -337,12 +361,12 @@ const ComposerAction: FC<{ modelName?: string }> = ({ modelName }) => {
         <AuiIf condition={(s) => !s.thread.isRunning}>
           <ComposerPrimitive.Send
             render={
-                <ComposerSend
-                  streaming={false}
-                  idle={canSend}
-                  disabled={!canSend}
-                  className="aui-composer-send"
-                />
+              <ComposerSend
+                streaming={false}
+                idle={canSend}
+                disabled={!canSend}
+                className="aui-composer-send"
+              />
             }
           >
             <ArrowUpIcon className="aui-composer-send-icon size-4" />

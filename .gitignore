@@ -5,7 +5,8 @@ out
 .eslintcache
 *.log*
 .agents
-docs
+docs/*
+!docs/architecture.md
 .tmp*
 .env
 .env*

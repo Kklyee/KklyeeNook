@@ -19,7 +19,7 @@ export type ApprovalPolicyDecision =
 export class ApprovalPolicy {
   constructor(
     private readonly repo: PermissionGrantRepo,
-    private readonly cwd: string,
+    private readonly workspace: string | (() => string),
   ) {}
 
   protects(toolName: string): boolean {
@@ -79,22 +79,23 @@ export class ApprovalPolicy {
 
   private describe(toolName: string, args: unknown): PermissionDescriptor {
     const input = isRecord(args) ? args : {}
+    const cwd = typeof this.workspace === 'string' ? this.workspace : this.workspace()
 
     if (toolName === 'read' || toolName === 'write' || toolName === 'edit') {
       const suppliedPath = typeof input.path === 'string' ? input.path : ''
-      const absolutePath = resolve(this.cwd, suppliedPath)
-      const insideProject = isWithin(this.cwd, absolutePath)
+      const absolutePath = resolve(cwd, suppliedPath)
+      const insideProject = isWithin(cwd, absolutePath)
       const isRead = toolName === 'read'
 
       return {
         toolName,
         action: isRead ? 'filesystem.read' : 'filesystem.write',
         resourceKind: 'path',
-        resource: isRead && insideProject ? resolve(this.cwd) : absolutePath,
+        resource: isRead && insideProject ? resolve(cwd) : absolutePath,
         recursive: isRead && insideProject,
         description:
           isRead && insideProject
-            ? `读取项目目录 ${resolve(this.cwd)}`
+            ? `读取项目目录 ${resolve(cwd)}`
             : `${isRead ? '读取' : '修改'}文件 ${absolutePath}`,
       }
     }

@@ -11,6 +11,34 @@ const settings: AgentSettingsSnapshot = {
   thinkingLevel: 'off',
   cwd: '/project',
   hasApiKey: true,
+  activeModelId: 'test:test-model',
+  models: [
+    {
+      id: 'test:test-model',
+      provider: 'test',
+      providerName: 'Test',
+      modelID: 'test-model',
+      modelName: 'Test Model',
+      thinkingLevel: 'off',
+      hasApiKey: true,
+    },
+  ],
+  catalog: [
+    {
+      id: 'test',
+      name: 'Test',
+      models: [
+        {
+          id: 'test-model',
+          name: 'Test Model',
+          reasoning: false,
+          contextWindow: 8_000,
+          maxTokens: 1_000,
+        },
+      ],
+    },
+  ],
+  credentialPersistenceAvailable: true,
   tools: [{ name: 'read', requiresApproval: true }],
   permissionGrants: [],
 }
@@ -24,6 +52,9 @@ test('renders settings as a dedicated page with navigation back to the app', () 
   expect(markup).toContain('搜索设置')
   expect(markup).toContain('aria-current="page"')
   expect(markup).toContain('模型与工作目录')
+  expect(markup).toContain('已保存的模型')
+  expect(markup).toContain('模型服务商')
+  expect(markup).toContain('Test Model')
 })
 
 test('renders the permissions tab with a settings snapshot from before grants were added', () => {

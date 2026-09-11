@@ -36,6 +36,7 @@ test('keeps the legacy AgentRuntime projection on top of the shared host', async
     setThinkingLevel: vi.fn(),
     setSessionName: vi.fn(),
     respondToHostUiRequest: vi.fn(),
+    reloadConfiguration: vi.fn(),
     subscribe(listener) {
       sessionListeners.add(listener)
       return unsubscribeSession

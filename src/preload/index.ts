@@ -3,7 +3,10 @@ import { electronAPI } from '@electron-toolkit/preload'
 import type { PiClient, PiClientEvent } from '@assistant-ui/react-pi'
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
 import { DeletePermissionGrantRequest } from '@/shared/approval/approvalTypes'
-import type { AgentSettingsSnapshot } from '@/shared/agent/agentSettings'
+import type {
+  AgentSettingsSnapshot,
+  UpdateAgentSettingsRequest,
+} from '@/shared/agent/agentSettings'
 import { AgentRun, LoadAgentRunsRequest } from '@/shared/agent/agentRun'
 import type {
   AgentExecutionRecord,
@@ -57,6 +60,14 @@ const api = {
 
   getAgentSettings(): Promise<AgentSettingsSnapshot> {
     return ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_GET)
+  },
+
+  updateAgentSettings(request: UpdateAgentSettingsRequest): Promise<AgentSettingsSnapshot> {
+    return ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_UPDATE, request)
+  },
+
+  selectAgentWorkspace(): Promise<string | null> {
+    return ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_SELECT_WORKSPACE)
   },
 
   deletePermissionGrant(request: DeletePermissionGrantRequest): Promise<void> {

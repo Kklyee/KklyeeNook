@@ -25,6 +25,13 @@ export class PiSessionHostManager {
     this.hosts.delete(sessionId)
   }
 
+  reloadConfiguration(): void {
+    for (const host of this.hosts.values()) {
+      if (host.isRunning()) throw new Error('请等待当前 Agent 运行结束后再修改设置')
+    }
+    for (const host of this.hosts.values()) host.reloadConfiguration()
+  }
+
   dispose(): void {
     for (const host of this.hosts.values()) host.dispose()
     this.hosts.clear()

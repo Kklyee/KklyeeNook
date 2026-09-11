@@ -1,13 +1,22 @@
-import { useState, type ComponentType, type ReactNode } from 'react'
+import { useEffect, useState, type ComponentType, type ReactNode } from 'react'
 import {
   ArrowLeftIcon,
   BotIcon,
   SearchIcon,
   ShieldCheckIcon,
   Trash2Icon,
+  PlusIcon,
   WrenchIcon,
 } from 'lucide-react'
-import type { AgentSettingsSnapshot } from '@/shared/agent/agentSettings'
+import type {
+  AgentSettingsSnapshot,
+  UpdateAgentSettingsRequest,
+} from '@/shared/agent/agentSettings'
+import {
+  modelConfigId,
+  type SavedModelConfig,
+  type ThinkingLevel,
+} from '@/shared/agent/agentConfig'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { cn } from '../../lib/utils'
@@ -145,7 +154,7 @@ export function SettingsPage({
               正在读取配置…
             </p>
           ) : tab === 'model' ? (
-            <ModelSettings settings={settings} />
+            <ModelSettings settings={settings} onChanged={onChanged} />
           ) : tab === 'tools' ? (
             <ToolSettings settings={settings} />
           ) : (
@@ -189,32 +198,339 @@ function SettingRow({
   )
 }
 
-function ModelSettings({ settings }: { settings: AgentSettingsSnapshot }) {
+function ModelSettings({
+  settings,
+  onChanged,
+}: {
+  settings: AgentSettingsSnapshot
+  onChanged: () => Promise<void>
+}) {
+  const firstProvider = settings.catalog?.[0]
+  const [models, setModels] = useState(() => settings.models ?? [])
+  const [activeModelId, setActiveModelId] = useState(settings.activeModelId)
+  const [cwd, setCwd] = useState(settings.cwd)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [provider, setProvider] = useState(firstProvider?.id ?? '')
+  const [modelID, setModelID] = useState(firstProvider?.models[0]?.id ?? '')
+  const [baseUrl, setBaseUrl] = useState('')
+  const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>('medium')
+  const [apiKey, setApiKey] = useState('')
+  const [deleteApiKey, setDeleteApiKey] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    setModels(settings.models ?? [])
+    setActiveModelId(settings.activeModelId)
+    setCwd(settings.cwd)
+  }, [settings])
+
+  const providerEntry = settings.catalog?.find((item) => item.id === provider)
+  const selectedProviderHasKey = settings.models?.some(
+    (item) => item.provider === provider && item.hasApiKey,
+  )
+  const resetEditor = () => {
+    const initialProvider = settings.catalog?.[0]
+    setEditingId(null)
+    setProvider(initialProvider?.id ?? '')
+    setModelID(initialProvider?.models[0]?.id ?? '')
+    setBaseUrl('')
+    setThinkingLevel('medium')
+    setApiKey('')
+    setDeleteApiKey(false)
+  }
+  const edit = (model: SavedModelConfig) => {
+    setEditingId(model.id)
+    setProvider(model.provider)
+    setModelID(model.modelID)
+    setBaseUrl(model.baseUrl ?? '')
+    setThinkingLevel(model.thinkingLevel ?? 'medium')
+    setApiKey('')
+    setDeleteApiKey(false)
+    setSaved(false)
+  }
+  const persist = async (
+    nextModels: SavedModelConfig[],
+    nextActiveModelId: string,
+    credential?: UpdateAgentSettingsRequest['credential'],
+  ) => {
+    setSaving(true)
+    setSaveError(null)
+    setSaved(false)
+    try {
+      await window.api.updateAgentSettings({
+        models: nextModels,
+        activeModelId: nextActiveModelId,
+        cwd,
+        credential,
+      })
+      await onChanged()
+      setSaved(true)
+      resetEditor()
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : '设置保存失败，请重试。')
+    } finally {
+      setSaving(false)
+    }
+  }
+  const chooseWorkspace = async () => {
+    const selected = await window.api.selectAgentWorkspace()
+    if (selected) {
+      setCwd(selected)
+      setSaved(false)
+    }
+  }
+  const saveModel = async () => {
+    if (!provider || !modelID) return
+    const next: SavedModelConfig = {
+      id: modelConfigId(provider, modelID),
+      provider,
+      modelID,
+      thinkingLevel,
+      ...(baseUrl.trim() ? { baseUrl: baseUrl.trim() } : {}),
+    }
+    const duplicate = models.some((item) => item.id === next.id && item.id !== editingId)
+    if (duplicate) {
+      setSaveError('这个模型已经添加过了。')
+      return
+    }
+    const nextModels = editingId
+      ? models.map((item) => (item.id === editingId ? next : item))
+      : [...models, next]
+    const nextActive = models.length === 0 || activeModelId === editingId ? next.id : activeModelId
+    await persist(nextModels, nextActive, {
+      provider,
+      ...(apiKey.trim() ? { apiKey } : {}),
+      ...(deleteApiKey ? { deleteApiKey: true } : {}),
+    })
+  }
+
   return (
     <section aria-labelledby="model-section-title">
       <h2 id="model-section-title" className="mb-3 text-xs font-medium">
-        常规
+        已保存的模型
       </h2>
       <SettingsCard>
-        <SettingRow label="供应商" description="当前模型服务提供方" value={settings.provider} />
-        <SettingRow label="模型" description="用于处理新任务的模型" value={settings.modelID} />
-        <SettingRow label="思考级别" description="模型的推理强度" value={settings.thinkingLevel} />
-        <SettingRow
-          label="API Key"
-          description="密钥只保存在主进程，不会在这里显示"
-          value={settings.hasApiKey ? '已配置' : '未配置'}
-        />
-        <SettingRow label="工作目录" description="Agent 默认操作的项目目录" value={settings.cwd} />
-        <SettingRow
-          label="会话存储"
-          description="当前会话数据的保存方式"
-          value="仅内存，重启后清空"
-        />
+        {models.map((model) => {
+          const details = settings.models?.find((item) => item.id === model.id)
+          return (
+            <div key={model.id} className="flex items-center gap-3 px-4 py-3.5">
+              <input
+                type="radio"
+                name="default-model"
+                aria-label={`设为默认模型 ${details?.modelName ?? model.modelID}`}
+                checked={activeModelId === model.id}
+                onChange={() => void persist(models, model.id)}
+              />
+              <button
+                type="button"
+                className="min-w-0 flex-1 text-left"
+                onClick={() => edit(model)}
+              >
+                <p className="truncate text-sm font-medium">
+                  {details?.modelName ?? model.modelID}
+                </p>
+                <p className="text-muted-foreground truncate text-xs">
+                  {details?.providerName ?? model.provider} ·{' '}
+                  {details?.hasApiKey ? 'API Key 已配置' : '缺少 API Key'}
+                </p>
+              </button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="删除模型配置"
+                disabled={models.length === 1 || saving}
+                onClick={() => {
+                  const next = models.filter((item) => item.id !== model.id)
+                  const nextActive = activeModelId === model.id ? next[0].id : activeModelId
+                  void persist(next, nextActive)
+                }}
+              >
+                <Trash2Icon />
+              </Button>
+            </div>
+          )
+        })}
       </SettingsCard>
-      <p className="text-muted-foreground mt-4 text-xs leading-relaxed">
-        模型配置当前为只读。通过启动配置设置模型，通过 .env 设置 API_KEY，修改后需重启。
-      </p>
+
+      <div className="mt-8 mb-3 flex items-center justify-between">
+        <h2 className="text-xs font-medium">{editingId ? '编辑模型配置' : '添加模型配置'}</h2>
+        {editingId && (
+          <Button type="button" variant="ghost" size="sm" onClick={resetEditor}>
+            <PlusIcon className="size-3.5" /> 新增
+          </Button>
+        )}
+      </div>
+      <SettingsCard>
+        <SettingsField label="模型服务商" description="来自 pi-ai 的内置服务商">
+          <select
+            aria-label="模型服务商"
+            className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            value={provider}
+            onChange={(event) => {
+              const nextProvider = settings.catalog.find((item) => item.id === event.target.value)
+              setProvider(event.target.value)
+              setModelID(nextProvider?.models[0]?.id ?? '')
+              setBaseUrl('')
+              setApiKey('')
+              setDeleteApiKey(false)
+              setSaved(false)
+            }}
+          >
+            {settings.catalog?.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </SettingsField>
+        <SettingsField label="模型" description="根据服务商列出 pi-ai 内置模型">
+          <select
+            aria-label="模型"
+            className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            value={modelID}
+            onChange={(event) => {
+              setModelID(event.target.value)
+              setSaved(false)
+            }}
+          >
+            {providerEntry?.models.map((model) => (
+              <option key={model.id} value={model.id}>
+                {model.name}
+              </option>
+            ))}
+          </select>
+        </SettingsField>
+        <SettingsField label="Base URL" description="留空时使用供应商默认地址">
+          <Input
+            aria-label="Base URL"
+            value={baseUrl}
+            onChange={(event) => {
+              setBaseUrl(event.target.value)
+              setSaved(false)
+            }}
+            placeholder="https://api.example.com/v1"
+          />
+        </SettingsField>
+        <SettingsField label="思考级别" description="模型的推理强度">
+          <select
+            aria-label="思考级别"
+            className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            value={thinkingLevel}
+            onChange={(event) => setThinkingLevel(event.target.value as ThinkingLevel)}
+          >
+            {['off', 'low', 'medium', 'high'].map((level) => (
+              <option key={level} value={level}>
+                {level}
+              </option>
+            ))}
+          </select>
+        </SettingsField>
+        <SettingsField label="API Key" description="密钥不会返回到渲染进程">
+          <div className="flex gap-2">
+            <Input
+              aria-label="API Key"
+              type="password"
+              autoComplete="off"
+              value={apiKey}
+              onChange={(event) => {
+                setApiKey(event.target.value)
+                setDeleteApiKey(false)
+              }}
+              placeholder={selectedProviderHasKey ? '已配置；留空表示不修改' : '输入 API Key'}
+            />
+            {selectedProviderHasKey && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setApiKey('')
+                  setDeleteApiKey(true)
+                }}
+              >
+                清除
+              </Button>
+            )}
+          </div>
+        </SettingsField>
+        <div className="flex justify-end px-4 py-3.5">
+          <Button
+            type="button"
+            disabled={saving || !provider || !modelID}
+            onClick={() => void saveModel()}
+          >
+            {saving ? '保存中…' : editingId ? '更新配置' : '添加模型'}
+          </Button>
+        </div>
+      </SettingsCard>
+
+      <h2 className="mt-8 mb-3 text-xs font-medium">工作区</h2>
+      <SettingsCard>
+        <SettingsField label="工作目录" description="工具和 Artifact 的安全根目录">
+          <div className="flex gap-2">
+            <Input
+              aria-label="工作目录"
+              value={cwd}
+              onChange={(event) => {
+                setCwd(event.target.value)
+                setSaved(false)
+              }}
+            />
+            <Button type="button" variant="outline" onClick={() => void chooseWorkspace()}>
+              选择
+            </Button>
+          </div>
+        </SettingsField>
+        <div className="flex justify-end px-4 py-3.5">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={saving}
+            onClick={() => void persist(models, activeModelId)}
+          >
+            保存工作目录
+          </Button>
+        </div>
+      </SettingsCard>
+      {!settings.credentialPersistenceAvailable && (
+        <p className="text-amber-600 mt-3 text-xs" role="status">
+          当前系统密钥存储不可用，API Key 只能保留到本次应用退出。
+        </p>
+      )}
+      {deleteApiKey && <p className="text-amber-600 mt-3 text-xs">保存后将清除 API Key。</p>}
+      {saveError && (
+        <p className="text-destructive mt-3 text-sm" role="alert">
+          {saveError}
+        </p>
+      )}
+      {saved && (
+        <p className="text-emerald-600 mt-3 text-sm" role="status">
+          设置已保存并生效。
+        </p>
+      )}
     </section>
+  )
+}
+
+function SettingsField({
+  label,
+  description,
+  children,
+}: {
+  label: string
+  description: string
+  children: ReactNode
+}) {
+  return (
+    <div className="grid gap-2 px-4 py-3.5 sm:grid-cols-[minmax(0,1fr)_minmax(240px,1.2fr)] sm:items-center sm:gap-6">
+      <div>
+        <p className="text-sm font-medium">{label}</p>
+        <p className="text-muted-foreground mt-0.5 text-xs">{description}</p>
+      </div>
+      {children}
+    </div>
   )
 }
 
