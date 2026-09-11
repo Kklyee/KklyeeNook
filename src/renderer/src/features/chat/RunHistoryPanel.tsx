@@ -254,7 +254,6 @@ function EventRow({
   onClick: () => void
 }) {
   const meta = EVENT_META[event.kind]
-  const Icon = meta.icon
 
   return (
     <button
@@ -545,7 +544,7 @@ const EVENT_META: Record<
   system: { label: '系统', icon: BotIcon, className: 'bg-foreground/[0.06] text-foreground/55' },
   user: { label: '用户', icon: UserIcon, className: 'bg-blue-500/12 text-blue-500' },
   assistant: {
-    label: 'AI',
+    label: '模型',
     icon: MessageSquareTextIcon,
     className: 'bg-violet-500/12 text-violet-500',
   },
@@ -570,7 +569,7 @@ function buildOverview(timelines: readonly RunTimeline[]) {
   const lanes: Array<Omit<TraceLane, 'segments'> & { segments: TraceSegment[] }> = [
     { id: 'runs', label: '轮次', segments: [] },
     { id: 'user', label: '输入', segments: [] },
-    { id: 'assistant', label: 'AI', segments: [] },
+    { id: 'assistant', label: '模型', segments: [] },
     { id: 'tool', label: '工具', segments: [] },
   ]
   const laneMap = new Map(lanes.map((lane) => [lane.id, lane]))

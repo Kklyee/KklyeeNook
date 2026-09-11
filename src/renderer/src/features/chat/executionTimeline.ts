@@ -75,7 +75,7 @@ export function buildExecutionTimeline(
       case 'tool_started': {
         const tool = {
           ...item(record.id, 'tool', event.tool, record.timestamp),
-          summary: '工具调用',
+          summary: timelineText(event.args),
           detail: { args: event.args },
           status: 'running' as const,
         }
@@ -88,6 +88,12 @@ export function buildExecutionTimeline(
         if (tool) {
           tool.durationMs = Math.max(0, record.timestamp - tool.timestamp)
           tool.detail = { ...asObject(tool.detail), partialResult: event.partialResult }
+          const update = timelineText(event.partialResult)
+          if (update) {
+            tool.summary = [timelineText(asObject(tool.detail)?.args), update]
+              .filter(Boolean)
+              .join(' → ')
+          }
         }
         break
       }
@@ -96,7 +102,10 @@ export function buildExecutionTimeline(
         if (tool) {
           tool.durationMs = Math.max(0, record.timestamp - tool.timestamp)
           tool.status = event.success ? 'completed' : 'failed'
-          tool.summary = event.success ? '执行成功' : '执行失败'
+          const result = timelineText(event.result)
+          tool.summary = [timelineText(asObject(tool.detail)?.args), result]
+            .filter(Boolean)
+            .join(' → ')
           tool.detail = { ...asObject(tool.detail), result: event.result }
         }
         break
@@ -104,7 +113,7 @@ export function buildExecutionTimeline(
       case 'approval_required': {
         const approval = {
           ...item(record.id, 'approval', `审批 · ${event.tool}`, record.timestamp),
-          summary: '等待用户决定',
+          summary: timelineText(event.args),
           detail: event.args,
           status: 'running' as const,
         }
@@ -117,7 +126,6 @@ export function buildExecutionTimeline(
         if (approval) {
           approval.durationMs = Math.max(0, record.timestamp - approval.timestamp)
           approval.status = event.decision === 'allow' ? 'completed' : 'failed'
-          approval.summary = event.decision === 'allow' ? '已允许' : '已拒绝'
         }
         break
       }
@@ -157,4 +165,25 @@ function isActive(run: AgentRun) {
 
 function asObject(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
+}
+
+function timelineText(value: unknown): string {
+  if (value === undefined || value === null) return ''
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) return value.map(timelineText).filter(Boolean).join(' ')
+
+  if (typeof value === 'object') {
+    const object = value as Record<string, unknown>
+    if (Array.isArray(object.content)) {
+      const content = object.content.map(timelineText).filter(Boolean).join(' ')
+      if (content) return content
+    }
+    if (typeof object.text === 'string') return object.text
+  }
+
+  try {
+    return JSON.stringify(value) ?? String(value)
+  } catch {
+    return String(value)
+  }
 }

@@ -23,9 +23,9 @@ export interface TraceLane {
 const TONE: Record<TraceTone, string> = {
   run: "bg-foreground/28",
   system: "bg-foreground/45",
-  user: "bg-amber-500/85",
+  user: "bg-blue-500/80",
   assistant: "bg-violet-500/80",
-  tool: "bg-cyan-500/75",
+  tool: "bg-amber-500/80",
   approval: "bg-emerald-500/75",
   failed: "bg-red-500/85",
 };

@@ -69,12 +69,12 @@ test('groups streamed text and pairs tool and approval events', () => {
   expect(model.items.find((item) => item.kind === 'approval')).toMatchObject({
     durationMs: 50,
     status: 'completed',
-    summary: '已允许',
+    summary: '{"path":"README.md"}',
   })
   expect(model.items.find((item) => item.kind === 'tool')).toMatchObject({
     durationMs: 200,
     status: 'completed',
-    summary: '执行成功',
+    summary: '{"path":"README.md"} → ok',
   })
 })
 
@@ -109,7 +109,27 @@ test('keeps successful and failed tool results distinct', () => {
   ])
 
   expect(model.items.filter((item) => item.kind === 'tool')).toMatchObject([
-    { title: 'read', status: 'completed', summary: '执行成功' },
-    { title: 'bash', status: 'failed', summary: '执行失败' },
+    { title: 'read', status: 'completed', summary: '{} → ok' },
+    { title: 'bash', status: 'failed', summary: '{} → exit 1' },
   ])
+})
+
+test('uses text content from structured tool results in the row preview', () => {
+  const model = buildExecutionTimeline(run, [
+    record(1, 110, {
+      type: 'tool_started',
+      toolCallId: 'bash-1',
+      tool: 'bash',
+      args: { command: 'npm test' },
+    }),
+    record(2, 140, {
+      type: 'tool_finished',
+      toolCallId: 'bash-1',
+      tool: 'bash',
+      result: { content: [{ type: 'text', text: '12 tests passed' }] },
+      success: true,
+    }),
+  ])
+
+  expect(model.items[0]?.summary).toBe('{"command":"npm test"} → 12 tests passed')
 })
