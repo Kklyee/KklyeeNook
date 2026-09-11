@@ -68,6 +68,8 @@ import {
   type ComponentType,
   type FC,
   type PropsWithChildren,
+  useEffect,
+  useState,
 } from 'react'
 
 export type ThreadGroupPart = MessagePrimitive.GroupedParts.GroupPart
@@ -412,15 +414,7 @@ const AssistantMessage: FC = () => {
                 if (ToolGroup) {
                   return <ToolGroup group={part}>{children}</ToolGroup>
                 }
-                return (
-                  <ToolGroupRoot variant="ghost">
-                    <ToolGroupTrigger
-                      count={part.indices.length}
-                      active={part.status.type === 'running'}
-                    />
-                    <ToolGroupContent>{children}</ToolGroupContent>
-                  </ToolGroupRoot>
-                )
+                return <PendingToolGroup group={part}>{children}</PendingToolGroup>
               case 'group-reasoning': {
                 if (ReasoningGroup) {
                   return <ReasoningGroup group={part}>{children}</ReasoningGroup>
@@ -481,6 +475,29 @@ const AssistantMessage: FC = () => {
         <AssistantActionBar />
       </div>
     </MessagePrimitive.Root>
+  )
+}
+
+const PendingToolGroup: FC<PropsWithChildren<{ group: ThreadGroupPart }>> = ({
+  children,
+  group,
+}) => {
+  const requiresAction = group.status.type === 'requires-action'
+  const [open, setOpen] = useState(requiresAction)
+
+  useEffect(() => {
+    if (requiresAction) setOpen(true)
+  }, [requiresAction])
+
+  return (
+    <ToolGroupRoot variant="ghost" open={open} onOpenChange={setOpen}>
+      <ToolGroupTrigger
+        count={group.indices.length}
+        active={group.status.type === 'running'}
+        attention={requiresAction}
+      />
+      <ToolGroupContent>{children}</ToolGroupContent>
+    </ToolGroupRoot>
   )
 }
 

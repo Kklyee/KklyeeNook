@@ -61,13 +61,15 @@ export class DrizzleAgentExecutionRecordRepo implements AgentExecutionRecordRepo
   constructor(private readonly db: Database) {}
 
   async append(envelope: AgentEventEnvelope): Promise<void> {
-    await this.db.insert(agentExecutionRecords).values({
-      sessionId: envelope.sessionId,
-      runId: envelope.runId,
-      timestamp: envelope.timestamp,
-      eventType: envelope.event.type,
-      eventJson: JSON.stringify(envelope.event),
-    })
+    await this.db
+      .insert(agentExecutionRecords)
+      .values({
+        sessionId: envelope.sessionId,
+        runId: envelope.runId,
+        timestamp: envelope.timestamp,
+        eventType: envelope.event.type,
+        eventJson: JSON.stringify(envelope.event),
+      })
   }
 
   async findByRunId(runId: string): Promise<AgentExecutionRecord[]> {

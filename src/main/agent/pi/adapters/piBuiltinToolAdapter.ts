@@ -34,10 +34,7 @@ export function registerPiBuiltinTools(registry: ToolRegistry, metadataCwd: stri
     const tool = createTool(metadataCwd)
     const registration: ToolRegistration<AnyPiToolDefinition> = {
       definition: toProductDefinition(tool),
-      adapter: {
-        runtime: 'pi',
-        create: ({ cwd }) => createTool(cwd),
-      },
+      adapter: { runtime: 'pi', create: ({ cwd }) => createTool(cwd) },
     }
     registry.register(registration)
   }

@@ -72,9 +72,7 @@ function setup(running = false) {
     agentService,
     manager,
     projection,
-    new AgentConfigStore({
-      model: { provider: 'test', modelID: 'test', thinkingLevel: 'off' },
-    }),
+    new AgentConfigStore({ model: { provider: 'test', modelID: 'test', thinkingLevel: 'off' } }),
     artifacts,
   )
   return {
@@ -141,10 +139,7 @@ test('projects the Pi transcript after a completed message', async () => {
   await vi.waitFor(() => expect(projection.project).toHaveBeenCalled())
   vi.mocked(projection.project).mockClear()
 
-  emit({
-    type: 'message_end',
-    message: { role: 'user', content: 'hello', timestamp: 1 },
-  })
+  emit({ type: 'message_end', message: { role: 'user', content: 'hello', timestamp: 1 } })
   await vi.waitFor(() => expect(projection.project).toHaveBeenCalled())
   unsubscribe()
 })

@@ -4,7 +4,6 @@ import { usePiRuntime } from '@assistant-ui/react-pi'
 import { assistantToolkit } from '../tools/AssistantToolkit'
 import { ArtifactDataUI } from '../../artifacts/ArtifactRenderer'
 import { electronPiClient } from './electronPiClient'
-import { PiHostUiPrompt } from './PiHostUiPrompt'
 
 export function AssistantRuntime({ children }: { children: ReactNode }) {
   const runtime = usePiRuntime({ client: electronPiClient })
@@ -33,7 +32,6 @@ export function AssistantRuntime({ children }: { children: ReactNode }) {
   return (
     <AssistantRuntimeProvider runtime={runtime} config={config}>
       <ArtifactDataUI />
-      <PiHostUiPrompt />
       {children}
     </AssistantRuntimeProvider>
   )

@@ -31,9 +31,8 @@ export function registerPiClientIpc(window: BrowserWindow, client: PiClient): ()
   handle<Parameters<PiClient['listThreads']>[0]>(IPC_CHANNELS.PI_THREAD_LIST, (_event, input) =>
     client.listThreads(input),
   )
-  handle<Parameters<PiClient['createThread']>[0]>(
-    IPC_CHANNELS.PI_THREAD_CREATE,
-    (_event, input) => client.createThread(input),
+  handle<Parameters<PiClient['createThread']>[0]>(IPC_CHANNELS.PI_THREAD_CREATE, (_event, input) =>
+    client.createThread(input),
   )
   handle<PiThreadRequest>(IPC_CHANNELS.PI_THREAD_GET, (_event, input) =>
     client.getThread(input.threadId),

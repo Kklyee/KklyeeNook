@@ -18,11 +18,7 @@ export const agentExecutionRecords = sqliteTable(
     eventJson: text('event_json').notNull(),
   },
   (table) => [
-    index('agent_execution_records_run_timestamp_idx').on(
-      table.runId,
-      table.timestamp,
-      table.id,
-    ),
+    index('agent_execution_records_run_timestamp_idx').on(table.runId, table.timestamp, table.id),
     index('agent_execution_records_session_idx').on(table.sessionId),
   ],
 )

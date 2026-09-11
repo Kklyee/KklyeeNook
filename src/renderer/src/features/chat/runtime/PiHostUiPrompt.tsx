@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { usePiHostUiRequests, type PiHostUiRequest } from '@assistant-ui/react-pi'
+import { usePiRuntimeExtras, type PiHostUiRequest } from '@assistant-ui/react-pi'
 
 import { Button } from '../../../components/ui/button'
 import {
@@ -17,7 +17,7 @@ function RequestDialog({
   respond,
 }: {
   request: PiHostUiRequest
-  respond: ReturnType<typeof usePiHostUiRequests>['respond']
+  respond: ReturnType<typeof usePiRuntimeExtras>['respondToHostUiRequest']
 }) {
   const [value, setValue] = useState(request.kind === 'editor' ? (request.prefill ?? '') : '')
   const answer = (response: Parameters<typeof respond>[0]) => void respond(response)
@@ -73,7 +73,11 @@ function RequestDialog({
               />
             )}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => answer({ requestId: request.id, dismissed: true })}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => answer({ requestId: request.id, dismissed: true })}
+              >
                 Cancel
               </Button>
               <Button type="submit">Submit</Button>
@@ -89,7 +93,9 @@ function RequestDialog({
             >
               Deny
             </Button>
-            <Button onClick={() => answer({ requestId: request.id, confirmed: true })}>Allow</Button>
+            <Button onClick={() => answer({ requestId: request.id, confirmed: true })}>
+              Allow
+            </Button>
           </DialogFooter>
         )}
       </DialogContent>
@@ -97,9 +103,52 @@ function RequestDialog({
   )
 }
 
+function SelectRequestBar({
+  request,
+  respond,
+}: {
+  request: Extract<PiHostUiRequest, { kind: 'select' }>
+  respond: ReturnType<typeof usePiRuntimeExtras>['respondToHostUiRequest']
+}) {
+  return (
+    <div
+      role="alertdialog"
+      aria-label={request.title}
+      className="bg-popover/95 border-border/80 absolute inset-x-4 bottom-36 z-50 mx-auto flex max-w-2xl items-center gap-3 rounded-2xl border p-3 shadow-2xl backdrop-blur-md"
+    >
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">{request.title}</p>
+        <p className="text-muted-foreground text-xs">请选择一个操作后继续</p>
+      </div>
+      <div className="flex shrink-0 flex-wrap justify-end gap-2">
+        {request.options.map((option, index) => (
+          <Button
+            key={option}
+            size="sm"
+            variant={index === 0 ? 'default' : 'outline'}
+            onClick={() => void respond({ requestId: request.id, value: option })}
+          >
+            {option}
+          </Button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function PiHostUiPrompt() {
-  const { requests, respond } = usePiHostUiRequests()
+  const { allHostUiRequests: requests, respondToHostUiRequest } = usePiRuntimeExtras()
   const request = requests[0]
 
-  return request ? <RequestDialog key={request.id} request={request} respond={respond} /> : null
+  if (!request) return null
+  if (request.kind === 'select') {
+    return (
+      <SelectRequestBar
+        key={request.id}
+        request={request}
+        respond={respondToHostUiRequest}
+      />
+    )
+  }
+  return <RequestDialog key={request.id} request={request} respond={respondToHostUiRequest} />
 }

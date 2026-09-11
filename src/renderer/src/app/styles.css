@@ -1,5 +1,5 @@
 @import 'tailwindcss';
-@import "tw-shimmer";
+@import 'tw-shimmer';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -139,19 +139,19 @@ body,
   --radius-3xl: 1.5rem;
 
   @keyframes collapsible-down {
-  from {
-    height: 0;
+    from {
+      height: 0;
     }
-  to {
-    height: var(--radix-collapsible-content-height, var(--collapsible-panel-height, auto));
+    to {
+      height: var(--radix-collapsible-content-height, var(--collapsible-panel-height, auto));
     }
   }
   @keyframes collapsible-up {
-  from {
-    height: var(--radix-collapsible-content-height, var(--collapsible-panel-height, auto));
+    from {
+      height: var(--radix-collapsible-content-height, var(--collapsible-panel-height, auto));
     }
-  to {
-    height: 0;
+    to {
+      height: 0;
     }
   }
 }

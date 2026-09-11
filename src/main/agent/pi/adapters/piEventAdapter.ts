@@ -34,10 +34,7 @@ export function convertPiEvent(event: PIAgentEvent): AgentEvent | undefined {
       }
 
       if (finalAssistantMessage.stopReason === 'error') {
-        return {
-          type: 'agent_failed',
-          error: finalAssistantMessage.errorMessage ?? '模型请求失败',
-        }
+        return { type: 'agent_failed', error: finalAssistantMessage.errorMessage ?? '模型请求失败' }
       }
 
       return undefined

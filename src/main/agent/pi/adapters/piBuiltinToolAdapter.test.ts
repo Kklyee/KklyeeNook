@@ -9,8 +9,6 @@ test('registers Pi built-ins as product tools and creates cwd-scoped adapters', 
 
   expect(registry.list().map(({ name }) => name)).toEqual(['read', 'bash', 'edit', 'write'])
 
-  const tools = registry.resolve<{ name: string }>('pi', ['read', 'write'], {
-    cwd: process.cwd(),
-  })
+  const tools = registry.resolve<{ name: string }>('pi', ['read', 'write'], { cwd: process.cwd() })
   expect(tools.map(({ name }) => name)).toEqual(['read', 'write'])
 })

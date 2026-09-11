@@ -25,16 +25,10 @@ test('registers product definitions and resolves runtime adapters', () => {
 
 test('rejects duplicate, unknown, and unsupported tool registrations', () => {
   const registry = new ToolRegistry()
-  registry.register({
-    definition,
-    adapter: { runtime: 'pi', create: () => ({}) },
-  })
+  registry.register({ definition, adapter: { runtime: 'pi', create: () => ({}) } })
 
   expect(() =>
-    registry.register({
-      definition,
-      adapter: { runtime: 'pi', create: () => ({}) },
-    }),
+    registry.register({ definition, adapter: { runtime: 'pi', create: () => ({}) } }),
   ).toThrow('Tool already registered: read')
   expect(() => registry.resolve('pi', ['missing'], { cwd: '/repo' })).toThrow(
     'Unknown tool: missing',

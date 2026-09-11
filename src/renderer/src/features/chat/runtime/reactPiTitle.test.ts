@@ -8,10 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
-const snapshot: PiThreadSnapshot = {
-  metadata: { id: 'thread-1', status: 'idle' },
-  messages: [],
-}
+const snapshot: PiThreadSnapshot = { metadata: { id: 'thread-1', status: 'idle' }, messages: [] }
 
 let root: Root | undefined
 

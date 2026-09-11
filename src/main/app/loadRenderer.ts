@@ -18,7 +18,5 @@ export function loadRenderer(window: BrowserWindow, windowType: 'pet' | 'chat'):
     return
   }
 
-  void window.loadFile(join(__dirname, '../renderer/index.html'), {
-    query: { window: windowType },
-  })
+  void window.loadFile(join(__dirname, '../renderer/index.html'), { query: { window: windowType } })
 }

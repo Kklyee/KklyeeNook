@@ -10,7 +10,14 @@ test('replaces the product message projection from the authoritative Pi transcri
   await service.project('session-1', [
     { role: 'user', content: 'Hello', timestamp: 10 },
     { role: 'assistant', content: [{ type: 'text', text: 'Hi' }], timestamp: 20 },
-    { role: 'toolResult', toolCallId: 'tool-1', toolName: 'read', content: [], isError: false, timestamp: 30 },
+    {
+      role: 'toolResult',
+      toolCallId: 'tool-1',
+      toolName: 'read',
+      content: [],
+      isError: false,
+      timestamp: 30,
+    },
   ])
 
   expect(repo.replaceBySession).toHaveBeenCalledWith('session-1', [

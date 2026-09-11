@@ -1,13 +1,7 @@
 import type { AgentExecutionRecord } from '@/shared/agent/agentExecutionRecord'
 import type { AgentRun } from '@/shared/agent/agentRun'
 
-export type TimelineItemKind =
-  | 'system'
-  | 'user'
-  | 'assistant'
-  | 'tool'
-  | 'approval'
-  | 'error'
+export type TimelineItemKind = 'system' | 'user' | 'assistant' | 'tool' | 'approval' | 'error'
 export type TimelineItemStatus = 'running' | 'completed' | 'failed'
 
 export interface TimelineItem {
@@ -150,12 +144,7 @@ export function buildExecutionTimeline(
   return { totalMs, items }
 }
 
-function item(
-  id: number,
-  kind: TimelineItemKind,
-  title: string,
-  timestamp: number,
-): TimelineItem {
+function item(id: number, kind: TimelineItemKind, title: string, timestamp: number): TimelineItem {
   return { id: String(id), kind, title, timestamp, durationMs: 0, status: 'completed' }
 }
 
@@ -164,7 +153,9 @@ function isActive(run: AgentRun) {
 }
 
 function asObject(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined
 }
 
 function timelineText(value: unknown): string {

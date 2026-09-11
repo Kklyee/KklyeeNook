@@ -2,7 +2,6 @@ import type { ToolCallMessagePartComponent } from '@assistant-ui/react'
 import { useState } from 'react'
 
 import { ToolCall } from '../../../components/assistant-ui/elements/tool-call'
-import { ToolFallback } from '../../../components/assistant-ui/elements/tool-fallback.aui'
 
 type ToolArgs = Record<string, unknown>
 
@@ -52,11 +51,6 @@ export function createToolCallRenderer<TArgs extends ToolArgs>({
     argsText,
     result,
     status,
-    addResult,
-    resume,
-    interrupt,
-    approval,
-    respondToApproval,
   }) {
     const [open, setOpen] = useState(false)
 
@@ -69,20 +63,11 @@ export function createToolCallRenderer<TArgs extends ToolArgs>({
           request={argsText}
           result={formatToolResult(result)}
           running={status.type === 'running'}
+          completed={status.type === 'complete'}
           open={open}
           onOpenChange={setOpen}
           className="max-w-none"
         />
-        {status.type === 'requires-action' && (
-          <ToolFallback.Approval
-            addResult={addResult}
-            resume={resume}
-            interrupt={interrupt}
-            approval={approval}
-            respondToApproval={respondToApproval}
-            status={status}
-          />
-        )}
       </div>
     )
   }

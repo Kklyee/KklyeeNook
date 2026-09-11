@@ -202,12 +202,7 @@ export class PiClientService implements PiClient {
             return
           }
           await this.messageProjection.project(threadId, snapshot.messages)
-          this.notify(listener, {
-            type: 'snapshot',
-            snapshot,
-            threadId,
-            seq: snapshotSeq,
-          })
+          this.notify(listener, { type: 'snapshot', snapshot, threadId, seq: snapshotSeq })
           snapshotDelivered = true
           for (const event of bufferedEvents) this.notify(listener, event)
           bufferedEvents.length = 0
@@ -297,9 +292,11 @@ export class PiClientService implements PiClient {
       const session = this.agentService.getSession(threadId)
       if (!session) return
       const snapshot = relay.host.getSnapshot(this.metadataOf(session.toSummary()))
-      void Promise.resolve(this.messageProjection.project(threadId, snapshot.messages)).catch((error) => {
-        console.error('[PiClientService] failed to project messages:', error)
-      })
+      void Promise.resolve(this.messageProjection.project(threadId, snapshot.messages)).catch(
+        (error) => {
+          console.error('[PiClientService] failed to project messages:', error)
+        },
+      )
     }
   }
 
