@@ -23,6 +23,8 @@ import { DrizzleAgentRuntimeStateRepo } from '../db/repo/agentRuntimeStateRepo'
 import { join } from 'node:path'
 import { DrizzleAgentRunRepo } from '../db/repo/agentRunRepo'
 import { DrizzleAgentExecutionRecordRepo } from '../db/repo/agentExecutionRecordRepo'
+import { ToolRegistry } from '../tools/toolRegistry'
+import { registerPiBuiltinTools } from '../agent/pi/piBuiltinToolAdapter'
 
 export interface AppContext {
   dispose(): void
@@ -53,6 +55,8 @@ export async function bootstrap(): Promise<AppContext> {
 
   const runtimeStateRepo = new DrizzleAgentRuntimeStateRepo(db)
   const sessionDir = join(app.getAppPath(), '.pi-sessions')
+  const toolRegistry = new ToolRegistry()
+  registerPiBuiltinTools(toolRegistry, agentConfig.cwd ?? process.cwd())
 
   const runtimeFactory = createPiAgentRuntimeFactory(
     configStore,
@@ -60,6 +64,7 @@ export async function bootstrap(): Promise<AppContext> {
     approvalService,
     approvalPolicy,
     runtimeStateRepo,
+    toolRegistry,
     sessionDir,
   )
 

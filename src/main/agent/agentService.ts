@@ -187,6 +187,8 @@ export class AgentService {
       createdAt: now,
       updatedAt: now,
       startedAt: now,
+      toolCalls: [],
+      toolResults: [],
     }
     session.addRun(run)
     const initialSave = this.queueRunSave(run)

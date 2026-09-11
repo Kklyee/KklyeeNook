@@ -1,17 +1,17 @@
+import type { ToolCall, ToolResult } from '../tool/tool'
+
 export type AgentEvent =
   | { type: 'user_message'; text: string }
   | { type: 'system_prompt'; text: string }
   | { type: 'agent_started' }
   | { type: 'text_delta'; text: string }
-  | { type: 'tool_started'; toolCallId: string; tool: string; args: unknown }
-  | { type: 'tool_updated'; toolCallId: string; tool: string; partialResult: unknown }
-  | { type: 'tool_finished'; toolCallId: string; tool: string; result: unknown; success: boolean }
+  | { type: 'tool_started'; call: ToolCall }
+  | { type: 'tool_updated'; toolCallId: string; partialResult: unknown }
+  | { type: 'tool_finished'; result: ToolResult }
   | {
       type: 'approval_required'
       approvalId: string
-      toolCallId: string
-      tool: string
-      args: unknown
+      call: ToolCall
     }
   | {
       type: 'approval_resolved'

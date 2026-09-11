@@ -21,6 +21,8 @@ function toAgentRun(row: AgentRunRow): AgentRun {
     startedAt: row.startedAt ?? undefined,
     completedAt: row.completedAt ?? undefined,
     error: row.error ?? undefined,
+    toolCalls: row.toolCalls,
+    toolResults: row.toolResults,
   }
 }
 
@@ -54,6 +56,8 @@ export class DrizzleAgentRunRepo implements AgentRunRepo {
         startedAt: run.startedAt,
         completedAt: run.completedAt,
         error: run.error,
+        toolCalls: run.toolCalls,
+        toolResults: run.toolResults,
       })
       .onConflictDoUpdate({
         target: agentRuns.id,
@@ -63,6 +67,8 @@ export class DrizzleAgentRunRepo implements AgentRunRepo {
           startedAt: run.startedAt,
           completedAt: run.completedAt,
           error: run.error,
+          toolCalls: run.toolCalls,
+          toolResults: run.toolResults,
         },
       })
   }

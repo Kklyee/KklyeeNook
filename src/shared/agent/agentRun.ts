@@ -16,8 +16,11 @@ export interface AgentRun {
   startedAt?: number
   completedAt?: number
   error?: string
+  toolCalls: ToolCall[]
+  toolResults: ToolResult[]
 }
 
 export interface LoadAgentRunsRequest {
   sessionId: string
 }
+import type { ToolCall, ToolResult } from '../tool/tool'

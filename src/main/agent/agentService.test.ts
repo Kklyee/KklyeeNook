@@ -91,7 +91,15 @@ const sessionRecord: AgentSessionRecord = {
 }
 
 function run(status: AgentRun['status'], id: string, createdAt: number): AgentRun {
-  return { id, sessionId: sessionRecord.id, status, createdAt, updatedAt: createdAt }
+  return {
+    id,
+    sessionId: sessionRecord.id,
+    status,
+    createdAt,
+    updatedAt: createdAt,
+    toolCalls: [],
+    toolResults: [],
+  }
 }
 
 test('initialize recovers active runs and restores run history', async () => {
@@ -133,11 +141,16 @@ test('persists a run before execution and serializes status changes', async () =
       emit({
         type: 'approval_required',
         approvalId: 'approval-1',
-        toolCallId: 'tool-1',
-        tool: 'write',
-        args: {},
+        call: { id: 'tool-1', toolName: 'write', args: {} },
       })
-      emit({ type: 'tool_started', toolCallId: 'tool-1', tool: 'write', args: {} })
+      emit({
+        type: 'tool_started',
+        call: { id: 'tool-1', toolName: 'write', args: {} },
+      })
+      emit({
+        type: 'tool_finished',
+        result: { toolCallId: 'tool-1', toolName: 'write', output: 'ok', success: true },
+      })
       emit({ type: 'agent_completed' })
     },
     dispose() {},
@@ -154,9 +167,20 @@ test('persists a run before execution and serializes status changes', async () =
 
   expect(finalRun.status).toBe('completed')
   expect(finalRun.completedAt).toBeDefined()
-  expect(runRepo.savedStatuses).toEqual(['running', 'waiting', 'running', 'completed'])
+  expect(runRepo.savedStatuses).toEqual(['running', 'waiting', 'running', 'running', 'completed'])
   expect(runRepo.runs.get(finalRun.id)?.status).toBe('completed')
+  expect(finalRun.toolCalls).toEqual([{ id: 'tool-1', toolName: 'write', args: {} }])
+  expect(finalRun.toolResults).toEqual([
+    { toolCallId: 'tool-1', toolName: 'write', output: 'ok', success: true },
+  ])
   expect((await service.listExecutionRecords(finalRun.id)).map((record) => record.event.type)).toEqual(
-    ['user_message', 'agent_started', 'approval_required', 'tool_started', 'agent_completed'],
+    [
+      'user_message',
+      'agent_started',
+      'approval_required',
+      'tool_started',
+      'tool_finished',
+      'agent_completed',
+    ],
   )
 })

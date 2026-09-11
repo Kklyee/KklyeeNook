@@ -46,26 +46,25 @@ export function convertPiEvent(event: PIAgentEvent): AgentEvent | undefined {
     case 'tool_execution_start':
       return {
         type: 'tool_started',
-        toolCallId: event.toolCallId,
-        tool: event.toolName,
-        args: event.args,
+        call: { id: event.toolCallId, toolName: event.toolName, args: event.args },
       }
 
     case 'tool_execution_update':
       return {
         type: 'tool_updated',
         toolCallId: event.toolCallId,
-        tool: event.toolName,
         partialResult: event.partialResult,
       }
 
     case 'tool_execution_end':
       return {
         type: 'tool_finished',
-        toolCallId: event.toolCallId,
-        tool: event.toolName,
-        result: event.result,
-        success: event.isError !== true,
+        result: {
+          toolCallId: event.toolCallId,
+          toolName: event.toolName,
+          output: event.result,
+          success: event.isError !== true,
+        },
       }
 
     default:

@@ -12,6 +12,8 @@ const run: AgentRun = {
   updatedAt: 500,
   startedAt: 100,
   completedAt: 500,
+  toolCalls: [],
+  toolResults: [],
 }
 
 function record(
@@ -32,9 +34,7 @@ test('groups streamed text and pairs tool and approval events', () => {
     record(6, 150, {
       type: 'approval_required',
       approvalId: 'approval-1',
-      toolCallId: 'tool-1',
-      tool: 'write',
-      args: { path: 'README.md' },
+      call: { id: 'tool-1', toolName: 'write', args: { path: 'README.md' } },
     }),
     record(7, 200, {
       type: 'approval_resolved',
@@ -44,16 +44,11 @@ test('groups streamed text and pairs tool and approval events', () => {
     }),
     record(8, 210, {
       type: 'tool_started',
-      toolCallId: 'tool-1',
-      tool: 'write',
-      args: { path: 'README.md' },
+      call: { id: 'tool-1', toolName: 'write', args: { path: 'README.md' } },
     }),
     record(9, 410, {
       type: 'tool_finished',
-      toolCallId: 'tool-1',
-      tool: 'write',
-      result: 'ok',
-      success: true,
+      result: { toolCallId: 'tool-1', toolName: 'write', output: 'ok', success: true },
     }),
     record(10, 500, { type: 'agent_completed' }),
   ])
@@ -82,29 +77,19 @@ test('keeps successful and failed tool results distinct', () => {
   const model = buildExecutionTimeline(run, [
     record(1, 110, {
       type: 'tool_started',
-      toolCallId: 'success',
-      tool: 'read',
-      args: {},
+      call: { id: 'success', toolName: 'read', args: {} },
     }),
     record(2, 120, {
       type: 'tool_finished',
-      toolCallId: 'success',
-      tool: 'read',
-      result: 'ok',
-      success: true,
+      result: { toolCallId: 'success', toolName: 'read', output: 'ok', success: true },
     }),
     record(3, 130, {
       type: 'tool_started',
-      toolCallId: 'failure',
-      tool: 'bash',
-      args: {},
+      call: { id: 'failure', toolName: 'bash', args: {} },
     }),
     record(4, 140, {
       type: 'tool_finished',
-      toolCallId: 'failure',
-      tool: 'bash',
-      result: 'exit 1',
-      success: false,
+      result: { toolCallId: 'failure', toolName: 'bash', output: 'exit 1', success: false },
     }),
   ])
 
@@ -118,16 +103,16 @@ test('uses text content from structured tool results in the row preview', () => 
   const model = buildExecutionTimeline(run, [
     record(1, 110, {
       type: 'tool_started',
-      toolCallId: 'bash-1',
-      tool: 'bash',
-      args: { command: 'npm test' },
+      call: { id: 'bash-1', toolName: 'bash', args: { command: 'npm test' } },
     }),
     record(2, 140, {
       type: 'tool_finished',
-      toolCallId: 'bash-1',
-      tool: 'bash',
-      result: { content: [{ type: 'text', text: '12 tests passed' }] },
-      success: true,
+      result: {
+        toolCallId: 'bash-1',
+        toolName: 'bash',
+        output: { content: [{ type: 'text', text: '12 tests passed' }] },
+        success: true,
+      },
     }),
   ])
 

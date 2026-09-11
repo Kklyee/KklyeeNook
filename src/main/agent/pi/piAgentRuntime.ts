@@ -4,12 +4,13 @@ import {
   ModelRuntime,
   SessionManager,
   type AgentSession as PiAgentSession,
+  type ToolDefinition as PiToolDefinition,
 } from '@earendil-works/pi-coding-agent'
 
 import type { AgentEvent } from '@/shared/agent/agentEvent'
 import type { AgentConfigStore } from '@/main/settings/agentConfigStore'
 import type { CredentialStore } from '@/main/settings/credentialStore'
-import { resolveBuiltinTools } from '@/main/tools/builtinTools'
+import type { ToolRegistry } from '@/main/tools/toolRegistry'
 import type { ApprovalService } from '@/main/approval/approvalService'
 import type { ApprovalPolicy } from '@/main/approval/approvalPolicy'
 import { createPiApprovalExtension } from '@/main/approval/piApprovalExtension'
@@ -34,6 +35,7 @@ export class PiAgentRuntime implements AgentRuntime {
     private readonly credentialStore: CredentialStore,
     private readonly approval: PIAgentApprovalDeps,
     private readonly runtimeStateRepo: AgentRuntimeStateRepo,
+    private readonly toolRegistry: ToolRegistry,
     private readonly sessionDir: string,
   ) {}
 
@@ -85,7 +87,11 @@ export class PiAgentRuntime implements AgentRuntime {
       }
 
       const cwd = config.cwd ?? process.cwd()
-      const tools = resolveBuiltinTools(config.tools.enabled)
+      const tools = this.toolRegistry.resolve<PiToolDefinition<any, any, any>>(
+        'pi',
+        config.tools.enabled,
+        { cwd },
+      )
 
       const resourceLoader = new DefaultResourceLoader({
         cwd,
@@ -105,7 +111,9 @@ export class PiAgentRuntime implements AgentRuntime {
         modelRuntime,
         model,
         thinkingLevel: thinkingLevel ?? 'medium',
-        tools,
+        noTools: 'builtin',
+        tools: config.tools.enabled,
+        customTools: tools,
         resourceLoader,
         sessionManager,
       })

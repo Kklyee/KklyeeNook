@@ -74,12 +74,12 @@ export function buildExecutionTimeline(
       }
       case 'tool_started': {
         const tool = {
-          ...item(record.id, 'tool', event.tool, record.timestamp),
-          summary: timelineText(event.args),
-          detail: { args: event.args },
+          ...item(record.id, 'tool', event.call.toolName, record.timestamp),
+          summary: timelineText(event.call.args),
+          detail: { args: event.call.args },
           status: 'running' as const,
         }
-        tools.set(event.toolCallId, tool)
+        tools.set(event.call.id, tool)
         items.push(tool)
         break
       }
@@ -98,23 +98,23 @@ export function buildExecutionTimeline(
         break
       }
       case 'tool_finished': {
-        const tool = tools.get(event.toolCallId)
+        const tool = tools.get(event.result.toolCallId)
         if (tool) {
           tool.durationMs = Math.max(0, record.timestamp - tool.timestamp)
-          tool.status = event.success ? 'completed' : 'failed'
-          const result = timelineText(event.result)
+          tool.status = event.result.success ? 'completed' : 'failed'
+          const result = timelineText(event.result.output)
           tool.summary = [timelineText(asObject(tool.detail)?.args), result]
             .filter(Boolean)
             .join(' → ')
-          tool.detail = { ...asObject(tool.detail), result: event.result }
+          tool.detail = { ...asObject(tool.detail), result: event.result.output }
         }
         break
       }
       case 'approval_required': {
         const approval = {
-          ...item(record.id, 'approval', `审批 · ${event.tool}`, record.timestamp),
-          summary: timelineText(event.args),
-          detail: event.args,
+          ...item(record.id, 'approval', `审批 · ${event.call.toolName}`, record.timestamp),
+          summary: timelineText(event.call.args),
+          detail: event.call.args,
           status: 'running' as const,
         }
         approvals.set(event.approvalId, approval)

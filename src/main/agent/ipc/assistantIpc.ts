@@ -92,9 +92,9 @@ export function registerAssistantIpc({ mainWindow, agentService }: Options) {
         case 'tool_started':
           send({
             type: 'tool_start',
-            toolCallId: agentEvent.toolCallId,
-            toolName: agentEvent.tool,
-            args: agentEvent.args,
+            toolCallId: agentEvent.call.id,
+            toolName: agentEvent.call.toolName,
+            args: agentEvent.call.args,
           })
           break
 
@@ -109,9 +109,9 @@ export function registerAssistantIpc({ mainWindow, agentService }: Options) {
         case 'tool_finished':
           send({
             type: 'tool_end',
-            toolCallId: agentEvent.toolCallId,
-            result: agentEvent.result,
-            success: agentEvent.success,
+            toolCallId: agentEvent.result.toolCallId,
+            result: agentEvent.result.output,
+            success: agentEvent.result.success,
           })
           break
 

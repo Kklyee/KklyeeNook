@@ -5,6 +5,7 @@ import type { ApprovalService } from '@/main/approval/approvalService'
 import type { ApprovalPolicy } from '@/main/approval/approvalPolicy'
 import { PiAgentRuntime } from './piAgentRuntime'
 import { AgentRuntimeStateRepo } from '@/main/db/repo/agentRuntimeStateRepo'
+import type { ToolRegistry } from '@/main/tools/toolRegistry'
 
 export function createPiAgentRuntimeFactory(
   configStore: AgentConfigStore,
@@ -12,6 +13,7 @@ export function createPiAgentRuntimeFactory(
   approvalService: ApprovalService,
   approvalPolicy: ApprovalPolicy,
   runtimeStateRepo: AgentRuntimeStateRepo,
+  toolRegistry: ToolRegistry,
   sessionDir: string,
 ): AgentRuntimeFactory {
   return {
@@ -22,6 +24,7 @@ export function createPiAgentRuntimeFactory(
         credentialStore,
         { approvalService, approvalPolicy },
         runtimeStateRepo,
+        toolRegistry,
         sessionDir,
       )
     },

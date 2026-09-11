@@ -1,6 +1,7 @@
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 import type { AgentRunStatus } from '@/shared/agent/agentRun'
+import type { ToolCall, ToolResult } from '@/shared/tool/tool'
 import { conversations } from './conversations'
 
 export const agentRuns = sqliteTable(
@@ -16,6 +17,8 @@ export const agentRuns = sqliteTable(
     startedAt: integer('started_at'),
     completedAt: integer('completed_at'),
     error: text('error'),
+    toolCalls: text('tool_calls', { mode: 'json' }).$type<ToolCall[]>().notNull().default([]),
+    toolResults: text('tool_results', { mode: 'json' }).$type<ToolResult[]>().notNull().default([]),
   },
   (table) => [
     index('agent_runs_session_created_at_idx').on(table.sessionId, table.createdAt),

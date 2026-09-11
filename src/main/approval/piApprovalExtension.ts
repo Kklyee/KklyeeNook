@@ -19,9 +19,7 @@ export function createPiApprovalExtension(
       emit({
         type: 'approval_required',
         approvalId: event.toolCallId,
-        toolCallId: event.toolCallId,
-        tool: event.toolName,
-        args: event.input,
+        call: { id: event.toolCallId, toolName: event.toolName, args: event.input },
       })
 
       const approved = await approvalService.request({

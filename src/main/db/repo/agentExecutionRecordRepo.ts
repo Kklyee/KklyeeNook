@@ -20,8 +20,41 @@ function toExecutionRecord(row: AgentExecutionRecordRow): AgentExecutionRecord {
     sessionId: row.sessionId,
     runId: row.runId,
     timestamp: row.timestamp,
-    event: JSON.parse(row.eventJson) as AgentEvent,
+    event: parseAgentEvent(row.eventJson),
   }
+}
+
+function parseAgentEvent(json: string): AgentEvent {
+  const event = JSON.parse(json) as Record<string, unknown>
+
+  if (event.type === 'tool_started' && typeof event.toolCallId === 'string') {
+    return {
+      type: 'tool_started',
+      call: { id: event.toolCallId, toolName: String(event.tool), args: event.args },
+    }
+  }
+
+  if (event.type === 'tool_finished' && typeof event.toolCallId === 'string') {
+    return {
+      type: 'tool_finished',
+      result: {
+        toolCallId: event.toolCallId,
+        toolName: String(event.tool),
+        output: event.result,
+        success: event.success === true,
+      },
+    }
+  }
+
+  if (event.type === 'approval_required' && typeof event.toolCallId === 'string') {
+    return {
+      type: 'approval_required',
+      approvalId: String(event.approvalId),
+      call: { id: event.toolCallId, toolName: String(event.tool), args: event.args },
+    }
+  }
+
+  return event as unknown as AgentEvent
 }
 
 export class DrizzleAgentExecutionRecordRepo implements AgentExecutionRecordRepo {

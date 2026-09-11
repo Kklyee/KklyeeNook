@@ -28,11 +28,26 @@ export function getAgentRunPatch(
       return { status: 'running', startedAt: run.startedAt ?? timestamp }
 
     case 'text_delta':
-    case 'tool_started':
     case 'tool_updated':
-    case 'tool_finished':
       if (run.status === 'running') return undefined
       return { status: 'running' }
+
+    case 'tool_started':
+      return {
+        status: 'running',
+        toolCalls: run.toolCalls.some(({ id }) => id === event.call.id)
+          ? run.toolCalls
+          : [...run.toolCalls, event.call],
+      }
+
+    case 'tool_finished':
+      return {
+        status: 'running',
+        toolResults: [
+          ...run.toolResults.filter(({ toolCallId }) => toolCallId !== event.result.toolCallId),
+          event.result,
+        ],
+      }
 
     case 'approval_required':
       if (run.status === 'waiting') return undefined
