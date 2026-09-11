@@ -19,6 +19,7 @@ export const agentRuns = sqliteTable(
     error: text('error'),
     toolCalls: text('tool_calls', { mode: 'json' }).$type<ToolCall[]>().notNull().default([]),
     toolResults: text('tool_results', { mode: 'json' }).$type<ToolResult[]>().notNull().default([]),
+    artifactIds: text('artifact_ids', { mode: 'json' }).$type<string[]>().notNull().default([]),
   },
   (table) => [
     index('agent_runs_session_created_at_idx').on(table.sessionId, table.createdAt),

@@ -14,6 +14,7 @@ const run: AgentRun = {
   completedAt: 500,
   toolCalls: [],
   toolResults: [],
+  artifactIds: [],
 }
 
 function record(
@@ -75,18 +76,12 @@ test('groups streamed text and pairs tool and approval events', () => {
 
 test('keeps successful and failed tool results distinct', () => {
   const model = buildExecutionTimeline(run, [
-    record(1, 110, {
-      type: 'tool_started',
-      call: { id: 'success', toolName: 'read', args: {} },
-    }),
+    record(1, 110, { type: 'tool_started', call: { id: 'success', toolName: 'read', args: {} } }),
     record(2, 120, {
       type: 'tool_finished',
       result: { toolCallId: 'success', toolName: 'read', output: 'ok', success: true },
     }),
-    record(3, 130, {
-      type: 'tool_started',
-      call: { id: 'failure', toolName: 'bash', args: {} },
-    }),
+    record(3, 130, { type: 'tool_started', call: { id: 'failure', toolName: 'bash', args: {} } }),
     record(4, 140, {
       type: 'tool_finished',
       result: { toolCallId: 'failure', toolName: 'bash', output: 'exit 1', success: false },

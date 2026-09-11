@@ -115,6 +115,10 @@ export function registerAssistantIpc({ mainWindow, agentService }: Options) {
           })
           break
 
+        case 'artifact_created':
+          send({ type: 'artifact', artifact: agentEvent.artifact })
+          break
+
         case 'agent_completed':
           send({ type: 'done' })
           break

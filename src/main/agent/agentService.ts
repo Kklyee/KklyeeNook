@@ -13,6 +13,8 @@ import { AgentSessionRepo } from '../db/repo/agentSessionRepo'
 import { AgentRunRepo } from '../db/repo/agentRunRepo'
 import type { AgentExecutionRecord } from '@/shared/agent/agentExecutionRecord'
 import type { AgentExecutionRecordRepo } from '../db/repo/agentExecutionRecordRepo'
+import type { ArtifactRepo } from '../db/repo/artifactRepo'
+import { parseArtifactDraft, type Artifact, type ArtifactDraft } from '@/shared/artifact/artifact'
 
 export interface AgentRunHandle {
   run: AgentRun
@@ -31,6 +33,7 @@ export class AgentService {
     private readonly sessionRepo: AgentSessionRepo,
     private readonly runRepo: AgentRunRepo,
     private readonly executionRecordRepo: AgentExecutionRecordRepo,
+    private readonly artifactRepo: ArtifactRepo,
   ) {}
 
   async initialize(): Promise<void> {
@@ -126,12 +129,52 @@ export class AgentService {
       updatedRun = session.updateRun(runId, { ...patch, updatedAt: timestamp })
     }
     void this.queuePersistence(runId, async () => {
+      if (event.type === 'artifact_created') await this.artifactRepo.save(event.artifact)
       await this.executionRecordRepo.append(envelope)
       if (updatedRun) await this.runRepo.save(updatedRun)
     }).catch((error) => {
       console.error('[AgentService] failed to persist execution event:', error)
     })
     this.publish(envelope)
+
+    if (
+      event.type === 'tool_finished' &&
+      event.result.success &&
+      event.result.toolName === 'create_artifact'
+    ) {
+      const call = run.toolCalls.find(({ id }) => id === event.result.toolCallId)
+      const draft = parseArtifactDraft(call?.args)
+      if (draft) this.createArtifact(session, runId, draft, event.result.toolCallId)
+    }
+  }
+
+  addArtifact(
+    sessionId: string,
+    runId: string,
+    draft: ArtifactDraft,
+    toolCallId?: string,
+  ): Artifact {
+    const session = this.sessions.get(sessionId)
+    if (!session?.getRun(runId)) throw new Error(`AgentRun not found: ${runId}`)
+    return this.createArtifact(session, runId, draft, toolCallId)
+  }
+
+  private createArtifact(
+    session: AgentSession,
+    runId: string,
+    draft: ArtifactDraft,
+    toolCallId?: string,
+  ): Artifact {
+    const artifact: Artifact = {
+      ...draft,
+      id: randomUUID(),
+      sessionId: session.id,
+      runId,
+      toolCallId,
+      createdAt: Date.now(),
+    }
+    this.handleAgentEvent(session, runId, { type: 'artifact_created', artifact })
+    return artifact
   }
 
   async listRuns(sessionId: string): Promise<AgentRun[]> {
@@ -189,13 +232,12 @@ export class AgentService {
       startedAt: now,
       toolCalls: [],
       toolResults: [],
+      artifactIds: [],
     }
     session.addRun(run)
     const initialSave = this.queueRunSave(run)
     this.handleAgentEvent(session, run.id, { type: 'user_message', text: prompt })
-    const completion = initialSave.then(() =>
-      this.executeRun(session, run.id, prompt, signal),
-    )
+    const completion = initialSave.then(() => this.executeRun(session, run.id, prompt, signal))
 
     void completion.then(
       () => this.runPersistence.delete(run.id),

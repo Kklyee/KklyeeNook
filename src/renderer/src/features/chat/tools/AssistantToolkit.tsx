@@ -4,6 +4,7 @@ import { createToolCallRenderer } from './ToolCallRenderer'
 
 type ReadArgs = { path?: string; file_path?: string }
 type BashArgs = { command?: string }
+type CreateArtifactArgs = { title?: string; kind?: string }
 
 const ReadToolCall = createToolCallRenderer<ReadArgs>({
   label: 'Read file',
@@ -17,7 +18,14 @@ const BashToolCall = createToolCallRenderer<BashArgs>({
   getQuery: (args) => args.command ?? '',
 })
 
+const CreateArtifactToolCall = createToolCallRenderer<CreateArtifactArgs>({
+  label: 'Created artifact',
+  activeLabel: 'Creating artifact',
+  getQuery: (args) => args.title ?? args.kind ?? '',
+})
+
 export const assistantToolkit = {
   read: { type: 'backend', render: ReadToolCall },
   bash: { type: 'backend', render: BashToolCall },
+  create_artifact: { type: 'backend', render: CreateArtifactToolCall },
 } satisfies Toolkit

@@ -26,6 +26,10 @@ import { DrizzleAgentExecutionRecordRepo } from '../db/repo/agentExecutionRecord
 import { ToolRegistry } from '../tools/toolRegistry'
 import { registerPiBuiltinTools } from '../agent/pi/piBuiltinToolAdapter'
 import { DrizzlePermissionGrantRepo } from '../db/repo/permissionGrantRepo'
+import { DrizzleArtifactRepo } from '../db/repo/artifactRepo'
+import { ArtifactService } from '../artifact/artifactService'
+import { registerArtifactIpc } from '../artifact/artifactIpc'
+import { registerPiArtifactTool } from '../agent/pi/piArtifactToolAdapter'
 
 export interface AppContext {
   dispose(): void
@@ -33,7 +37,7 @@ export interface AppContext {
 
 const agentConfig: AgentConfig = {
   model: { provider: 'deepseek', modelID: 'deepseek-v4-flash', thinkingLevel: 'off' },
-  tools: { enabled: ['read', 'bash', 'edit', 'write'] },
+  tools: { enabled: ['read', 'bash', 'edit', 'write', 'create_artifact'] },
   cwd: process.cwd(),
 }
 
@@ -59,6 +63,7 @@ export async function bootstrap(): Promise<AppContext> {
   const sessionDir = join(app.getAppPath(), '.pi-sessions')
   const toolRegistry = new ToolRegistry()
   registerPiBuiltinTools(toolRegistry, agentConfig.cwd ?? process.cwd())
+  registerPiArtifactTool(toolRegistry)
 
   const runtimeFactory = createPiAgentRuntimeFactory(
     configStore,
@@ -73,7 +78,15 @@ export async function bootstrap(): Promise<AppContext> {
   const sessionRepo = new DrizzleAgentSessionRepo(db)
   const runRepo = new DrizzleAgentRunRepo(db)
   const executionRecordRepo = new DrizzleAgentExecutionRecordRepo(db)
-  const agentService = new AgentService(runtimeFactory, sessionRepo, runRepo, executionRecordRepo)
+  const artifactRepo = new DrizzleArtifactRepo(db)
+  const agentService = new AgentService(
+    runtimeFactory,
+    sessionRepo,
+    runRepo,
+    executionRecordRepo,
+    artifactRepo,
+  )
+  const artifactService = new ArtifactService(artifactRepo, agentConfig.cwd ?? process.cwd())
 
   const messageRepo = new DrizzleAgentMessageRepo(db)
   const messageService = new AgentMessageService(messageRepo)
@@ -86,6 +99,7 @@ export async function bootstrap(): Promise<AppContext> {
   registerApprovalIpc(chatWindow, approvalService)
   registerAgentSessionIpc(agentService)
   registerAgentMessageIpc(messageService)
+  registerArtifactIpc(chatWindow, artifactService)
 
   loadRenderer(chatWindow, 'chat')
   chatWindow.on('ready-to-show', () => chatWindow.show())

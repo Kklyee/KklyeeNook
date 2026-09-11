@@ -1,4 +1,5 @@
 import type { ToolCall, ToolResult } from '../tool/tool'
+import type { Artifact } from '../artifact/artifact'
 
 export type AgentEvent =
   | { type: 'user_message'; text: string }
@@ -8,11 +9,8 @@ export type AgentEvent =
   | { type: 'tool_started'; call: ToolCall }
   | { type: 'tool_updated'; toolCallId: string; partialResult: unknown }
   | { type: 'tool_finished'; result: ToolResult }
-  | {
-      type: 'approval_required'
-      approvalId: string
-      call: ToolCall
-    }
+  | { type: 'artifact_created'; artifact: Artifact }
+  | { type: 'approval_required'; approvalId: string; call: ToolCall }
   | {
       type: 'approval_resolved'
       approvalId: string

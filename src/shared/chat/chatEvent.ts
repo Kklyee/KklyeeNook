@@ -10,6 +10,7 @@ export type ChatStreamEvent =
   | { type: 'tool_start'; toolCallId: string; toolName: string; args: unknown }
   | { type: 'tool_update'; toolCallId: string; partialResult: unknown }
   | { type: 'tool_end'; toolCallId: string; result: unknown; success: boolean }
+  | { type: 'artifact'; artifact: import('../artifact/artifact').Artifact }
   | { type: 'aborted' }
   | { type: 'done' }
   | { type: 'error'; message: string }

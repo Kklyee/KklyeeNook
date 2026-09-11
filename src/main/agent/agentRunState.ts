@@ -49,6 +49,14 @@ export function getAgentRunPatch(
         ],
       }
 
+    case 'artifact_created':
+      return {
+        status: 'running',
+        artifactIds: run.artifactIds.includes(event.artifact.id)
+          ? run.artifactIds
+          : [...run.artifactIds, event.artifact.id],
+      }
+
     case 'approval_required':
       if (run.status === 'waiting') return undefined
       return { status: 'waiting' }

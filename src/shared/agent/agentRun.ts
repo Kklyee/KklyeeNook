@@ -18,6 +18,7 @@ export interface AgentRun {
   error?: string
   toolCalls: ToolCall[]
   toolResults: ToolResult[]
+  artifactIds: string[]
 }
 
 export interface LoadAgentRunsRequest {

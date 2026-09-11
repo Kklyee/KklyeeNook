@@ -1,5 +1,6 @@
 import type { ChatModelAdapter, ToolCallMessagePart } from '@assistant-ui/react'
 import type { ChatMessage, ChatStreamEvent } from '@/shared/chat/chatEvent'
+import type { Artifact } from '@/shared/artifact/artifact'
 
 type SessionResolver = () => Promise<string>
 
@@ -14,7 +15,11 @@ export function createChatModelAdapter(resolveSessionId: SessionResolver): ChatM
       abortSignal.throwIfAborted()
 
       const serializedMessages: ChatMessage[] = []
-      const contentParts: Array<{ type: 'text'; text: string } | ToolCallMessagePart> = []
+      const contentParts: Array<
+        | { type: 'text'; text: string }
+        | ToolCallMessagePart
+        | { type: 'data'; name: 'artifact'; data: Artifact }
+      > = []
       const toolCallIndices = new Map<string, number>()
 
       for (const message of messages) {
@@ -121,14 +126,13 @@ export function createChatModelAdapter(resolveSessionId: SessionResolver): ChatM
               const index = toolCallIndices.get(event.toolCallId)
               const toolCall = index === undefined ? undefined : contentParts[index]
               if (index !== undefined && toolCall?.type === 'tool-call') {
-                contentParts[index] = {
-                  ...toolCall,
-                  result: event.result,
-                  isError: !event.success,
-                }
+                contentParts[index] = { ...toolCall, result: event.result, isError: !event.success }
               }
               break
             }
+            case 'artifact':
+              contentParts.push({ type: 'data', name: 'artifact', data: event.artifact })
+              break
             case 'tool_update':
             case 'aborted':
             case 'done':

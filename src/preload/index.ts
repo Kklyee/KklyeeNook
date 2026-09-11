@@ -20,6 +20,13 @@ import type {
   AgentExecutionRecord,
   LoadAgentExecutionRecordsRequest,
 } from '@/shared/agent/agentExecutionRecord'
+import type {
+  ApplyArtifactRequest,
+  Artifact,
+  ArtifactActionResult,
+  ExportArtifactRequest,
+  ListArtifactsRequest,
+} from '@/shared/artifact/artifact'
 
 const api = {
   getAgentSettings(): Promise<AgentSettingsSnapshot> {
@@ -97,6 +104,18 @@ const api = {
 
   saveAgentMessage(message: AgentMessageSnapshot): Promise<void> {
     return ipcRenderer.invoke(IPC_CHANNELS.AGENT_MESSAGE_SAVE, message)
+  },
+
+  listArtifacts(request: ListArtifactsRequest): Promise<Artifact[]> {
+    return ipcRenderer.invoke(IPC_CHANNELS.ARTIFACT_LIST, request)
+  },
+
+  applyArtifact(request: ApplyArtifactRequest): Promise<ArtifactActionResult> {
+    return ipcRenderer.invoke(IPC_CHANNELS.ARTIFACT_APPLY, request)
+  },
+
+  exportArtifact(request: ExportArtifactRequest): Promise<ArtifactActionResult> {
+    return ipcRenderer.invoke(IPC_CHANNELS.ARTIFACT_EXPORT, request)
   },
 }
 

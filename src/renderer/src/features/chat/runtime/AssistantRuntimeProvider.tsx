@@ -12,6 +12,7 @@ import { assistantToolkit } from '../tools/AssistantToolkit'
 import { createChatModelAdapter } from './chatModelAdapter'
 import { threadListAdapter } from './threadListAdapter'
 import { createThreadHistoryAdapter } from './threadHistoryAdapter'
+import { ArtifactDataUI } from '../artifacts/ArtifactRenderer'
 
 function useAgentThreadRuntime() {
   const aui = useAui()
@@ -67,6 +68,7 @@ export function AssistantRuntime({ children }: { children: ReactNode }) {
 
   return (
     <AssistantRuntimeProvider runtime={runtime} config={config}>
+      <ArtifactDataUI />
       {children}
     </AssistantRuntimeProvider>
   )

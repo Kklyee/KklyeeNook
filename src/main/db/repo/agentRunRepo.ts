@@ -23,6 +23,7 @@ function toAgentRun(row: AgentRunRow): AgentRun {
     error: row.error ?? undefined,
     toolCalls: row.toolCalls,
     toolResults: row.toolResults,
+    artifactIds: row.artifactIds,
   }
 }
 
@@ -58,6 +59,7 @@ export class DrizzleAgentRunRepo implements AgentRunRepo {
         error: run.error,
         toolCalls: run.toolCalls,
         toolResults: run.toolResults,
+        artifactIds: run.artifactIds,
       })
       .onConflictDoUpdate({
         target: agentRuns.id,
@@ -69,6 +71,7 @@ export class DrizzleAgentRunRepo implements AgentRunRepo {
           error: run.error,
           toolCalls: run.toolCalls,
           toolResults: run.toolResults,
+          artifactIds: run.artifactIds,
         },
       })
   }

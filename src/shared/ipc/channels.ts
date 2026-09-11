@@ -14,4 +14,7 @@ export const IPC_CHANNELS = {
   AGENT_EXECUTION_RECORD_LIST: 'agent-execution-record:list',
   AGENT_MESSAGE_LIST: 'agent-message:list',
   AGENT_MESSAGE_SAVE: 'agent-message:save',
+  ARTIFACT_LIST: 'artifact:list',
+  ARTIFACT_APPLY: 'artifact:apply',
+  ARTIFACT_EXPORT: 'artifact:export',
 } as const

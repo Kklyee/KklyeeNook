@@ -18,6 +18,13 @@ import type {
   AgentExecutionRecord,
   LoadAgentExecutionRecordsRequest,
 } from '../shared/agent/agentExecutionRecord'
+import type {
+  ApplyArtifactRequest,
+  Artifact,
+  ArtifactActionResult,
+  ExportArtifactRequest,
+  ListArtifactsRequest,
+} from '../shared/artifact/artifact'
 
 interface API {
   getAgentSettings(): Promise<AgentSettingsSnapshot>
@@ -35,6 +42,9 @@ interface API {
   ): Promise<AgentExecutionRecord[]>
   loadAgentMessages(request: LoadAgentMessagesRequest): Promise<AgentMessageSnapshot[]>
   saveAgentMessage(message: AgentMessageSnapshot): Promise<void>
+  listArtifacts(request: ListArtifactsRequest): Promise<Artifact[]>
+  applyArtifact(request: ApplyArtifactRequest): Promise<ArtifactActionResult>
+  exportArtifact(request: ExportArtifactRequest): Promise<ArtifactActionResult>
 }
 
 declare global {

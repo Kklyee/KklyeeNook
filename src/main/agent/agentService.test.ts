@@ -8,6 +8,8 @@ import type { AgentRunRepo } from '../db/repo/agentRunRepo'
 import type { AgentSessionRecord, AgentSessionRepo } from '../db/repo/agentSessionRepo'
 import type { AgentEventEnvelope } from './agentEventEnvelope'
 import type { AgentExecutionRecordRepo } from '../db/repo/agentExecutionRecordRepo'
+import type { ArtifactRepo } from '../db/repo/artifactRepo'
+import type { Artifact } from '@/shared/artifact/artifact'
 
 class MemorySessionRepo implements AgentSessionRepo {
   constructor(private readonly records: AgentSessionRecord[]) {}
@@ -83,6 +85,26 @@ class MemoryExecutionRecordRepo implements AgentExecutionRecordRepo {
   }
 }
 
+class MemoryArtifactRepo implements ArtifactRepo {
+  readonly artifacts: Artifact[] = []
+
+  async findById(id: string) {
+    return this.artifacts.find((artifact) => artifact.id === id)
+  }
+
+  async findBySessionId(sessionId: string) {
+    return this.artifacts.filter((artifact) => artifact.sessionId === sessionId)
+  }
+
+  async findByRunId(runId: string) {
+    return this.artifacts.filter((artifact) => artifact.runId === runId)
+  }
+
+  async save(artifact: Artifact) {
+    this.artifacts.push(artifact)
+  }
+}
+
 const sessionRecord: AgentSessionRecord = {
   id: 'session-1',
   title: 'Test session',
@@ -99,6 +121,7 @@ function run(status: AgentRun['status'], id: string, createdAt: number): AgentRu
     updatedAt: createdAt,
     toolCalls: [],
     toolResults: [],
+    artifactIds: [],
   }
 }
 
@@ -118,6 +141,7 @@ test('initialize recovers active runs and restores run history', async () => {
     new MemorySessionRepo([sessionRecord]),
     runRepo,
     new MemoryExecutionRecordRepo(),
+    new MemoryArtifactRepo(),
   )
 
   await service.initialize()
@@ -143,10 +167,7 @@ test('persists a run before execution and serializes status changes', async () =
         approvalId: 'approval-1',
         call: { id: 'tool-1', toolName: 'write', args: {} },
       })
-      emit({
-        type: 'tool_started',
-        call: { id: 'tool-1', toolName: 'write', args: {} },
-      })
+      emit({ type: 'tool_started', call: { id: 'tool-1', toolName: 'write', args: {} } })
       emit({
         type: 'tool_finished',
         result: { toolCallId: 'tool-1', toolName: 'write', output: 'ok', success: true },
@@ -160,6 +181,7 @@ test('persists a run before execution and serializes status changes', async () =
     new MemorySessionRepo([sessionRecord]),
     runRepo,
     executionRecordRepo,
+    new MemoryArtifactRepo(),
   )
   await service.initialize()
 
@@ -173,14 +195,64 @@ test('persists a run before execution and serializes status changes', async () =
   expect(finalRun.toolResults).toEqual([
     { toolCallId: 'tool-1', toolName: 'write', output: 'ok', success: true },
   ])
-  expect((await service.listExecutionRecords(finalRun.id)).map((record) => record.event.type)).toEqual(
-    [
-      'user_message',
-      'agent_started',
-      'approval_required',
-      'tool_started',
-      'tool_finished',
-      'agent_completed',
-    ],
+  expect(
+    (await service.listExecutionRecords(finalRun.id)).map((record) => record.event.type),
+  ).toEqual([
+    'user_message',
+    'agent_started',
+    'approval_required',
+    'tool_started',
+    'tool_finished',
+    'agent_completed',
+  ])
+})
+
+test('turns a successful create_artifact tool call into a durable run artifact', async () => {
+  const runRepo = new MemoryRunRepo()
+  const artifactRepo = new MemoryArtifactRepo()
+  const runtime: AgentRuntime = {
+    async run(_prompt, emit) {
+      emit({
+        type: 'tool_started',
+        call: {
+          id: 'tool-artifact',
+          toolName: 'create_artifact',
+          args: { kind: 'markdown', title: 'Plan', content: '# Plan' },
+        },
+      })
+      emit({
+        type: 'tool_finished',
+        result: {
+          toolCallId: 'tool-artifact',
+          toolName: 'create_artifact',
+          output: 'created',
+          success: true,
+        },
+      })
+      emit({ type: 'agent_completed' })
+    },
+    dispose() {},
+  }
+  const service = new AgentService(
+    { create: () => runtime },
+    new MemorySessionRepo([sessionRecord]),
+    runRepo,
+    new MemoryExecutionRecordRepo(),
+    artifactRepo,
   )
+  await service.initialize()
+
+  const finalRun = await service.startRun(sessionRecord.id, 'create a plan').completion
+
+  expect(artifactRepo.artifacts).toMatchObject([
+    {
+      sessionId: sessionRecord.id,
+      runId: finalRun.id,
+      toolCallId: 'tool-artifact',
+      kind: 'markdown',
+      title: 'Plan',
+      content: '# Plan',
+    },
+  ])
+  expect(finalRun.artifactIds).toEqual([artifactRepo.artifacts[0]!.id])
 })
