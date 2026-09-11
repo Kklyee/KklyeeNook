@@ -6,7 +6,7 @@ import { SidebarInset, SidebarProvider } from '../components/ui/sidebar'
 export function AppShell() {
   return (
     <SidebarProvider className="h-full min-h-0 overflow-hidden">
-      <ThreadSidebar collapsible="icon" />
+      <ThreadSidebar collapsible="icon"  />
       <SidebarInset className="min-h-0 overflow-hidden">
         <ChatPanel />
       </SidebarInset>

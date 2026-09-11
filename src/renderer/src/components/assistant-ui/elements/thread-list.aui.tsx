@@ -3,6 +3,7 @@
 import { Button } from "@/renderer/src/components/ui/button";
 import { Input } from "@/renderer/src/components/ui/input";
 import { Skeleton } from "@/renderer/src/components/ui/skeleton";
+import { useSidebar } from "@/renderer/src/components/ui/sidebar";
 import { cn } from "@/renderer/src/lib/utils";
 import {
   AuiIf,
@@ -35,12 +36,19 @@ import {
 export const ThreadList: FC = () => {
   const [search, setSearch] = useState("");
   const hasThreads = useAuiState((s) => s.threads.threadIds.length > 0);
+  const { isMobile, state } = useSidebar();
+  const collapsed = state === "collapsed" && !isMobile;
 
   return (
     <ThreadListRoot>
       <ThreadListNew />
       {hasThreads && (
         <ThreadListSearch value={search} onValueChange={setSearch} />
+      )}
+      {hasThreads && !collapsed && (
+        <div className="px-2 pt-3 pb-0.5 text-[11px] font-medium text-sidebar-foreground/45">
+          会话
+        </div>
       )}
       <ThreadListItems searchQuery={hasThreads ? search : ""} />
     </ThreadListRoot>
@@ -54,20 +62,43 @@ export const ThreadListSearch = forwardRef<
     onValueChange: (value: string) => void;
   }
 >(({ className, value, onValueChange, ...props }, ref) => {
+  const { isMobile, setOpen, state } = useSidebar();
+  const collapsed = state === "collapsed" && !isMobile;
+
+  if (collapsed) {
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        data-slot="aui_thread-list-search-collapsed"
+        className="mx-auto size-8 rounded-lg text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+        aria-label="展开并搜索对话"
+        title="搜索对话"
+        onClick={() => setOpen(true)}
+      >
+        <SearchIcon className="size-4" />
+      </Button>
+    );
+  }
+
   return (
-    <div data-slot="aui_thread-list-search" className="relative px-0.5 py-1">
+    <div data-slot="aui_thread-list-search" className="relative py-1">
       <SearchIcon
         data-slot="aui_thread-list-search-icon"
-        className="text-muted-foreground pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2"
+        className="pointer-events-none absolute start-2.5 top-1/2 size-3.5 -translate-y-1/2 text-sidebar-foreground/45"
       />
       <Input
         ref={ref}
         type="search"
         value={value}
         onChange={(event) => onValueChange(event.target.value)}
-        aria-label="Search threads"
-        placeholder="Search threads"
-        className={cn("h-8 ps-8 text-sm", className)}
+        aria-label="搜索对话"
+        placeholder="搜索对话"
+        className={cn(
+          "h-8 rounded-lg border-transparent bg-transparent ps-8 text-xs text-sidebar-foreground shadow-none placeholder:text-sidebar-foreground/45 hover:bg-sidebar-accent focus-visible:border-sidebar-ring focus-visible:bg-sidebar-accent focus-visible:ring-1",
+          className,
+        )}
         {...props}
       />
     </div>
@@ -82,7 +113,7 @@ export const ThreadListRoot: FC<
   return (
     <ThreadListPrimitive.Root
       data-slot="aui_thread-list-root"
-      className={cn("flex flex-col gap-0.5", className)}
+      className={cn("flex flex-col gap-1", className)}
       {...props}
     />
   );
@@ -91,6 +122,10 @@ export const ThreadListRoot: FC<
 export const ThreadListItems: FC<
   ComponentPropsWithoutRef<"div"> & { searchQuery?: string }
 > = ({ className, searchQuery = "", ...props }) => {
+  const { isMobile, state } = useSidebar();
+
+  if (state === "collapsed" && !isMobile) return null;
+
   return (
     <div
       data-slot="aui_thread-list-items"
@@ -113,9 +148,9 @@ const dateGroupLabel = (
   date: Date | undefined,
   startOfToday: number,
 ): string => {
-  if (!date || date.getTime() >= startOfToday) return "Today";
-  if (date.getTime() >= startOfToday - DAY_IN_MS) return "Yesterday";
-  return "Earlier";
+  if (!date || date.getTime() >= startOfToday) return "今天";
+  if (date.getTime() >= startOfToday - DAY_IN_MS) return "昨天";
+  return "更早";
 };
 
 export type ThreadListGroup = { label: string; indices: number[] };
@@ -185,7 +220,7 @@ const ThreadListItemGroups: FC<{ searchQuery?: string }> = ({
         data-slot="aui_thread-list-empty"
         className="text-muted-foreground px-2.5 py-4 text-sm"
       >
-        No threads found
+        没有找到对话
       </div>
     );
   }
@@ -204,7 +239,7 @@ const ThreadListItemGroups: FC<{ searchQuery?: string }> = ({
     <Fragment key={group.label}>
       <div
         data-slot="aui_thread-list-group-label"
-        className="text-muted-foreground px-2.5 pt-3 pb-1 text-xs font-medium"
+        className="px-2 pt-4 pb-1.5 text-[11px] font-medium text-sidebar-foreground/45"
       >
         {group.label}
       </div>
@@ -223,24 +258,48 @@ export const ThreadListNew = forwardRef<
   HTMLButtonElement,
   ComponentPropsWithoutRef<typeof Button> & { labelClassName?: string }
 >(({ className, labelClassName, children, ...props }, ref) => {
+  const { isMobile, state } = useSidebar();
+  const collapsed = state === "collapsed" && !isMobile;
+
   return (
-    <ThreadListPrimitive.New render={<Button ref={ref} variant="ghost" data-slot="aui_thread-list-new" className={cn(
-                "hover:bg-muted data-active:bg-muted h-8 justify-start gap-2 rounded-md px-2.5 text-sm font-normal",
-                className,
-              )} {...props} />}>{children ?? (
-                <>
-                  <PlusIcon
-                    data-slot="aui_thread-list-new-icon"
-                    className="size-4 shrink-0"
-                  />
-                  <span
-                    data-slot="aui_thread-list-new-label"
-                    className={cn("whitespace-nowrap", labelClassName)}
-                  >
-                    New Thread
-                  </span>
-                </>
-              )}</ThreadListPrimitive.New>
+    <ThreadListPrimitive.New
+      render={
+        <Button
+          ref={ref}
+          variant="ghost"
+          data-slot="aui_thread-list-new"
+          className={cn(
+            collapsed
+              ? "mx-auto size-8 justify-center rounded-lg p-0"
+              : "h-8 justify-start gap-2 rounded-lg px-2 text-sm font-normal",
+            "text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-active:bg-sidebar-accent",
+            className,
+          )}
+          aria-label={collapsed ? "新建对话" : undefined}
+          title={collapsed ? "新建对话" : undefined}
+          {...props}
+        />
+      }
+    >
+      {collapsed ? (
+        <PlusIcon data-slot="aui_thread-list-new-icon" className="size-4" />
+      ) : (
+        children ?? (
+          <>
+            <PlusIcon
+              data-slot="aui_thread-list-new-icon"
+              className="size-4 shrink-0"
+            />
+            <span
+              data-slot="aui_thread-list-new-label"
+              className={cn("whitespace-nowrap", labelClassName)}
+            >
+              新对话
+            </span>
+          </>
+        )
+      )}
+    </ThreadListPrimitive.New>
   );
 });
 
@@ -282,7 +341,7 @@ export const ThreadListItem: FC = () => {
   return (
     <ThreadListItemPrimitive.Root
       data-slot="aui_thread-list-item"
-      className="group hover:bg-muted focus-visible:bg-muted data-active:bg-muted has-focus-visible:bg-muted has-data-[state=open]:bg-muted relative flex h-8 items-center rounded-md transition-colors focus-visible:outline-none"
+      className="group relative flex h-8 items-center rounded-lg text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:bg-sidebar-accent data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground has-focus-visible:bg-sidebar-accent has-data-[state=open]:bg-sidebar-accent focus-visible:outline-none"
     >
       {isRenaming ? (
         <ThreadListItemRename
@@ -295,7 +354,7 @@ export const ThreadListItem: FC = () => {
         <ThreadListItemPrimitive.Trigger
           ref={triggerRef}
           data-slot="aui_thread-list-item-trigger"
-          className="focus-visible:ring-ring/50 flex h-full min-w-0 flex-1 items-center rounded-md px-2.5 text-start text-sm outline-none group-hover:pe-9 group-has-focus-visible:pe-9 group-has-data-[state=open]:pe-9 group-data-active:pe-9 focus-visible:ring-1"
+          className="flex h-full min-w-0 flex-1 items-center rounded-lg px-2 text-start text-xs outline-none group-hover:pe-8 group-has-focus-visible:pe-8 group-has-data-[state=open]:pe-8 group-data-active:pe-8 focus-visible:ring-1 focus-visible:ring-sidebar-ring"
         >
           {isRunning && (
             <Loader2Icon
@@ -308,7 +367,7 @@ export const ThreadListItem: FC = () => {
             data-slot="aui_thread-list-item-title"
             className="min-w-0 flex-1 truncate"
           >
-            <ThreadListItemPrimitive.Title fallback="New Chat" />
+            <ThreadListItemPrimitive.Title fallback="新对话" />
           </span>
           {isRunning && <span className="sr-only">Running</span>}
         </ThreadListItemPrimitive.Trigger>
@@ -385,7 +444,7 @@ const ThreadListItemRename: FC<{
 const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
   return (
     <ThreadListItemMorePrimitive.Root sharedFocusGroup>
-      <ThreadListItemMorePrimitive.Trigger render={<Button variant="ghost" size="icon" data-slot="aui_thread-list-item-more" className="data-[state=open]:bg-accent absolute end-1.5 top-1/2 size-6 -translate-y-1/2 p-0 opacity-0 group-hover:opacity-100 group-has-focus-visible:opacity-100 group-data-active:opacity-100 data-[state=open]:opacity-100" />}><MoreHorizontalIcon className="size-3.5" /><span className="sr-only">More options</span></ThreadListItemMorePrimitive.Trigger>
+      <ThreadListItemMorePrimitive.Trigger render={<Button variant="ghost" size="icon" data-slot="aui_thread-list-item-more" className="absolute end-1 top-1/2 size-6 -translate-y-1/2 rounded-md p-0 text-sidebar-foreground/45 opacity-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-hover:opacity-100 group-has-focus-visible:opacity-100 group-data-active:opacity-100 data-[state=open]:bg-sidebar-accent data-[state=open]:opacity-100" />}><MoreHorizontalIcon className="size-3.5" /><span className="sr-only">More options</span></ThreadListItemMorePrimitive.Trigger>
       <ThreadListItemMorePrimitive.Content
         side="right"
         align="start"

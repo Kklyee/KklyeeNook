@@ -1,6 +1,8 @@
-import type * as React from "react";
-import { MessagesSquare } from "lucide-react";
-import { GitHubIcon } from "@/renderer/src/components/icons/github";
+import type * as React from 'react'
+import { BotIcon } from 'lucide-react'
+import { GitHubIcon } from '@/renderer/src/components/icons/github'
+import { Button } from '@/renderer/src/components/ui/button'
+import { cn } from '@/renderer/src/lib/utils'
 import {
   Sidebar,
   SidebarContent,
@@ -10,71 +12,89 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-} from "@/renderer/src/components/ui/sidebar";
-import { ThreadList } from "@/renderer/src/components/assistant-ui/elements/thread-list.aui";
+  SidebarTrigger,
+  useSidebar,
+} from '@/renderer/src/components/ui/sidebar'
+import { ThreadList } from '@/renderer/src/components/assistant-ui/elements/thread-list.aui'
 
-export function ThreadSidebar({
-  ...props
-}: React.ComponentProps<typeof Sidebar>) {
+function SidebarBrand({ canCollapse }: { canCollapse: boolean }) {
+  const { isMobile, state, toggleSidebar } = useSidebar()
+  const collapsed = state === 'collapsed' && !isMobile
+
+  if (collapsed) {
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="mx-auto size-8 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+        aria-label="展开侧边栏"
+        title="展开侧边栏"
+        onClick={toggleSidebar}
+      >
+        <BotIcon className="size-4" />
+      </Button>
+    )
+  }
+
   return (
-    <Sidebar {...props}>
-      <SidebarHeader className="aui-sidebar-header mb-2 border-b">
-        <div className="aui-sidebar-header-content flex items-center justify-between">
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                size="lg"
-                render={
-                  <a
-                    href="https://assistant-ui.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  />
-                }
-              >
-                <div className="aui-sidebar-header-icon-wrapper bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                  <MessagesSquare className="aui-sidebar-header-icon size-4" />
-                </div>
-                <div className="aui-sidebar-header-heading me-6 flex flex-col gap-0.5 leading-none">
-                  <span className="aui-sidebar-header-title font-semibold">
-                    assistant-ui
-                  </span>
-                </div>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </div>
+    <div className="flex h-9 min-w-0 items-center gap-2 px-1.5">
+      <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
+        <BotIcon className="size-3.5" />
+      </div>
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold">KklyeeNook</span>
+      {canCollapse && (
+        <SidebarTrigger className="size-7 shrink-0 rounded-md text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" />
+      )}
+    </div>
+  )
+}
+
+function SidebarRepositoryLink() {
+  const { isMobile, state } = useSidebar()
+  const collapsed = state === 'collapsed' && !isMobile
+
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          size="lg"
+          tooltip="GitHub"
+          className={cn(
+            collapsed ? 'mx-auto size-8! justify-center rounded-lg p-0!' : 'h-9 rounded-lg px-2',
+            'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+          )}
+          render={
+            <a
+              href="https://github.com/assistant-ui/assistant-ui"
+              target="_blank"
+              rel="noopener noreferrer"
+            />
+          }
+        >
+          <GitHubIcon className="size-4 shrink-0" />
+          {!collapsed && <span className="truncate">GitHub</span>}
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  )
+}
+
+export function ThreadSidebar({ className, ...props }: React.ComponentProps<typeof Sidebar>) {
+  const canCollapse = props.collapsible !== 'none'
+
+  return (
+    <Sidebar className={cn('border-sidebar-border', className)} {...props}>
+      <SidebarHeader className="px-2 pt-2 pb-1 group-data-[collapsible=icon]:px-1.5">
+        <SidebarBrand canCollapse={canCollapse} />
       </SidebarHeader>
-      <SidebarContent className="aui-sidebar-content px-2">
+      <SidebarContent className="px-2 pb-2 group-data-[collapsible=icon]:px-1.5">
         <ThreadList />
       </SidebarContent>
-      {props.collapsible !== "none" && <SidebarRail />}
-      <SidebarFooter className="aui-sidebar-footer border-t">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              size="lg"
-              render={
-                <a
-                  href="https://github.com/assistant-ui/assistant-ui"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                />
-              }
-            >
-              <div className="aui-sidebar-footer-icon-wrapper bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                <GitHubIcon className="aui-sidebar-footer-icon size-4" />
-              </div>
-              <div className="aui-sidebar-footer-heading flex flex-col gap-0.5 leading-none">
-                <span className="aui-sidebar-footer-title font-semibold">
-                  GitHub
-                </span>
-                <span>View Source</span>
-              </div>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+      {canCollapse && <SidebarRail />}
+      <SidebarFooter className="border-sidebar-border border-t px-2 py-2 group-data-[collapsible=icon]:px-1.5">
+        <SidebarRepositoryLink />
       </SidebarFooter>
     </Sidebar>
-  );
+  )
 }
