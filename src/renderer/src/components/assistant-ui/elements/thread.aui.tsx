@@ -5,9 +5,9 @@ import {
   ComposerAttachments,
   UserMessageAttachments,
 } from '@/renderer/src/components/assistant-ui/elements/attachment.aui'
-import { File } from '@/renderer/src/components/assistant-ui/elements/file'
+import { File } from '@/renderer/src/features/artifacts/FilePreview'
 import { ThreadFollowupSuggestions } from '@/renderer/src/components/assistant-ui/elements/follow-up-suggestions.aui'
-import { Image } from '@/renderer/src/components/assistant-ui/elements/image'
+import { Image } from '@/renderer/src/features/artifacts/ImagePreview'
 import { MarkdownText } from '@/renderer/src/components/assistant-ui/elements/markdown-text'
 import {
   ComposerBar,

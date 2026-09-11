@@ -4,7 +4,7 @@ import { applyPatch } from 'diff'
 
 import type { Artifact, ArtifactDraft } from '@/shared/artifact/artifact'
 import { artifactText } from '@/shared/artifact/artifact'
-import type { ArtifactRepo } from '../db/repo/artifactRepo'
+import type { ArtifactRepo } from '../db/repositories/artifactRepo'
 
 export class ArtifactService {
   private readonly workspaceRoot: string

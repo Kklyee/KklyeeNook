@@ -9,11 +9,11 @@ import { AgentEventEnvelope } from './agentEventEnvelope'
 import { AgentEvent } from '@/shared/agent/agentEvent'
 import { AgentSessionSummary } from '@/shared/agent/agentSession'
 import type { AgentRuntimeFactory } from './agentRuntime'
-import { AgentSessionRepo } from '../db/repo/agentSessionRepo'
-import { AgentRunRepo } from '../db/repo/agentRunRepo'
+import { AgentSessionRepo } from '../db/repositories/agentSessionRepo'
+import { AgentRunRepo } from '../db/repositories/agentRunRepo'
 import type { AgentExecutionRecord } from '@/shared/agent/agentExecutionRecord'
-import type { AgentExecutionRecordRepo } from '../db/repo/agentExecutionRecordRepo'
-import type { ArtifactRepo } from '../db/repo/artifactRepo'
+import type { AgentExecutionRecordRepo } from '../db/repositories/agentExecutionRecordRepo'
+import type { ArtifactRepo } from '../db/repositories/artifactRepo'
 import { parseArtifactDraft, type Artifact, type ArtifactDraft } from '@/shared/artifact/artifact'
 
 export interface AgentRunHandle {
@@ -41,8 +41,8 @@ export class AgentService {
     const records = await this.sessionRepo.findAll()
 
     for (const record of records) {
-      const { id, title, createdAt, updatedAt } = record
-      const session = new AgentSession(id, title, { createdAt, updatedAt })
+      const { id, title, createdAt, updatedAt, archived } = record
+      const session = new AgentSession(id, title, { createdAt, updatedAt, archived })
       this.sessions.set(id, session)
     }
 
@@ -86,6 +86,20 @@ export class AgentService {
     }
 
     this.sessions.delete(sessionId)
+  }
+
+  async setSessionArchived(sessionId: string, archived: boolean): Promise<AgentSessionSummary> {
+    const session = this.sessions.get(sessionId)
+    if (!session) throw new Error(`AgentSession not found: ${sessionId}`)
+    session.setArchived(archived)
+    await this.sessionRepo.save(session.toRecord())
+    return session.toSummary()
+  }
+
+  recordActiveRunEvent(sessionId: string, event: AgentEvent): void {
+    const session = this.sessions.get(sessionId)
+    const runId = session?.toSummary().activeRunId
+    if (session && runId) this.handleAgentEvent(session, runId, event)
   }
 
   getSessions(): AgentSession[] {

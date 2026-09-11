@@ -4,11 +4,11 @@ import type { AgentEvent } from '@/shared/agent/agentEvent'
 import type { AgentRun } from '@/shared/agent/agentRun'
 import type { AgentRuntime, AgentRuntimeFactory } from './agentRuntime'
 import { AgentService } from './agentService'
-import type { AgentRunRepo } from '../db/repo/agentRunRepo'
-import type { AgentSessionRecord, AgentSessionRepo } from '../db/repo/agentSessionRepo'
+import type { AgentRunRepo } from '../db/repositories/agentRunRepo'
+import type { AgentSessionRecord, AgentSessionRepo } from '../db/repositories/agentSessionRepo'
 import type { AgentEventEnvelope } from './agentEventEnvelope'
-import type { AgentExecutionRecordRepo } from '../db/repo/agentExecutionRecordRepo'
-import type { ArtifactRepo } from '../db/repo/artifactRepo'
+import type { AgentExecutionRecordRepo } from '../db/repositories/agentExecutionRecordRepo'
+import type { ArtifactRepo } from '../db/repositories/artifactRepo'
 import type { Artifact } from '@/shared/artifact/artifact'
 
 class MemorySessionRepo implements AgentSessionRepo {
@@ -110,6 +110,7 @@ const sessionRecord: AgentSessionRecord = {
   title: 'Test session',
   createdAt: 1,
   updatedAt: 1,
+  archived: false,
 }
 
 function run(status: AgentRun['status'], id: string, createdAt: number): AgentRun {

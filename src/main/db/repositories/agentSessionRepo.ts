@@ -9,6 +9,7 @@ export interface AgentSessionRecord {
   title: string
   createdAt: number
   updatedAt: number
+  archived: boolean
 }
 
 export interface AgentSessionRepo {
@@ -37,7 +38,7 @@ export class DrizzleAgentSessionRepo implements AgentSessionRepo {
       .values(session)
       .onConflictDoUpdate({
         target: conversations.id,
-        set: { title: session.title, updatedAt: session.updatedAt },
+        set: { title: session.title, updatedAt: session.updatedAt, archived: session.archived },
       })
   }
 

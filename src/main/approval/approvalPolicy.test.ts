@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import { expect, test } from 'vitest'
 
 import type { PermissionGrant } from '@/shared/approval/approvalTypes'
-import type { PermissionGrantRepo } from '../db/repo/permissionGrantRepo'
+import type { PermissionGrantRepo } from '../db/repositories/permissionGrantRepo'
 import { ApprovalPolicy } from './approvalPolicy'
 
 class MemoryPermissionGrantRepo implements PermissionGrantRepo {

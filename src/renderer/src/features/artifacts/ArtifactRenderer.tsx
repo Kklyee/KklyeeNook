@@ -4,9 +4,9 @@ import { useMemo, useState } from 'react'
 
 import type { Artifact } from '@/shared/artifact/artifact'
 import { artifactText } from '@/shared/artifact/artifact'
-import { ArtifactCard } from '@/renderer/src/components/assistant-ui/elements/artifact-card'
-import { CodeDiff, type DiffLine } from '@/renderer/src/components/assistant-ui/elements/code-diff'
-import { DataTable } from '@/renderer/src/components/assistant-ui/elements/data-table'
+import { ArtifactCard } from './ArtifactCard'
+import { CodeDiff, type DiffLine } from './CodeDiff'
+import { DataTable } from './DataTable'
 import { Button } from '@/renderer/src/components/ui/button'
 import {
   Dialog,
@@ -62,7 +62,9 @@ function ArtifactBody({ artifact }: { artifact: Artifact }) {
   )
 }
 
-const ArtifactRenderer: DataMessagePartComponent<Artifact> = ({ data: artifact }) => {
+type PiCustomMessageData = { customType?: string; details?: unknown }
+
+function ArtifactMessage({ artifact }: { artifact: Artifact }) {
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [busy, setBusy] = useState<'apply' | 'export' | null>(null)
@@ -146,7 +148,12 @@ const ArtifactRenderer: DataMessagePartComponent<Artifact> = ({ data: artifact }
   )
 }
 
-export const ArtifactDataUI = makeAssistantDataUI<Artifact>({
-  name: 'artifact',
+const ArtifactRenderer: DataMessagePartComponent<PiCustomMessageData> = ({ data }) => {
+  if (data.customType !== 'artifact') return null
+  return <ArtifactMessage artifact={data.details as Artifact} />
+}
+
+export const ArtifactDataUI = makeAssistantDataUI<PiCustomMessageData>({
+  name: 'pi-custom-message',
   render: ArtifactRenderer,
 })

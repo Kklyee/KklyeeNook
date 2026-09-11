@@ -6,7 +6,7 @@ import type {
   PermissionGrant,
   PermissionGrantDuration,
 } from '@/shared/approval/approvalTypes'
-import type { PermissionGrantRepo } from '../db/repo/permissionGrantRepo'
+import type { PermissionGrantRepo } from '../db/repositories/permissionGrantRepo'
 
 const protectedTools = new Set(['read', 'write', 'edit', 'bash'])
 const deletionCommand =

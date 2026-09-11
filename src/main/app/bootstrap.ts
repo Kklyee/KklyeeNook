@@ -1,12 +1,8 @@
 import type { AgentConfig } from '@/shared/agent/agentConfig'
 import { app } from 'electron'
 import { AgentService } from '../agent/agentService'
-import { registerAgentSessionIpc } from '../agent/ipc/agentSessionIpc'
-import { registerAssistantIpc } from '../agent/ipc/assistantIpc'
-import { createPiAgentRuntimeFactory } from '../agent/pi/createPiAgentRuntime'
-import { registerApprovalIpc } from '../approval/approvalIpc'
+import { createPiAgentRuntimeFactory } from '../agent/pi/runtime/createPiAgentRuntime'
 import { ApprovalPolicy } from '../approval/approvalPolicy'
-import { ApprovalService } from '../approval/approvalService'
 import { connectDatabase } from '../db/client'
 import { getDatabaseUrl, getMigrationsPath } from '../db/databasePath'
 import { createChatWindow } from '../electron/chatWindow'
@@ -15,21 +11,25 @@ import { AgentConfigStore } from '../settings/agentConfigStore'
 import { MemoryCredentialStore } from '../settings/credentialStore'
 import { registerSettingsIpc } from '../settings/settingsIpc'
 import { loadRenderer } from './loadRenderer'
-import { DrizzleAgentSessionRepo } from '../db/repo/agentSessionRepo'
-import { DrizzleAgentMessageRepo } from '../db/repo/agentMessageRepo'
-import { AgentMessageService } from '../agent/agentMessageService'
-import { registerAgentMessageIpc } from '../agent/ipc/agentMessageIpc'
-import { DrizzleAgentRuntimeStateRepo } from '../db/repo/agentRuntimeStateRepo'
+import { DrizzleAgentSessionRepo } from '../db/repositories/agentSessionRepo'
+import { DrizzleAgentMessageRepo } from '../db/repositories/agentMessageRepo'
+import { DrizzleAgentRuntimeStateRepo } from '../db/repositories/agentRuntimeStateRepo'
 import { join } from 'node:path'
-import { DrizzleAgentRunRepo } from '../db/repo/agentRunRepo'
-import { DrizzleAgentExecutionRecordRepo } from '../db/repo/agentExecutionRecordRepo'
+import { DrizzleAgentRunRepo } from '../db/repositories/agentRunRepo'
+import { DrizzleAgentExecutionRecordRepo } from '../db/repositories/agentExecutionRecordRepo'
 import { ToolRegistry } from '../tools/toolRegistry'
-import { registerPiBuiltinTools } from '../agent/pi/piBuiltinToolAdapter'
-import { DrizzlePermissionGrantRepo } from '../db/repo/permissionGrantRepo'
-import { DrizzleArtifactRepo } from '../db/repo/artifactRepo'
+import { registerPiBuiltinTools } from '../agent/pi/adapters/piBuiltinToolAdapter'
+import { DrizzlePermissionGrantRepo } from '../db/repositories/permissionGrantRepo'
+import { DrizzleArtifactRepo } from '../db/repositories/artifactRepo'
 import { ArtifactService } from '../artifact/artifactService'
 import { registerArtifactIpc } from '../artifact/artifactIpc'
-import { registerPiArtifactTool } from '../agent/pi/piArtifactToolAdapter'
+import { registerPiArtifactTool } from '../agent/pi/adapters/piArtifactToolAdapter'
+import { PiSessionHost } from '../agent/pi/runtime/piSessionHost'
+import { PiSessionHostManager } from '../agent/pi/runtime/piSessionHostManager'
+import { PiClientService } from '../agent/pi/client/piClientService'
+import { registerPiClientIpc } from '../agent/pi/client/piClientIpc'
+import { MessageProjectionService } from '../agent/messageProjectionService'
+import { registerAgentRunIpc } from '../agent/ipc/agentRunIpc'
 
 export interface AppContext {
   dispose(): void
@@ -49,7 +49,6 @@ export async function bootstrap(): Promise<AppContext> {
 
   const configStore = new AgentConfigStore(agentConfig)
   const credentialStore = new MemoryCredentialStore()
-  const approvalService = new ApprovalService()
   const { database: db, close: closeDb } = await connectDatabase(
     getDatabaseUrl(),
     getMigrationsPath(),
@@ -60,20 +59,24 @@ export async function bootstrap(): Promise<AppContext> {
   credentialStore.setApiKey(agentConfig.model.provider, apiKey)
 
   const runtimeStateRepo = new DrizzleAgentRuntimeStateRepo(db)
-  const sessionDir = join(app.getAppPath(), '.pi-sessions')
+  const sessionDir = join(app.getPath('userData'), 'pi-sessions')
   const toolRegistry = new ToolRegistry()
   registerPiBuiltinTools(toolRegistry, agentConfig.cwd ?? process.cwd())
   registerPiArtifactTool(toolRegistry)
 
-  const runtimeFactory = createPiAgentRuntimeFactory(
-    configStore,
-    credentialStore,
-    approvalService,
-    approvalPolicy,
-    runtimeStateRepo,
-    toolRegistry,
-    sessionDir,
+  const piSessionHostManager = new PiSessionHostManager(
+    (sessionId) =>
+      new PiSessionHost(
+        sessionId,
+        configStore,
+        credentialStore,
+        approvalPolicy,
+        runtimeStateRepo,
+        toolRegistry,
+        sessionDir,
+      ),
   )
+  const runtimeFactory = createPiAgentRuntimeFactory(piSessionHostManager)
 
   const sessionRepo = new DrizzleAgentSessionRepo(db)
   const runRepo = new DrizzleAgentRunRepo(db)
@@ -88,17 +91,21 @@ export async function bootstrap(): Promise<AppContext> {
   )
   const artifactService = new ArtifactService(artifactRepo, agentConfig.cwd ?? process.cwd())
 
-  const messageRepo = new DrizzleAgentMessageRepo(db)
-  const messageService = new AgentMessageService(messageRepo)
   await agentService.initialize()
+  const messageProjection = new MessageProjectionService(new DrizzleAgentMessageRepo(db))
+  const piClientService = new PiClientService(
+    agentService,
+    piSessionHostManager,
+    messageProjection,
+    configStore,
+    artifactService,
+  )
   const chatWindow = createChatWindow()
 
   registerSettingsIpc(chatWindow, agentConfig, credentialStore, approvalPolicy)
   registerWindowIpc()
-  registerAssistantIpc({ mainWindow: chatWindow, agentService })
-  registerApprovalIpc(chatWindow, approvalService)
-  registerAgentSessionIpc(agentService)
-  registerAgentMessageIpc(messageService)
+  registerPiClientIpc(chatWindow, piClientService)
+  registerAgentRunIpc(agentService)
   registerArtifactIpc(chatWindow, artifactService)
 
   loadRenderer(chatWindow, 'chat')
@@ -107,6 +114,8 @@ export async function bootstrap(): Promise<AppContext> {
 
   return {
     dispose() {
+      piClientService.dispose()
+      piSessionHostManager.dispose()
       closeDb()
     },
   }

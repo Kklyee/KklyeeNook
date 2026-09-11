@@ -7,6 +7,7 @@ export const conversations = sqliteTable(
     title: text('title').notNull(),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
+    archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
   },
   (table) => [index('conversations_updated_at_idx').on(table.updatedAt)],
 )

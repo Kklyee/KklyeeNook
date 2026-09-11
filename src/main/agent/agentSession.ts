@@ -1,10 +1,11 @@
 import { AgentSessionSummary } from '@/shared/agent/agentSession'
 import type { AgentRun } from '../../shared/agent/agentRun'
-import { AgentSessionRecord } from '../db/repo/agentSessionRepo'
+import { AgentSessionRecord } from '../db/repositories/agentSessionRepo'
 
 interface AgentSessionTimestamps {
   createdAt: number
   updatedAt: number
+  archived?: boolean
 }
 
 export class AgentSession {
@@ -12,6 +13,7 @@ export class AgentSession {
   readonly createdAt: number
   title: string
   updatedAt: number
+  archived: boolean
 
   private runs = new Map<string, AgentRun>()
 
@@ -21,6 +23,7 @@ export class AgentSession {
     const now = Date.now()
     this.createdAt = timestamp?.createdAt ?? now
     this.updatedAt = timestamp?.updatedAt ?? now
+    this.archived = timestamp?.archived ?? false
   }
 
   addRun(run: AgentRun): void {
@@ -63,6 +66,11 @@ export class AgentSession {
     this.touch()
   }
 
+  setArchived(archived: boolean): void {
+    this.archived = archived
+    this.touch()
+  }
+
   touch(): void {
     this.updatedAt = Date.now()
   }
@@ -87,11 +95,18 @@ export class AgentSession {
       title: this.title,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
+      archived: this.archived,
       activeRunId: activeRun?.id,
     }
   }
 
   toRecord(): AgentSessionRecord {
-    return { id: this.id, title: this.title, createdAt: this.createdAt, updatedAt: this.updatedAt }
+    return {
+      id: this.id,
+      title: this.title,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+      archived: this.archived,
+    }
   }
 }

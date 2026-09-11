@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 
 import type { Artifact } from '@/shared/artifact/artifact'
-import type { ArtifactRepo } from '../db/repo/artifactRepo'
+import type { ArtifactRepo } from '../db/repositories/artifactRepo'
 import { ArtifactService } from './artifactService'
 
 class MemoryArtifactRepo implements ArtifactRepo {

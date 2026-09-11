@@ -364,6 +364,46 @@ function ToolFallbackApproval({
 
   if (!offersInterruptAction(status, approval, interrupt)) return null;
 
+  const interruptPayload = interrupt?.payload as
+    | { kind?: string; options?: unknown }
+    | undefined;
+  const selectOptions =
+    interruptPayload?.kind === "select" &&
+    Array.isArray(interruptPayload.options) &&
+    interruptPayload.options.every((option) => typeof option === "string")
+      ? (interruptPayload.options as string[])
+      : undefined;
+
+  if (selectOptions) {
+    return (
+      <div
+        data-slot="tool-fallback-interrupt-select"
+        className={cn(
+          "aui-tool-fallback-interrupt-select flex flex-wrap items-center gap-2 pt-1",
+          className,
+        )}
+        {...props}
+      >
+        {selectOptions.map((option, index) => (
+          <Button
+            key={option}
+            size="sm"
+            variant={index === 0 ? "default" : "outline"}
+            className={pressable}
+            onClick={() => {
+              if (submitted) return;
+              resume?.({ value: option });
+              setSubmitted(true);
+            }}
+            disabled={submitted}
+          >
+            {option}
+          </Button>
+        ))}
+      </div>
+    );
+  }
+
   // A declared option list is a host constraint: the kit never adds an
   // approval path beyond it, but always preserves a refusal path.
   const declaredOptions = respondToApproval ? approval?.options : undefined;

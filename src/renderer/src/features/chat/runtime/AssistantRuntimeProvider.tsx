@@ -1,49 +1,13 @@
-import { useMemo, type ReactNode } from 'react'
-import {
-  AssistantRuntimeProvider,
-  AuiConfig,
-  Suggestions,
-  Tools,
-  useAui,
-  useLocalRuntime,
-  useRemoteThreadListRuntime,
-} from '@assistant-ui/react'
+import type { ReactNode } from 'react'
+import { AssistantRuntimeProvider, AuiConfig, Suggestions, Tools } from '@assistant-ui/react'
+import { usePiRuntime } from '@assistant-ui/react-pi'
 import { assistantToolkit } from '../tools/AssistantToolkit'
-import { createChatModelAdapter } from './chatModelAdapter'
-import { threadListAdapter } from './threadListAdapter'
-import { createThreadHistoryAdapter } from './threadHistoryAdapter'
-import { ArtifactDataUI } from '../artifacts/ArtifactRenderer'
-
-function useAgentThreadRuntime() {
-  const aui = useAui()
-
-  const resolveSessionId = useMemo(
-    () => async () => {
-      const { remoteId } = await aui.threadListItem.initialize()
-      return remoteId
-    },
-    [aui],
-  )
-
-  const chatModel = useMemo(() => createChatModelAdapter(resolveSessionId), [resolveSessionId])
-
-  const history = useMemo(
-    () =>
-      createThreadHistoryAdapter({
-        getSessionId: () => aui.threadListItem.getState().remoteId,
-        ensureSessionId: resolveSessionId,
-      }),
-    [aui, resolveSessionId],
-  )
-
-  return useLocalRuntime(chatModel, { adapters: { history } })
-}
+import { ArtifactDataUI } from '../../artifacts/ArtifactRenderer'
+import { electronPiClient } from './electronPiClient'
+import { PiHostUiPrompt } from './PiHostUiPrompt'
 
 export function AssistantRuntime({ children }: { children: ReactNode }) {
-  const runtime = useRemoteThreadListRuntime({
-    runtimeHook: useAgentThreadRuntime,
-    adapter: threadListAdapter,
-  })
+  const runtime = usePiRuntime({ client: electronPiClient })
 
   const config = AuiConfig({
     tools: Tools({ toolkit: assistantToolkit }),
@@ -69,6 +33,7 @@ export function AssistantRuntime({ children }: { children: ReactNode }) {
   return (
     <AssistantRuntimeProvider runtime={runtime} config={config}>
       <ArtifactDataUI />
+      <PiHostUiPrompt />
       {children}
     </AssistantRuntimeProvider>
   )

@@ -2,6 +2,7 @@ import type { ToolCallMessagePartComponent } from '@assistant-ui/react'
 import { useState } from 'react'
 
 import { ToolCall } from '../../../components/assistant-ui/elements/tool-call'
+import { ToolFallback } from '../../../components/assistant-ui/elements/tool-fallback.aui'
 
 type ToolArgs = Record<string, unknown>
 
@@ -46,21 +47,43 @@ export function createToolCallRenderer<TArgs extends ToolArgs>({
   activeLabel,
   getQuery,
 }: ToolCallRendererOptions<TArgs>): ToolCallMessagePartComponent<TArgs, unknown> {
-  return function ToolCallRenderer({ args, argsText, result, status }) {
+  return function ToolCallRenderer({
+    args,
+    argsText,
+    result,
+    status,
+    addResult,
+    resume,
+    interrupt,
+    approval,
+    respondToApproval,
+  }) {
     const [open, setOpen] = useState(false)
 
     return (
-      <ToolCall
-        label={label}
-        activeLabel={activeLabel}
-        query={getQuery(args)}
-        request={argsText}
-        result={formatToolResult(result)}
-        running={status.type === 'running'}
-        open={open}
-        onOpenChange={setOpen}
-        className="max-w-none"
-      />
+      <div className="flex flex-col gap-2">
+        <ToolCall
+          label={label}
+          activeLabel={activeLabel}
+          query={getQuery(args)}
+          request={argsText}
+          result={formatToolResult(result)}
+          running={status.type === 'running'}
+          open={open}
+          onOpenChange={setOpen}
+          className="max-w-none"
+        />
+        {status.type === 'requires-action' && (
+          <ToolFallback.Approval
+            addResult={addResult}
+            resume={resume}
+            interrupt={interrupt}
+            approval={approval}
+            respondToApproval={respondToApproval}
+            status={status}
+          />
+        )}
+      </div>
     )
   }
 }

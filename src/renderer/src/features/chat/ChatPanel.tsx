@@ -2,7 +2,7 @@ import { useState, type ButtonHTMLAttributes } from 'react'
 import { useAuiState } from '@assistant-ui/react'
 import { Thread } from '../../components/assistant-ui/elements/thread.aui'
 import { cn } from '@/renderer/src/lib/utils'
-import { RunHistoryPanel } from './RunHistoryPanel'
+import { RunHistoryPanel } from '../runs/RunHistoryPanel'
 
 export function ChatPanel({ modelName }: { modelName?: string }) {
   const [view, setView] = useState<'chat' | 'trace'>('chat')

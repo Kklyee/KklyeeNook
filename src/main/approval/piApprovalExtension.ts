@@ -1,17 +1,17 @@
 import type { ExtensionFactory } from '@earendil-works/pi-coding-agent'
 
-import type { ApprovalService } from './approvalService'
 import type { ApprovalPolicy } from './approvalPolicy'
 import type { AgentEvent } from '@/shared/agent/agentEvent'
 
+const APPROVAL_OPTIONS = ['Allow once', 'Allow for this session', 'Always allow', 'Deny'] as const
+
 export function createPiApprovalExtension(
   sessionId: string,
-  approvalService: ApprovalService,
   approvalPolicy: ApprovalPolicy,
   emit: (event: AgentEvent) => void,
 ): ExtensionFactory {
   return (pi) => {
-    pi.on('tool_call', async (event) => {
+    pi.on('tool_call', async (event, context) => {
       const policyDecision = await approvalPolicy.evaluate(sessionId, event.toolName, event.input)
       if (policyDecision.outcome === 'allow') {
         return undefined
@@ -23,14 +23,17 @@ export function createPiApprovalExtension(
         call: { id: event.toolCallId, toolName: event.toolName, args: event.input },
       })
 
-      const decision = await approvalService.request({
-        id: event.toolCallId,
-        toolCallId: event.toolCallId,
-        sessionId,
-        toolName: event.toolName,
-        args: event.input,
-        permission: policyDecision.permission,
-      })
+      const selected = await context.ui.select(`${event.toolName} requests permission`, [
+        ...APPROVAL_OPTIONS,
+      ])
+      const decision =
+        selected === 'Allow once'
+          ? 'allow_once'
+          : selected === 'Allow for this session'
+            ? 'allow_session'
+            : selected === 'Always allow'
+              ? 'allow_always'
+              : 'deny'
 
       if (decision === 'allow_session' || decision === 'allow_always') {
         await approvalPolicy.grant(

@@ -1,20 +1,9 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import type { PiClient, PiClientEvent } from '@assistant-ui/react-pi'
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
-import { ChatRequest, ChatStreamEvent } from '@/shared/chat/chatEvent'
-import {
-  ApprovalRequest,
-  ApprovalResponse,
-  DeletePermissionGrantRequest,
-} from '@/shared/approval/approvalTypes'
+import { DeletePermissionGrantRequest } from '@/shared/approval/approvalTypes'
 import type { AgentSettingsSnapshot } from '@/shared/agent/agentSettings'
-import {
-  AgentSessionSummary,
-  CreateAgentSessionRequest,
-  DeleteAgentSessionRequest,
-  RenameAgentSessionRequest,
-} from '@/shared/agent/agentSession'
-import { AgentMessageSnapshot, LoadAgentMessagesRequest } from '@/shared/chat/chatHistory'
 import { AgentRun, LoadAgentRunsRequest } from '@/shared/agent/agentRun'
 import type {
   AgentExecutionRecord,
@@ -28,23 +17,32 @@ import type {
   ListArtifactsRequest,
 } from '@/shared/artifact/artifact'
 
-const api = {
-  getAgentSettings(): Promise<AgentSettingsSnapshot> {
-    return ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_GET)
-  },
-
-  streamChat(request: ChatRequest, onEvent: (event: ChatStreamEvent) => void) {
+const pi = {
+  listThreads: (input) => ipcRenderer.invoke(IPC_CHANNELS.PI_THREAD_LIST, input),
+  createThread: (input) => ipcRenderer.invoke(IPC_CHANNELS.PI_THREAD_CREATE, input),
+  getThread: (threadId) => ipcRenderer.invoke(IPC_CHANNELS.PI_THREAD_GET, { threadId }),
+  sendMessage: (threadId, input) =>
+    ipcRenderer.invoke(IPC_CHANNELS.PI_MESSAGE_SEND, { threadId, input }),
+  cancelRun: (threadId) => ipcRenderer.invoke(IPC_CHANNELS.PI_RUN_CANCEL, { threadId }),
+  clearQueue: (threadId) => ipcRenderer.invoke(IPC_CHANNELS.PI_QUEUE_CLEAR, { threadId }),
+  getAvailableModels: (input) => ipcRenderer.invoke(IPC_CHANNELS.PI_MODEL_LIST, input),
+  setModel: (threadId, input) => ipcRenderer.invoke(IPC_CHANNELS.PI_MODEL_SET, { threadId, input }),
+  setThinkingLevel: (threadId, level) =>
+    ipcRenderer.invoke(IPC_CHANNELS.PI_THINKING_SET, { threadId, level }),
+  renameThread: (threadId, title) =>
+    ipcRenderer.invoke(IPC_CHANNELS.PI_THREAD_RENAME, { threadId, title }),
+  archiveThread: (threadId) => ipcRenderer.invoke(IPC_CHANNELS.PI_THREAD_ARCHIVE, { threadId }),
+  unarchiveThread: (threadId) => ipcRenderer.invoke(IPC_CHANNELS.PI_THREAD_UNARCHIVE, { threadId }),
+  deleteThread: (threadId) => ipcRenderer.invoke(IPC_CHANNELS.PI_THREAD_DELETE, { threadId }),
+  respondToHostUiRequest: (threadId, response) =>
+    ipcRenderer.invoke(IPC_CHANNELS.PI_HOST_UI_RESPOND, { threadId, response }),
+  subscribe(threadId, listener, options) {
     const { port1, port2 } = new MessageChannel()
-
-    const handleMessage = (event: MessageEvent<ChatStreamEvent>) => {
-      onEvent(event.data)
-    }
+    const handleMessage = (event: MessageEvent<PiClientEvent>) => listener(event.data)
     port1.addEventListener('message', handleMessage)
     port1.start()
-    ipcRenderer.postMessage(IPC_CHANNELS.ASSISTANT_STREAM, request, [port2])
-
+    ipcRenderer.postMessage(IPC_CHANNELS.PI_THREAD_SUBSCRIBE, { threadId, options }, [port2])
     let stopped = false
-
     return () => {
       if (stopped) return
       stopped = true
@@ -52,40 +50,17 @@ const api = {
       port1.close()
     }
   },
+} satisfies PiClient
 
-  onApprovalRequested(callback: (request: ApprovalRequest) => void) {
-    const listener = (_event: IpcRendererEvent, request: ApprovalRequest) => {
-      callback(request)
-    }
+const api = {
+  pi,
 
-    ipcRenderer.on(IPC_CHANNELS.APPROVAL_REQUEST, listener)
-    return () => {
-      ipcRenderer.removeListener(IPC_CHANNELS.APPROVAL_REQUEST, listener)
-    }
-  },
-
-  respondApproval(response: ApprovalResponse) {
-    ipcRenderer.send(IPC_CHANNELS.APPROVAL_RESPOND, response)
+  getAgentSettings(): Promise<AgentSettingsSnapshot> {
+    return ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_GET)
   },
 
   deletePermissionGrant(request: DeletePermissionGrantRequest): Promise<void> {
     return ipcRenderer.invoke(IPC_CHANNELS.PERMISSION_GRANT_DELETE, request)
-  },
-
-  createAgentSession(request: CreateAgentSessionRequest): Promise<AgentSessionSummary> {
-    return ipcRenderer.invoke(IPC_CHANNELS.AGENT_SESSION_CREATE, request)
-  },
-
-  listAgentSessions(): Promise<AgentSessionSummary[]> {
-    return ipcRenderer.invoke(IPC_CHANNELS.AGENT_SESSION_LIST)
-  },
-
-  renameAgentSession(request: RenameAgentSessionRequest): Promise<AgentSessionSummary> {
-    return ipcRenderer.invoke(IPC_CHANNELS.AGENT_SESSION_RENAME, request)
-  },
-
-  deleteAgentSession(request: DeleteAgentSessionRequest): Promise<void> {
-    return ipcRenderer.invoke(IPC_CHANNELS.AGENT_SESSION_DELETE, request)
   },
 
   listAgentRuns(request: LoadAgentRunsRequest): Promise<AgentRun[]> {
@@ -96,14 +71,6 @@ const api = {
     request: LoadAgentExecutionRecordsRequest,
   ): Promise<AgentExecutionRecord[]> {
     return ipcRenderer.invoke(IPC_CHANNELS.AGENT_EXECUTION_RECORD_LIST, request)
-  },
-
-  loadAgentMessages(request: LoadAgentMessagesRequest): Promise<AgentMessageSnapshot[]> {
-    return ipcRenderer.invoke(IPC_CHANNELS.AGENT_MESSAGE_LIST, request)
-  },
-
-  saveAgentMessage(message: AgentMessageSnapshot): Promise<void> {
-    return ipcRenderer.invoke(IPC_CHANNELS.AGENT_MESSAGE_SAVE, message)
   },
 
   listArtifacts(request: ListArtifactsRequest): Promise<Artifact[]> {

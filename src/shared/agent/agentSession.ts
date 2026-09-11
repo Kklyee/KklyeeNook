@@ -3,18 +3,6 @@ export interface AgentSessionSummary {
   title?: string
   createdAt: number
   updatedAt: number
+  archived?: boolean
   activeRunId?: string
-}
-
-export interface CreateAgentSessionRequest {
-  title?: string
-}
-
-export interface RenameAgentSessionRequest {
-  sessionId: string
-  title: string
-}
-
-export interface DeleteAgentSessionRequest {
-  sessionId: string
 }

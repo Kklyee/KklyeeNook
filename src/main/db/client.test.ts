@@ -1,9 +1,9 @@
 import { fileURLToPath } from 'node:url'
 import { expect, test } from 'vitest'
 
-import { DrizzleAgentRunRepo } from './repo/agentRunRepo'
-import { DrizzleArtifactRepo } from './repo/artifactRepo'
-import { DrizzleAgentSessionRepo } from './repo/agentSessionRepo'
+import { DrizzleAgentRunRepo } from './repositories/agentRunRepo'
+import { DrizzleArtifactRepo } from './repositories/artifactRepo'
+import { DrizzleAgentSessionRepo } from './repositories/agentSessionRepo'
 import { connectDatabase } from './client'
 
 test('applies pending migrations before repositories access the database', async () => {
@@ -16,7 +16,13 @@ test('applies pending migrations before repositories access the database', async
     await expect(runRepo.markActiveAsInterrupted(Date.now())).resolves.toBeUndefined()
 
     const sessionRepo = new DrizzleAgentSessionRepo(database)
-    await sessionRepo.save({ id: 'session-1', title: 'Test', createdAt: 1, updatedAt: 1 })
+    await sessionRepo.save({
+      id: 'session-1',
+      title: 'Test',
+      createdAt: 1,
+      updatedAt: 1,
+      archived: false,
+    })
     await runRepo.save({
       id: 'run-1',
       sessionId: 'session-1',
