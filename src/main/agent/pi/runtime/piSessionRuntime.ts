@@ -10,6 +10,7 @@ import type {
   PiThreadSnapshot,
   PiTranscriptMessage,
 } from '@assistant-ui/react-pi/node'
+import { getSupportedThinkingLevels } from '@earendil-works/pi-ai'
 
 import {
   createAgentSession,
@@ -22,6 +23,7 @@ import {
 } from '@earendil-works/pi-coding-agent'
 
 import { getActiveModel, getSavedModels, type ModelConfig } from '@/shared/agent/agentConfig'
+import { resolveModelInput } from '@/shared/agent/modelCapabilities'
 
 import type { ApprovalPolicy } from '@/main/approval/approvalPolicy'
 import { createPiApprovalExtension } from '@/main/approval/piApprovalExtension'
@@ -35,10 +37,24 @@ import {
   createPiExtensionUiBridge,
   type PiExtensionUiBridge,
 } from '../adapters/piExtensionUiBridge'
+import type { AgentRunContext } from '@/main/context/contextBuilder'
+import { toPiContextMessage } from '../adapters/piContextAdapter'
 
 export type PiSessionEventListener = (event: AgentSessionEvent) => void
 export type PiSessionClientEventListener = (event: PiClientEventBody) => void
 export type PiSessionProductEventListener = (event: AgentEvent) => void
+
+const PI_CLIENT_THINKING_LEVELS: readonly PiThinkingLevel[] = [
+  'off',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+]
+
+const isPiClientThinkingLevel = (level: string): level is PiThinkingLevel =>
+  PI_CLIENT_THINKING_LEVELS.some((candidate) => candidate === level)
 
 /**
  * The minimal session-runtime interface consumed by the AgentRun adapter and
@@ -50,7 +66,7 @@ export interface PiSessionRuntimePort {
   getSnapshot(metadata: PiThreadMetadata): PiThreadSnapshot
   isRunning(): boolean
   sendMessage(input: PiSendMessageInput): Promise<void>
-  runMessage(input: PiSendMessageInput): Promise<void>
+  runMessage(input: PiSendMessageInput, context?: AgentRunContext): Promise<void>
   cancel(): Promise<void>
   clearQueue(): { steering: string[]; followUp: string[] }
   getAvailableModels(): Promise<PiModelInfo[]>
@@ -168,7 +184,17 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     await this.prompt(input, 'accepted')
   }
 
-  async runMessage(input: PiSendMessageInput): Promise<void> {
+  async runMessage(input: PiSendMessageInput, context?: AgentRunContext): Promise<void> {
+    await this.initialize()
+
+    if (context) {
+      const message = toPiContextMessage(context)
+
+      if (message) {
+        await this.getPiSession().sendCustomMessage(message, { deliverAs: 'nextTurn' })
+      }
+    }
+
     await this.prompt(input, 'settled')
   }
 
@@ -238,6 +264,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
       modelId: model.id,
       name: model.name,
       supportsThinking: Boolean(model.reasoning),
+      availableThinkingLevels: getSupportedThinkingLevels(model).filter(isPiClientThinkingLevel),
     }))
   }
 
@@ -405,39 +432,71 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     if (!apiKey) throw new Error(`Provider "${config.provider}" 没有配置 API Key`)
 
     runtime.unregisterProvider(config.provider)
-    if (config.baseUrl) {
-      const builtinModel =
-        !config.providerName && !config.contextWindow && !config.maxTokens
-          ? runtime.getModel(config.provider, config.modelID)
-          : undefined
+    const builtinModel = runtime.getModel(config.provider, config.modelID)
+    if (builtinModel) {
+      const resolvedInput = resolveModelInput(config.provider, config.modelID, builtinModel.input)
+      const needsInputOverride = resolvedInput.some((input) => !builtinModel.input.includes(input))
+      const needsModelDefinition =
+        needsInputOverride || Boolean(config.baseUrl && (config.contextWindow || config.maxTokens))
+
+      if (config.baseUrl || needsInputOverride) {
+        runtime.registerProvider(config.provider, {
+          ...(config.providerName ? { name: config.providerName } : {}),
+          ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
+          ...(needsModelDefinition
+            ? {
+                models: runtime.getModels(config.provider).map((model) => ({
+                  id: model.id,
+                  name: model.name,
+                  api: model.api,
+                  baseUrl: model.baseUrl,
+                  reasoning: model.reasoning,
+                  thinkingLevelMap: model.thinkingLevelMap,
+                  input: resolveModelInput(config.provider, model.id, model.input),
+                  cost: model.cost,
+                  contextWindow:
+                    config.baseUrl && model.id === config.modelID && config.contextWindow
+                      ? config.contextWindow
+                      : model.contextWindow,
+                  maxTokens:
+                    config.baseUrl && model.id === config.modelID && config.maxTokens
+                      ? config.maxTokens
+                      : model.maxTokens,
+                  samplingParams: model.samplingParams,
+                  headers: model.headers,
+                  compat: model.compat,
+                })),
+              }
+            : {}),
+        })
+      }
+    } else if (config.baseUrl) {
       runtime.registerProvider(
         config.provider,
-        builtinModel
-          ? { baseUrl: config.baseUrl }
-          : {
-              name: config.providerName ?? config.provider,
-              baseUrl: config.baseUrl,
-              api: 'openai-completions',
-              authHeader: true,
-              models: [
-                {
-                  id: config.modelID,
-                  name: config.modelID,
-                  reasoning: false,
-                  input: ['text'],
-                  contextWindow: config.contextWindow ?? 128_000,
-                  maxTokens: config.maxTokens ?? 1_000,
-                  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-                  samplingParams: { temperature: 0.7 },
-                  compat: {
-                    maxTokensField: 'max_tokens',
-                    supportsUsageInStreaming: false,
-                    supportsDeveloperRole: false,
-                    supportsReasoningEffort: false,
-                  },
-                },
-              ],
+        {
+          name: config.providerName ?? config.provider,
+          baseUrl: config.baseUrl,
+          api: 'openai-completions',
+          authHeader: true,
+          models: [
+            {
+              id: config.modelID,
+              name: config.modelID,
+              reasoning: false,
+              input: ['text'],
+              contextWindow: config.contextWindow ?? 128_000,
+              maxTokens: config.maxTokens ?? 1_000,
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+              samplingParams: { temperature: 0.7 },
+              compat: {
+                maxTokensField: 'max_tokens',
+                supportsUsageInStreaming: false,
+                supportsDeveloperRole: false,
+                supportsReasoningEffort: false,
+              },
             },
+          ],
+        },
       )
     }
     await runtime.setRuntimeApiKey(config.provider, apiKey)

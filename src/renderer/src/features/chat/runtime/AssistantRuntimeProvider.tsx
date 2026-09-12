@@ -4,9 +4,13 @@ import { usePiRuntime } from '@assistant-ui/react-pi'
 import { assistantToolkit } from '../tools/AssistantToolkit'
 import { ArtifactDataUI } from '../../artifacts/ArtifactRenderer'
 import { electronPiClient } from './electronPiClient'
+import { contextAttachmentAdapter } from '../context/contextAttachmentAdapter'
 
 export function AssistantRuntime({ children }: { children: ReactNode }) {
-  const runtime = usePiRuntime({ client: electronPiClient })
+  const runtime = usePiRuntime({
+    client: electronPiClient,
+    adapters: { attachments: contextAttachmentAdapter },
+  })
 
   const config = AuiConfig({
     tools: Tools({ toolkit: assistantToolkit }),

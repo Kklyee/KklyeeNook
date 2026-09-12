@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-import type { AgentRuntime } from './agentRuntime'
+import type { AgentRuntime, AgentRuntimeInput } from './agentRuntime'
 import { AgentSession } from './agentSession'
 import { AgentRun } from '@/shared/agent/agentRun'
 import { getAgentRunPatch } from './agentRunState'
@@ -128,8 +128,8 @@ export class AgentService {
     this.runtimes.set(sessionId, runtime)
     return runtime
   }
-  async prompt(sessionId: string, prompt: string): Promise<AgentRun> {
-    const handle = this.startRun(sessionId, prompt)
+  async prompt(sessionId: string, input: AgentRuntimeInput): Promise<AgentRun> {
+    const handle = this.startRun(sessionId, input)
 
     return handle.completion
   }
@@ -233,7 +233,7 @@ export class AgentService {
     }
   }
 
-  startRun(sessionId: string, prompt: string, signal?: AbortSignal): AgentRunHandle {
+  startRun(sessionId: string, input: AgentRuntimeInput, signal?: AbortSignal): AgentRunHandle {
     const session = this.getSession(sessionId)
 
     if (!session) {
@@ -254,8 +254,8 @@ export class AgentService {
     }
     session.addRun(run)
     const initialSave = this.queueRunSave(run)
-    this.handleAgentEvent(session, run.id, { type: 'user_message', text: prompt })
-    const completion = initialSave.then(() => this.executeRun(session, run.id, prompt, signal))
+    this.handleAgentEvent(session, run.id, { type: 'user_message', text: input.prompt })
+    const completion = initialSave.then(() => this.executeRun(session, run.id, input, signal))
 
     void completion.then(
       () => this.runPersistence.delete(run.id),
@@ -279,13 +279,13 @@ export class AgentService {
   private async executeRun(
     session: AgentSession,
     runId: string,
-    prompt: string,
+    input: AgentRuntimeInput,
     signal?: AbortSignal,
   ): Promise<AgentRun> {
     const runtime = this.getOrCreateRuntime(session.id)
     try {
       await runtime.run(
-        prompt,
+        input,
         (event) => {
           this.handleAgentEvent(session, runId, event)
         },

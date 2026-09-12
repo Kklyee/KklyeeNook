@@ -1,5 +1,5 @@
 import type { AgentEvent } from '@/shared/agent/agentEvent'
-import type { AgentRuntime } from '../../agentRuntime'
+import type { AgentRuntime, AgentRuntimeInput } from '../../agentRuntime'
 import { convertPiEvent } from '../adapters/piEventAdapter'
 import type { PiSessionRuntimePort } from './piSessionRuntime'
 
@@ -11,7 +11,7 @@ export class PiAgentRuntime implements AgentRuntime {
     private readonly disposeRuntime: () => void,
   ) {}
 
-  async run(prompt: string, emit: Emit, signal?: AbortSignal): Promise<void> {
+  async run(input: AgentRuntimeInput, emit: Emit, signal?: AbortSignal): Promise<void> {
     let unsubscribe: (() => void) | undefined
     let unsubscribeProductEvents: (() => void) | undefined
     let terminalEventReceived = false
@@ -40,7 +40,12 @@ export class PiAgentRuntime implements AgentRuntime {
       }
 
       signal?.addEventListener('abort', handleAbort, { once: true })
-      await this.sessionRuntime.runMessage({ content: prompt })
+      await this.sessionRuntime.runMessage(
+        input.attachments?.length
+          ? { content: input.prompt, attachments: input.attachments }
+          : { content: input.prompt },
+        input.context,
+      )
 
       if (terminalEventReceived) return
       if (signal?.aborted) {

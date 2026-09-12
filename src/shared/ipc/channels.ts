@@ -25,4 +25,6 @@ export const IPC_CHANNELS = {
   ARTIFACT_LIST: 'artifact:list',
   ARTIFACT_APPLY: 'artifact:apply',
   ARTIFACT_EXPORT: 'artifact:export',
+  CONTEXT_ATTACHMENT_STAGE: 'context-attachment:stage',
+  CONTEXT_ATTACHMENT_REMOVE: 'context-attachment:remove',
 } as const

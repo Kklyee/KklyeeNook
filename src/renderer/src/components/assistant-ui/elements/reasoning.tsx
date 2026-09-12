@@ -10,7 +10,7 @@ import {
   useState,
 } from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
-import { BrainIcon, ChevronDownIcon } from 'lucide-react'
+import { ChevronDownIcon } from 'lucide-react'
 import {
   Collapsible,
   CollapsibleContent,
@@ -22,7 +22,7 @@ export const ANIMATION_DURATION = 200
 
 const ReasoningPreviewContext = createContext(false)
 
-const reasoningVariants = cva('aui-reasoning-root mb-4 w-full', {
+const reasoningVariants = cva('aui-reasoning-root mb-3 w-full', {
   variants: {
     variant: {
       outline: 'rounded-lg border px-3 py-2',
@@ -30,7 +30,7 @@ const reasoningVariants = cva('aui-reasoning-root mb-4 w-full', {
       muted: 'bg-muted/50 rounded-lg px-3 py-2',
     },
   },
-  defaultVariants: { variant: 'outline' },
+  defaultVariants: { variant: 'ghost' },
 })
 
 export type ReasoningRootProps = Omit<
@@ -162,15 +162,11 @@ function ReasoningTrigger({
     <CollapsibleTrigger
       data-slot="reasoning-trigger"
       className={cn(
-        'aui-reasoning-trigger group/trigger text-muted-foreground hover:text-foreground flex max-w-[75%] origin-left items-center gap-2 py-1.5 text-sm transition-[color,scale] active:scale-[0.98]',
+        'aui-reasoning-trigger group/trigger text-muted-foreground hover:text-foreground flex max-w-[75%] origin-left items-center gap-1.5 py-1 text-sm transition-[color,scale] active:scale-[0.98]',
         className,
       )}
       {...props}
     >
-      <BrainIcon
-        data-slot="reasoning-trigger-icon"
-        className="aui-reasoning-trigger-icon size-4 shrink-0"
-      />
       <span
         data-slot="reasoning-trigger-label"
         className={cn(
@@ -178,12 +174,12 @@ function ReasoningTrigger({
           active && 'shimmer motion-reduce:animate-none',
         )}
       >
-        Reasoning{durationText}
+        Thinking{durationText}
       </span>
       <ChevronDownIcon
         data-slot="reasoning-trigger-chevron"
         className={cn(
-          'aui-reasoning-trigger-chevron mt-0.5 size-4 shrink-0',
+          'aui-reasoning-trigger-chevron mt-0.5 size-3.5 shrink-0',
           'transition-transform duration-(--animation-duration) ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none',
           '-rotate-90',
           'group-data-open/trigger:rotate-0',
@@ -273,7 +269,7 @@ function ReasoningText({ className, children, ...props }: React.ComponentProps<'
       ref={scrollRef}
       data-slot="reasoning-text"
       className={cn(
-        'aui-reasoning-text relative z-0 max-h-64 overflow-y-auto ps-6 pt-2 pb-2 leading-relaxed text-pretty',
+        'aui-reasoning-text relative z-0 max-h-64 overflow-y-auto pt-1 pb-1 leading-relaxed text-pretty',
         'transform-gpu transition-[transform,opacity] ease-[cubic-bezier(0.32,0.72,0,1)]',
         'motion-reduce:animate-none',
         'group-data-open/collapsible-content:animate-in',

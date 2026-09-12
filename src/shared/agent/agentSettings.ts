@@ -1,5 +1,6 @@
 import type { PermissionGrant } from '../approval/approvalTypes'
 import type { SavedModelConfig, ThinkingLevel } from './agentConfig'
+import type { ModelInput } from './modelCapabilities'
 
 export interface ModelCatalogProvider {
   id: string
@@ -11,6 +12,8 @@ export interface ModelCatalogModel {
   id: string
   name: string
   reasoning: boolean
+  input: ModelInput[]
+  availableThinkingLevels: ThinkingLevel[]
   contextWindow: number
   maxTokens: number
 }

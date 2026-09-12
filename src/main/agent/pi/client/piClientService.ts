@@ -15,6 +15,9 @@ import type { ArtifactService } from '@/main/artifact/artifactService'
 import type { Artifact } from '@/shared/artifact/artifact'
 import type { AgentSessionSummary } from '@/shared/agent/agentSession'
 import type { AgentConfigStore } from '@/main/settings/agentConfigStore'
+import { getModelCatalog } from '@/main/settings/modelCatalog'
+import type { ContextBuilder } from '@/main/context/contextBuilder'
+import type { ContextAttachmentService } from '@/main/context/contextAttachmentService'
 import type { AgentService } from '../../agentService'
 import type { MessageProjectionService } from '../../messageProjectionService'
 import type { PiSessionRuntimePort } from '../runtime/piSessionRuntime'
@@ -39,6 +42,8 @@ export class PiClientService implements PiClient {
     private readonly messageProjection: MessageProjectionService,
     private readonly configStore: AgentConfigStore,
     private readonly artifactService: ArtifactService,
+    private readonly contextBuilder: ContextBuilder,
+    private readonly contextAttachments: ContextAttachmentService,
   ) {
     this.unsubscribeAgentEvents = agentService.subscribe((envelope) => {
       if (envelope.event.type !== 'artifact_created') return
@@ -78,14 +83,26 @@ export class PiClientService implements PiClient {
     return snapshot
   }
 
-  async sendMessage(threadId: string, input: PiSendMessageInput): Promise<void> {
+  async sendMessage(
+    threadId: string,
+    input: PiSendMessageInput,
+    contextAttachmentIds: readonly string[] = [],
+  ): Promise<void> {
+    const uniqueContextAttachmentIds = [...new Set(contextAttachmentIds)]
     const session = this.requireSession(threadId)
-    if (input.attachments?.length) {
-      throw new Error('Image attachments are not enabled for this agent')
-    }
 
     const sessionRuntime = this.sessionRuntimeManager.getOrCreate(threadId)
     await sessionRuntime.initialize()
+
+    if (
+      uniqueContextAttachmentIds.length &&
+      (this.pendingRuns.has(threadId) || sessionRuntime.isRunning())
+    ) {
+      throw new Error('File context cannot be added while the agent is running')
+    }
+
+    const context = this.contextBuilder.build(uniqueContextAttachmentIds)
+
     if (session.title === 'New Task') {
       const text = input.content.trim()
       const title = !text ? 'New Task' : text.length > 50 ? `${text.slice(0, 47)}...` : text
@@ -102,7 +119,13 @@ export class PiClientService implements PiClient {
 
     this.pendingRuns.add(threadId)
     try {
-      const handle = this.agentService.startRun(threadId, input.content)
+      const runInput = {
+        prompt: input.content,
+        ...(context ? { context } : {}),
+        ...(input.attachments?.length ? { attachments: input.attachments } : {}),
+      }
+      const handle = this.agentService.startRun(threadId, runInput)
+      this.contextAttachments.release(uniqueContextAttachmentIds)
       void handle.completion.then(
         () => this.pendingRuns.delete(threadId),
         () => this.pendingRuns.delete(threadId),
@@ -129,8 +152,17 @@ export class PiClientService implements PiClient {
     if (firstRuntime) return firstRuntime.getAvailableModels()
 
     const { provider, modelID, thinkingLevel } = this.configStore.get().model
+    const catalogModel = getModelCatalog()
+      .find((item) => item.id === provider)
+      ?.models.find((item) => item.id === modelID)
     return [
-      { provider, modelId: modelID, name: modelID, supportsThinking: thinkingLevel !== 'off' },
+      {
+        provider,
+        modelId: modelID,
+        name: catalogModel?.name ?? modelID,
+        supportsThinking: catalogModel?.reasoning ?? thinkingLevel !== 'off',
+        availableThinkingLevels: catalogModel?.availableThinkingLevels,
+      },
     ]
   }
 
@@ -167,10 +199,7 @@ export class PiClientService implements PiClient {
     this.sessionRuntimeManager.delete(threadId)
   }
 
-  async respondToHostUiRequest(
-    threadId: string,
-    response: PiExtensionUiResponse,
-  ): Promise<void> {
+  async respondToHostUiRequest(threadId: string, response: PiExtensionUiResponse): Promise<void> {
     const sessionRuntime = this.sessionRuntimeManager.getOrCreate(threadId)
     await sessionRuntime.initialize()
     sessionRuntime.respondToExtensionUiRequest(response)

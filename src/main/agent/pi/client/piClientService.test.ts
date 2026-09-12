@@ -5,6 +5,8 @@ import { AgentConfigStore } from '@/main/settings/agentConfigStore'
 import type { AgentService } from '../../agentService'
 import type { MessageProjectionService } from '../../messageProjectionService'
 import type { ArtifactService } from '@/main/artifact/artifactService'
+import { ContextAttachmentService } from '@/main/context/contextAttachmentService'
+import { ContextBuilder } from '@/main/context/contextBuilder'
 import type { AgentSessionSummary } from '@/shared/agent/agentSession'
 import type { PiSessionClientEventListener, PiSessionRuntimePort } from '../runtime/piSessionRuntime'
 import { PiSessionRuntimeManager } from '../runtime/piSessionRuntimeManager'
@@ -68,6 +70,7 @@ function setup(running = false) {
   } as unknown as AgentService
   const projection = { project: vi.fn() } as unknown as MessageProjectionService
   const artifacts = { list: vi.fn(() => Promise.resolve([])) } as unknown as ArtifactService
+  const contextAttachments = new ContextAttachmentService()
   const manager = new PiSessionRuntimeManager(() => sessionRuntime)
   const client = new PiClientService(
     agentService,
@@ -75,12 +78,15 @@ function setup(running = false) {
     projection,
     new AgentConfigStore({ model: { provider: 'test', modelID: 'test', thinkingLevel: 'off' } }),
     artifacts,
+    new ContextBuilder(contextAttachments),
+    contextAttachments,
   )
   return {
     client,
     sessionRuntime,
     agentService,
     projection,
+    contextAttachments,
     emit(body: PiClientEventBody) {
       for (const listener of clientListeners) listener(body)
     },
@@ -107,7 +113,7 @@ test('delivers snapshot-first events and unsubscribe does not cancel the run', a
 test('starts a product run for an idle thread and uses Pi queue while running', async () => {
   const idle = setup()
   await idle.client.sendMessage('session-1', { content: 'hello' })
-  expect(idle.agentService.startRun).toHaveBeenCalledWith('session-1', 'hello')
+  expect(idle.agentService.startRun).toHaveBeenCalledWith('session-1', { prompt: 'hello' })
 
   const running = setup(true)
   await running.client.sendMessage('session-1', { content: 'follow up' })
@@ -116,6 +122,42 @@ test('starts a product run for an idle thread and uses Pi queue while running', 
     streamingBehavior: 'steer',
   })
   expect(running.agentService.steerRun).toHaveBeenCalledWith('session-1', 'follow up')
+})
+
+test('resolves staged file context before starting an idle product run', async () => {
+  const testContext = setup()
+  const text = 'Use this note as context.'
+  const attachment = testContext.contextAttachments.stage({
+    name: 'note.txt',
+    mimeType: 'text/plain',
+    size: Buffer.byteLength(text),
+    text,
+  })
+
+  await testContext.client.sendMessage('session-1', { content: 'Summarize it' }, [attachment.id])
+
+  expect(testContext.agentService.startRun).toHaveBeenCalledWith('session-1', {
+    prompt: 'Summarize it',
+    context: { attachments: [{ ...attachment, text }] },
+  })
+  expect(() => testContext.contextAttachments.resolve([attachment.id])).toThrow(
+    `Context attachment not found: ${attachment.id}`,
+  )
+})
+
+test('forwards image attachments to an idle product run', async () => {
+  const testContext = setup()
+  const attachments = [{ type: 'image' as const, mimeType: 'image/png', data: 'base64-image' }]
+
+  await testContext.client.sendMessage('session-1', {
+    content: 'Describe this image',
+    attachments,
+  })
+
+  expect(testContext.agentService.startRun).toHaveBeenCalledWith('session-1', {
+    prompt: 'Describe this image',
+    attachments,
+  })
 })
 
 test('initializes a new thread before synchronizing its generated title to Pi', async () => {

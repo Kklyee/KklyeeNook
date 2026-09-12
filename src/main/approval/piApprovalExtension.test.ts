@@ -29,8 +29,8 @@ function setup(selection: string | undefined) {
   return { execute, policy, emit }
 }
 
-test('persists a session approval selected through Pi host UI', async () => {
-  const { execute, policy, emit } = setup('Allow for this session')
+test('persists a tool-level session approval selected through Pi host UI', async () => {
+  const { execute, policy, emit } = setup('Allow this tool for this session')
 
   await expect(execute()).resolves.toBeUndefined()
   expect(policy.grant).toHaveBeenCalledWith('session', 'session-1', permission)

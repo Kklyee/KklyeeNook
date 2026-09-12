@@ -3,7 +3,12 @@ import type { ExtensionFactory } from '@earendil-works/pi-coding-agent'
 import type { ApprovalPolicy } from './approvalPolicy'
 import type { AgentEvent } from '@/shared/agent/agentEvent'
 
-const APPROVAL_OPTIONS = ['Allow once', 'Allow for this session', 'Always allow', 'Deny'] as const
+const APPROVAL_OPTIONS = [
+  'Allow once',
+  'Allow this tool for this session',
+  'Always allow this tool',
+  'Deny',
+] as const
 
 export function createPiApprovalExtension(
   sessionId: string,
@@ -29,9 +34,9 @@ export function createPiApprovalExtension(
       const decision =
         selected === 'Allow once'
           ? 'allow_once'
-          : selected === 'Allow for this session'
+          : selected === 'Allow this tool for this session'
             ? 'allow_session'
-            : selected === 'Always allow'
+            : selected === 'Always allow this tool'
               ? 'allow_always'
               : 'deny'
 

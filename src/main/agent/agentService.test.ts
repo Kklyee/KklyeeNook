@@ -194,7 +194,7 @@ test('records steering against the run during its startup window', async () => {
   )
   await service.initialize()
 
-  const handle = service.startRun(sessionRecord.id, 'first')
+  const handle = service.startRun(sessionRecord.id, { prompt: 'first' })
   service.steerRun(sessionRecord.id, 'second')
   await vi.waitFor(() => expect(finishRun).not.toBe(initialFinishRun))
   finishRun()
@@ -211,7 +211,7 @@ test('persists a run before execution and serializes status changes', async () =
   const runRepo = new MemoryRunRepo()
   const executionRecordRepo = new MemoryExecutionRecordRepo()
   const runtime: AgentRuntime = {
-    async run(_prompt: string, emit: (event: AgentEvent) => void) {
+    async run(_input, emit: (event: AgentEvent) => void) {
       expect(Array.from(runRepo.runs.values())[0]?.status).toBe('running')
       emit({ type: 'agent_started' })
       emit({
@@ -237,7 +237,7 @@ test('persists a run before execution and serializes status changes', async () =
   )
   await service.initialize()
 
-  const finalRun = await service.startRun(sessionRecord.id, 'hello').completion
+  const finalRun = await service.startRun(sessionRecord.id, { prompt: 'hello' }).completion
 
   expect(finalRun.status).toBe('completed')
   expect(finalRun.completedAt).toBeDefined()
@@ -294,7 +294,7 @@ test('turns a successful create_artifact tool call into a durable run artifact',
   )
   await service.initialize()
 
-  const finalRun = await service.startRun(sessionRecord.id, 'create a plan').completion
+  const finalRun = await service.startRun(sessionRecord.id, { prompt: 'create a plan' }).completion
 
   expect(artifactRepo.artifacts).toMatchObject([
     {

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import type {
   AgentSettingsSnapshot,
+  ModelCatalogModel,
   UpdateAgentSettingsRequest,
 } from '@/shared/agent/agentSettings'
 import {
@@ -26,6 +27,12 @@ const toolDescriptions: Record<string, string> = {
   edit: '编辑文件',
   write: '写入文件',
   bash: '执行命令',
+}
+
+const defaultThinkingLevelFor = (model: ModelCatalogModel | undefined): ThinkingLevel => {
+  const levels = model?.availableThinkingLevels
+  if (!levels?.length) return 'off'
+  return levels.includes('medium') ? 'medium' : levels[0]
 }
 
 type SettingsTab = 'model' | 'tools' | 'permissions'
@@ -206,14 +213,17 @@ function ModelSettings({
   onChanged: () => Promise<void>
 }) {
   const firstProvider = settings.catalog?.[0]
+  const firstModel = firstProvider?.models[0]
   const [models, setModels] = useState(() => settings.models ?? [])
   const [activeModelId, setActiveModelId] = useState(settings.activeModelId)
   const [cwd, setCwd] = useState(settings.cwd)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [provider, setProvider] = useState(firstProvider?.id ?? '')
-  const [modelID, setModelID] = useState(firstProvider?.models[0]?.id ?? '')
+  const [modelID, setModelID] = useState(firstModel?.id ?? '')
   const [baseUrl, setBaseUrl] = useState('')
-  const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>('medium')
+  const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>(() =>
+    defaultThinkingLevelFor(firstModel),
+  )
   const [apiKey, setApiKey] = useState('')
   const [deleteApiKey, setDeleteApiKey] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -227,6 +237,7 @@ function ModelSettings({
   }, [settings])
 
   const providerEntry = settings.catalog?.find((item) => item.id === provider)
+  const selectedCatalogModel = providerEntry?.models.find((item) => item.id === modelID)
   const selectedProviderHasKey = settings.models?.some(
     (item) => item.provider === provider && item.hasApiKey,
   )
@@ -236,16 +247,24 @@ function ModelSettings({
     setProvider(initialProvider?.id ?? '')
     setModelID(initialProvider?.models[0]?.id ?? '')
     setBaseUrl('')
-    setThinkingLevel('medium')
+    setThinkingLevel(defaultThinkingLevelFor(initialProvider?.models[0]))
     setApiKey('')
     setDeleteApiKey(false)
   }
   const edit = (model: SavedModelConfig) => {
+    const catalogModel = settings.catalog
+      .find((item) => item.id === model.provider)
+      ?.models.find((item) => item.id === model.modelID)
+    const configuredLevel = model.thinkingLevel ?? defaultThinkingLevelFor(catalogModel)
     setEditingId(model.id)
     setProvider(model.provider)
     setModelID(model.modelID)
     setBaseUrl(model.baseUrl ?? '')
-    setThinkingLevel(model.thinkingLevel ?? 'medium')
+    setThinkingLevel(
+      catalogModel?.availableThinkingLevels.includes(configuredLevel)
+        ? configuredLevel
+        : defaultThinkingLevelFor(catalogModel),
+    )
     setApiKey('')
     setDeleteApiKey(false)
     setSaved(false)
@@ -371,8 +390,10 @@ function ModelSettings({
             value={provider}
             onChange={(event) => {
               const nextProvider = settings.catalog.find((item) => item.id === event.target.value)
+              const nextModel = nextProvider?.models[0]
               setProvider(event.target.value)
-              setModelID(nextProvider?.models[0]?.id ?? '')
+              setModelID(nextModel?.id ?? '')
+              setThinkingLevel(defaultThinkingLevelFor(nextModel))
               setBaseUrl('')
               setApiKey('')
               setDeleteApiKey(false)
@@ -392,7 +413,10 @@ function ModelSettings({
             className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
             value={modelID}
             onChange={(event) => {
-              setModelID(event.target.value)
+              const nextModelID = event.target.value
+              const nextModel = providerEntry?.models.find((item) => item.id === nextModelID)
+              setModelID(nextModelID)
+              setThinkingLevel(defaultThinkingLevelFor(nextModel))
               setSaved(false)
             }}
           >
@@ -421,7 +445,7 @@ function ModelSettings({
             value={thinkingLevel}
             onChange={(event) => setThinkingLevel(event.target.value as ThinkingLevel)}
           >
-            {['off', 'low', 'medium', 'high'].map((level) => (
+            {(selectedCatalogModel?.availableThinkingLevels ?? ['off']).map((level) => (
               <option key={level} value={level}>
                 {level}
               </option>
@@ -587,7 +611,7 @@ function PermissionSettings({
               key={tool.name}
               label={toolDescriptions[tool.name] ?? tool.name}
               description={tool.name}
-              value={tool.requiresApproval ? '未授权时询问' : '直接允许'}
+              value={tool.requiresApproval ? '未授权时询问，授权后自动执行' : '直接允许'}
             />
           ))}
         </SettingsCard>
@@ -596,16 +620,16 @@ function PermissionSettings({
       <div className="bg-foreground/[0.025] mt-5 flex items-start gap-3 rounded-xl border p-4">
         <ShieldCheckIcon className="text-muted-foreground mt-0.5 size-4 shrink-0" />
         <p className="text-muted-foreground text-xs leading-relaxed">
-          Session 权限只匹配对应 Agent Session；Always 权限跨 Session
-          生效。撤销后，下一次匹配调用会重新询问。
+          授权按工具生效，不匹配单次调用的参数。Session 权限只在对应 Agent Session
+          生效；Always 权限跨 Session 生效。撤销后，该工具的下一次调用会重新询问。
         </p>
       </div>
 
       <div className="mt-8 mb-3 flex items-end justify-between gap-4">
         <div>
-          <h2 className="text-xs font-medium">已保存的 Grant</h2>
+          <h2 className="text-xs font-medium">已保存的工具授权</h2>
           <p className="text-muted-foreground mt-1 text-xs">
-            在审批卡中选择 This session 或 Always 后会显示在这里。
+            在审批卡中选择 This session 或 Always 后，该内置工具会自动执行。
           </p>
         </div>
         <span className="text-muted-foreground text-xs">{permissionGrants.length} 条</span>
@@ -630,13 +654,15 @@ function PermissionSettings({
             <div key={grant.id} className="flex items-start justify-between gap-4 px-4 py-3.5">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
-                  <span>{grant.permission.description}</span>
+                  <span>
+                    {toolDescriptions[grant.permission.toolName] ?? grant.permission.toolName}
+                  </span>
                   <span className="bg-secondary text-secondary-foreground rounded-full px-2 py-0.5 text-[10px] uppercase">
                     {grant.duration}
                   </span>
                 </div>
                 <p className="text-muted-foreground mt-1 break-all font-mono text-xs">
-                  {grant.permission.action} · {grant.permission.resource}
+                  内置工具 · {grant.permission.toolName}
                 </p>
                 {grant.sessionId && (
                   <p className="text-muted-foreground mt-1 truncate text-[11px]">

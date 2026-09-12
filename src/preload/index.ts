@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import type { PiClient, PiClientEvent } from '@assistant-ui/react-pi'
+import type { PiClientEvent } from '@assistant-ui/react-pi'
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
 import { DeletePermissionGrantRequest } from '@/shared/approval/approvalTypes'
 import type {
@@ -19,13 +19,25 @@ import type {
   ExportArtifactRequest,
   ListArtifactsRequest,
 } from '@/shared/artifact/artifact'
+import type {
+  ContextAttachmentRef,
+  RemoveContextAttachmentRequest,
+  StageContextAttachmentRequest,
+} from '@/shared/context/contextAttachment'
+import type { ContextAwarePiClient } from '@/shared/pi/piIpc'
 
 const pi = {
   listThreads: (input) => ipcRenderer.invoke(IPC_CHANNELS.PI_THREAD_LIST, input),
   createThread: (input) => ipcRenderer.invoke(IPC_CHANNELS.PI_THREAD_CREATE, input),
   getThread: (threadId) => ipcRenderer.invoke(IPC_CHANNELS.PI_THREAD_GET, { threadId }),
-  sendMessage: (threadId, input) =>
-    ipcRenderer.invoke(IPC_CHANNELS.PI_MESSAGE_SEND, { threadId, input }),
+  sendMessage: (threadId, input, contextAttachmentIds?: readonly string[]) =>
+    ipcRenderer.invoke(IPC_CHANNELS.PI_MESSAGE_SEND, {
+      threadId,
+      input,
+      ...(contextAttachmentIds?.length
+        ? { contextAttachmentIds: [...contextAttachmentIds] }
+        : {}),
+    }),
   cancelRun: (threadId) => ipcRenderer.invoke(IPC_CHANNELS.PI_RUN_CANCEL, { threadId }),
   clearQueue: (threadId) => ipcRenderer.invoke(IPC_CHANNELS.PI_QUEUE_CLEAR, { threadId }),
   getAvailableModels: (input) => ipcRenderer.invoke(IPC_CHANNELS.PI_MODEL_LIST, input),
@@ -53,10 +65,21 @@ const pi = {
       port1.close()
     }
   },
-} satisfies PiClient
+} satisfies ContextAwarePiClient
+
+const context = {
+  stage(request: StageContextAttachmentRequest): Promise<ContextAttachmentRef> {
+    return ipcRenderer.invoke(IPC_CHANNELS.CONTEXT_ATTACHMENT_STAGE, request)
+  },
+
+  remove(request: RemoveContextAttachmentRequest): Promise<void> {
+    return ipcRenderer.invoke(IPC_CHANNELS.CONTEXT_ATTACHMENT_REMOVE, request)
+  },
+}
 
 const api = {
   pi,
+  context,
 
   getAgentSettings(): Promise<AgentSettingsSnapshot> {
     return ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_GET)

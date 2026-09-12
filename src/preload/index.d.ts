@@ -17,9 +17,19 @@ import type {
   ExportArtifactRequest,
   ListArtifactsRequest,
 } from '../shared/artifact/artifact'
+import type {
+  ContextAttachmentRef,
+  RemoveContextAttachmentRequest,
+  StageContextAttachmentRequest,
+} from '../shared/context/contextAttachment'
+import type { ContextAwarePiClient } from '../shared/pi/piIpc'
 
 interface API {
-  pi: PiClient
+  pi: ContextAwarePiClient
+  context: {
+    stage(request: StageContextAttachmentRequest): Promise<ContextAttachmentRef>
+    remove(request: RemoveContextAttachmentRequest): Promise<void>
+  }
   getAgentSettings(): Promise<AgentSettingsSnapshot>
   updateAgentSettings(request: UpdateAgentSettingsRequest): Promise<AgentSettingsSnapshot>
   selectAgentWorkspace(): Promise<string | null>

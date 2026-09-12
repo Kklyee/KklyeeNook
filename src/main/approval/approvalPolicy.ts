@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto'
-import { isAbsolute, relative, resolve } from 'node:path'
 
 import type {
   PermissionDescriptor,
@@ -9,18 +8,13 @@ import type {
 import type { PermissionGrantRepo } from '../db/repositories/permissionGrantRepo'
 
 const protectedTools = new Set(['read', 'write', 'edit', 'bash'])
-const deletionCommand =
-  /(?:^|[;&|]\s*)(?:rm\b|rmdir\b|del\b|erase\b|remove-item\b)|\bgit\s+clean\b/i
 
 export type ApprovalPolicyDecision =
   | { outcome: 'allow'; permission?: PermissionDescriptor; grant?: PermissionGrant }
   | { outcome: 'prompt'; permission: PermissionDescriptor }
 
 export class ApprovalPolicy {
-  constructor(
-    private readonly repo: PermissionGrantRepo,
-    private readonly workspace: string | (() => string),
-  ) {}
+  constructor(private readonly repo: PermissionGrantRepo) {}
 
   protects(toolName: string): boolean {
     return protectedTools.has(toolName)
@@ -29,25 +23,28 @@ export class ApprovalPolicy {
   async evaluate(
     sessionId: string,
     toolName: string,
-    args: unknown,
+    _args: unknown,
   ): Promise<ApprovalPolicyDecision> {
     if (!this.protects(toolName)) return { outcome: 'allow' }
 
-    const permission = this.describe(toolName, args)
+    const permission = this.describe(toolName)
     const grant = (await this.repo.list()).find(
       (candidate) =>
         (candidate.duration === 'always' || candidate.sessionId === sessionId) &&
         matches(candidate.permission, permission),
     )
 
-    return grant ? { outcome: 'allow', permission, grant } : { outcome: 'prompt', permission }
+    return grant
+      ? { outcome: 'allow', permission, grant: this.normalizeGrant(grant) }
+      : { outcome: 'prompt', permission }
   }
 
   async grant(
     duration: PermissionGrantDuration,
     sessionId: string,
-    permission: PermissionDescriptor,
+    requestedPermission: PermissionDescriptor,
   ): Promise<PermissionGrant> {
+    const permission = this.describe(requestedPermission.toolName)
     const grants = await this.repo.list()
     const existing = grants.find(
       (candidate) =>
@@ -55,7 +52,7 @@ export class ApprovalPolicy {
         candidate.sessionId === (duration === 'session' ? sessionId : undefined) &&
         samePermission(candidate.permission, permission),
     )
-    if (existing) return existing
+    if (existing) return this.normalizeGrant(existing)
 
     const grant: PermissionGrant = {
       id: randomUUID(),
@@ -70,91 +67,53 @@ export class ApprovalPolicy {
   }
 
   async listGrants(): Promise<PermissionGrant[]> {
-    return this.repo.list()
+    const grants = await this.repo.list()
+    const unique = new Map<string, PermissionGrant>()
+
+    for (const grant of grants) {
+      const key = grantKey(grant)
+      if (!unique.has(key)) unique.set(key, this.normalizeGrant(grant))
+    }
+
+    return [...unique.values()]
   }
 
   async revoke(id: string): Promise<void> {
-    await this.repo.delete(id)
+    const grants = await this.repo.list()
+    const target = grants.find((grant) => grant.id === id)
+    if (!target) return
+
+    const key = grantKey(target)
+    for (const grant of grants) {
+      if (grantKey(grant) === key) await this.repo.delete(grant.id)
+    }
   }
 
-  private describe(toolName: string, args: unknown): PermissionDescriptor {
-    const input = isRecord(args) ? args : {}
-    const cwd = typeof this.workspace === 'string' ? this.workspace : this.workspace()
-
-    if (toolName === 'read' || toolName === 'write' || toolName === 'edit') {
-      const suppliedPath = typeof input.path === 'string' ? input.path : ''
-      const absolutePath = resolve(cwd, suppliedPath)
-      const insideProject = isWithin(cwd, absolutePath)
-      const isRead = toolName === 'read'
-
-      return {
-        toolName,
-        action: isRead ? 'filesystem.read' : 'filesystem.write',
-        resourceKind: 'path',
-        resource: isRead && insideProject ? resolve(cwd) : absolutePath,
-        recursive: isRead && insideProject,
-        description:
-          isRead && insideProject
-            ? `读取项目目录 ${resolve(cwd)}`
-            : `${isRead ? '读取' : '修改'}文件 ${absolutePath}`,
-      }
-    }
-
-    if (toolName === 'bash') {
-      const command = typeof input.command === 'string' ? input.command.trim() : ''
-      const deletesFiles = deletionCommand.test(command)
-      return {
-        toolName,
-        action: deletesFiles ? 'shell.delete' : 'shell.execute',
-        resourceKind: 'command',
-        resource: command,
-        recursive: false,
-        description: `${deletesFiles ? '执行删除命令' : '执行命令'} ${command}`,
-      }
-    }
-
+  private describe(toolName: string): PermissionDescriptor {
     return {
       toolName,
-      action: `tool.${toolName}`,
+      action: 'tool.execute',
       resourceKind: 'tool',
       resource: toolName,
       recursive: false,
-      description: `使用工具 ${toolName}`,
+      description: `允许内置工具 ${toolName} 自动执行`,
     }
   }
-}
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
-
-function isWithin(parent: string, child: string): boolean {
-  const path = relative(resolve(parent), resolve(child))
-  return path === '' || (!path.startsWith('..') && !isAbsolute(path))
+  private normalizeGrant(grant: PermissionGrant): PermissionGrant {
+    return { ...grant, permission: this.describe(grant.permission.toolName) }
+  }
 }
 
 function samePermission(left: PermissionDescriptor, right: PermissionDescriptor): boolean {
-  return (
-    left.toolName === right.toolName &&
-    left.action === right.action &&
-    left.resourceKind === right.resourceKind &&
-    left.resource === right.resource &&
-    left.recursive === right.recursive
-  )
+  return left.toolName === right.toolName
 }
 
 function matches(granted: PermissionDescriptor, requested: PermissionDescriptor): boolean {
-  if (
-    granted.toolName !== requested.toolName ||
-    granted.action !== requested.action ||
-    granted.resourceKind !== requested.resourceKind
-  ) {
-    return false
-  }
+  return samePermission(granted, requested)
+}
 
-  if (!granted.recursive || granted.resourceKind !== 'path') {
-    return granted.resource === requested.resource
-  }
-
-  return isWithin(granted.resource, requested.resource)
+function grantKey(grant: PermissionGrant): string {
+  const sessionId = grant.duration === 'session' ? (grant.sessionId ?? null) : null
+  return JSON.stringify([grant.duration, sessionId, grant.permission.toolName])
 }

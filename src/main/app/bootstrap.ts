@@ -30,6 +30,9 @@ import { PiClientService } from '../agent/pi/client/piClientService'
 import { registerPiClientIpc } from '../agent/pi/client/piClientIpc'
 import { MessageProjectionService } from '../agent/messageProjectionService'
 import { registerAgentRunIpc } from '../agent/ipc/agentRunIpc'
+import { ContextAttachmentService } from '../context/contextAttachmentService'
+import { ContextBuilder } from '../context/contextBuilder'
+import { registerContextIpc } from '../context/contextIpc'
 
 export interface AppContext {
   dispose(): void
@@ -71,7 +74,7 @@ export async function bootstrap(): Promise<AppContext> {
     if (!cwd) throw new Error('Agent workspace is not configured')
     return cwd
   }
-  const approvalPolicy = new ApprovalPolicy(permissionGrantRepo, workspace)
+  const approvalPolicy = new ApprovalPolicy(permissionGrantRepo)
 
   const runtimeStateRepo = new DrizzleAgentRuntimeStateRepo(db)
   const sessionDir = join(app.getPath('userData'), 'pi-sessions')
@@ -108,14 +111,19 @@ export async function bootstrap(): Promise<AppContext> {
 
   await agentService.initialize()
   const messageProjection = new MessageProjectionService(new DrizzleAgentMessageRepo(db))
+  const contextAttachments = new ContextAttachmentService()
+  const contextBuilder = new ContextBuilder(contextAttachments)
   const piClientService = new PiClientService(
     agentService,
     piSessionRuntimeManager,
     messageProjection,
     configStore,
     artifactService,
+    contextBuilder,
+    contextAttachments,
   )
   const chatWindow = createChatWindow()
+  const disposeContextIpc = registerContextIpc(chatWindow, contextAttachments)
 
   registerSettingsIpc(chatWindow, configStore, credentialStore, approvalPolicy, () => {
     piSessionRuntimeManager.reloadConfiguration()
@@ -131,6 +139,8 @@ export async function bootstrap(): Promise<AppContext> {
 
   return {
     dispose() {
+      disposeContextIpc()
+      contextAttachments.clear()
       piClientService.dispose()
       piSessionRuntimeManager.dispose()
       closeDb()

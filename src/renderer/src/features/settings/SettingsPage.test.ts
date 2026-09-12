@@ -32,6 +32,8 @@ const settings: AgentSettingsSnapshot = {
           id: 'test-model',
           name: 'Test Model',
           reasoning: false,
+          input: ['text'],
+          availableThinkingLevels: ['off'],
           contextWindow: 8_000,
           maxTokens: 1_000,
         },
@@ -82,4 +84,40 @@ test('renders the permissions tab with a settings snapshot from before grants we
   expect(markup).toContain('1 个受保护工具')
   expect(markup).toContain('未授权时询问')
   expect(markup).toContain('尚无已保存的权限')
+})
+
+test('renders saved permissions as tool grants instead of command grants', () => {
+  const markup = renderToStaticMarkup(
+    createElement(SettingsPage, {
+      settings: {
+        ...settings,
+        tools: [{ name: 'bash', requiresApproval: true }],
+        permissionGrants: [
+          {
+            id: 'bash-grant',
+            effect: 'allow',
+            duration: 'always',
+            permission: {
+              toolName: 'bash',
+              action: 'shell.execute',
+              resourceKind: 'command',
+              resource: 'npm test',
+              recursive: false,
+              description: '执行命令 npm test',
+            },
+            createdAt: 1,
+          },
+        ],
+      },
+      error: null,
+      initialTab: 'permissions',
+      onClose() {},
+      async onChanged() {},
+    }),
+  )
+
+  expect(markup).toContain('执行命令')
+  expect(markup).toContain('内置工具 · bash')
+  expect(markup).toContain('授权按工具生效')
+  expect(markup).not.toContain('npm test')
 })

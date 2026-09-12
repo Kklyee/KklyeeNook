@@ -1,12 +1,16 @@
-import { useState, type ButtonHTMLAttributes } from 'react'
+import { useEffect, useState, type ButtonHTMLAttributes } from 'react'
 import { useAuiState } from '@assistant-ui/react'
-import { usePiSession } from '@assistant-ui/react-pi'
+import { usePiRuntimeExtras, usePiSession } from '@assistant-ui/react-pi'
 import type { AgentSettingsSnapshot } from '@/shared/agent/agentSettings'
 import type { ThinkingLevel } from '@/shared/agent/agentConfig'
 import { Thread } from '../../components/assistant-ui/elements/thread.aui'
 import { cn } from '@/renderer/src/lib/utils'
 import { RunHistoryPanel } from '../runs/RunHistoryPanel'
 import { PiExtensionUiPrompt } from './runtime/PiExtensionUiPrompt'
+import {
+  clearPendingNewThreadPreferences,
+  setPendingNewThreadPreferences,
+} from './runtime/pendingNewThreadPreferences'
 
 const THINKING_LEVELS = [
   { id: 'off', name: '关闭' },
@@ -22,32 +26,68 @@ export function ChatPanel({ settings }: { settings: AgentSettingsSnapshot | null
   const [view, setView] = useState<'chat' | 'trace'>('chat')
   const [switchingModel, setSwitchingModel] = useState(false)
   const [modelError, setModelError] = useState<string | null>(null)
+  const threadItemId = useAuiState((state) => state.threadListItem.id)
   const sessionId = useAuiState((state) => state.threadListItem.remoteId)
   const session = usePiSession()
+  const piRuntime = usePiRuntimeExtras()
   const configuredModels = settings?.models ?? []
-  const selectedModel = configuredModels.find(
+  const [draftSelection, setDraftSelection] = useState<{
+    threadItemId: string
+    modelId?: string
+    thinkingLevel?: ThinkingLevel
+  }>({ threadItemId })
+  const sessionModel = configuredModels.find(
     (model) =>
       model.provider === session?.config?.provider && model.modelID === session?.config?.modelId,
   )
-  const modelOptions = configuredModels.map((model) => ({
-    id: model.id,
-    name: model.modelName,
-    description: model.providerName,
-    keywords: [model.provider, model.providerName],
-    efforts: settings?.catalog
+  const currentDraft = draftSelection.threadItemId === threadItemId ? draftSelection : undefined
+  const selectedModel = sessionId
+    ? sessionModel
+    : configuredModels.find(
+        (model) => model.id === (currentDraft?.modelId ?? settings?.activeModelId),
+      )
+  const draftThinkingLevel =
+    currentDraft?.thinkingLevel ??
+    selectedModel?.thinkingLevel ??
+    (isThinkingLevel(settings?.thinkingLevel ?? '') ? settings?.thinkingLevel : undefined)
+
+  useEffect(() => {
+    clearPendingNewThreadPreferences()
+  }, [threadItemId, sessionId])
+
+  const modelOptions = configuredModels.map((model) => {
+    const catalogModel = settings?.catalog
       .find((provider) => provider.id === model.provider)
-      ?.models.some((catalogModel) => catalogModel.id === model.modelID && catalogModel.reasoning)
-      ? THINKING_LEVELS
-      : undefined,
-  }))
+      ?.models.find((item) => item.id === model.modelID)
+    const efforts = THINKING_LEVELS.filter((option) =>
+      catalogModel?.availableThinkingLevels.includes(option.id),
+    )
+
+    return {
+      id: model.id,
+      name: model.modelName,
+      description: model.providerName,
+      keywords: [model.provider, model.providerName],
+      efforts: efforts.length > 1 ? efforts : undefined,
+    }
+  })
   const switchModel = async (id: string) => {
     const model = configuredModels.find((item) => item.id === id)
-    if (!sessionId || !model) return
+    if (!model) return
+    if (!sessionId) {
+      const thinkingLevel = model.thinkingLevel ?? 'medium'
+      setDraftSelection({ threadItemId, modelId: model.id, thinkingLevel })
+      setPendingNewThreadPreferences({
+        model: { provider: model.provider, modelId: model.modelID },
+        thinkingLevel,
+      })
+      return
+    }
     setSwitchingModel(true)
     setModelError(null)
     try {
-      await window.api.pi.setModel(sessionId, { provider: model.provider, modelId: model.modelID })
-      await window.api.pi.setThinkingLevel(sessionId, model.thinkingLevel ?? 'medium')
+      await piRuntime.setModel({ provider: model.provider, modelId: model.modelID })
+      await piRuntime.setThinkingLevel(model.thinkingLevel ?? 'medium')
     } catch (error) {
       setModelError(error instanceof Error ? error.message : '模型切换失败')
     } finally {
@@ -55,11 +95,25 @@ export function ChatPanel({ settings }: { settings: AgentSettingsSnapshot | null
     }
   }
   const switchThinkingLevel = async (level: string) => {
-    if (!sessionId || !isThinkingLevel(level)) return
+    if (!isThinkingLevel(level)) return
+    if (!sessionId) {
+      setDraftSelection({
+        threadItemId,
+        modelId: selectedModel?.id ?? settings?.activeModelId,
+        thinkingLevel: level,
+      })
+      setPendingNewThreadPreferences({
+        ...(selectedModel
+          ? { model: { provider: selectedModel.provider, modelId: selectedModel.modelID } }
+          : {}),
+        thinkingLevel: level,
+      })
+      return
+    }
     setSwitchingModel(true)
     setModelError(null)
     try {
-      await window.api.pi.setThinkingLevel(sessionId, level)
+      await piRuntime.setThinkingLevel(level)
     } catch (error) {
       setModelError(error instanceof Error ? error.message : '推理等级切换失败')
     } finally {
@@ -94,7 +148,7 @@ export function ChatPanel({ settings }: { settings: AgentSettingsSnapshot | null
               value: selectedModel?.id ?? settings?.activeModelId,
               effort:
                 session?.config?.thinkingLevel ??
-                selectedModel?.thinkingLevel ??
+                (sessionId ? selectedModel?.thinkingLevel : draftThinkingLevel) ??
                 settings?.thinkingLevel,
               disabled: switchingModel || session?.status === 'running',
               onValueChange: (id) => void switchModel(id),

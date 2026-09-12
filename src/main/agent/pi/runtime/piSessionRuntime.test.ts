@@ -58,11 +58,16 @@ function fakeSession() {
 
 test('uses configured custom-provider limits and keeps client subscriptions across reloads', async () => {
   const model = { provider: 'custom', id: 'model-1' }
+  let registered = false
   const runtime = {
-    registerProvider: vi.fn(),
-    unregisterProvider: vi.fn(),
+    registerProvider: vi.fn(() => {
+      registered = true
+    }),
+    unregisterProvider: vi.fn(() => {
+      registered = false
+    }),
     setRuntimeApiKey: vi.fn(),
-    getModel: vi.fn(() => model),
+    getModel: vi.fn(() => (registered ? model : undefined)),
   }
   vi.mocked(ModelRuntime.create).mockResolvedValue(runtime as never)
   vi.mocked(SessionManager.create).mockReturnValue({} as never)
@@ -111,4 +116,56 @@ test('uses configured custom-provider limits and keeps client subscriptions acro
   await sessionRuntime.initialize()
   secondSession.emit({ type: 'agent_start' })
   expect(events).toContain('agent_start')
+})
+
+test('enables image input for the current DeepSeek Flash alias', async () => {
+  const model = {
+    id: 'deepseek-v4-flash',
+    name: 'DeepSeek V4 Flash',
+    api: 'openai-completions',
+    provider: 'deepseek',
+    baseUrl: 'https://api.deepseek.com',
+    reasoning: true,
+    input: ['text'] as const,
+    cost: { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0 },
+    contextWindow: 1_000_000,
+    maxTokens: 384_000,
+  }
+  const runtime = {
+    registerProvider: vi.fn(),
+    unregisterProvider: vi.fn(),
+    setRuntimeApiKey: vi.fn(),
+    getModel: vi.fn(() => model),
+    getModels: vi.fn(() => [model]),
+  }
+  vi.mocked(ModelRuntime.create).mockResolvedValue(runtime as never)
+  vi.mocked(SessionManager.create).mockReturnValue({} as never)
+  vi.mocked(createAgentSession).mockResolvedValue({ session: fakeSession() } as never)
+
+  const sessionRuntime = new PiSessionRuntime(
+    'session-1',
+    new AgentConfigStore({
+      model: {
+        provider: 'deepseek',
+        modelID: 'deepseek-v4-flash',
+        thinkingLevel: 'off',
+      },
+      tools: { enabled: [] },
+      cwd: 'C:\\workspace',
+    }),
+    { getApiKey: () => 'secret' } as unknown as CredentialStore,
+    {} as ApprovalPolicy,
+    { findBySessionId: vi.fn(), save: vi.fn() } as unknown as AgentRuntimeStateRepo,
+    { resolve: vi.fn(() => []) } as unknown as ToolRegistry,
+    'sessions',
+  )
+
+  await sessionRuntime.initialize()
+
+  expect(runtime.registerProvider).toHaveBeenCalledWith(
+    'deepseek',
+    expect.objectContaining({
+      models: [expect.objectContaining({ reasoning: true, input: ['text', 'image'] })],
+    }),
+  )
 })

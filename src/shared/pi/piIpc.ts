@@ -1,9 +1,18 @@
 import type {
+  PiClient,
   PiClientEvent,
   PiHostUiResponse as PiExtensionUiResponse,
   PiSendMessageInput,
   PiThinkingLevel,
 } from '@assistant-ui/react-pi'
+
+export type ContextAwarePiClient = Omit<PiClient, 'sendMessage'> & {
+  sendMessage(
+    threadId: string,
+    input: PiSendMessageInput,
+    contextAttachmentIds?: readonly string[],
+  ): Promise<void>
+}
 
 export interface PiThreadRequest {
   threadId: string
@@ -11,6 +20,7 @@ export interface PiThreadRequest {
 
 export interface PiSendMessageRequest extends PiThreadRequest {
   input: PiSendMessageInput
+  contextAttachmentIds?: readonly string[]
 }
 
 export interface PiSetModelRequest extends PiThreadRequest {

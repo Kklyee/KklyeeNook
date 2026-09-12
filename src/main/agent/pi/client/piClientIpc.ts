@@ -1,8 +1,9 @@
 import { ipcMain, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
-import type { PiClient } from '@assistant-ui/react-pi/node'
+import type { PiClient } from '@assistant-ui/react-pi'
 
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
 import type {
+  ContextAwarePiClient,
   PiExtensionUiResponseRequest,
   PiRenameThreadRequest,
   PiSendMessageRequest,
@@ -12,7 +13,7 @@ import type {
   PiThreadRequest,
 } from '@/shared/pi/piIpc'
 
-export function registerPiClientIpc(window: BrowserWindow, client: PiClient): () => void {
+export function registerPiClientIpc(window: BrowserWindow, client: ContextAwarePiClient): () => void {
   const assertTrusted = (event: IpcMainInvokeEvent | IpcMainEvent) => {
     if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) {
       throw new Error('Untrusted Pi IPC sender')
@@ -38,7 +39,7 @@ export function registerPiClientIpc(window: BrowserWindow, client: PiClient): ()
     client.getThread(input.threadId),
   )
   handle<PiSendMessageRequest>(IPC_CHANNELS.PI_MESSAGE_SEND, (_event, request) =>
-    client.sendMessage(request.threadId, request.input),
+    client.sendMessage(request.threadId, request.input, request.contextAttachmentIds),
   )
   handle<PiThreadRequest>(IPC_CHANNELS.PI_RUN_CANCEL, (_event, request) =>
     client.cancelRun(request.threadId),
