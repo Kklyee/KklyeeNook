@@ -1,6 +1,6 @@
 import type {
   PiClientEvent,
-  PiHostUiResponse,
+  PiHostUiResponse as PiExtensionUiResponse,
   PiSendMessageInput,
   PiThinkingLevel,
 } from '@assistant-ui/react-pi'
@@ -25,8 +25,8 @@ export interface PiRenameThreadRequest extends PiThreadRequest {
   title: string
 }
 
-export interface PiHostUiResponseRequest extends PiThreadRequest {
-  response: PiHostUiResponse
+export interface PiExtensionUiResponseRequest extends PiThreadRequest {
+  response: PiExtensionUiResponse
 }
 
 export interface PiSubscribeRequest extends PiThreadRequest {

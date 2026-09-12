@@ -19,7 +19,7 @@ export const IPC_CHANNELS = {
   PI_MODEL_LIST: 'pi:model:list',
   PI_MODEL_SET: 'pi:model:set',
   PI_THINKING_SET: 'pi:thinking:set',
-  PI_HOST_UI_RESPOND: 'pi:host-ui:respond',
+  PI_EXTENSION_UI_RESPOND: 'pi:extension-ui:respond',
   AGENT_RUN_LIST: 'agent-run:list',
   AGENT_EXECUTION_RECORD_LIST: 'agent-execution-record:list',
   ARTIFACT_LIST: 'artifact:list',

@@ -38,7 +38,7 @@ const pi = {
   unarchiveThread: (threadId) => ipcRenderer.invoke(IPC_CHANNELS.PI_THREAD_UNARCHIVE, { threadId }),
   deleteThread: (threadId) => ipcRenderer.invoke(IPC_CHANNELS.PI_THREAD_DELETE, { threadId }),
   respondToHostUiRequest: (threadId, response) =>
-    ipcRenderer.invoke(IPC_CHANNELS.PI_HOST_UI_RESPOND, { threadId, response }),
+    ipcRenderer.invoke(IPC_CHANNELS.PI_EXTENSION_UI_RESPOND, { threadId, response }),
   subscribe(threadId, listener, options) {
     const { port1, port2 } = new MessageChannel()
     const handleMessage = (event: MessageEvent<PiClientEvent>) => listener(event.data)

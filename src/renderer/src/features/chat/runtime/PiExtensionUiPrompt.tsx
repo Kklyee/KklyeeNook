@@ -1,5 +1,8 @@
 import { useState, type FormEvent } from 'react'
-import { usePiRuntimeExtras, type PiHostUiRequest } from '@assistant-ui/react-pi'
+import {
+  usePiRuntimeExtras,
+  type PiHostUiRequest as PiExtensionUiRequest,
+} from '@assistant-ui/react-pi'
 
 import { Button } from '../../../components/ui/button'
 import {
@@ -16,7 +19,7 @@ function RequestDialog({
   request,
   respond,
 }: {
-  request: PiHostUiRequest
+    request: PiExtensionUiRequest
   respond: ReturnType<typeof usePiRuntimeExtras>['respondToHostUiRequest']
 }) {
   const [value, setValue] = useState(request.kind === 'editor' ? (request.prefill ?? '') : '')
@@ -107,7 +110,7 @@ function SelectRequestBar({
   request,
   respond,
 }: {
-  request: Extract<PiHostUiRequest, { kind: 'select' }>
+  request: Extract<PiExtensionUiRequest, { kind: 'select' }>
   respond: ReturnType<typeof usePiRuntimeExtras>['respondToHostUiRequest']
 }) {
   return (
@@ -136,8 +139,11 @@ function SelectRequestBar({
   )
 }
 
-export function PiHostUiPrompt() {
-  const { allHostUiRequests: requests, respondToHostUiRequest } = usePiRuntimeExtras()
+export function PiExtensionUiPrompt() {
+  const {
+    allHostUiRequests: requests,
+    respondToHostUiRequest: respondToExtensionUiRequest,
+  } = usePiRuntimeExtras()
   const request = requests[0]
 
   if (!request) return null
@@ -146,9 +152,9 @@ export function PiHostUiPrompt() {
       <SelectRequestBar
         key={request.id}
         request={request}
-        respond={respondToHostUiRequest}
+        respond={respondToExtensionUiRequest}
       />
     )
   }
-  return <RequestDialog key={request.id} request={request} respond={respondToHostUiRequest} />
+  return <RequestDialog key={request.id} request={request} respond={respondToExtensionUiRequest} />
 }

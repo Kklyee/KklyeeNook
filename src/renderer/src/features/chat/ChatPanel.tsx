@@ -2,10 +2,21 @@ import { useState, type ButtonHTMLAttributes } from 'react'
 import { useAuiState } from '@assistant-ui/react'
 import { usePiSession } from '@assistant-ui/react-pi'
 import type { AgentSettingsSnapshot } from '@/shared/agent/agentSettings'
+import type { ThinkingLevel } from '@/shared/agent/agentConfig'
 import { Thread } from '../../components/assistant-ui/elements/thread.aui'
 import { cn } from '@/renderer/src/lib/utils'
 import { RunHistoryPanel } from '../runs/RunHistoryPanel'
-import { PiHostUiPrompt } from './runtime/PiHostUiPrompt'
+import { PiExtensionUiPrompt } from './runtime/PiExtensionUiPrompt'
+
+const THINKING_LEVELS = [
+  { id: 'off', name: '关闭' },
+  { id: 'low', name: '低' },
+  { id: 'medium', name: '中' },
+  { id: 'high', name: '高' },
+] as const
+
+const isThinkingLevel = (value: string): value is ThinkingLevel =>
+  THINKING_LEVELS.some((option) => option.id === value)
 
 export function ChatPanel({ settings }: { settings: AgentSettingsSnapshot | null }) {
   const [view, setView] = useState<'chat' | 'trace'>('chat')
@@ -23,6 +34,11 @@ export function ChatPanel({ settings }: { settings: AgentSettingsSnapshot | null
     name: model.modelName,
     description: model.providerName,
     keywords: [model.provider, model.providerName],
+    efforts: settings?.catalog
+      .find((provider) => provider.id === model.provider)
+      ?.models.some((catalogModel) => catalogModel.id === model.modelID && catalogModel.reasoning)
+      ? THINKING_LEVELS
+      : undefined,
   }))
   const switchModel = async (id: string) => {
     const model = configuredModels.find((item) => item.id === id)
@@ -38,10 +54,22 @@ export function ChatPanel({ settings }: { settings: AgentSettingsSnapshot | null
       setSwitchingModel(false)
     }
   }
+  const switchThinkingLevel = async (level: string) => {
+    if (!sessionId || !isThinkingLevel(level)) return
+    setSwitchingModel(true)
+    setModelError(null)
+    try {
+      await window.api.pi.setThinkingLevel(sessionId, level)
+    } catch (error) {
+      setModelError(error instanceof Error ? error.message : '推理等级切换失败')
+    } finally {
+      setSwitchingModel(false)
+    }
+  }
 
   return (
     <div className="relative flex h-full w-full flex-col">
-      <PiHostUiPrompt />
+      <PiExtensionUiPrompt />
       {modelError && (
         <p className="bg-destructive/10 text-destructive px-4 py-2 text-xs" role="alert">
           {modelError}
@@ -64,8 +92,13 @@ export function ChatPanel({ settings }: { settings: AgentSettingsSnapshot | null
             modelSelector={{
               models: modelOptions,
               value: selectedModel?.id ?? settings?.activeModelId,
+              effort:
+                session?.config?.thinkingLevel ??
+                selectedModel?.thinkingLevel ??
+                settings?.thinkingLevel,
               disabled: switchingModel || session?.status === 'running',
               onValueChange: (id) => void switchModel(id),
+              onEffortChange: (level) => void switchThinkingLevel(level),
             }}
           />
         </div>

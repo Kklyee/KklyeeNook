@@ -2,7 +2,7 @@ import type {
   PiClient,
   PiClientEvent,
   PiClientEventBody,
-  PiHostUiResponse,
+  PiHostUiResponse as PiExtensionUiResponse,
   PiModelInfo,
   PiSendMessageInput,
   PiThinkingLevel,
@@ -17,12 +17,12 @@ import type { AgentSessionSummary } from '@/shared/agent/agentSession'
 import type { AgentConfigStore } from '@/main/settings/agentConfigStore'
 import type { AgentService } from '../../agentService'
 import type { MessageProjectionService } from '../../messageProjectionService'
-import type { PiSessionHostLike } from '../runtime/piSessionHost'
-import type { PiSessionHostManager } from '../runtime/piSessionHostManager'
+import type { PiSessionRuntimePort } from '../runtime/piSessionRuntime'
+import type { PiSessionRuntimeManager } from '../runtime/piSessionRuntimeManager'
 
 type Listener = (event: PiClientEvent) => void
 type Relay = {
-  host: PiSessionHostLike
+  sessionRuntime: PiSessionRuntimePort
   listeners: Set<Listener>
   unsubscribe: () => void
   seq: number
@@ -35,7 +35,7 @@ export class PiClientService implements PiClient {
 
   constructor(
     private readonly agentService: AgentService,
-    private readonly hostManager: PiSessionHostManager,
+    private readonly sessionRuntimeManager: PiSessionRuntimeManager,
     private readonly messageProjection: MessageProjectionService,
     private readonly configStore: AgentConfigStore,
     private readonly artifactService: ArtifactService,
@@ -71,9 +71,9 @@ export class PiClientService implements PiClient {
 
   async getThread(threadId: string): Promise<PiThreadSnapshot> {
     const session = this.requireSession(threadId)
-    const host = this.hostManager.getOrCreate(threadId)
-    await host.initialize()
-    const snapshot = await this.withArtifacts(host.getSnapshot(this.metadataOf(session)))
+    const sessionRuntime = this.sessionRuntimeManager.getOrCreate(threadId)
+    await sessionRuntime.initialize()
+    const snapshot = await this.withArtifacts(sessionRuntime.getSnapshot(this.metadataOf(session)))
     await this.messageProjection.project(threadId, snapshot.messages)
     return snapshot
   }
@@ -84,16 +84,19 @@ export class PiClientService implements PiClient {
       throw new Error('Image attachments are not enabled for this agent')
     }
 
-    const host = this.hostManager.getOrCreate(threadId)
-    await host.initialize()
+    const sessionRuntime = this.sessionRuntimeManager.getOrCreate(threadId)
+    await sessionRuntime.initialize()
     if (session.title === 'New Task') {
       const text = input.content.trim()
       const title = !text ? 'New Task' : text.length > 50 ? `${text.slice(0, 47)}...` : text
       await this.renameThread(threadId, title)
     }
-    if (this.pendingRuns.has(threadId) || host.isRunning()) {
+    if (this.pendingRuns.has(threadId) || sessionRuntime.isRunning()) {
       this.agentService.steerRun(threadId, input.content)
-      await host.sendMessage({ ...input, streamingBehavior: input.streamingBehavior ?? 'steer' })
+      await sessionRuntime.sendMessage({
+        ...input,
+        streamingBehavior: input.streamingBehavior ?? 'steer',
+      })
       return
     }
 
@@ -111,19 +114,19 @@ export class PiClientService implements PiClient {
   }
 
   async cancelRun(threadId: string): Promise<void> {
-    await this.hostManager.get(threadId)?.cancel()
+    await this.sessionRuntimeManager.get(threadId)?.cancel()
   }
 
   async clearQueue(threadId: string): Promise<{ steering: string[]; followUp: string[] }> {
-    return this.hostManager.get(threadId)?.clearQueue() ?? { steering: [], followUp: [] }
+    return this.sessionRuntimeManager.get(threadId)?.clearQueue() ?? { steering: [], followUp: [] }
   }
 
   async getAvailableModels(input?: { workspacePath?: string }): Promise<PiModelInfo[]> {
     void input?.workspacePath
-    const firstHost = (await this.agentService.listSessions())
-      .map((session) => this.hostManager.get(session.id))
-      .find((host) => host !== undefined)
-    if (firstHost) return firstHost.getAvailableModels()
+    const firstRuntime = (await this.agentService.listSessions())
+      .map((session) => this.sessionRuntimeManager.get(session.id))
+      .find((runtime) => runtime !== undefined)
+    if (firstRuntime) return firstRuntime.getAvailableModels()
 
     const { provider, modelID, thinkingLevel } = this.configStore.get().model
     return [
@@ -132,20 +135,20 @@ export class PiClientService implements PiClient {
   }
 
   async setModel(threadId: string, input: { provider: string; modelId: string }): Promise<void> {
-    const host = this.hostManager.getOrCreate(threadId)
-    await host.initialize()
-    await host.setModel(input)
+    const sessionRuntime = this.sessionRuntimeManager.getOrCreate(threadId)
+    await sessionRuntime.initialize()
+    await sessionRuntime.setModel(input)
   }
 
   async setThinkingLevel(threadId: string, level: PiThinkingLevel): Promise<void> {
-    const host = this.hostManager.getOrCreate(threadId)
-    await host.initialize()
-    host.setThinkingLevel(level)
+    const sessionRuntime = this.sessionRuntimeManager.getOrCreate(threadId)
+    await sessionRuntime.initialize()
+    sessionRuntime.setThinkingLevel(level)
   }
 
   async renameThread(threadId: string, title: string): Promise<void> {
     await this.agentService.renameSession(threadId, title)
-    this.hostManager.get(threadId)?.setSessionName(title)
+    this.sessionRuntimeManager.get(threadId)?.setSessionName(title)
   }
 
   async archiveThread(threadId: string): Promise<void> {
@@ -161,13 +164,16 @@ export class PiClientService implements PiClient {
     relay?.unsubscribe()
     this.relays.delete(threadId)
     await this.agentService.deleteSession(threadId)
-    this.hostManager.delete(threadId)
+    this.sessionRuntimeManager.delete(threadId)
   }
 
-  async respondToHostUiRequest(threadId: string, response: PiHostUiResponse): Promise<void> {
-    const host = this.hostManager.getOrCreate(threadId)
-    await host.initialize()
-    host.respondToHostUiRequest(response)
+  async respondToHostUiRequest(
+    threadId: string,
+    response: PiExtensionUiResponse,
+  ): Promise<void> {
+    const sessionRuntime = this.sessionRuntimeManager.getOrCreate(threadId)
+    await sessionRuntime.initialize()
+    sessionRuntime.respondToExtensionUiRequest(response)
   }
 
   subscribe(
@@ -192,7 +198,7 @@ export class PiClientService implements PiClient {
           const session = this.requireSession(threadId)
           const snapshotSeq = relay.seq
           const snapshot = await this.withArtifacts(
-            relay.host.getSnapshot(this.metadataOf(session)),
+            relay.sessionRuntime.getSnapshot(this.metadataOf(session)),
           )
           if (!active) {
             relay.listeners.delete(relayListener)
@@ -272,11 +278,18 @@ export class PiClientService implements PiClient {
     if (existing) return existing
 
     this.requireSession(threadId)
-    const host = this.hostManager.getOrCreate(threadId)
-    const relay: Relay = { host, listeners: new Set(), unsubscribe: () => undefined, seq: 0 }
-    relay.unsubscribe = host.subscribeClientEvents((body) => this.emit(threadId, relay, body))
+    const sessionRuntime = this.sessionRuntimeManager.getOrCreate(threadId)
+    const relay: Relay = {
+      sessionRuntime,
+      listeners: new Set(),
+      unsubscribe: () => undefined,
+      seq: 0,
+    }
+    relay.unsubscribe = sessionRuntime.subscribeClientEvents((body) =>
+      this.emit(threadId, relay, body),
+    )
     this.relays.set(threadId, relay)
-    await host.initialize()
+    await sessionRuntime.initialize()
     return relay
   }
 
@@ -288,7 +301,7 @@ export class PiClientService implements PiClient {
     if (body.type === 'message_end') {
       const session = this.agentService.getSession(threadId)
       if (!session) return
-      const snapshot = relay.host.getSnapshot(this.metadataOf(session.toSummary()))
+      const snapshot = relay.sessionRuntime.getSnapshot(this.metadataOf(session.toSummary()))
       void Promise.resolve(this.messageProjection.project(threadId, snapshot.messages)).catch(
         (error) => {
           console.error('[PiClientService] failed to project messages:', error)

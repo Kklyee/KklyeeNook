@@ -3,7 +3,7 @@ import type { PiClient } from '@assistant-ui/react-pi/node'
 
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
 import type {
-  PiHostUiResponseRequest,
+  PiExtensionUiResponseRequest,
   PiRenameThreadRequest,
   PiSendMessageRequest,
   PiSetModelRequest,
@@ -68,7 +68,7 @@ export function registerPiClientIpc(window: BrowserWindow, client: PiClient): ()
   handle<PiThreadRequest>(IPC_CHANNELS.PI_THREAD_DELETE, (_event, request) =>
     client.deleteThread(request.threadId),
   )
-  handle<PiHostUiResponseRequest>(IPC_CHANNELS.PI_HOST_UI_RESPOND, (_event, request) =>
+  handle<PiExtensionUiResponseRequest>(IPC_CHANNELS.PI_EXTENSION_UI_RESPOND, (_event, request) =>
     client.respondToHostUiRequest(request.threadId, request.response),
   )
 
@@ -105,7 +105,7 @@ export function registerPiClientIpc(window: BrowserWindow, client: PiClient): ()
     IPC_CHANNELS.PI_THREAD_ARCHIVE,
     IPC_CHANNELS.PI_THREAD_UNARCHIVE,
     IPC_CHANNELS.PI_THREAD_DELETE,
-    IPC_CHANNELS.PI_HOST_UI_RESPOND,
+    IPC_CHANNELS.PI_EXTENSION_UI_RESPOND,
   ]
   return () => {
     for (const channel of channels) ipcMain.removeHandler(channel)

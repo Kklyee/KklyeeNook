@@ -1,14 +1,14 @@
 import type { AgentEvent } from '@/shared/agent/agentEvent'
 import type { AgentRuntime } from '../../agentRuntime'
 import { convertPiEvent } from '../adapters/piEventAdapter'
-import type { PiSessionHostLike } from './piSessionHost'
+import type { PiSessionRuntimePort } from './piSessionRuntime'
 
 type Emit = (event: AgentEvent) => void
 
 export class PiAgentRuntime implements AgentRuntime {
   constructor(
-    private readonly host: PiSessionHostLike,
-    private readonly disposeHost: () => void,
+    private readonly sessionRuntime: PiSessionRuntimePort,
+    private readonly disposeRuntime: () => void,
   ) {}
 
   async run(prompt: string, emit: Emit, signal?: AbortSignal): Promise<void> {
@@ -17,13 +17,13 @@ export class PiAgentRuntime implements AgentRuntime {
     let terminalEventReceived = false
 
     const handleAbort = () => {
-      void this.host.cancel()
+      void this.sessionRuntime.cancel()
     }
 
     try {
-      await this.host.initialize()
-      emit({ type: 'system_prompt', text: this.host.getSystemPrompt() })
-      unsubscribe = this.host.subscribe((piEvent) => {
+      await this.sessionRuntime.initialize()
+      emit({ type: 'system_prompt', text: this.sessionRuntime.getSystemPrompt() })
+      unsubscribe = this.sessionRuntime.subscribe((piEvent) => {
         const agentEvent = convertPiEvent(piEvent)
         if (!agentEvent) return
 
@@ -32,7 +32,7 @@ export class PiAgentRuntime implements AgentRuntime {
         }
         emit(agentEvent)
       })
-      unsubscribeProductEvents = this.host.subscribeProductEvents(emit)
+      unsubscribeProductEvents = this.sessionRuntime.subscribeProductEvents(emit)
 
       if (signal?.aborted) {
         emit({ type: 'agent_aborted' })
@@ -40,7 +40,7 @@ export class PiAgentRuntime implements AgentRuntime {
       }
 
       signal?.addEventListener('abort', handleAbort, { once: true })
-      await this.host.runMessage({ content: prompt })
+      await this.sessionRuntime.runMessage({ content: prompt })
 
       if (terminalEventReceived) return
       if (signal?.aborted) {
@@ -62,10 +62,10 @@ export class PiAgentRuntime implements AgentRuntime {
   }
 
   async abort(): Promise<void> {
-    await this.host.cancel()
+    await this.sessionRuntime.cancel()
   }
 
   dispose(): void {
-    this.disposeHost()
+    this.disposeRuntime()
   }
 }

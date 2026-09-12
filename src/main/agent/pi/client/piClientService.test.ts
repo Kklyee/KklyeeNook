@@ -6,8 +6,8 @@ import type { AgentService } from '../../agentService'
 import type { MessageProjectionService } from '../../messageProjectionService'
 import type { ArtifactService } from '@/main/artifact/artifactService'
 import type { AgentSessionSummary } from '@/shared/agent/agentSession'
-import type { PiSessionClientEventListener, PiSessionHostLike } from '../runtime/piSessionHost'
-import { PiSessionHostManager } from '../runtime/piSessionHostManager'
+import type { PiSessionClientEventListener, PiSessionRuntimePort } from '../runtime/piSessionRuntime'
+import { PiSessionRuntimeManager } from '../runtime/piSessionRuntimeManager'
 import { PiClientService } from './piClientService'
 
 function setup(running = false) {
@@ -19,7 +19,7 @@ function setup(running = false) {
     archived: false,
   }
   const clientListeners = new Set<PiSessionClientEventListener>()
-  const host: PiSessionHostLike = {
+  const sessionRuntime: PiSessionRuntimePort = {
     initialize: vi.fn(),
     getSystemPrompt: vi.fn(() => 'system'),
     getSnapshot: vi.fn((metadata: PiThreadMetadata) => ({
@@ -35,7 +35,7 @@ function setup(running = false) {
     setModel: vi.fn(),
     setThinkingLevel: vi.fn(),
     setSessionName: vi.fn(),
-    respondToHostUiRequest: vi.fn(),
+    respondToExtensionUiRequest: vi.fn(),
     reloadConfiguration: vi.fn(),
     subscribe: vi.fn(() => () => undefined),
     subscribeClientEvents(listener) {
@@ -68,7 +68,7 @@ function setup(running = false) {
   } as unknown as AgentService
   const projection = { project: vi.fn() } as unknown as MessageProjectionService
   const artifacts = { list: vi.fn(() => Promise.resolve([])) } as unknown as ArtifactService
-  const manager = new PiSessionHostManager(() => host)
+  const manager = new PiSessionRuntimeManager(() => sessionRuntime)
   const client = new PiClientService(
     agentService,
     manager,
@@ -78,7 +78,7 @@ function setup(running = false) {
   )
   return {
     client,
-    host,
+    sessionRuntime,
     agentService,
     projection,
     emit(body: PiClientEventBody) {
@@ -88,7 +88,7 @@ function setup(running = false) {
 }
 
 test('delivers snapshot-first events and unsubscribe does not cancel the run', async () => {
-  const { client, host, emit } = setup()
+  const { client, sessionRuntime, emit } = setup()
   const events: string[] = []
   const unsubscribe = client.subscribe('session-1', (event) => events.push(event.type))
   await vi.waitFor(() => expect(events).toEqual(['snapshot']))
@@ -99,9 +99,9 @@ test('delivers snapshot-first events and unsubscribe does not cancel the run', a
   emit({ type: 'agent_settled' })
 
   expect(events).toEqual(['snapshot', 'agent_start'])
-  expect(host.cancel).not.toHaveBeenCalled()
+  expect(sessionRuntime.cancel).not.toHaveBeenCalled()
   await client.cancelRun('session-1')
-  expect(host.cancel).toHaveBeenCalledOnce()
+  expect(sessionRuntime.cancel).toHaveBeenCalledOnce()
 })
 
 test('starts a product run for an idle thread and uses Pi queue while running', async () => {
@@ -111,7 +111,7 @@ test('starts a product run for an idle thread and uses Pi queue while running', 
 
   const running = setup(true)
   await running.client.sendMessage('session-1', { content: 'follow up' })
-  expect(running.host.sendMessage).toHaveBeenCalledWith({
+  expect(running.sessionRuntime.sendMessage).toHaveBeenCalledWith({
     content: 'follow up',
     streamingBehavior: 'steer',
   })
@@ -125,10 +125,10 @@ test('initializes a new thread before synchronizing its generated title to Pi', 
 
   await testContext.client.sendMessage('session-1', { content: 'First prompt' })
 
-  expect(testContext.host.initialize).toHaveBeenCalledBefore(
-    vi.mocked(testContext.host.setSessionName),
+  expect(testContext.sessionRuntime.initialize).toHaveBeenCalledBefore(
+    vi.mocked(testContext.sessionRuntime.setSessionName),
   )
-  expect(testContext.host.setSessionName).toHaveBeenCalledWith('First prompt')
+  expect(testContext.sessionRuntime.setSessionName).toHaveBeenCalledWith('First prompt')
 })
 
 test('projects the Pi transcript after a completed message', async () => {
@@ -143,7 +143,7 @@ test('projects the Pi transcript after a completed message', async () => {
 })
 
 test('forwards thread controls, queue controls, model settings, and host UI responses', async () => {
-  const { client, host, agentService } = setup()
+  const { client, sessionRuntime, agentService } = setup()
   const response = { requestId: 'approval-1', value: 'Allow once' } as const
 
   await client.getThread('session-1')
@@ -156,16 +156,16 @@ test('forwards thread controls, queue controls, model settings, and host UI resp
   await client.archiveThread('session-1')
   await client.unarchiveThread('session-1')
 
-  expect(host.cancel).toHaveBeenCalledOnce()
-  expect(host.clearQueue).toHaveBeenCalledOnce()
-  expect(host.setModel).toHaveBeenCalledWith({ provider: 'test', modelId: 'next' })
-  expect(host.setThinkingLevel).toHaveBeenCalledWith('high')
-  expect(host.respondToHostUiRequest).toHaveBeenCalledWith(response)
-  expect(host.setSessionName).toHaveBeenCalledWith('Renamed')
+  expect(sessionRuntime.cancel).toHaveBeenCalledOnce()
+  expect(sessionRuntime.clearQueue).toHaveBeenCalledOnce()
+  expect(sessionRuntime.setModel).toHaveBeenCalledWith({ provider: 'test', modelId: 'next' })
+  expect(sessionRuntime.setThinkingLevel).toHaveBeenCalledWith('high')
+  expect(sessionRuntime.respondToExtensionUiRequest).toHaveBeenCalledWith(response)
+  expect(sessionRuntime.setSessionName).toHaveBeenCalledWith('Renamed')
   expect(agentService.setSessionArchived).toHaveBeenNthCalledWith(1, 'session-1', true)
   expect(agentService.setSessionArchived).toHaveBeenNthCalledWith(2, 'session-1', false)
 
   await client.deleteThread('session-1')
   expect(agentService.deleteSession).toHaveBeenCalledWith('session-1')
-  expect(host.dispose).toHaveBeenCalledOnce()
+  expect(sessionRuntime.dispose).toHaveBeenCalledOnce()
 })

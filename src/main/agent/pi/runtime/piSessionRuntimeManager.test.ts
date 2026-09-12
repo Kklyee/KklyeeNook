@@ -1,9 +1,9 @@
 import { expect, test, vi } from 'vitest'
 
-import type { PiSessionHostLike } from './piSessionHost'
-import { PiSessionHostManager } from './piSessionHostManager'
+import type { PiSessionRuntimePort } from './piSessionRuntime'
+import { PiSessionRuntimeManager } from './piSessionRuntimeManager'
 
-function createFakeHost(): PiSessionHostLike {
+function createFakeRuntime(): PiSessionRuntimePort {
   return {
     initialize: vi.fn(),
     getSystemPrompt: vi.fn(() => ''),
@@ -17,7 +17,7 @@ function createFakeHost(): PiSessionHostLike {
     setModel: vi.fn(),
     setThinkingLevel: vi.fn(),
     setSessionName: vi.fn(),
-    respondToHostUiRequest: vi.fn(),
+    respondToExtensionUiRequest: vi.fn(),
     reloadConfiguration: vi.fn(),
     subscribe: vi.fn(() => () => undefined),
     subscribeClientEvents: vi.fn(() => () => undefined),
@@ -26,21 +26,21 @@ function createFakeHost(): PiSessionHostLike {
   }
 }
 
-test('returns one host for each product session', () => {
-  const createHost = vi.fn(() => createFakeHost())
-  const manager = new PiSessionHostManager(createHost)
+test('returns one runtime for each product session', () => {
+  const createRuntime = vi.fn(() => createFakeRuntime())
+  const manager = new PiSessionRuntimeManager(createRuntime)
 
   const first = manager.getOrCreate('session-1')
   const second = manager.getOrCreate('session-1')
 
   expect(second).toBe(first)
-  expect(createHost).toHaveBeenCalledOnce()
-  expect(createHost).toHaveBeenCalledWith('session-1')
+  expect(createRuntime).toHaveBeenCalledOnce()
+  expect(createRuntime).toHaveBeenCalledWith('session-1')
 })
 
-test('disposes a deleted host before allowing it to be recreated', () => {
-  const hosts = [createFakeHost(), createFakeHost()]
-  const manager = new PiSessionHostManager(() => hosts.shift()!)
+test('disposes a deleted runtime before allowing it to be recreated', () => {
+  const runtimes = [createFakeRuntime(), createFakeRuntime()]
+  const manager = new PiSessionRuntimeManager(() => runtimes.shift()!)
   const first = manager.getOrCreate('session-1')
 
   manager.delete('session-1')
@@ -50,10 +50,10 @@ test('disposes a deleted host before allowing it to be recreated', () => {
   expect(second).not.toBe(first)
 })
 
-test('disposes every owned host on shutdown', () => {
-  const first = createFakeHost()
-  const second = createFakeHost()
-  const manager = new PiSessionHostManager((sessionId) =>
+test('disposes every owned runtime on shutdown', () => {
+  const first = createFakeRuntime()
+  const second = createFakeRuntime()
+  const manager = new PiSessionRuntimeManager((sessionId) =>
     sessionId === 'session-1' ? first : second,
   )
   manager.getOrCreate('session-1')
@@ -65,11 +65,11 @@ test('disposes every owned host on shutdown', () => {
   expect(second.dispose).toHaveBeenCalledOnce()
 })
 
-test('reloads idle hosts and refuses to split state from an active run', () => {
-  const idle = createFakeHost()
-  const active = createFakeHost()
+test('reloads idle runtimes and refuses to split state from an active run', () => {
+  const idle = createFakeRuntime()
+  const active = createFakeRuntime()
   vi.mocked(active.isRunning).mockReturnValue(true)
-  const manager = new PiSessionHostManager((sessionId) => (sessionId === 'idle' ? idle : active))
+  const manager = new PiSessionRuntimeManager((sessionId) => (sessionId === 'idle' ? idle : active))
   manager.getOrCreate('idle')
   manager.reloadConfiguration()
   expect(idle.reloadConfiguration).toHaveBeenCalledOnce()

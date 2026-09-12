@@ -11,7 +11,7 @@ import type { ApprovalPolicy } from '@/main/approval/approvalPolicy'
 import type { AgentRuntimeStateRepo } from '@/main/db/repositories/agentRuntimeStateRepo'
 import type { CredentialStore } from '@/main/settings/credentialStore'
 import type { ToolRegistry } from '@/main/tools/toolRegistry'
-import { PiSessionHost } from './piSessionHost'
+import { PiSessionRuntime } from './piSessionRuntime'
 
 vi.mock('@earendil-works/pi-coding-agent', () => ({
   createAgentSession: vi.fn(),
@@ -85,7 +85,7 @@ test('uses configured custom-provider limits and keeps client subscriptions acro
     tools: { enabled: [] },
     cwd: 'C:\\workspace',
   })
-  const host = new PiSessionHost(
+  const sessionRuntime = new PiSessionRuntime(
     'session-1',
     configStore,
     { getApiKey: () => 'secret' } as unknown as CredentialStore,
@@ -95,9 +95,9 @@ test('uses configured custom-provider limits and keeps client subscriptions acro
     'sessions',
   )
   const events: string[] = []
-  host.subscribeClientEvents((event) => events.push(event.type))
+  sessionRuntime.subscribeClientEvents((event) => events.push(event.type))
 
-  await host.initialize()
+  await sessionRuntime.initialize()
   expect(runtime.registerProvider).toHaveBeenCalledWith(
     'custom',
     expect.objectContaining({
@@ -106,9 +106,9 @@ test('uses configured custom-provider limits and keeps client subscriptions acro
     }),
   )
 
-  host.reloadConfiguration()
+  sessionRuntime.reloadConfiguration()
   expect(firstSession.dispose).toHaveBeenCalledOnce()
-  await host.initialize()
+  await sessionRuntime.initialize()
   secondSession.emit({ type: 'agent_start' })
   expect(events).toContain('agent_start')
 })

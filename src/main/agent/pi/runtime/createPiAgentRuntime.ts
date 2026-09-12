@@ -1,14 +1,14 @@
 import type { AgentRuntimeFactory } from '../../agentRuntime'
 import { PiAgentRuntime } from './piAgentRuntime'
-import type { PiSessionHostManager } from './piSessionHostManager'
+import type { PiSessionRuntimeManager } from './piSessionRuntimeManager'
 
 export function createPiAgentRuntimeFactory(
-  hostManager: PiSessionHostManager,
+  sessionRuntimeManager: PiSessionRuntimeManager,
 ): AgentRuntimeFactory {
   return {
     create(sessionId) {
-      return new PiAgentRuntime(hostManager.getOrCreate(sessionId), () => {
-        hostManager.delete(sessionId)
+      return new PiAgentRuntime(sessionRuntimeManager.getOrCreate(sessionId), () => {
+        sessionRuntimeManager.delete(sessionId)
       })
     },
   }

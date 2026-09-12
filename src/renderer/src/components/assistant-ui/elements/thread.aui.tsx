@@ -98,8 +98,10 @@ export type ThreadProps = {
   modelSelector?: {
     models: readonly ModelOption[]
     value?: string
+    effort?: string
     disabled?: boolean
     onValueChange: (value: string) => void
+    onEffortChange: (effort: string) => void
   }
 }
 
@@ -312,7 +314,9 @@ const ComposerAction: FC<{ modelSelector?: ThreadProps['modelSelector'] }> = ({
           <ModelSelectorRoot
             models={modelSelector.models}
             value={modelSelector.value}
+            effort={modelSelector.effort}
             onValueChange={modelSelector.onValueChange}
+            onEffortChange={modelSelector.onEffortChange}
           >
             <ModelSelectorTrigger variant="ghost" size="sm" disabled={modelSelector.disabled}>
               <ModelSelectorValue placeholder="选择模型" />

@@ -1,33 +1,37 @@
 import type { ExtensionUIContext } from '@earendil-works/pi-coding-agent'
-import type { PiHostUiRequest, PiHostUiResponse } from '@assistant-ui/react-pi/node'
+import type {
+  PiHostUiRequest as PiExtensionUiRequest,
+  PiHostUiResponse as PiExtensionUiResponse,
+} from '@assistant-ui/react-pi/node'
 
 type DialogOptions = { signal?: AbortSignal; timeout?: number } | undefined
 type PendingRequest = {
-  request: PiHostUiRequest
-  settle(response: PiHostUiResponse): void
+  request: PiExtensionUiRequest
+  settle(response: PiExtensionUiResponse): void
   dismiss(): void
 }
 
 interface Options {
   nextRequestId(): string
   currentToolCallId(): string | undefined
-  onRequest(request: PiHostUiRequest): void
+  onRequest(request: PiExtensionUiRequest): void
   onResolved(requestId: string): void
 }
 
-export interface PiHostUiBridge {
+/** Bridges Pi ExtensionUIContext calls to the Renderer-facing interaction channel. */
+export interface PiExtensionUiBridge {
   ui: ExtensionUIContext
-  pending(): PiHostUiRequest[]
-  respond(response: PiHostUiResponse): boolean
+  pending(): PiExtensionUiRequest[]
+  respond(response: PiExtensionUiResponse): boolean
   dispose(): void
 }
 
-export function createPiHostUiBridge(options: Options): PiHostUiBridge {
+export function createPiExtensionUiBridge(options: Options): PiExtensionUiBridge {
   const pending = new Map<string, PendingRequest>()
 
   const ask = <T>(
-    request: PiHostUiRequest,
-    convert: (response: PiHostUiResponse) => T,
+    request: PiExtensionUiRequest,
+    convert: (response: PiExtensionUiResponse) => T,
     dismissed: T,
     dialogOptions?: DialogOptions,
   ) =>

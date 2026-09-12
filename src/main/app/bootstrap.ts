@@ -24,8 +24,8 @@ import { DrizzleArtifactRepo } from '../db/repositories/artifactRepo'
 import { ArtifactService } from '../artifact/artifactService'
 import { registerArtifactIpc } from '../artifact/artifactIpc'
 import { registerPiArtifactTool } from '../agent/pi/adapters/piArtifactToolAdapter'
-import { PiSessionHost } from '../agent/pi/runtime/piSessionHost'
-import { PiSessionHostManager } from '../agent/pi/runtime/piSessionHostManager'
+import { PiSessionRuntime } from '../agent/pi/runtime/piSessionRuntime'
+import { PiSessionRuntimeManager } from '../agent/pi/runtime/piSessionRuntimeManager'
 import { PiClientService } from '../agent/pi/client/piClientService'
 import { registerPiClientIpc } from '../agent/pi/client/piClientIpc'
 import { MessageProjectionService } from '../agent/messageProjectionService'
@@ -79,9 +79,9 @@ export async function bootstrap(): Promise<AppContext> {
   registerPiBuiltinTools(toolRegistry, workspace())
   registerPiArtifactTool(toolRegistry)
 
-  const piSessionHostManager = new PiSessionHostManager(
+  const piSessionRuntimeManager = new PiSessionRuntimeManager(
     (sessionId) =>
-      new PiSessionHost(
+      new PiSessionRuntime(
         sessionId,
         configStore,
         credentialStore,
@@ -91,7 +91,7 @@ export async function bootstrap(): Promise<AppContext> {
         sessionDir,
       ),
   )
-  const runtimeFactory = createPiAgentRuntimeFactory(piSessionHostManager)
+  const runtimeFactory = createPiAgentRuntimeFactory(piSessionRuntimeManager)
 
   const sessionRepo = new DrizzleAgentSessionRepo(db)
   const runRepo = new DrizzleAgentRunRepo(db)
@@ -110,7 +110,7 @@ export async function bootstrap(): Promise<AppContext> {
   const messageProjection = new MessageProjectionService(new DrizzleAgentMessageRepo(db))
   const piClientService = new PiClientService(
     agentService,
-    piSessionHostManager,
+    piSessionRuntimeManager,
     messageProjection,
     configStore,
     artifactService,
@@ -118,7 +118,7 @@ export async function bootstrap(): Promise<AppContext> {
   const chatWindow = createChatWindow()
 
   registerSettingsIpc(chatWindow, configStore, credentialStore, approvalPolicy, () => {
-    piSessionHostManager.reloadConfiguration()
+    piSessionRuntimeManager.reloadConfiguration()
   })
   registerWindowIpc()
   registerPiClientIpc(chatWindow, piClientService)
@@ -132,7 +132,7 @@ export async function bootstrap(): Promise<AppContext> {
   return {
     dispose() {
       piClientService.dispose()
-      piSessionHostManager.dispose()
+      piSessionRuntimeManager.dispose()
       closeDb()
     },
   }

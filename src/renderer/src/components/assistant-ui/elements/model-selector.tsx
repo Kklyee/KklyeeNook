@@ -41,13 +41,7 @@ export type ModelOption = {
   description?: string
   icon?: ReactNode
   disabled?: boolean
-  /** Extra terms matched by ModelSelector.Search, in addition to id and name. */
   keywords?: readonly string[]
-  /**
-   * Reasoning effort levels the model supports. Pass `true` for the default
-   * low/medium/high levels, or a custom list. Omit for models without
-   * configurable reasoning.
-   */
   efforts?: boolean | readonly ModelSelectorEffortOption[]
 }
 
@@ -66,11 +60,6 @@ function resolveEffort(
   return efforts?.some((e) => e.id === effort) ? effort : undefined
 }
 
-/**
- * Returns the effort id if the given model supports it, otherwise undefined.
- * Effort selection is kept sticky across model switches; this resolves what
- * actually applies to the current model.
- */
 export function resolveModelEffort(
   models: readonly ModelOption[],
   modelId: string | undefined,
@@ -91,8 +80,7 @@ function useControllableState<T>({
   const [internal, setInternal] = useState(defaultProp)
   const isControlled = prop !== undefined
   const value = isControlled ? prop : internal
-  // Read onChange through a ref so inline callbacks don't recreate the setter
-  // (and with it the memoized context value) every render.
+
   const onChangeRef = useRef(onChange)
   useEffect(() => {
     onChangeRef.current = onChange
@@ -111,11 +99,8 @@ type ModelSelectorContextValue = {
   models: readonly ModelOption[]
   value: string | undefined
   setValue: (value: string) => void
-  /** The model matching `value`, derived once for all sub-components. */
   selectedModel: ModelOption | undefined
-  /** The selected model's effort levels, undefined when not configurable. */
   efforts: readonly ModelSelectorEffortOption[] | undefined
-  /** Effort resolved against the selected model's supported levels. */
   effort: string | undefined
   setEffort: (effort: string) => void
   setOpen: (open: boolean) => void
@@ -131,12 +116,6 @@ export function useModelSelectorContext() {
   return ctx
 }
 
-/**
- * The selected model's effort levels and the active selection. Use it to build
- * a custom effort UI inside ModelSelector.Content (e.g. a slider or a shadcn
- * DropdownMenu) when the built-in ModelSelector.Effort layout doesn't fit.
- * `efforts` is undefined for models without configurable reasoning.
- */
 export function useModelSelectorEfforts(): {
   efforts: readonly ModelSelectorEffortOption[] | undefined
   effort: string | undefined
@@ -271,7 +250,6 @@ function ModelSelectorTrigger({
 
 export type ModelSelectorValueProps = {
   placeholder?: ReactNode
-  /** Show the active effort level next to the model name. */
   showEffort?: boolean
   className?: string
 }
@@ -324,21 +302,8 @@ function ModelSelectorValue({
 export type ModelSelectorContentProps = Omit<
   ComponentPropsWithoutRef<typeof PopoverContent>,
   'side'
-> & {
-  /**
-   * Preferred side for the initial placement. Once the popover is open, the
-   * rendered side takes over until it closes, so the popup does not jump
-   * between sides while filtering resizes the list.
-   */
-  side?: ComponentPropsWithoutRef<typeof PopoverContent>['side']
-  searchable?: boolean
-}
+> & { side?: ComponentPropsWithoutRef<typeof PopoverContent>['side']; searchable?: boolean }
 
-// Base UI's Popover re-evaluates collision flipping whenever the popup
-// resizes, so filtering the list down flips the popup back to the preferred
-// side mid-interaction. Base UI only exposes its lazy-flip behavior on the
-// Combobox positioner, so mirror it here: feed the rendered side back as the
-// preferred side, making the popup keep its side until it no longer fits.
 function useLazyFlipSide(): {
   side: ModelSelectorContentProps['side']
   popupRef: (node: HTMLDivElement | null) => void
@@ -364,11 +329,6 @@ function useLazyFlipSide(): {
   return { side, popupRef }
 }
 
-/**
- * Hidden input that anchors cmdk's keyboard navigation, keeping the list
- * keyboard-operable without a visible search box. ModelSelectorContent renders
- * one automatically when unfiltered.
- */
 function ModelSelectorFocusAnchor() {
   return (
     <div className="sr-only">
@@ -555,10 +515,7 @@ function ModelSelectorEffort({
         onKeyDownCapture?.(e)
         if (e.defaultPrevented) return
         if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
-        // Base UI's RadioGroup composite claims vertical arrows for roving
-        // focus (orientation "both", not configurable), so intercept them in
-        // capture and hand the keypress to cmdk: the model list owns vertical
-        // navigation, and cmdk's Enter is inert while a radio has focus.
+
         onKeyDown?.(e)
         if (e.defaultPrevented) return
         const input = e.currentTarget
@@ -574,9 +531,7 @@ function ModelSelectorEffort({
         if (e.key === 'ArrowUp' || e.key === 'ArrowDown') return
         onKeyDown?.(e)
         if (e.defaultPrevented) return
-        // Base UI's radio composite ignores Home/End and cmdk's Command
-        // root would claim them to jump the model list; move radio focus
-        // here so only the radiogroup reacts.
+
         if (e.key === 'Home' || e.key === 'End') {
           e.preventDefault()
           e.stopPropagation()
@@ -614,10 +569,8 @@ function ModelSelectorEffort({
 
 export type ModelSelectorProps = Omit<ModelSelectorRootProps, 'children'> &
   VariantProps<typeof modelSelectorTriggerVariants> & {
-    /** Render a search input above the model list. */
     searchable?: boolean
-    /** Alignment of the dropdown relative to the trigger. Use `"end"` when the
-     * trigger sits at the right edge of its container. */
+
     align?: ModelSelectorContentProps['align']
     className?: string
     contentClassName?: string

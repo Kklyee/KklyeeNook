@@ -1,11 +1,11 @@
 import { expect, test } from 'vitest'
 
-import { createPiHostUiBridge } from './piHostUiBridge'
+import { createPiExtensionUiBridge } from './piExtensionUiBridge'
 
 test('round-trips a blocking Pi select request through the client response', async () => {
   const requested: string[] = []
   const resolved: string[] = []
-  const bridge = createPiHostUiBridge({
+  const bridge = createPiExtensionUiBridge({
     nextRequestId: () => 'request-1',
     currentToolCallId: () => 'tool-1',
     onRequest: (request) => requested.push(request.id),

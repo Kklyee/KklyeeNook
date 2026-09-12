@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 
 import type {
   PiClientEventBody,
-  PiHostUiResponse,
+  PiHostUiResponse as PiExtensionUiResponse,
   PiModelInfo,
   PiSendMessageInput,
   PiThinkingLevel,
@@ -10,6 +10,7 @@ import type {
   PiThreadSnapshot,
   PiTranscriptMessage,
 } from '@assistant-ui/react-pi/node'
+
 import {
   createAgentSession,
   DefaultResourceLoader,
@@ -19,6 +20,7 @@ import {
   type AgentSessionEvent,
   type ToolDefinition as PiToolDefinition,
 } from '@earendil-works/pi-coding-agent'
+
 import { getActiveModel, getSavedModels, type ModelConfig } from '@/shared/agent/agentConfig'
 
 import type { ApprovalPolicy } from '@/main/approval/approvalPolicy'
@@ -29,13 +31,20 @@ import type { CredentialStore } from '@/main/settings/credentialStore'
 import type { ToolRegistry } from '@/main/tools/toolRegistry'
 import type { AgentEvent } from '@/shared/agent/agentEvent'
 import { toPiClientEventBody } from '../client/piClientEventAdapter'
-import { createPiHostUiBridge, type PiHostUiBridge } from '../adapters/piHostUiBridge'
+import {
+  createPiExtensionUiBridge,
+  type PiExtensionUiBridge,
+} from '../adapters/piExtensionUiBridge'
 
 export type PiSessionEventListener = (event: AgentSessionEvent) => void
 export type PiSessionClientEventListener = (event: PiClientEventBody) => void
 export type PiSessionProductEventListener = (event: AgentEvent) => void
 
-export interface PiSessionHostLike {
+/**
+ * The minimal session-runtime interface consumed by the AgentRun adapter and
+ * client-facing module. Tests can provide an in-memory adapter at this seam.
+ */
+export interface PiSessionRuntimePort {
   initialize(): Promise<void>
   getSystemPrompt(): string
   getSnapshot(metadata: PiThreadMetadata): PiThreadSnapshot
@@ -48,7 +57,7 @@ export interface PiSessionHostLike {
   setModel(input: { provider: string; modelId: string }): Promise<void>
   setThinkingLevel(level: PiThinkingLevel): void
   setSessionName(title: string): void
-  respondToHostUiRequest(response: PiHostUiResponse): void
+  respondToExtensionUiRequest(response: PiExtensionUiResponse): void
   reloadConfiguration(): void
   subscribe(listener: PiSessionEventListener): () => void
   subscribeClientEvents(listener: PiSessionClientEventListener): () => void
@@ -56,12 +65,16 @@ export interface PiSessionHostLike {
   dispose(): void
 }
 
-export class PiSessionHost implements PiSessionHostLike {
-  private session: PiAgentSession | null = null
+/**
+ * Long-lived runtime for one persisted Pi conversation. It owns the live Pi
+ * SDK session and its model, tools, extensions, queues, and event streams.
+ */
+export class PiSessionRuntime implements PiSessionRuntimePort {
+  private piSession: PiAgentSession | null = null
   private modelRuntime: ModelRuntime | null = null
   private initializePromise: Promise<void> | null = null
-  private unsubscribeSession: (() => void) | undefined
-  private uiBridge: PiHostUiBridge | null = null
+  private unsubscribePiSession: (() => void) | undefined
+  private extensionUiBridge: PiExtensionUiBridge | null = null
   private requestCounter = 0
   private turnIndex = -1
   private lastError: string | undefined
@@ -80,9 +93,9 @@ export class PiSessionHost implements PiSessionHostLike {
   ) {}
 
   async initialize(): Promise<void> {
-    if (this.session) return
+    if (this.piSession) return
     if (this.initializePromise) return this.initializePromise
-    this.initializePromise = this.createSession()
+    this.initializePromise = this.createPiSession()
     try {
       await this.initializePromise
     } finally {
@@ -91,11 +104,11 @@ export class PiSessionHost implements PiSessionHostLike {
   }
 
   getSystemPrompt(): string {
-    return this.getSession().systemPrompt
+    return this.getPiSession().systemPrompt
   }
 
   getSnapshot(metadata: PiThreadMetadata): PiThreadSnapshot {
-    const session = this.getSession()
+    const session = this.getPiSession()
     const model = session.model
     const contextUsage = session.getContextUsage()
     const queuedMessages = [
@@ -129,7 +142,7 @@ export class PiSessionHost implements PiSessionHostLike {
         ...(queuedMessages.length ? { queuedMessages } : {}),
       },
       messages: session.messages as unknown as PiTranscriptMessage[],
-      hostUiRequests: this.uiBridge?.pending() ?? [],
+      hostUiRequests: this.extensionUiBridge?.pending() ?? [],
       readiness: model
         ? {
             state: 'ready',
@@ -142,7 +155,7 @@ export class PiSessionHost implements PiSessionHostLike {
   }
 
   isRunning(): boolean {
-    const session = this.session
+    const session = this.piSession
     return Boolean(
       this.initializePromise ||
       session?.isStreaming ||
@@ -194,7 +207,7 @@ export class PiSessionHost implements PiSessionHostLike {
     options: NonNullable<Parameters<PiAgentSession['prompt']>[1]>,
   ): Promise<void> {
     try {
-      await this.getSession().prompt(content, options)
+      await this.getPiSession().prompt(content, options)
       this.lastError = undefined
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : String(error)
@@ -204,11 +217,11 @@ export class PiSessionHost implements PiSessionHostLike {
   }
 
   async cancel(): Promise<void> {
-    await this.session?.abort()
+    await this.piSession?.abort()
   }
 
   clearQueue(): { steering: string[]; followUp: string[] } {
-    return this.session?.clearQueue() ?? { steering: [], followUp: [] }
+    return this.piSession?.clearQueue() ?? { steering: [], followUp: [] }
   }
 
   async getAvailableModels(): Promise<PiModelInfo[]> {
@@ -217,7 +230,7 @@ export class PiSessionHost implements PiSessionHostLike {
     try {
       await runtime.refresh()
     } catch (error) {
-      console.warn('[PiSessionHost] failed to refresh available models:', error)
+      console.warn('[PiSessionRuntime] failed to refresh available models:', error)
     }
     const models = runtime.getAvailableSnapshot()
     return (models.length ? models : runtime.getModels()).map((model) => ({
@@ -238,27 +251,27 @@ export class PiSessionHost implements PiSessionHostLike {
     await this.configureModelRuntime(runtime, configured)
     const model = runtime.getModel(input.provider, input.modelId)
     if (!model) throw new Error(`找不到模型: ${input.provider}/${input.modelId}`)
-    await this.getSession().setModel(model)
+    await this.getPiSession().setModel(model)
     this.lastError = undefined
   }
 
   setThinkingLevel(level: PiThinkingLevel): void {
-    this.getSession().setThinkingLevel(level)
+    this.getPiSession().setThinkingLevel(level)
   }
 
   setSessionName(title: string): void {
-    this.getSession().setSessionName(title)
+    this.getPiSession().setSessionName(title)
   }
 
-  respondToHostUiRequest(response: PiHostUiResponse): void {
-    if (!this.uiBridge?.respond(response)) {
-      throw new Error(`Unknown Pi host UI request: ${response.requestId}`)
+  respondToExtensionUiRequest(response: PiExtensionUiResponse): void {
+    if (!this.extensionUiBridge?.respond(response)) {
+      throw new Error(`Unknown Pi extension UI request: ${response.requestId}`)
     }
   }
 
   reloadConfiguration(): void {
     if (this.isRunning()) throw new Error('Cannot change agent settings while a run is active')
-    this.resetSession()
+    this.resetPiSession()
   }
 
   subscribe(listener: PiSessionEventListener): () => void {
@@ -277,27 +290,27 @@ export class PiSessionHost implements PiSessionHostLike {
   }
 
   dispose(): void {
-    this.resetSession()
+    this.resetPiSession()
     this.listeners.clear()
     this.clientEventListeners.clear()
     this.productEventListeners.clear()
   }
 
-  private resetSession(): void {
-    this.unsubscribeSession?.()
-    this.unsubscribeSession = undefined
-    this.uiBridge?.dispose()
-    this.uiBridge = null
-    this.session?.dispose()
-    this.session = null
+  private resetPiSession(): void {
+    this.unsubscribePiSession?.()
+    this.unsubscribePiSession = undefined
+    this.extensionUiBridge?.dispose()
+    this.extensionUiBridge = null
+    this.piSession?.dispose()
+    this.piSession = null
     this.modelRuntime = null
     this.lastError = undefined
     this.turnIndex = -1
   }
 
-  private getSession(): PiAgentSession {
-    if (!this.session) throw new Error('Session is not initialized')
-    return this.session
+  private getPiSession(): PiAgentSession {
+    if (!this.piSession) throw new Error('Pi session is not initialized')
+    return this.piSession
   }
 
   private getModelRuntime(): ModelRuntime {
@@ -305,7 +318,7 @@ export class PiSessionHost implements PiSessionHostLike {
     return this.modelRuntime
   }
 
-  private async createSession(): Promise<void> {
+  private async createPiSession(): Promise<void> {
     const config = this.configStore.get()
     const activeModel = getActiveModel(config)
     const { provider, modelID, thinkingLevel } = activeModel
@@ -356,9 +369,9 @@ export class PiSessionHost implements PiSessionHostLike {
         throw new Error('Persistent Pi session did not provide a session file')
       }
 
-      this.session = session
+      this.piSession = session
       this.modelRuntime = modelRuntime
-      this.uiBridge = createPiHostUiBridge({
+      this.extensionUiBridge = createPiExtensionUiBridge({
         nextRequestId: () => `${this.sessionId}:ui:${++this.requestCounter}`,
         currentToolCallId: () => {
           const pending = session.state.pendingToolCalls
@@ -368,7 +381,7 @@ export class PiSessionHost implements PiSessionHostLike {
         onResolved: (requestId) =>
           this.publishClientEvent({ type: 'extension_ui_resolved', requestId }),
       })
-      await session.bindExtensions({ uiContext: this.uiBridge.ui })
+      await session.bindExtensions({ uiContext: this.extensionUiBridge.ui })
       await this.runtimeStateRepo.save({
         sessionId: this.sessionId,
         runtimeKind: 'pi',
@@ -376,13 +389,13 @@ export class PiSessionHost implements PiSessionHostLike {
         updatedAt: Date.now(),
       })
       createdSession = undefined
-      this.unsubscribeSession = session.subscribe((event) => this.onSessionEvent(event))
+      this.unsubscribePiSession = session.subscribe((event) => this.onSessionEvent(event))
     } catch (error) {
       createdSession?.dispose()
-      this.session = null
+      this.piSession = null
       this.modelRuntime = null
-      this.uiBridge?.dispose()
-      this.uiBridge = null
+      this.extensionUiBridge?.dispose()
+      this.extensionUiBridge = null
       throw error
     }
   }
@@ -439,7 +452,7 @@ export class PiSessionHost implements PiSessionHostLike {
       event.type === 'agent_end' ||
       event.type === 'compaction_end'
     ) {
-      const contextUsage = this.getSession().getContextUsage()
+      const contextUsage = this.getPiSession().getContextUsage()
       if (contextUsage) this.publishClientEvent({ type: 'context_usage', contextUsage })
     }
   }
@@ -456,7 +469,7 @@ export class PiSessionHost implements PiSessionHostLike {
     try {
       listener(event)
     } catch (error) {
-      console.error('[PiSessionHost] listener failed:', error)
+      console.error('[PiSessionRuntime] listener failed:', error)
     }
   }
 
