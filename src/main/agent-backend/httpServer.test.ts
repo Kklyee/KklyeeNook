@@ -24,7 +24,7 @@ afterEach(async () => {
   server = undefined
 })
 
-function makeClient() {
+function makeClient(getSnapshot: () => PiThreadSnapshot = () => snapshot) {
   const subscriptions: Array<{
     options: { includeSnapshot?: boolean } | undefined
     emit: (event: PiClientEvent) => void
@@ -49,7 +49,7 @@ function makeClient() {
       const unsubscribe = vi.fn()
       subscriptions.push({ options, emit: listener, unsubscribe })
       if (options?.includeSnapshot !== false) {
-        listener({ type: 'snapshot', threadId, seq: 1, snapshot } as PiClientEvent)
+        listener({ type: 'snapshot', threadId, seq: 1, snapshot: getSnapshot() } as PiClientEvent)
       }
       listener({ type: 'agent_start', threadId, seq: 2 } as PiClientEvent)
       return unsubscribe
@@ -140,7 +140,8 @@ test('health and invalid paths disclose no secret; CORS only allows the configur
 })
 
 test('SSE honors snapshot=false; disconnect unsubscribes but does not cancel the run', async () => {
-  const { client, subscriptions } = makeClient()
+  let authoritativeSnapshot = snapshot
+  const { client, subscriptions } = makeClient(() => authoritativeSnapshot)
   server = await startAgentHttpServer(client, { secret: 'c'.repeat(64) })
 
   const firstController = new AbortController()
@@ -162,13 +163,19 @@ test('SSE honors snapshot=false; disconnect unsubscribes but does not cancel the
   await vi.waitFor(() => expect(subscriptions[0]?.unsubscribe).toHaveBeenCalledOnce())
   expect(client.cancelRun).not.toHaveBeenCalled()
 
+  authoritativeSnapshot = {
+    ...snapshot,
+    metadata: { ...snapshot.metadata, title: 'Latest authoritative title' },
+  }
   const reconnectController = new AbortController()
   const reconnectResponse = await fetch(`${server.baseUrl}/threads/thread-1/events`, {
     signal: reconnectController.signal,
   })
   expect(subscriptions[1]?.options).toEqual({ includeSnapshot: true })
   const reconnectChunk = await reconnectResponse.body!.getReader().read()
-  expect(new TextDecoder().decode(reconnectChunk.value)).toContain('"type":"snapshot"')
+  const reconnectData = new TextDecoder().decode(reconnectChunk.value)
+  expect(reconnectData).toContain('"type":"snapshot"')
+  expect(reconnectData).toContain('"title":"Latest authoritative title"')
   reconnectController.abort()
   await vi.waitFor(() => expect(subscriptions[1]?.unsubscribe).toHaveBeenCalledOnce())
   expect(client.sendMessage).not.toHaveBeenCalled()

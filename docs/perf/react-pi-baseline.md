@@ -62,11 +62,12 @@ Composer / Thread
   this compares transport paths, not the old main-process placement.
 - The IPC path remains until a comparable live run and profiler capture have
   been reviewed; it has not been removed based on unmeasured results.
-- Static/unit checks cover HTTP/SSE route behavior, SSE disconnect and
-  resubscription, utility-process request/event relays, renderer attachment
-  transport, and CSP. No live model prompt or CPU/React Profiler capture was
-  run during implementation.
-- Verification: `npm test` passed (36 files / 79 tests); typecheck, lint, and
+- Static/unit checks cover HTTP/SSE routes, continuous SSE events, latest
+  authoritative snapshot on reconnect, disconnect without cancel/restart,
+  utility-process lifetime across renderer-window recreation, shutdown and
+  crash-status forwarding, renderer attachment transport, and CSP. No live
+  model prompt or CPU/React Profiler capture was run during implementation.
+- Verification: `npm test` passed (37 files / 81 tests); typecheck, lint, and
   `npm run build` passed. `electron-builder --dir --publish never` completed,
   and the packaged `app.asar` contains the main, utility backend, preload,
   renderer, and main-process chunk files. A dev-mode smoke test rendered the
