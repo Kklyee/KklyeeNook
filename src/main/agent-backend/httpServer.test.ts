@@ -120,6 +120,7 @@ test('health and invalid paths disclose no secret; CORS only allows the configur
 
   const wrongSecret = await fetch(new URL('/wrong/api/pi/threads', server.baseUrl))
   expect(wrongSecret.status).toBe(404)
+  expect(await wrongSecret.text()).not.toContain('b'.repeat(64))
 
   const deniedOrigin = await fetch(`${server.baseUrl}/threads`, {
     headers: { origin: 'https://untrusted.example' },
