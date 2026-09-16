@@ -73,7 +73,10 @@ Composer / Thread
   `127.0.0.1` listener was owned by the app process group, and `GET /health`
   returned `{ ok: true, service: "kklyeenook-agent-backend" }`. No model prompt
   was sent. Package runtime startup and local HTTP health checks pass; live
-  model performance and profiler checks remain outstanding.
+  model performance and profiler checks remain outstanding. A separate final-
+  package launch with `PI_TRANSPORT=ipc` also reached the chat composer without
+  an unavailable-backend state; this is a startup smoke check only, not evidence
+  of functional or performance parity.
 
 ## Performance measurements
 
