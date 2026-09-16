@@ -52,6 +52,11 @@ Composer / Thread
 
 - `PI_TRANSPORT=http` (default) uses a memoized `createPiHttpClient` over local
   HTTP/SSE and runs the existing Pi service in an Electron utility process.
+- The migration spec's `createPiNodeClient()` singleton requirement remains
+  open: the installed package exports it, but the app still uses its custom
+  `PiClientService` to integrate app-owned settings/credentials, approvals,
+  context attachments, artifacts, and run history. Replacing that service would
+  bypass those flows; an adapter/feature migration needs an explicit design.
 - `PI_TRANSPORT=ipc` keeps the previous Pi IPC/MessagePort route available for
   same-UI A/B runs. Both options use the same utility-process Pi service, so
   this compares transport paths, not the old main-process placement.
