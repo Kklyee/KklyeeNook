@@ -65,11 +65,15 @@ Composer / Thread
   `npm run build` passed. `electron-builder --dir --publish never` completed,
   and the packaged `app.asar` contains the main, utility backend, preload,
   renderer, and main-process chunk files. A dev-mode smoke test rendered the
-  chat UI using the default HTTP transport. The packaged GUI was then launched
-  twice from `dist/win-unpacked/kklyeenook.exe`, but no targetable window or
-  running `kklyeenook` process appeared; `%APPDATA%\kklyeenook\data` was not
-  created. The production-package startup failure is unresolved, so package
-  runtime acceptance has not passed.
+  chat UI using the default HTTP transport. An earlier launch attempt against
+  the existing unpacked package did not expose a window; its cause was not
+  isolated. After a fresh build and package, `dist/win-unpacked/kklyeenook.exe`
+  launched successfully twice. In the final-package smoke test, the chat
+  composer was present, `%APPDATA%\kklyeenook\data` was created, a
+  `127.0.0.1` listener was owned by the app process group, and `GET /health`
+  returned `{ ok: true, service: "kklyeenook-agent-backend" }`. No model prompt
+  was sent. Package runtime startup and local HTTP health checks pass; live
+  model performance and profiler checks remain outstanding.
 
 ## Performance measurements
 
