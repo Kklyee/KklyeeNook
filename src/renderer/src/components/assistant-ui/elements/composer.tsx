@@ -573,7 +573,7 @@ export function ComposerSend({
         'grid size-8 place-items-center rounded-full',
         streaming || !idle
           ? inkButton
-          : 'bg-foreground/[0.06] text-foreground/30 dark:bg-foreground/[0.09] transition-colors',
+          : 'bg-foreground text-black dark:bg-foreground transition-colors',
         className,
       )}
       {...props}

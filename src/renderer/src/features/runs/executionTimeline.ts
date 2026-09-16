@@ -141,6 +141,11 @@ export function buildExecutionTimeline(
     }
   }
 
+  const systemPromptIndex = items.findIndex((timelineItem) => timelineItem.kind === 'system')
+  if (systemPromptIndex > 0) {
+    items.unshift(items.splice(systemPromptIndex, 1)[0]!)
+  }
+
   return { totalMs, items }
 }
 

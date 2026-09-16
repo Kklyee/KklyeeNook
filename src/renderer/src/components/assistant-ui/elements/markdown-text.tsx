@@ -14,6 +14,7 @@ import type { TextMessagePartProps } from '@assistant-ui/react'
 import { CheckIcon, CopyIcon } from 'lucide-react'
 
 import { TooltipIconButton } from '@/renderer/src/components/assistant-ui/elements/tooltip-icon-button'
+import { MermaidDiagram } from '@/renderer/src/components/assistant-ui/elements/mermaid-diagram.aui'
 import { useCopyToClipboard } from '@/renderer/src/hooks/use-copy-to-clipboard'
 import { cn } from '@/renderer/src/lib/utils'
 
@@ -47,12 +48,17 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = ({ components }) => {
       remarkPlugins={[remarkGfm]}
       className="aui-md"
       components={markdownComponents}
+      componentsByLanguage={markdownComponentsByLanguage}
       defer
     />
   )
 }
 
 export const MarkdownText = memo(MarkdownTextImpl)
+
+const markdownComponentsByLanguage = {
+  mermaid: { SyntaxHighlighter: MermaidDiagram },
+}
 
 const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
   const { isCopied, copyToClipboard } = useCopyToClipboard()

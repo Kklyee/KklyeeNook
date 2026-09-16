@@ -72,6 +72,25 @@ test('groups streamed text and pairs tool and approval events', () => {
     status: 'completed',
     summary: '{"path":"README.md"} → ok',
   })
+  expect(model.items.map((item) => item.kind)).toEqual([
+    'system',
+    'user',
+    'assistant',
+    'approval',
+    'tool',
+  ])
+})
+
+test('places the system prompt before the user message', () => {
+  const model = buildExecutionTimeline(run, [
+    record(1, 100, { type: 'user_message', text: '请更新 README' }),
+    record(2, 100, { type: 'system_prompt', text: 'You are a coding agent.' }),
+  ])
+
+  expect(model.items).toMatchObject([
+    { kind: 'system', summary: 'You are a coding agent.' },
+    { kind: 'user', summary: '请更新 README' },
+  ])
 })
 
 test('keeps successful and failed tool results distinct', () => {
