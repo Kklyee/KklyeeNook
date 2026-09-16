@@ -61,6 +61,10 @@ Composer / Thread
   resubscription, utility-process request/event relays, renderer attachment
   transport, and CSP. No live model prompt or CPU/React Profiler capture was
   run during implementation.
+- Verification: `npm test` passed (36 files / 79 tests); typecheck, lint, and
+  `npm run build` passed. `electron-builder --dir --publish never` completed,
+  and the packaged `app.asar` contains both `out/main/index.mjs` and
+  `out/main/agent-backend-entry.mjs`. The packaged GUI was not launched.
 
 ## Performance measurements
 
