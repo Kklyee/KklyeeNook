@@ -57,6 +57,10 @@ Composer / Thread
   `PiClientService` to integrate app-owned settings/credentials, approvals,
   context attachments, artifacts, and run history. Replacing that service would
   bypass those flows; an adapter/feature migration needs an explicit design.
+- In installed `@assistant-ui/react-pi` 0.0.21 source, `PiNodeClientOptions`
+  exposes only `workspacePath`, `agentDir`, and `model`; it has no direct
+  injection point for the app's custom runtime, credentials, tools, or approval
+  services, so it is not a drop-in replacement.
 - `PI_TRANSPORT=ipc` keeps the previous Pi IPC/MessagePort route available for
   same-UI A/B runs. Both options use the same utility-process Pi service, so
   this compares transport paths, not the old main-process placement.
