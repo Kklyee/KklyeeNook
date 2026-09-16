@@ -1,5 +1,4 @@
 import type { ElectronAPI } from '@electron-toolkit/preload'
-import type { PiClient } from '@assistant-ui/react-pi'
 import type {
   AgentSettingsSnapshot,
   UpdateAgentSettingsRequest,
@@ -22,9 +21,14 @@ import type {
   RemoveContextAttachmentRequest,
   StageContextAttachmentRequest,
 } from '../shared/context/contextAttachment'
-import type { ContextAwarePiClient } from '../shared/pi/piIpc'
+import type { AgentBackendStatus } from '../shared/agentBackend'
+import type { ContextAwarePiClient } from '../shared/pi/piClient'
 
 interface API {
+  agentBackend: {
+    getStatus(): Promise<AgentBackendStatus>
+    onStatus(listener: (status: AgentBackendStatus) => void): () => void
+  }
   pi: ContextAwarePiClient
   context: {
     stage(request: StageContextAttachmentRequest): Promise<ContextAttachmentRef>

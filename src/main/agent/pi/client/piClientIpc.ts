@@ -2,8 +2,8 @@ import { ipcMain, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent
 import type { PiClient } from '@assistant-ui/react-pi'
 
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
+import type { ContextAwarePiClient } from '@/shared/pi/piClient'
 import type {
-  ContextAwarePiClient,
   PiExtensionUiResponseRequest,
   PiRenameThreadRequest,
   PiSendMessageRequest,

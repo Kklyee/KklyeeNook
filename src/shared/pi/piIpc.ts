@@ -1,18 +1,26 @@
 import type {
-  PiClient,
   PiClientEvent,
-  PiHostUiResponse as PiExtensionUiResponse,
+  PiHostUiResponse,
   PiSendMessageInput,
   PiThinkingLevel,
 } from '@assistant-ui/react-pi'
+import type { ContextAwarePiClient } from './piClient'
 
-export type ContextAwarePiClient = Omit<PiClient, 'sendMessage'> & {
-  sendMessage(
-    threadId: string,
-    input: PiSendMessageInput,
-    contextAttachmentIds?: readonly string[],
-  ): Promise<void>
+type PiClientMethod = Exclude<keyof ContextAwarePiClient, 'subscribe'>
+
+export type PiClientCall = {
+  [Method in PiClientMethod]: {
+    method: Method
+    args: Parameters<ContextAwarePiClient[Method]>
+  }
+}[PiClientMethod]
+
+export interface PiSubscribeRequest {
+  threadId: string
+  options?: { includeSnapshot?: boolean }
 }
+
+export type PiSubscriptionListener = (event: PiClientEvent) => void
 
 export interface PiThreadRequest {
   threadId: string
@@ -36,11 +44,5 @@ export interface PiRenameThreadRequest extends PiThreadRequest {
 }
 
 export interface PiExtensionUiResponseRequest extends PiThreadRequest {
-  response: PiExtensionUiResponse
+  response: PiHostUiResponse
 }
-
-export interface PiSubscribeRequest extends PiThreadRequest {
-  options?: { includeSnapshot?: boolean }
-}
-
-export type PiSubscriptionListener = (event: PiClientEvent) => void

@@ -35,7 +35,7 @@ Composer / Thread
  -> preload listener -> react-pi runtime -> assistant-ui Thread / Markdown
 ```
 
-## Source-level transport observations
+## Before-migration source-level transport observations
 
 - Pi commands use `ipcRenderer.invoke`; the event subscription transfers a
   `MessagePort` with `ipcRenderer.postMessage`.
@@ -47,6 +47,20 @@ Composer / Thread
 - The Pi AgentSession and its event adaptation currently run in Electron main.
 - These observations show that Pi events cross an Electron MessagePort, but do
   not establish that transport is the cause of renderer stalls.
+
+## Migration implementation status
+
+- `PI_TRANSPORT=http` (default) uses a memoized `createPiHttpClient` over local
+  HTTP/SSE and runs the existing Pi service in an Electron utility process.
+- `PI_TRANSPORT=ipc` keeps the previous Pi IPC/MessagePort route available for
+  same-UI A/B runs. Both options use the same utility-process Pi service, so
+  this compares transport paths, not the old main-process placement.
+- The IPC path remains until a comparable live run and profiler capture have
+  been reviewed; it has not been removed based on unmeasured results.
+- Static/unit checks cover HTTP/SSE route behavior, SSE disconnect and
+  resubscription, utility-process request/event relays, renderer attachment
+  transport, and CSP. No live model prompt or CPU/React Profiler capture was
+  run during implementation.
 
 ## Performance measurements
 

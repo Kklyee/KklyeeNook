@@ -27,10 +27,14 @@ export class PiSessionRuntimeManager {
   }
 
   reloadConfiguration(): void {
+    this.assertCanReloadConfiguration()
+    for (const runtime of this.runtimes.values()) runtime.reloadConfiguration()
+  }
+
+  assertCanReloadConfiguration(): void {
     for (const runtime of this.runtimes.values()) {
       if (runtime.isRunning()) throw new Error('请等待当前 Agent 运行结束后再修改设置')
     }
-    for (const runtime of this.runtimes.values()) runtime.reloadConfiguration()
   }
 
   dispose(): void {

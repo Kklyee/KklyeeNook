@@ -5,6 +5,8 @@ export const IPC_CHANNELS = {
   PERMISSION_GRANT_DELETE: 'permission-grant:delete',
   WINDOW_GET_POSITION: 'window:get-position',
   WINDOW_SET_POSITION: 'window:set-position',
+  AGENT_BACKEND_GET_STATUS: 'agent-backend:get-status',
+  AGENT_BACKEND_STATUS: 'agent-backend:status',
   PI_THREAD_LIST: 'pi:thread:list',
   PI_THREAD_CREATE: 'pi:thread:create',
   PI_THREAD_GET: 'pi:thread:get',

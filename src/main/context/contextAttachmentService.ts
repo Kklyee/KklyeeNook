@@ -50,6 +50,10 @@ export class ContextAttachmentService {
     return { id, name: attachment.name, mimeType: attachment.mimeType, size: attachment.size }
   }
 
+  storeResolved(attachment: ResolvedContextAttachment): void {
+    this.attachments.set(attachment.id, { ...attachment })
+  }
+
   resolve(ids: readonly string[]): ResolvedContextAttachment[] {
     const uniqueIds = [...new Set(ids)]
 

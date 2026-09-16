@@ -8,7 +8,11 @@ export default defineConfig({
     resolve: { alias: { '@': resolve('src') } },
     build: {
       rollupOptions: {
-        output: { format: 'es' },
+        input: {
+          index: resolve('src/main/index.ts'),
+          'agent-backend-entry': resolve('src/main/agent-backend/entry.ts'),
+        },
+        output: { format: 'es', entryFileNames: '[name].mjs' },
       },
     },
   },

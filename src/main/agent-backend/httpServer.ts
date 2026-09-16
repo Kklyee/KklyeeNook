@@ -9,7 +9,7 @@ import type {
   PiThinkingLevel,
 } from '@assistant-ui/react-pi/node'
 
-import type { ContextAwarePiClient } from '@/shared/pi/piIpc'
+import type { ContextAwarePiClient } from '@/shared/pi/piClient'
 
 const HOST = '127.0.0.1'
 const MAX_BODY_BYTES = 4 * 1024 * 1024

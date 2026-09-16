@@ -1,38 +1,29 @@
 import type { AgentConfig } from '@/shared/agent/agentConfig'
 import { app, safeStorage } from 'electron'
-import { AgentService } from '../agent/agentService'
-import { createPiAgentRuntimeFactory } from '../agent/pi/runtime/createPiAgentRuntime'
-import { ApprovalPolicy } from '../approval/approvalPolicy'
+import { is } from '@electron-toolkit/utils'
+import { join } from 'node:path'
+
+import { createAgentBackendProcess } from '../agent-backend/electronProcess'
+import { createBackendPiClient } from '../agent-backend/piClientProxy'
+import type { AgentBackendInitOptions } from '../agent-backend/protocol'
+import { registerAgentBackendIpc } from '../agent-backend/agentBackendIpc'
+import { registerPiClientIpc } from '../agent/pi/client/piClientIpc'
+import { registerAgentRunIpc } from '../agent/ipc/agentRunIpc'
 import { connectDatabase } from '../db/client'
 import { getDatabaseUrl, getMigrationsPath } from '../db/databasePath'
-import { createChatWindow } from '../electron/chatWindow'
-import { registerWindowIpc } from '../electron/windowIpc'
-import { AgentConfigStore } from '../settings/agentConfigStore'
-import { PersistentCredentialStore } from '../settings/credentialStore'
-import { registerSettingsIpc } from '../settings/settingsIpc'
-import { loadRenderer } from './loadRenderer'
-import { DrizzleAgentSessionRepo } from '../db/repositories/agentSessionRepo'
-import { DrizzleAgentMessageRepo } from '../db/repositories/agentMessageRepo'
-import { DrizzleAgentRuntimeStateRepo } from '../db/repositories/agentRuntimeStateRepo'
-import { join } from 'node:path'
-import { DrizzleAgentRunRepo } from '../db/repositories/agentRunRepo'
-import { DrizzleAgentExecutionRecordRepo } from '../db/repositories/agentExecutionRecordRepo'
-import { ToolRegistry } from '../tools/toolRegistry'
-import { registerPiBuiltinTools } from '../agent/pi/adapters/piBuiltinToolAdapter'
-import { DrizzlePermissionGrantRepo } from '../db/repositories/permissionGrantRepo'
 import { DrizzleArtifactRepo } from '../db/repositories/artifactRepo'
+import { DrizzlePermissionGrantRepo } from '../db/repositories/permissionGrantRepo'
 import { ArtifactService } from '../artifact/artifactService'
 import { registerArtifactIpc } from '../artifact/artifactIpc'
-import { registerPiArtifactTool } from '../agent/pi/adapters/piArtifactToolAdapter'
-import { PiSessionRuntime } from '../agent/pi/runtime/piSessionRuntime'
-import { PiSessionRuntimeManager } from '../agent/pi/runtime/piSessionRuntimeManager'
-import { PiClientService } from '../agent/pi/client/piClientService'
-import { registerPiClientIpc } from '../agent/pi/client/piClientIpc'
-import { MessageProjectionService } from '../agent/messageProjectionService'
-import { registerAgentRunIpc } from '../agent/ipc/agentRunIpc'
 import { ContextAttachmentService } from '../context/contextAttachmentService'
-import { ContextBuilder } from '../context/contextBuilder'
 import { registerContextIpc } from '../context/contextIpc'
+import { createChatWindow } from '../electron/chatWindow'
+import { registerWindowIpc } from '../electron/windowIpc'
+import { ApprovalPolicy } from '../approval/approvalPolicy'
+import { AgentConfigStore } from '../settings/agentConfigStore'
+import { PersistentCredentialStore, type CredentialStore } from '../settings/credentialStore'
+import { registerSettingsIpc } from '../settings/settingsIpc'
+import { loadRenderer } from './loadRenderer'
 
 export interface AppContext {
   dispose(): void
@@ -64,86 +55,99 @@ export async function bootstrap(): Promise<AppContext> {
   if (apiKey && !credentialStore.hasApiKey(configuredProvider)) {
     credentialStore.setApiKey(configuredProvider, apiKey)
   }
-  const { database: db, close: closeDb } = await connectDatabase(
-    getDatabaseUrl(),
-    getMigrationsPath(),
-  )
+
+  const databaseUrl = getDatabaseUrl()
+  const migrationsPath = getMigrationsPath()
+  const { database: db, close: closeDb } = await connectDatabase(databaseUrl, migrationsPath)
   const permissionGrantRepo = new DrizzlePermissionGrantRepo(db)
+  const artifactRepo = new DrizzleArtifactRepo(db)
+  const approvalPolicy = new ApprovalPolicy(permissionGrantRepo)
   const workspace = () => {
     const cwd = configStore.get().cwd
     if (!cwd) throw new Error('Agent workspace is not configured')
     return cwd
   }
-  const approvalPolicy = new ApprovalPolicy(permissionGrantRepo)
-
-  const runtimeStateRepo = new DrizzleAgentRuntimeStateRepo(db)
-  const sessionDir = join(app.getPath('userData'), 'pi-sessions')
-  const toolRegistry = new ToolRegistry()
-  registerPiBuiltinTools(toolRegistry, workspace())
-  registerPiArtifactTool(toolRegistry)
-
-  const piSessionRuntimeManager = new PiSessionRuntimeManager(
-    (sessionId) =>
-      new PiSessionRuntime(
-        sessionId,
-        configStore,
-        credentialStore,
-        approvalPolicy,
-        runtimeStateRepo,
-        toolRegistry,
-        sessionDir,
-      ),
-  )
-  const runtimeFactory = createPiAgentRuntimeFactory(piSessionRuntimeManager)
-
-  const sessionRepo = new DrizzleAgentSessionRepo(db)
-  const runRepo = new DrizzleAgentRunRepo(db)
-  const executionRecordRepo = new DrizzleAgentExecutionRecordRepo(db)
-  const artifactRepo = new DrizzleArtifactRepo(db)
-  const agentService = new AgentService(
-    runtimeFactory,
-    sessionRepo,
-    runRepo,
-    executionRecordRepo,
-    artifactRepo,
-  )
   const artifactService = new ArtifactService(artifactRepo, workspace)
-
-  await agentService.initialize()
-  const messageProjection = new MessageProjectionService(new DrizzleAgentMessageRepo(db))
   const contextAttachments = new ContextAttachmentService()
-  const contextBuilder = new ContextBuilder(contextAttachments)
-  const piClientService = new PiClientService(
-    agentService,
-    piSessionRuntimeManager,
-    messageProjection,
-    configStore,
-    artifactService,
-    contextBuilder,
-    contextAttachments,
-  )
-  const chatWindow = createChatWindow()
-  const disposeContextIpc = registerContextIpc(chatWindow, contextAttachments)
+  const backendProcess = createAgentBackendProcess()
+  const transport = process.env.PI_TRANSPORT === 'ipc' ? 'ipc' : 'http'
+  const rendererUrl = is.dev ? process.env.ELECTRON_RENDERER_URL : undefined
+  const backendOptions: AgentBackendInitOptions = {
+    config: configStore.get(),
+    apiKeys: collectApiKeys(configStore.get(), credentialStore),
+    databaseUrl,
+    migrationsPath,
+    sessionDir: join(userDataPath, 'pi-sessions'),
+    allowedOrigins: [rendererUrl ? new URL(rendererUrl).origin : 'null'],
+    transport,
+  }
+  const backendStatus = await backendProcess.start(backendOptions)
+  if (backendStatus.state === 'unavailable') console.error('[bootstrap] agent backend unavailable')
 
-  registerSettingsIpc(chatWindow, configStore, credentialStore, approvalPolicy, () => {
-    piSessionRuntimeManager.reloadConfiguration()
+  const chatWindow = createChatWindow()
+  const disposeAgentBackendIpc = registerAgentBackendIpc(chatWindow, backendProcess)
+  const disposePiIpc =
+    transport === 'ipc'
+      ? registerPiClientIpc(chatWindow, createBackendPiClient(backendProcess))
+      : () => undefined
+  const disposeContextIpc = registerContextIpc(chatWindow, contextAttachments, {
+    stage: async (attachment) => {
+      await backendProcess.request({ action: 'context:stage', attachment })
+    },
+    remove: async (id) => {
+      await backendProcess.request({ action: 'context:remove', id })
+    },
+  })
+
+  registerSettingsIpc(chatWindow, configStore, credentialStore, approvalPolicy, {
+    prepare: async () => {
+      await backendProcess.request({ action: 'settings:prepare' })
+    },
+    commit: async () => {
+      const config = configStore.get()
+      await backendProcess.request({
+        action: 'settings:commit',
+        config,
+        apiKeys: collectApiKeys(config, credentialStore),
+      })
+    },
+    cancel: async () => {
+      await backendProcess.request({ action: 'settings:cancel' }).catch(() => undefined)
+    },
   })
   registerWindowIpc()
-  registerPiClientIpc(chatWindow, piClientService)
-  registerAgentRunIpc(agentService)
+  const disposeAgentRunIpc = registerAgentRunIpc(backendProcess)
   registerArtifactIpc(chatWindow, artifactService)
 
   loadRenderer(chatWindow, 'chat')
   chatWindow.on('ready-to-show', () => chatWindow.show())
-  app.once('will-quit', closeDb)
+  let mainDatabaseClosed = false
+  const closeMainDatabase = () => {
+    if (mainDatabaseClosed) return
+    mainDatabaseClosed = true
+    closeDb()
+  }
+  app.once('will-quit', closeMainDatabase)
 
   return {
     dispose() {
+      disposeAgentBackendIpc()
+      disposePiIpc()
+      disposeAgentRunIpc()
       disposeContextIpc()
       contextAttachments.clear()
-      piClientService.dispose()
-      piSessionRuntimeManager.dispose()
-      closeDb()
+      backendProcess.close()
+      closeMainDatabase()
     },
   }
+}
+
+function collectApiKeys(config: AgentConfig, credentials: CredentialStore): Record<string, string> {
+  const providers = new Set([config.model.provider, ...(config.models ?? []).map((model) => model.provider)])
+  const apiKeys: Record<string, string> = {}
+  for (const provider of providers) {
+    const apiKey = credentials.getApiKey(provider)
+    if (apiKey) apiKeys[provider] = apiKey
+  }
+  return apiKeys
 }

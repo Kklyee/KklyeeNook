@@ -9,16 +9,23 @@ import { IPC_CHANNELS } from '@/shared/ipc/channels'
 import type { ApprovalPolicy } from '../approval/approvalPolicy'
 import type { CredentialStore } from './credentialStore'
 import type { DeletePermissionGrantRequest } from '@/shared/approval/approvalTypes'
+import type { AgentConfig } from '@/shared/agent/agentConfig'
 import type { AgentConfigStore } from './agentConfigStore'
 import { getActiveModel, modelConfigId } from '@/shared/agent/agentConfig'
 import { getModelCatalog, hasBuiltinModel } from './modelCatalog'
+
+export interface AgentSettingsChangeHooks {
+  prepare(): void | Promise<void>
+  commit(): void | Promise<void>
+  cancel(): void | Promise<void>
+}
 
 export function registerSettingsIpc(
   window: BrowserWindow,
   configStore: AgentConfigStore,
   credentials: CredentialStore,
   policy: ApprovalPolicy,
-  onSettingsChanged: () => void,
+  settingsChange: AgentSettingsChangeHooks,
 ) {
   const assertTrustedSender = (event: IpcMainInvokeEvent) => {
     if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) {
@@ -93,18 +100,35 @@ export function registerSettingsIpc(
       const activeModel = models.find((model) => model.id === request.activeModelId)
       if (!activeModel) throw new Error('默认模型不在已保存的配置中')
 
-      onSettingsChanged()
-      configStore.set({
+      const nextConfig: AgentConfig = {
         ...current,
         cwd,
         models,
         activeModelId: activeModel.id,
         model: activeModel,
-      })
-      if (request.credential?.deleteApiKey) {
-        credentials.deleteApiKey(request.credential.provider)
-      } else if (request.credential?.apiKey?.trim()) {
-        credentials.setApiKey(request.credential.provider, request.credential.apiKey.trim())
+      }
+      const credentialProvider = request.credential?.provider
+      const previousApiKey = credentialProvider
+        ? credentials.getApiKey(credentialProvider)
+        : undefined
+
+      await settingsChange.prepare()
+      try {
+        configStore.set(nextConfig)
+        if (request.credential?.deleteApiKey) {
+          credentials.deleteApiKey(request.credential.provider)
+        } else if (request.credential?.apiKey?.trim()) {
+          credentials.setApiKey(request.credential.provider, request.credential.apiKey.trim())
+        }
+        await settingsChange.commit()
+      } catch (error) {
+        configStore.set(current)
+        if (credentialProvider) {
+          if (previousApiKey) credentials.setApiKey(credentialProvider, previousApiKey)
+          else credentials.deleteApiKey(credentialProvider)
+        }
+        await Promise.resolve(settingsChange.cancel()).catch(() => undefined)
+        throw error
       }
       return snapshot()
     },

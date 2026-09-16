@@ -27,6 +27,22 @@ test('stages, resolves, deduplicates, and releases text attachments', () => {
   )
 })
 
+test('restores a staged attachment with its original ID in another process', () => {
+  const source = new ContextAttachmentService()
+  const target = new ContextAttachmentService()
+  const text = 'context from the renderer process'
+  const reference = source.stage({
+    name: 'context.txt',
+    mimeType: 'text/plain',
+    size: Buffer.byteLength(text),
+    text,
+  })
+
+  target.storeResolved(source.resolve([reference.id])[0]!)
+
+  expect(target.resolve([reference.id])).toEqual([{ ...reference, text }])
+})
+
 test('rejects empty, oversized, and invalidly named attachments', () => {
   const service = new ContextAttachmentService()
 

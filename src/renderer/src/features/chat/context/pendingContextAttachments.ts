@@ -2,8 +2,8 @@ const pendingContextAttachmentIds: string[] = []
 
 /**
  * The Pi client contract only carries text and image parts. Keep the staged
- * text-file ids alongside the next composer send until the Electron client can
- * add them to its IPC request.
+ * text-file ids alongside the next composer send until the HTTP client can add
+ * them to its message request.
  */
 export function rememberPendingContextAttachment(id: string): void {
   if (!pendingContextAttachmentIds.includes(id)) pendingContextAttachmentIds.push(id)

@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { PiClientEvent } from '@assistant-ui/react-pi'
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
+import type { ContextAwarePiClient } from '@/shared/pi/piClient'
+import type { AgentBackendStatus } from '@/shared/agentBackend'
 import { DeletePermissionGrantRequest } from '@/shared/approval/approvalTypes'
 import type {
   AgentSettingsSnapshot,
@@ -24,7 +26,16 @@ import type {
   RemoveContextAttachmentRequest,
   StageContextAttachmentRequest,
 } from '@/shared/context/contextAttachment'
-import type { ContextAwarePiClient } from '@/shared/pi/piIpc'
+
+const context = {
+  stage(request: StageContextAttachmentRequest): Promise<ContextAttachmentRef> {
+    return ipcRenderer.invoke(IPC_CHANNELS.CONTEXT_ATTACHMENT_STAGE, request)
+  },
+
+  remove(request: RemoveContextAttachmentRequest): Promise<void> {
+    return ipcRenderer.invoke(IPC_CHANNELS.CONTEXT_ATTACHMENT_REMOVE, request)
+  },
+}
 
 const pi = {
   listThreads: (input) => ipcRenderer.invoke(IPC_CHANNELS.PI_THREAD_LIST, input),
@@ -67,17 +78,18 @@ const pi = {
   },
 } satisfies ContextAwarePiClient
 
-const context = {
-  stage(request: StageContextAttachmentRequest): Promise<ContextAttachmentRef> {
-    return ipcRenderer.invoke(IPC_CHANNELS.CONTEXT_ATTACHMENT_STAGE, request)
-  },
-
-  remove(request: RemoveContextAttachmentRequest): Promise<void> {
-    return ipcRenderer.invoke(IPC_CHANNELS.CONTEXT_ATTACHMENT_REMOVE, request)
-  },
-}
-
 const api = {
+  agentBackend: {
+    getStatus(): Promise<AgentBackendStatus> {
+      return ipcRenderer.invoke(IPC_CHANNELS.AGENT_BACKEND_GET_STATUS)
+    },
+    onStatus(listener: (status: AgentBackendStatus) => void): () => void {
+      const handler = (_event: Electron.IpcRendererEvent, status: AgentBackendStatus) =>
+        listener(status)
+      ipcRenderer.on(IPC_CHANNELS.AGENT_BACKEND_STATUS, handler)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.AGENT_BACKEND_STATUS, handler)
+    },
+  },
   pi,
   context,
 
