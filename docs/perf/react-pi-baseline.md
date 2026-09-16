@@ -63,8 +63,13 @@ Composer / Thread
   run during implementation.
 - Verification: `npm test` passed (36 files / 79 tests); typecheck, lint, and
   `npm run build` passed. `electron-builder --dir --publish never` completed,
-  and the packaged `app.asar` contains both `out/main/index.mjs` and
-  `out/main/agent-backend-entry.mjs`. The packaged GUI was not launched.
+  and the packaged `app.asar` contains the main, utility backend, preload,
+  renderer, and main-process chunk files. A dev-mode smoke test rendered the
+  chat UI using the default HTTP transport. The packaged GUI was then launched
+  twice from `dist/win-unpacked/kklyeenook.exe`, but no targetable window or
+  running `kklyeenook` process appeared; `%APPDATA%\kklyeenook\data` was not
+  created. The production-package startup failure is unresolved, so package
+  runtime acceptance has not passed.
 
 ## Performance measurements
 
