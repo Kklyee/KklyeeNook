@@ -27,6 +27,7 @@ afterEach(async () => {
 function makeClient() {
   const subscriptions: Array<{
     options: { includeSnapshot?: boolean } | undefined
+    emit: (event: PiClientEvent) => void
     unsubscribe: ReturnType<typeof vi.fn>
   }> = []
   const client: ContextAwarePiClient = {
@@ -46,7 +47,7 @@ function makeClient() {
     respondToHostUiRequest: vi.fn(async () => undefined),
     subscribe: vi.fn((threadId, listener, options) => {
       const unsubscribe = vi.fn()
-      subscriptions.push({ options, unsubscribe })
+      subscriptions.push({ options, emit: listener, unsubscribe })
       if (options?.includeSnapshot !== false) {
         listener({ type: 'snapshot', threadId, seq: 1, snapshot } as PiClientEvent)
       }
@@ -153,6 +154,10 @@ test('SSE honors snapshot=false; disconnect unsubscribes but does not cancel the
   const liveChunk = await liveReader.read()
   expect(new TextDecoder().decode(liveChunk.value)).toContain('"type":"agent_start"')
 
+  subscriptions[0]?.emit({ type: 'agent_end', threadId: 'thread-1', seq: 3 })
+  const nextLiveChunk = await liveReader.read()
+  expect(new TextDecoder().decode(nextLiveChunk.value)).toContain('"seq":3')
+
   firstController.abort()
   await vi.waitFor(() => expect(subscriptions[0]?.unsubscribe).toHaveBeenCalledOnce())
   expect(client.cancelRun).not.toHaveBeenCalled()
@@ -166,4 +171,5 @@ test('SSE honors snapshot=false; disconnect unsubscribes but does not cancel the
   expect(new TextDecoder().decode(reconnectChunk.value)).toContain('"type":"snapshot"')
   reconnectController.abort()
   await vi.waitFor(() => expect(subscriptions[1]?.unsubscribe).toHaveBeenCalledOnce())
+  expect(client.sendMessage).not.toHaveBeenCalled()
 })
