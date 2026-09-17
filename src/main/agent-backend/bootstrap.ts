@@ -23,6 +23,7 @@ import { MemoryCredentialStore } from '@/main/settings/credentialStore'
 import { ToolRegistry } from '@/main/tools/toolRegistry'
 import type { AgentBackendInitOptions, AgentBackendRequest } from './protocol'
 import { startAgentHttpServer, type RunningAgentHttpServer } from './httpServer'
+import { createPiNodeClientAdapter } from './piNodeClientAdapter'
 import type { ContextAwarePiClient } from '@/shared/pi/piClient'
 import type { PiClientCall, PiSubscribeRequest } from '@/shared/pi/piIpc'
 import type { PiClientEvent } from '@assistant-ui/react-pi'
@@ -99,7 +100,11 @@ export async function createAgentBackend(
       contextBuilder,
       contextAttachments,
     )
-    server = await startAgentHttpServer(piClientService, {
+    const piClient = createPiNodeClientAdapter(piClientService, {
+      workspacePath: workspace(),
+      agentDir: sessionDir,
+    })
+    server = await startAgentHttpServer(piClient, {
       allowedOrigins: options.allowedOrigins,
     })
 
@@ -136,11 +141,11 @@ export async function createAgentBackend(
           case 'agent-execution-record:list':
             return agentService.listExecutionRecords(request.request.runId)
           case 'pi:call':
-            return invokePiClientCall(piClientService, request.call)
+            return invokePiClientCall(piClient, request.call)
         }
       },
       subscribePi(request, listener) {
-        return piClientService.subscribe(request.threadId, listener, request.options)
+        return piClient.subscribe(request.threadId, listener, request.options)
       },
       async close() {
         await server?.close()

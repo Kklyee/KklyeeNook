@@ -14,10 +14,11 @@ Versions read from the installed dependency tree (`npm ls ... --depth=0`):
 | `@assistant-ui/react-streamdown` | not installed |
 | `electron` | `39.8.10` |
 
-The runtime is the repository's custom `PiClientService`, not the package's
-`createPiNodeClient`. It also owns app-specific settings, approval, context
-attachments, artifacts, and run-history behavior; replacing it with the default
-Node client would change those features.
+The runtime keeps the repository's custom `PiClientService` as the app facade
+for settings, approval, context attachments, artifacts, and run-history
+behavior. The backend now also owns one long-lived package
+`createPiNodeClient()` instance through an adapter; it is not recreated per
+request.
 
 ## Current call chain
 
@@ -28,6 +29,7 @@ Composer / Thread
  -> preload window.api.pi: src/preload/index.ts
  -> PI IPC handlers: src/main/agent/pi/client/piClientIpc.ts
  -> PiClientService: src/main/agent/pi/client/piClientService.ts
+ -> PiNodeClientAdapter: src/main/agent-backend/piNodeClientAdapter.ts
  -> PiSessionRuntimeManager / PiSessionRuntime: src/main/agent/pi/runtime/*
  -> Pi AgentSession event / PiClientEvent adapter
  -> PiClientService subscription relay
@@ -52,26 +54,27 @@ Composer / Thread
 
 - `PI_TRANSPORT=http` (default) uses a memoized `createPiHttpClient` over local
   HTTP/SSE and runs the existing Pi service in an Electron utility process.
-- The migration spec's `createPiNodeClient()` singleton requirement remains
-  open: the installed package exports it, but the app still uses its custom
-  `PiClientService` to integrate app-owned settings/credentials, approvals,
-  context attachments, artifacts, and run history. Replacing that service would
-  bypass those flows; an adapter/feature migration needs an explicit design.
+- `createPiNodeClient()` is created once during backend initialization by
+  `src/main/agent-backend/piNodeClientAdapter.ts`. The adapter keeps the custom
+  app facade for featureful operations and uses the NodeClient model catalog as
+  a fallback when the app catalog is empty.
 - In installed `@assistant-ui/react-pi` 0.0.21 source, `PiNodeClientOptions`
   exposes only `workspacePath`, `agentDir`, and `model`; it has no direct
   injection point for the app's custom runtime, credentials, tools, or approval
-  services, so it is not a drop-in replacement.
+  services, so it remains an unsafe drop-in replacement. The adapter is the
+  compatibility boundary until those app-owned features are migrated.
 - `PI_TRANSPORT=ipc` keeps the previous Pi IPC/MessagePort route available for
   same-UI A/B runs. Both options use the same utility-process Pi service, so
   this compares transport paths, not the old main-process placement.
 - The IPC path remains until a comparable live run and profiler capture have
   been reviewed; it has not been removed based on unmeasured results.
-- Static/unit checks cover HTTP/SSE routes, continuous SSE events, latest
+- Static/unit checks cover the long-lived NodeClient adapter, HTTP/SSE routes,
+  continuous SSE events, latest
   authoritative snapshot on reconnect, disconnect without cancel/restart,
   utility-process lifetime across renderer-window recreation, shutdown and
   crash-status forwarding, renderer attachment transport, and CSP. No live
   model prompt or CPU/React Profiler capture was run during implementation.
-- Verification: `npm test` passed (37 files / 81 tests); typecheck, lint, and
+- Verification: `npm test` passed (38 files / 83 tests); typecheck, lint, and
   `npm run build` passed. `electron-builder --dir --publish never` completed,
   and the packaged `app.asar` contains the main, utility backend, preload,
   renderer, and main-process chunk files. A dev-mode smoke test rendered the
