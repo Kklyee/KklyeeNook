@@ -15,7 +15,12 @@ import type { ArtifactService } from '@/main/artifact/artifactService'
 import type { Artifact } from '@/shared/artifact/artifact'
 import type { AgentSessionSummary } from '@/shared/agent/agentSession'
 import type { AgentConfigStore } from '@/main/settings/agentConfigStore'
-import { getModelCatalog } from '@/main/settings/modelCatalog'
+import {
+  getModelCatalog,
+  mergeConfiguredProvidersIntoCatalog,
+  mergeSavedModelsIntoCatalog,
+} from '@/main/settings/modelCatalog'
+import { getActiveModel, getConfiguredProviders, getSavedModels } from '@/shared/agent/agentConfig'
 import type { ContextBuilder } from '@/main/context/contextBuilder'
 import type { ContextAttachmentService } from '@/main/context/contextAttachmentService'
 import type { AgentService } from '../../agentService'
@@ -151,8 +156,12 @@ export class PiClientService implements PiClient {
       .find((runtime) => runtime !== undefined)
     if (firstRuntime) return firstRuntime.getAvailableModels()
 
-    const { provider, modelID, thinkingLevel } = this.configStore.get().model
-    const catalogModel = getModelCatalog()
+    const config = this.configStore.get()
+    const { provider, modelID, thinkingLevel } = getActiveModel(config)
+    const catalogModel = mergeConfiguredProvidersIntoCatalog(
+      mergeSavedModelsIntoCatalog(getModelCatalog(), getSavedModels(config)),
+      getConfiguredProviders(config),
+    )
       .find((item) => item.id === provider)
       ?.models.find((item) => item.id === modelID)
     return [
@@ -161,7 +170,9 @@ export class PiClientService implements PiClient {
         modelId: modelID,
         name: catalogModel?.name ?? modelID,
         supportsThinking: catalogModel?.reasoning ?? thinkingLevel !== 'off',
-        availableThinkingLevels: catalogModel?.availableThinkingLevels,
+        availableThinkingLevels: catalogModel?.availableThinkingLevels?.map(
+          (level) => level as PiThinkingLevel,
+        ),
       },
     ]
   }

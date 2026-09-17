@@ -7,8 +7,10 @@ import type { AgentBackendStatus } from '@/shared/agentBackend'
 import { DeletePermissionGrantRequest } from '@/shared/approval/approvalTypes'
 import type {
   AgentSettingsSnapshot,
+  DiscoverModelsRequest,
   UpdateAgentSettingsRequest,
 } from '@/shared/agent/agentSettings'
+import type { ModelCatalogModel } from '@/shared/agent/agentSettings'
 import { AgentRun, LoadAgentRunsRequest } from '@/shared/agent/agentRun'
 import type {
   AgentExecutionRecord,
@@ -45,9 +47,7 @@ const pi = {
     ipcRenderer.invoke(IPC_CHANNELS.PI_MESSAGE_SEND, {
       threadId,
       input,
-      ...(contextAttachmentIds?.length
-        ? { contextAttachmentIds: [...contextAttachmentIds] }
-        : {}),
+      ...(contextAttachmentIds?.length ? { contextAttachmentIds: [...contextAttachmentIds] } : {}),
     }),
   cancelRun: (threadId) => ipcRenderer.invoke(IPC_CHANNELS.PI_RUN_CANCEL, { threadId }),
   clearQueue: (threadId) => ipcRenderer.invoke(IPC_CHANNELS.PI_QUEUE_CLEAR, { threadId }),
@@ -99,6 +99,10 @@ const api = {
 
   updateAgentSettings(request: UpdateAgentSettingsRequest): Promise<AgentSettingsSnapshot> {
     return ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_UPDATE, request)
+  },
+
+  discoverModels(request: DiscoverModelsRequest): Promise<ModelCatalogModel[]> {
+    return ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_DISCOVER_MODELS, request)
   },
 
   selectAgentWorkspace(): Promise<string | null> {

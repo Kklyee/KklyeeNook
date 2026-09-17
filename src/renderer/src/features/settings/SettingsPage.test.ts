@@ -53,10 +53,33 @@ test('renders settings as a dedicated page with navigation back to the app', () 
   expect(markup).toContain('返回应用')
   expect(markup).toContain('搜索设置')
   expect(markup).toContain('aria-current="page"')
-  expect(markup).toContain('模型与工作目录')
+  expect(markup).toContain('填入各提供方的 API 密钥即可使用其模型。')
   expect(markup).toContain('已保存的模型')
   expect(markup).toContain('模型服务商')
   expect(markup).toContain('Test Model')
+  expect(markup).toContain('API 密钥')
+  expect(markup).not.toContain('思考级别')
+  expect(markup).not.toContain('API 地址')
+})
+
+test('does not offer an already saved provider in the add provider picker', () => {
+  const markup = renderToStaticMarkup(
+    createElement(SettingsPage, {
+      settings: {
+        ...settings,
+        providers: [{ id: 'test', name: 'Test', builtin: true, hasApiKey: true, models: [] }],
+        catalog: [...settings.catalog, { id: 'openai', name: 'OpenAI', builtin: true, models: [] }],
+      },
+      error: null,
+      onClose() {},
+      async onChanged() {},
+    }),
+  )
+  const providerPicker =
+    markup.match(/<select aria-label="模型服务商"[\s\S]*?<\/select>/)?.[0] ?? ''
+
+  expect(providerPicker).not.toContain('>Test<')
+  expect(providerPicker).toContain('>OpenAI<')
 })
 
 test('renders the permissions tab with a settings snapshot from before grants were added', () => {

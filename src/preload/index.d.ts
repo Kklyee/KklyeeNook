@@ -1,6 +1,8 @@
 import type { ElectronAPI } from '@electron-toolkit/preload'
 import type {
   AgentSettingsSnapshot,
+  DiscoverModelsRequest,
+  ModelCatalogModel,
   UpdateAgentSettingsRequest,
 } from '@/shared/agent/agentSettings'
 import type { DeletePermissionGrantRequest } from '@/shared/approval/approvalTypes'
@@ -36,6 +38,7 @@ interface API {
   }
   getAgentSettings(): Promise<AgentSettingsSnapshot>
   updateAgentSettings(request: UpdateAgentSettingsRequest): Promise<AgentSettingsSnapshot>
+  discoverModels(request: DiscoverModelsRequest): Promise<ModelCatalogModel[]>
   selectAgentWorkspace(): Promise<string | null>
   deletePermissionGrant(request: DeletePermissionGrantRequest): Promise<void>
   listAgentRuns(request: LoadAgentRunsRequest): Promise<AgentRun[]>

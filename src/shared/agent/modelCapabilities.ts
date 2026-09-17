@@ -1,8 +1,13 @@
-export type ModelInput = 'text' | 'image'
+import type { ModelInput } from './agentConfig'
+
+export type { ModelInput } from './agentConfig'
 
 const DEEPSEEK_V41_IMAGE_MODEL_IDS = new Set([
   'deepseek-flash',
   'deepseek-v4-flash',
+  'deepseek-v4.1-flash',
+  'deepseek-v41-flash',
+  'deepseek-v4-1-flash',
   'deepseek-v4-flash-vision-exp',
 ])
 

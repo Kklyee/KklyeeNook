@@ -56,6 +56,17 @@ function fakeSession() {
   }
 }
 
+function fakeSessionManager(
+  context: {
+    messages: never[]
+    thinkingLevel: string
+    model: { provider: string; modelId: string } | null
+  } = { messages: [], thinkingLevel: 'off', model: null },
+  branch: Array<{ type: string }> = [],
+) {
+  return { buildSessionContext: vi.fn(() => context), getBranch: vi.fn(() => branch) }
+}
+
 test('uses configured custom-provider limits and keeps client subscriptions across reloads', async () => {
   const model = { provider: 'custom', id: 'model-1' }
   let registered = false
@@ -70,7 +81,7 @@ test('uses configured custom-provider limits and keeps client subscriptions acro
     getModel: vi.fn(() => (registered ? model : undefined)),
   }
   vi.mocked(ModelRuntime.create).mockResolvedValue(runtime as never)
-  vi.mocked(SessionManager.create).mockReturnValue({} as never)
+  vi.mocked(SessionManager.create).mockReturnValue(fakeSessionManager() as never)
   const firstSession = fakeSession()
   const secondSession = fakeSession()
   vi.mocked(createAgentSession)
@@ -139,17 +150,13 @@ test('enables image input for the current DeepSeek Flash alias', async () => {
     getModels: vi.fn(() => [model]),
   }
   vi.mocked(ModelRuntime.create).mockResolvedValue(runtime as never)
-  vi.mocked(SessionManager.create).mockReturnValue({} as never)
+  vi.mocked(SessionManager.create).mockReturnValue(fakeSessionManager() as never)
   vi.mocked(createAgentSession).mockResolvedValue({ session: fakeSession() } as never)
 
   const sessionRuntime = new PiSessionRuntime(
     'session-1',
     new AgentConfigStore({
-      model: {
-        provider: 'deepseek',
-        modelID: 'deepseek-v4-flash',
-        thinkingLevel: 'off',
-      },
+      model: { provider: 'deepseek', modelID: 'deepseek-v4-flash', thinkingLevel: 'off' },
       tools: { enabled: [] },
       cwd: 'C:\\workspace',
     }),
@@ -166,6 +173,56 @@ test('enables image input for the current DeepSeek Flash alias', async () => {
     'deepseek',
     expect.objectContaining({
       models: [expect.objectContaining({ reasoning: true, input: ['text', 'image'] })],
+    }),
+  )
+})
+
+test('restores the model and thinking level saved in the Pi session transcript', async () => {
+  const restoredModel = { provider: 'deepseek', modelId: 'deepseek-v4-pro' }
+  const runtime = {
+    registerProvider: vi.fn(),
+    unregisterProvider: vi.fn(),
+    setRuntimeApiKey: vi.fn(),
+    getModel: vi.fn((_provider: string, modelId: string) => ({
+      provider: 'deepseek',
+      id: modelId,
+      input: ['text'],
+      contextWindow: 128_000,
+      maxTokens: 16_384,
+    })),
+    getModels: vi.fn(() => []),
+  }
+  const sessionManager = fakeSessionManager(
+    { messages: [], thinkingLevel: 'max', model: restoredModel },
+    [{ type: 'thinking_level_change' }],
+  )
+  vi.mocked(ModelRuntime.create).mockResolvedValue(runtime as never)
+  vi.mocked(SessionManager.create).mockReturnValue(sessionManager as never)
+  vi.mocked(createAgentSession).mockResolvedValue({ session: fakeSession() } as never)
+
+  const sessionRuntime = new PiSessionRuntime(
+    'session-1',
+    new AgentConfigStore({
+      model: { provider: 'deepseek', modelID: 'deepseek-v4-flash', thinkingLevel: 'off' },
+      providers: [{ id: 'deepseek' }],
+      tools: { enabled: [] },
+      cwd: 'C:\\workspace',
+    }),
+    { getApiKey: () => 'secret' } as unknown as CredentialStore,
+    {} as ApprovalPolicy,
+    { findBySessionId: vi.fn(), save: vi.fn() } as unknown as AgentRuntimeStateRepo,
+    { resolve: vi.fn(() => []) } as unknown as ToolRegistry,
+    'sessions',
+  )
+
+  await sessionRuntime.initialize()
+
+  const options = vi.mocked(createAgentSession).mock.calls.at(-1)?.[0]
+  expect(options).toEqual(
+    expect.objectContaining({
+      model: expect.objectContaining({ provider: 'deepseek', id: 'deepseek-v4-pro' }),
+      thinkingLevel: 'max',
+      sessionManager,
     }),
   )
 })

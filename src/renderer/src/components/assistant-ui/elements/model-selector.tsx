@@ -12,7 +12,7 @@ import {
   type ReactNode,
 } from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
-import { CheckIcon, ChevronDownIcon } from 'lucide-react'
+import { CheckIcon, ChevronDownIcon, ChevronRightIcon } from 'lucide-react'
 import { cn } from '@/renderer/src/lib/utils'
 import { Popover, PopoverContent, PopoverTrigger } from '@/renderer/src/components/ui/popover'
 import {
@@ -203,7 +203,11 @@ export const modelSelectorTriggerVariants = cva(
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         muted: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
       },
-      size: { default: 'h-9 px-3 py-2', sm: 'h-8 px-2.5 py-1.5 text-xs', lg: 'h-10 px-4 py-2.5' },
+      size: {
+        default: 'h-9 px-3 py-2',
+        sm: 'h-8 px-2.5 py-1.5 text-[11px]',
+        lg: 'h-10 px-4 py-2.5',
+      },
     },
     defaultVariants: { variant: 'outline', size: 'default' },
   },
@@ -346,9 +350,12 @@ function ModelSelectorContent({
   children,
   ...props
 }: ModelSelectorContentProps) {
-  const { value } = useModelSelectorContext()
+  const { value, selectedModel, efforts, effort } = useModelSelectorContext()
+  const [expandedSection, setExpandedSection] = useState<'model' | 'effort' | null>(null)
   const { side: renderedSide, popupRef } = useLazyFlipSide()
   const unfiltered = searchable === false || (!searchable && children === undefined)
+  const selectedEffort = efforts?.find((option) => option.id === effort) ?? efforts?.[0]
+  const isCompactLayout = children === undefined
 
   return (
     <PopoverContent
@@ -365,19 +372,83 @@ function ModelSelectorContent({
     >
       <Command
         className="bg-transparent"
-        shouldFilter={!unfiltered}
+        shouldFilter={isCompactLayout ? expandedSection === 'model' : !unfiltered}
         {...(value !== undefined ? { defaultValue: value } : {})}
       >
-        {unfiltered && <ModelSelectorFocusAnchor />}
-        {children ?? (
-          <>
-            {searchable && <ModelSelectorSearch />}
-            <ModelSelectorList />
-            <ModelSelectorEffort />
-          </>
+        {children ? (
+          children
+        ) : (
+          <div className="flex flex-col gap-0.5 p-1.5">
+            <ModelSelectorSection
+              data-section="model"
+              value={selectedModel?.name ?? '选择模型'}
+              expanded={expandedSection === 'model'}
+              onClick={() =>
+                setExpandedSection((current) => (current === 'model' ? null : 'model'))
+              }
+            >
+              {searchable && <ModelSelectorSearch />}
+              <ModelSelectorList className="max-h-52" />
+            </ModelSelectorSection>
+            <ModelSelectorSection
+              data-section="effort"
+              value={selectedEffort?.name ?? '关闭'}
+              expanded={expandedSection === 'effort'}
+              disabled={!efforts?.length}
+              onClick={() =>
+                setExpandedSection((current) => (current === 'effort' ? null : 'effort'))
+              }
+            >
+              <ModelSelectorEffort className="border-t-0 px-1 pb-1" />
+            </ModelSelectorSection>
+          </div>
         )}
       </Command>
     </PopoverContent>
+  )
+}
+
+type ModelSelectorSectionProps = {
+  'data-section': 'model' | 'effort'
+  value: ReactNode
+  expanded: boolean
+  disabled?: boolean
+  onClick: () => void
+  children: ReactNode
+}
+
+function ModelSelectorSection({
+  value,
+  expanded,
+  disabled = false,
+  onClick,
+  children,
+  ...props
+}: ModelSelectorSectionProps) {
+  return (
+    <div
+      data-slot="model-selector-section"
+      className={cn('overflow-hidden rounded-lg', expanded && 'bg-muted/35')}
+      {...props}
+    >
+      <button
+        type="button"
+        data-slot="model-selector-section-trigger"
+        aria-expanded={expanded}
+        disabled={disabled}
+        onClick={onClick}
+        className="hover:bg-muted/70 flex h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <span className="min-w-0 flex-1 truncate font-medium">{value}</span>
+        <ChevronRightIcon
+          className={cn(
+            'text-muted-foreground size-4 shrink-0 transition-transform',
+            expanded && 'rotate-90',
+          )}
+        />
+      </button>
+      {expanded && <div className="pt-0.5">{children}</div>}
+    </div>
   )
 }
 
@@ -385,9 +456,17 @@ export type ModelSelectorSearchProps = ComponentPropsWithoutRef<typeof CommandIn
 
 function ModelSelectorSearch({
   placeholder = 'Search models...',
+  className,
   ...props
 }: ModelSelectorSearchProps) {
-  return <CommandInput data-slot="model-selector-search" placeholder={placeholder} {...props} />
+  return (
+    <CommandInput
+      data-slot="model-selector-search"
+      className={cn('text-xs', className)}
+      placeholder={placeholder}
+      {...props}
+    />
+  )
 }
 
 export type ModelSelectorListProps = ComponentPropsWithoutRef<typeof CommandList>
@@ -407,7 +486,7 @@ function ModelSelectorList({ className, children, ...props }: ModelSelectorListP
       {children ?? (
         <>
           <ModelSelectorEmpty />
-          <CommandGroup>
+          <CommandGroup className="**:[[cmdk-group-items]]:flex **:[[cmdk-group-items]]:flex-col **:[[cmdk-group-items]]:gap-1.5">
             {models.map((model) => (
               <ModelSelectorItem key={model.id} model={model} />
             ))}
@@ -466,7 +545,7 @@ function ModelSelectorItem({
         onSelect?.(selectedValue)
       }}
       className={cn(
-        "relative items-start gap-2 rounded-lg py-2 ps-3 pe-9 [&_svg:not([class*='size-'])]:size-3.5",
+        "relative items-start gap-2 rounded-lg py-1.5 ps-3 pe-9 text-[11px] leading-4 [&_svg:not([class*='size-'])]:size-3.5",
         className,
       )}
       {...props}
@@ -476,9 +555,11 @@ function ModelSelectorItem({
           {model.icon && <ModelIcon className="mt-[3px]">{model.icon}</ModelIcon>}
           <span className="flex min-w-0 flex-col">
             <span className="truncate font-medium">{model.name}</span>
-            {model.description && (
-              <span className="text-muted-foreground truncate text-xs">{model.description}</span>
-            )}
+            {/*{model.description && (
+              <span className="text-muted-foreground truncate text-[10px] leading-4">
+                {model.description}
+              </span>
+            )}*/}
           </span>
         </>
       )}
@@ -543,7 +624,7 @@ function ModelSelectorEffort({
       }}
       {...props}
     >
-      <span className="text-muted-foreground text-xs">{label}</span>
+      <span className="text-muted-foreground text-[11px]">{label}</span>
       <RadioGroup
         value={effort ?? ''}
         onValueChange={setEffort}
@@ -555,7 +636,7 @@ function ModelSelectorEffort({
             key={option.id}
             value={option.id}
             className={cn(
-              'focus-visible:ring-ring/50 text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer rounded-md px-2 py-1 text-xs transition-colors outline-none focus-visible:ring-1',
+              'focus-visible:ring-ring/50 text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer rounded-md px-1.5 py-1 text-[11px] transition-colors outline-none focus-visible:ring-1',
               'data-checked:bg-accent data-checked:text-accent-foreground data-checked:font-medium',
             )}
           >

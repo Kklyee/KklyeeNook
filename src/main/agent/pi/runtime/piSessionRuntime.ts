@@ -22,8 +22,21 @@ import {
   type ToolDefinition as PiToolDefinition,
 } from '@earendil-works/pi-coding-agent'
 
-import { getActiveModel, getSavedModels, type ModelConfig } from '@/shared/agent/agentConfig'
+import {
+  getActiveModel,
+  getConfiguredProviders,
+  getSavedModels,
+  type AgentConfig,
+  type ModelConfig,
+  type ThinkingLevel,
+} from '@/shared/agent/agentConfig'
 import { resolveModelInput } from '@/shared/agent/modelCapabilities'
+import {
+  getConfiguredModelConfigs,
+  getModelCatalog,
+  hasBuiltinModel,
+  mergeConfiguredProvidersIntoCatalog,
+} from '@/main/settings/modelCatalog'
 
 import type { ApprovalPolicy } from '@/main/approval/approvalPolicy'
 import { createPiApprovalExtension } from '@/main/approval/piApprovalExtension'
@@ -44,17 +57,25 @@ export type PiSessionEventListener = (event: AgentSessionEvent) => void
 export type PiSessionClientEventListener = (event: PiClientEventBody) => void
 export type PiSessionProductEventListener = (event: AgentEvent) => void
 
-const PI_CLIENT_THINKING_LEVELS: readonly PiThinkingLevel[] = [
+const APP_THINKING_LEVELS: readonly ThinkingLevel[] = [
   'off',
   'minimal',
   'low',
   'medium',
   'high',
   'xhigh',
+  'max',
 ]
 
-const isPiClientThinkingLevel = (level: string): level is PiThinkingLevel =>
-  PI_CLIENT_THINKING_LEVELS.some((candidate) => candidate === level)
+function usesBearerAuth(api: string): boolean {
+  return [
+    'openai-completions',
+    'openai-responses',
+    'openai-codex-responses',
+    'anthropic-messages',
+    'mistral-conversations',
+  ].includes(api)
+}
 
 /**
  * The minimal session-runtime interface consumed by the AgentRun adapter and
@@ -264,13 +285,15 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
       modelId: model.id,
       name: model.name,
       supportsThinking: Boolean(model.reasoning),
-      availableThinkingLevels: getSupportedThinkingLevels(model).filter(isPiClientThinkingLevel),
+      availableThinkingLevels: getSupportedThinkingLevels(model)
+        .filter((level): level is ThinkingLevel => APP_THINKING_LEVELS.includes(level))
+        .map((level) => level as PiThinkingLevel),
     }))
   }
 
   async setModel(input: { provider: string; modelId: string }): Promise<void> {
     await this.initialize()
-    const configured = getSavedModels(this.configStore.get()).find(
+    const configured = getRuntimeModelConfigs(this.configStore.get()).find(
       (item) => item.provider === input.provider && item.modelID === input.modelId,
     )
     if (!configured) throw new Error(`模型尚未配置: ${input.provider}/${input.modelId}`)
@@ -347,8 +370,20 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
 
   private async createPiSession(): Promise<void> {
     const config = this.configStore.get()
-    const activeModel = getActiveModel(config)
-    const { provider, modelID, thinkingLevel } = activeModel
+    const cwd = config.cwd
+    if (!cwd) throw new Error('Agent workspace is not configured')
+
+    const sessionManager = await this.createSessionManager(cwd)
+    const sessionContext = sessionManager.buildSessionContext()
+    const configuredModels = getRuntimeModelConfigs(config)
+    const activeModel =
+      configuredModels.find(
+        (model) =>
+          model.provider === sessionContext.model?.provider &&
+          model.modelID === sessionContext.model?.modelId,
+      ) ?? getActiveModel(config)
+    const { provider, modelID } = activeModel
+    const thinkingLevel = getSessionThinkingLevel(activeModel, sessionManager, sessionContext)
 
     let createdSession: PiAgentSession | undefined
     try {
@@ -357,8 +392,6 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
       const model = modelRuntime.getModel(provider, modelID)
       if (!model) throw new Error(`找不到模型: ${provider}/${modelID}`)
 
-      const cwd = config.cwd
-      if (!cwd) throw new Error('Agent workspace is not configured')
       const tools = this.toolRegistry.resolve<PiToolDefinition<any, any, any>>(
         'pi',
         config.tools.enabled,
@@ -374,7 +407,6 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
         ],
       })
       await resourceLoader.reload()
-      const sessionManager = await this.createSessionManager(cwd)
       const { session } = await createAgentSession({
         cwd,
         modelRuntime,
@@ -429,77 +461,123 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
 
   private async configureModelRuntime(runtime: ModelRuntime, config: ModelConfig): Promise<void> {
     const apiKey = this.credentialStore.getApiKey(config.provider)
-    if (!apiKey) throw new Error(`Provider "${config.provider}" 没有配置 API Key`)
+    const builtinModel = hasBuiltinModel(config.provider, config.modelID)
+      ? runtime.getModel(config.provider, config.modelID)
+      : undefined
+    const providerTemplate =
+      typeof runtime.getModels === 'function' ? runtime.getModels(config.provider)[0] : undefined
 
     runtime.unregisterProvider(config.provider)
-    const builtinModel = runtime.getModel(config.provider, config.modelID)
     if (builtinModel) {
-      const resolvedInput = resolveModelInput(config.provider, config.modelID, builtinModel.input)
+      const resolvedInput = resolveModelInput(
+        config.provider,
+        config.modelID,
+        config.input ?? builtinModel.input,
+      )
       const needsInputOverride = resolvedInput.some((input) => !builtinModel.input.includes(input))
       const needsModelDefinition =
-        needsInputOverride || Boolean(config.baseUrl && (config.contextWindow || config.maxTokens))
+        needsInputOverride ||
+        Boolean(
+          config.contextWindow ||
+          config.maxTokens ||
+          config.reasoning !== undefined ||
+          config.modelName ||
+          config.api,
+        )
 
-      if (config.baseUrl || needsInputOverride) {
+      if (config.baseUrl || config.providerName || needsModelDefinition) {
         runtime.registerProvider(config.provider, {
           ...(config.providerName ? { name: config.providerName } : {}),
           ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
           ...(needsModelDefinition
             ? {
-                models: runtime.getModels(config.provider).map((model) => ({
-                  id: model.id,
-                  name: model.name,
-                  api: model.api,
-                  baseUrl: model.baseUrl,
-                  reasoning: model.reasoning,
-                  thinkingLevelMap: model.thinkingLevelMap,
-                  input: resolveModelInput(config.provider, model.id, model.input),
-                  cost: model.cost,
-                  contextWindow:
-                    config.baseUrl && model.id === config.modelID && config.contextWindow
-                      ? config.contextWindow
-                      : model.contextWindow,
-                  maxTokens:
-                    config.baseUrl && model.id === config.modelID && config.maxTokens
-                      ? config.maxTokens
-                      : model.maxTokens,
-                  samplingParams: model.samplingParams,
-                  headers: model.headers,
-                  compat: model.compat,
-                })),
+                models: runtime
+                  .getModels(config.provider)
+                  .map((model) => ({
+                    id: model.id,
+                    name:
+                      model.id === config.modelID ? (config.modelName ?? model.name) : model.name,
+                    api: model.id === config.modelID ? (config.api ?? model.api) : model.api,
+                    baseUrl: model.baseUrl,
+                    reasoning:
+                      model.id === config.modelID && config.reasoning !== undefined
+                        ? config.reasoning
+                        : model.reasoning,
+                    thinkingLevelMap: model.thinkingLevelMap,
+                    input: resolveModelInput(
+                      config.provider,
+                      model.id,
+                      model.id === config.modelID && config.input ? config.input : model.input,
+                    ),
+                    cost: model.cost,
+                    contextWindow:
+                      model.id === config.modelID && config.contextWindow
+                        ? config.contextWindow
+                        : model.contextWindow,
+                    maxTokens:
+                      model.id === config.modelID && config.maxTokens
+                        ? config.maxTokens
+                        : model.maxTokens,
+                    samplingParams: model.samplingParams,
+                    headers: model.headers,
+                    compat: model.compat,
+                  })),
               }
             : {}),
         })
       }
-    } else if (config.baseUrl) {
-      runtime.registerProvider(
+    } else {
+      const api = config.api ?? providerTemplate?.api ?? 'openai-completions'
+      const baseUrl = config.baseUrl ?? providerTemplate?.baseUrl
+      if (!baseUrl) {
+        throw new Error(`Provider "${config.provider}" 缺少 API 地址，无法注册自定义模型`)
+      }
+
+      const input = resolveModelInput(
         config.provider,
-        {
-          name: config.providerName ?? config.provider,
-          baseUrl: config.baseUrl,
-          api: 'openai-completions',
-          authHeader: true,
-          models: [
-            {
-              id: config.modelID,
-              name: config.modelID,
-              reasoning: false,
-              input: ['text'],
-              contextWindow: config.contextWindow ?? 128_000,
-              maxTokens: config.maxTokens ?? 1_000,
-              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-              samplingParams: { temperature: 0.7 },
-              compat: {
-                maxTokensField: 'max_tokens',
-                supportsUsageInStreaming: false,
-                supportsDeveloperRole: false,
-                supportsReasoningEffort: false,
-              },
-            },
-          ],
-        },
+        config.modelID,
+        config.input ?? providerTemplate?.input ?? ['text'],
       )
+      runtime.registerProvider(config.provider, {
+        name: config.providerName ?? providerTemplate?.provider ?? config.provider,
+        baseUrl,
+        api,
+        ...(usesBearerAuth(api) ? { authHeader: true } : {}),
+        models: [
+          {
+            id: config.modelID,
+            name: config.modelName ?? config.modelID,
+            api,
+            baseUrl,
+            reasoning: config.reasoning ?? providerTemplate?.reasoning ?? false,
+            input,
+            contextWindow: config.contextWindow ?? providerTemplate?.contextWindow ?? 128_000,
+            maxTokens: config.maxTokens ?? providerTemplate?.maxTokens ?? 16_384,
+            cost: providerTemplate?.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            ...(providerTemplate?.thinkingLevelMap
+              ? { thinkingLevelMap: providerTemplate.thinkingLevelMap }
+              : {}),
+            ...(providerTemplate?.samplingParams
+              ? { samplingParams: providerTemplate.samplingParams }
+              : { samplingParams: { temperature: 0.7 } }),
+            ...(providerTemplate?.headers ? { headers: providerTemplate.headers } : {}),
+            ...(providerTemplate?.compat
+              ? { compat: providerTemplate.compat }
+              : api === 'openai-completions'
+                ? {
+                    compat: {
+                      maxTokensField: 'max_tokens',
+                      supportsUsageInStreaming: false,
+                      supportsDeveloperRole: false,
+                      supportsReasoningEffort: false,
+                    },
+                  }
+                : {}),
+          },
+        ],
+      })
     }
-    await runtime.setRuntimeApiKey(config.provider, apiKey)
+    if (apiKey) await runtime.setRuntimeApiKey(config.provider, apiKey)
   }
 
   private onSessionEvent(event: AgentSessionEvent): void {
@@ -547,4 +625,29 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     }
     return manager
   }
+}
+
+function getSessionThinkingLevel(
+  activeModel: ModelConfig,
+  sessionManager: SessionManager,
+  sessionContext: ReturnType<SessionManager['buildSessionContext']>,
+): ThinkingLevel {
+  const hasPersistedThinkingLevel = sessionManager
+    .getBranch()
+    .some((entry) => entry.type === 'thinking_level_change')
+  if (hasPersistedThinkingLevel && isThinkingLevel(sessionContext.thinkingLevel)) {
+    return sessionContext.thinkingLevel
+  }
+  return activeModel.thinkingLevel ?? (activeModel.reasoning ? 'medium' : 'off')
+}
+
+function isThinkingLevel(value: string): value is ThinkingLevel {
+  return APP_THINKING_LEVELS.includes(value as ThinkingLevel)
+}
+
+function getRuntimeModelConfigs(config: AgentConfig) {
+  const providers = getConfiguredProviders(config)
+  const catalog = mergeConfiguredProvidersIntoCatalog(getModelCatalog(), providers)
+  const expanded = getConfiguredModelConfigs(providers, catalog)
+  return expanded.length ? expanded : getSavedModels(config)
 }

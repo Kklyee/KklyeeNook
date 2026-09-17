@@ -1,15 +1,14 @@
 import type { PiClient, PiThinkingLevel, PiThreadSnapshot } from '@assistant-ui/react-pi'
+import type { ThinkingLevel } from '@/shared/agent/agentConfig'
 
 export interface PendingNewThreadPreferences {
   model?: { provider: string; modelId: string }
-  thinkingLevel?: PiThinkingLevel
+  thinkingLevel?: ThinkingLevel
 }
 
 let pendingPreferences: PendingNewThreadPreferences | null = null
 
-export function setPendingNewThreadPreferences(
-  preferences: PendingNewThreadPreferences,
-): void {
+export function setPendingNewThreadPreferences(preferences: PendingNewThreadPreferences): void {
   pendingPreferences = preferences
 }
 
@@ -29,7 +28,7 @@ export function withPendingNewThreadPreferences(client: PiClient): PiClient {
         const threadId = snapshot.metadata.id
         if (preferences.model) await client.setModel(threadId, preferences.model)
         if (preferences.thinkingLevel) {
-          await client.setThinkingLevel(threadId, preferences.thinkingLevel)
+          await client.setThinkingLevel(threadId, preferences.thinkingLevel as PiThinkingLevel)
         }
 
         return withPreferences(snapshot, preferences)
@@ -62,14 +61,9 @@ function withPreferences(
       config: {
         ...snapshot.metadata.config,
         ...(preferences.model
-          ? {
-              provider: preferences.model.provider,
-              modelId: preferences.model.modelId,
-            }
+          ? { provider: preferences.model.provider, modelId: preferences.model.modelId }
           : {}),
-        ...(preferences.thinkingLevel
-          ? { thinkingLevel: preferences.thinkingLevel }
-          : {}),
+        ...(preferences.thinkingLevel ? { thinkingLevel: preferences.thinkingLevel } : {}),
       },
     },
   }

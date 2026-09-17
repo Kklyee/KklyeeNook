@@ -1,6 +1,6 @@
 import { useEffect, useState, type ButtonHTMLAttributes } from 'react'
 import { useAuiState } from '@assistant-ui/react'
-import { usePiRuntimeExtras, usePiSession } from '@assistant-ui/react-pi'
+import { usePiRuntimeExtras, usePiSession, type PiThinkingLevel } from '@assistant-ui/react-pi'
 import type { AgentSettingsSnapshot } from '@/shared/agent/agentSettings'
 import type { ThinkingLevel } from '@/shared/agent/agentConfig'
 import { Thread } from '../../components/assistant-ui/elements/thread.aui'
@@ -14,13 +14,18 @@ import {
 
 const THINKING_LEVELS = [
   { id: 'off', name: '关闭' },
+  { id: 'minimal', name: '最低' },
   { id: 'low', name: '低' },
   { id: 'medium', name: '中' },
   { id: 'high', name: '高' },
+  { id: 'xhigh', name: '很高' },
+  { id: 'max', name: '最大' },
 ] as const
 
 const isThinkingLevel = (value: string): value is ThinkingLevel =>
   THINKING_LEVELS.some((option) => option.id === value)
+
+const toPiThinkingLevel = (level: ThinkingLevel): PiThinkingLevel => level as PiThinkingLevel
 
 export function ChatPanel({ settings }: { settings: AgentSettingsSnapshot | null }) {
   const [view, setView] = useState<'chat' | 'trace'>('chat')
@@ -68,14 +73,14 @@ export function ChatPanel({ settings }: { settings: AgentSettingsSnapshot | null
       name: model.modelName,
       description: model.providerName,
       keywords: [model.provider, model.providerName],
-      efforts: efforts.length > 1 ? efforts : undefined,
+      efforts: efforts.length ? efforts : undefined,
     }
   })
   const switchModel = async (id: string) => {
     const model = configuredModels.find((item) => item.id === id)
     if (!model) return
     if (!sessionId) {
-      const thinkingLevel = model.thinkingLevel ?? 'medium'
+      const thinkingLevel = model.thinkingLevel ?? (model.reasoning ? 'medium' : 'off')
       setDraftSelection({ threadItemId, modelId: model.id, thinkingLevel })
       setPendingNewThreadPreferences({
         model: { provider: model.provider, modelId: model.modelID },
@@ -87,7 +92,9 @@ export function ChatPanel({ settings }: { settings: AgentSettingsSnapshot | null
     setModelError(null)
     try {
       await piRuntime.setModel({ provider: model.provider, modelId: model.modelID })
-      await piRuntime.setThinkingLevel(model.thinkingLevel ?? 'medium')
+      await piRuntime.setThinkingLevel(
+        toPiThinkingLevel(model.thinkingLevel ?? (model.reasoning ? 'medium' : 'off')),
+      )
     } catch (error) {
       setModelError(error instanceof Error ? error.message : '模型切换失败')
     } finally {
@@ -113,7 +120,7 @@ export function ChatPanel({ settings }: { settings: AgentSettingsSnapshot | null
     setSwitchingModel(true)
     setModelError(null)
     try {
-      await piRuntime.setThinkingLevel(level)
+      await piRuntime.setThinkingLevel(toPiThinkingLevel(level))
     } catch (error) {
       setModelError(error instanceof Error ? error.message : '推理等级切换失败')
     } finally {

@@ -94,31 +94,88 @@ function isAgentConfig(value: unknown): value is AgentConfig {
   const config = value as Partial<AgentConfig>
   return Boolean(
     config.model &&
-    typeof config.model.provider === 'string' &&
-    typeof config.model.modelID === 'string' &&
-    (config.model.baseUrl === undefined || typeof config.model.baseUrl === 'string') &&
-    (config.model.providerName === undefined || typeof config.model.providerName === 'string') &&
-    (config.model.contextWindow === undefined || isPositiveInteger(config.model.contextWindow)) &&
-    (config.model.maxTokens === undefined || isPositiveInteger(config.model.maxTokens)) &&
-    (config.model.thinkingLevel === undefined ||
-      ['off', 'low', 'medium', 'high'].includes(config.model.thinkingLevel)) &&
+    isModelConfig(config.model) &&
     (config.models === undefined ||
       (Array.isArray(config.models) &&
         config.models.length > 0 &&
-        config.models.every(
-          (model) =>
-            typeof model.id === 'string' &&
-            typeof model.provider === 'string' &&
-            typeof model.modelID === 'string' &&
-            (model.baseUrl === undefined || typeof model.baseUrl === 'string') &&
-            (model.thinkingLevel === undefined ||
-              ['off', 'low', 'medium', 'high'].includes(model.thinkingLevel)),
+        config.models.every((model) =>
+          Boolean(model && typeof model.id === 'string' && isModelConfig(model)),
         ))) &&
+    (config.providers === undefined ||
+      (Array.isArray(config.providers) &&
+        config.providers.every((provider) => isProviderConfig(provider)))) &&
     (config.activeModelId === undefined || typeof config.activeModelId === 'string') &&
     config.tools &&
     Array.isArray(config.tools.enabled) &&
     config.tools.enabled.every((name) => typeof name === 'string') &&
     (config.cwd === undefined || typeof config.cwd === 'string'),
+  )
+}
+
+function isProviderConfig(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false
+  const provider = value as {
+    id?: unknown
+    name?: unknown
+    baseUrl?: unknown
+    api?: unknown
+    models?: unknown
+  }
+  return Boolean(
+    typeof provider.id === 'string' &&
+    (provider.name === undefined || typeof provider.name === 'string') &&
+    (provider.baseUrl === undefined || typeof provider.baseUrl === 'string') &&
+    (provider.api === undefined || typeof provider.api === 'string') &&
+    (provider.models === undefined ||
+      (Array.isArray(provider.models) &&
+        provider.models.every((model) => isProviderModelConfig(model)))),
+  )
+}
+
+function isProviderModelConfig(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false
+  const model = value as {
+    id?: unknown
+    name?: unknown
+    api?: unknown
+    reasoning?: unknown
+    input?: unknown
+    contextWindow?: unknown
+    maxTokens?: unknown
+  }
+  return Boolean(
+    typeof model.id === 'string' &&
+    (model.name === undefined || typeof model.name === 'string') &&
+    (model.api === undefined || typeof model.api === 'string') &&
+    (model.reasoning === undefined || typeof model.reasoning === 'boolean') &&
+    (model.input === undefined ||
+      (Array.isArray(model.input) &&
+        model.input.length > 0 &&
+        model.input.every((input) => input === 'text' || input === 'image'))) &&
+    (model.contextWindow === undefined || isPositiveInteger(model.contextWindow)) &&
+    (model.maxTokens === undefined || isPositiveInteger(model.maxTokens)),
+  )
+}
+
+function isModelConfig(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false
+  const model = value as Partial<AgentConfig['model']>
+  return Boolean(
+    typeof model.provider === 'string' &&
+    typeof model.modelID === 'string' &&
+    (model.baseUrl === undefined || typeof model.baseUrl === 'string') &&
+    (model.providerName === undefined || typeof model.providerName === 'string') &&
+    (model.modelName === undefined || typeof model.modelName === 'string') &&
+    (model.api === undefined || typeof model.api === 'string') &&
+    (model.reasoning === undefined || typeof model.reasoning === 'boolean') &&
+    (model.input === undefined ||
+      (Array.isArray(model.input) &&
+        model.input.length > 0 &&
+        model.input.every((input) => input === 'text' || input === 'image'))) &&
+    (model.contextWindow === undefined || isPositiveInteger(model.contextWindow)) &&
+    (model.maxTokens === undefined || isPositiveInteger(model.maxTokens)) &&
+    (model.thinkingLevel === undefined ||
+      ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(model.thinkingLevel)),
   )
 }
 
