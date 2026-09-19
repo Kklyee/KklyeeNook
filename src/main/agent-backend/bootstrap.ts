@@ -24,8 +24,7 @@ import { ToolRegistry } from '@/main/tools/toolRegistry'
 import type { AgentBackendInitOptions, AgentBackendRequest } from './protocol'
 import { startAgentHttpServer, type RunningAgentHttpServer } from './httpServer'
 import { createPiNodeClientAdapter } from './piNodeClientAdapter'
-import type { ContextAwarePiClient } from '@/shared/pi/piClient'
-import type { PiClientCall, PiSubscribeRequest } from '@/shared/pi/piIpc'
+import type { PiSubscribeRequest } from '@/shared/pi/piClient'
 import type { PiClientEvent } from '@assistant-ui/react-pi'
 
 export interface AgentBackendRuntime {
@@ -140,8 +139,6 @@ export async function createAgentBackend(
             return agentService.listRuns(request.request.sessionId)
           case 'agent-execution-record:list':
             return agentService.listExecutionRecords(request.request.runId)
-          case 'pi:call':
-            return invokePiClientCall(piClient, request.call)
         }
       },
       subscribePi(request, listener) {
@@ -159,39 +156,6 @@ export async function createAgentBackend(
     await server?.close()
     closeDb()
     throw error
-  }
-}
-
-function invokePiClientCall(client: ContextAwarePiClient, call: PiClientCall): Promise<unknown> {
-  switch (call.method) {
-    case 'listThreads':
-      return client.listThreads(...call.args)
-    case 'createThread':
-      return client.createThread(...call.args)
-    case 'getThread':
-      return client.getThread(...call.args)
-    case 'sendMessage':
-      return client.sendMessage(...call.args)
-    case 'cancelRun':
-      return client.cancelRun(...call.args)
-    case 'clearQueue':
-      return client.clearQueue(...call.args)
-    case 'getAvailableModels':
-      return client.getAvailableModels(...call.args)
-    case 'setModel':
-      return client.setModel(...call.args)
-    case 'setThinkingLevel':
-      return client.setThinkingLevel(...call.args)
-    case 'renameThread':
-      return client.renameThread(...call.args)
-    case 'archiveThread':
-      return client.archiveThread(...call.args)
-    case 'unarchiveThread':
-      return client.unarchiveThread(...call.args)
-    case 'deleteThread':
-      return client.deleteThread(...call.args)
-    case 'respondToHostUiRequest':
-      return client.respondToHostUiRequest(...call.args)
   }
 }
 

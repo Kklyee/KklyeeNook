@@ -23,10 +23,9 @@ const options: AgentBackendInitOptions = {
   migrationsPath: '/tmp/drizzle',
   sessionDir: '/tmp/sessions',
   allowedOrigins: [],
-  transport: 'http',
 }
 
-const info = { baseUrl: 'http://127.0.0.1:12345/x/api/pi', transport: 'http' as const }
+const info = { baseUrl: 'http://127.0.0.1:12345/x/api/pi' }
 
 class FakeUtilityProcess extends EventEmitter implements UtilityProcessLike {
   readonly messages: MainToAgentBackendMessage[] = []

@@ -5,7 +5,7 @@ import {
   rememberPendingContextAttachment,
   takePendingContextAttachmentIds,
 } from '../context/pendingContextAttachments'
-import { createElectronPiClient, createElectronPiIpcClient } from './electronPiClient'
+import { createElectronPiClient } from './electronPiClient'
 
 afterEach(() => {
   clearPendingContextAttachmentIds()
@@ -43,18 +43,4 @@ test('restores staged context IDs when the HTTP message request fails', async ()
     'Pi HTTP request failed: 409',
   )
   expect(takePendingContextAttachmentIds()).toEqual(['attachment-2'])
-})
-
-test('sends staged context IDs over the temporary IPC transport', async () => {
-  const sendMessage = vi.fn(async () => undefined)
-  vi.stubGlobal('window', { api: { pi: { sendMessage } } })
-  rememberPendingContextAttachment('attachment-3')
-
-  const client = createElectronPiIpcClient()
-  await client.sendMessage('thread-1', { content: 'use this file' })
-
-  expect(sendMessage).toHaveBeenCalledWith('thread-1', { content: 'use this file' }, [
-    'attachment-3',
-  ])
-  expect(takePendingContextAttachmentIds()).toEqual([])
 })

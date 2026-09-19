@@ -4,10 +4,8 @@ import { is } from '@electron-toolkit/utils'
 import { join } from 'node:path'
 
 import { createAgentBackendProcess } from '../agent-backend/electronProcess'
-import { createBackendPiClient } from '../agent-backend/piClientProxy'
 import type { AgentBackendInitOptions } from '../agent-backend/protocol'
 import { registerAgentBackendIpc } from '../agent-backend/agentBackendIpc'
-import { registerPiClientIpc } from '../agent/pi/client/piClientIpc'
 import { registerAgentRunIpc } from '../agent/ipc/agentRunIpc'
 import { connectDatabase } from '../db/client'
 import { getDatabaseUrl, getMigrationsPath } from '../db/databasePath'
@@ -70,7 +68,6 @@ export async function bootstrap(): Promise<AppContext> {
   const artifactService = new ArtifactService(artifactRepo, workspace)
   const contextAttachments = new ContextAttachmentService()
   const backendProcess = createAgentBackendProcess()
-  const transport = process.env.PI_TRANSPORT === 'ipc' ? 'ipc' : 'http'
   const rendererUrl = is.dev ? process.env.ELECTRON_RENDERER_URL : undefined
   const backendOptions: AgentBackendInitOptions = {
     config: configStore.get(),
@@ -79,17 +76,12 @@ export async function bootstrap(): Promise<AppContext> {
     migrationsPath,
     sessionDir: join(userDataPath, 'pi-sessions'),
     allowedOrigins: [rendererUrl ? new URL(rendererUrl).origin : 'null'],
-    transport,
   }
   const backendStatus = await backendProcess.start(backendOptions)
   if (backendStatus.state === 'unavailable') console.error('[bootstrap] agent backend unavailable')
 
   const chatWindow = createChatWindow()
   const disposeAgentBackendIpc = registerAgentBackendIpc(chatWindow, backendProcess)
-  const disposePiIpc =
-    transport === 'ipc'
-      ? registerPiClientIpc(chatWindow, createBackendPiClient(backendProcess))
-      : () => undefined
   const disposeContextIpc = registerContextIpc(chatWindow, contextAttachments, {
     stage: async (attachment) => {
       await backendProcess.request({ action: 'context:stage', attachment })
@@ -132,7 +124,6 @@ export async function bootstrap(): Promise<AppContext> {
   return {
     dispose() {
       disposeAgentBackendIpc()
-      disposePiIpc()
       disposeAgentRunIpc()
       disposeContextIpc()
       contextAttachments.clear()

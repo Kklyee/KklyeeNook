@@ -1,10 +1,8 @@
 import { createAgentBackend, type AgentBackendRuntime } from './bootstrap'
 import type { AgentBackendRequest, MainToAgentBackendMessage } from './protocol'
-import type { PiClientEvent } from '@assistant-ui/react-pi'
 
 const parentPort = process.parentPort
 let backend: AgentBackendRuntime | undefined
-const piSubscriptions = new Map<string, () => void>()
 
 if (!parentPort) throw new Error('Agent backend must run as an Electron utility process')
 
@@ -19,7 +17,7 @@ async function handleMessage(message: MainToAgentBackendMessage): Promise<void> 
       backend = await createAgentBackend(message.options)
       parentPort?.postMessage({
         type: 'ready',
-        info: { baseUrl: backend.baseUrl, transport: message.options.transport },
+        info: { baseUrl: backend.baseUrl },
       })
     } catch {
       parentPort?.postMessage({ type: 'failed', message: 'Agent backend failed to initialize.' })
@@ -30,31 +28,10 @@ async function handleMessage(message: MainToAgentBackendMessage): Promise<void> 
 
   if (message.type === 'shutdown') {
     try {
-      for (const unsubscribe of piSubscriptions.values()) unsubscribe()
-      piSubscriptions.clear()
       await backend?.close()
     } finally {
       process.exit(0)
     }
-  }
-
-  if (message.type === 'pi:subscribe') {
-    if (!backend || piSubscriptions.has(message.subscriptionId)) return
-    const unsubscribe = backend.subscribePi(message.request, (event: PiClientEvent) => {
-      parentPort?.postMessage({
-        type: 'pi:event',
-        subscriptionId: message.subscriptionId,
-        event,
-      })
-    })
-    piSubscriptions.set(message.subscriptionId, unsubscribe)
-    return
-  }
-
-  if (message.type === 'pi:unsubscribe') {
-    piSubscriptions.get(message.subscriptionId)?.()
-    piSubscriptions.delete(message.subscriptionId)
-    return
   }
 
   if (message.type === 'request') {

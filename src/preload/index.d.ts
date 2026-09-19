@@ -24,14 +24,12 @@ import type {
   StageContextAttachmentRequest,
 } from '../shared/context/contextAttachment'
 import type { AgentBackendStatus } from '../shared/agentBackend'
-import type { ContextAwarePiClient } from '../shared/pi/piClient'
 
 interface API {
   agentBackend: {
     getStatus(): Promise<AgentBackendStatus>
     onStatus(listener: (status: AgentBackendStatus) => void): () => void
   }
-  pi: ContextAwarePiClient
   context: {
     stage(request: StageContextAttachmentRequest): Promise<ContextAttachmentRef>
     remove(request: RemoveContextAttachmentRequest): Promise<void>

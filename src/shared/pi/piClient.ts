@@ -7,3 +7,8 @@ export type ContextAwarePiClient = Omit<PiClient, 'sendMessage'> & {
     contextAttachmentIds?: readonly string[],
   ): Promise<void>
 }
+
+export interface PiSubscribeRequest {
+  threadId: string
+  options?: { includeSnapshot?: boolean }
+}

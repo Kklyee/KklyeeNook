@@ -14,7 +14,6 @@ const options: AgentBackendInitOptions = {
   migrationsPath: '/tmp/drizzle',
   sessionDir: '/tmp/sessions',
   allowedOrigins: [],
-  transport: 'http',
 }
 
 class FakeUtilityProcess extends EventEmitter implements UtilityProcessLike {
@@ -27,8 +26,8 @@ class FakeUtilityProcess extends EventEmitter implements UtilityProcessLike {
     if (typedMessage.type === 'initialize') {
       queueMicrotask(() =>
         this.emit('message', {
-          type: 'ready',
-          info: { baseUrl: 'http://127.0.0.1:12345/x/api/pi', transport: 'http' },
+        type: 'ready',
+        info: { baseUrl: 'http://127.0.0.1:12345/x/api/pi' },
         }),
       )
     } else if (typedMessage.type === 'request') {
@@ -62,7 +61,7 @@ test('waits for backend readiness, proxies low-frequency requests, and kills the
   const status = await backend.start(options)
   expect(status).toEqual({
     state: 'ready',
-    info: { baseUrl: 'http://127.0.0.1:12345/x/api/pi', transport: 'http' },
+    info: { baseUrl: 'http://127.0.0.1:12345/x/api/pi' },
   })
 
   await expect(backend.request({ action: 'context:clear' })).resolves.toBe('done')
@@ -72,34 +71,6 @@ test('waits for backend readiness, proxies low-frequency requests, and kills the
   backend.close()
   expect(child.killed).toBe(true)
   expect(child.messages.at(-1)).toEqual({ type: 'shutdown' })
-})
-
-test('forwards Pi events over a temporary IPC subscription and unsubscribes on cleanup', async () => {
-  const { backend, child } = makeProcess()
-  await backend.start(options)
-  const listener = vi.fn()
-  const unsubscribe = backend.subscribePi({ threadId: 'thread-1' }, listener)
-  const subscribeMessage = child.messages.at(-1)
-  expect(subscribeMessage).toMatchObject({
-    type: 'pi:subscribe',
-    request: { threadId: 'thread-1' },
-  })
-  if (subscribeMessage?.type !== 'pi:subscribe') throw new Error('Expected Pi subscription')
-
-  const event = { type: 'snapshot', threadId: 'thread-1', seq: 0, snapshot: {} }
-  child.emit('message', {
-    type: 'pi:event',
-    subscriptionId: subscribeMessage.subscriptionId,
-    event,
-  })
-  expect(listener).toHaveBeenCalledWith(event)
-
-  unsubscribe()
-  expect(child.messages.at(-1)).toEqual({
-    type: 'pi:unsubscribe',
-    subscriptionId: subscribeMessage.subscriptionId,
-  })
-  backend.close()
 })
 
 test('marks the backend unavailable when its process exits unexpectedly', async () => {

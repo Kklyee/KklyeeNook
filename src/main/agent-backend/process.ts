@@ -8,8 +8,6 @@ import type {
   AgentBackendToMainMessage,
   MainToAgentBackendMessage,
 } from './protocol'
-import type { PiClientEvent } from '@assistant-ui/react-pi'
-import type { PiSubscribeRequest, PiSubscriptionListener } from '@/shared/pi/piIpc'
 
 export interface UtilityProcessLike {
   on(event: 'message', listener: (message: unknown) => void): unknown
@@ -32,7 +30,6 @@ export class AgentBackendProcess {
   private status: AgentBackendStatus = { state: 'starting' }
   private readonly statusListeners = new Set<(status: AgentBackendStatus) => void>()
   private readonly pendingRequests = new Map<string, PendingRequest>()
-  private readonly piSubscriptions = new Map<string, PiSubscriptionListener>()
   private resolveStart: ((status: AgentBackendStatus) => void) | undefined
   private startTimer: ReturnType<typeof setTimeout> | undefined
   private closing = false
@@ -109,32 +106,6 @@ export class AgentBackendProcess {
     })
   }
 
-  subscribePi(request: PiSubscribeRequest, listener: PiSubscriptionListener): () => void {
-    const child = this.child
-    if (!child || this.status.state !== 'ready') return () => undefined
-
-    const subscriptionId = randomUUID()
-    this.piSubscriptions.set(subscriptionId, listener)
-    try {
-      child.postMessage({ type: 'pi:subscribe', subscriptionId, request })
-    } catch {
-      this.piSubscriptions.delete(subscriptionId)
-      return () => undefined
-    }
-
-    let active = true
-    return () => {
-      if (!active) return
-      active = false
-      this.piSubscriptions.delete(subscriptionId)
-      try {
-        child.postMessage({ type: 'pi:unsubscribe', subscriptionId })
-      } catch {
-        // The process may already have exited.
-      }
-    }
-  }
-
   close(): void {
     this.closing = true
     const child = this.child
@@ -144,14 +115,6 @@ export class AgentBackendProcess {
       request.reject(new Error('Agent backend is shutting down.'))
     }
     this.pendingRequests.clear()
-    for (const subscriptionId of this.piSubscriptions.keys()) {
-      try {
-        child?.postMessage({ type: 'pi:unsubscribe', subscriptionId })
-      } catch {
-        // The process may already have exited.
-      }
-    }
-    this.piSubscriptions.clear()
     if (this.startTimer) clearTimeout(this.startTimer)
     this.resolveStart?.({ state: 'unavailable', message: 'Agent backend is shutting down.' })
     this.resolveStart = undefined
@@ -179,11 +142,6 @@ export class AgentBackendProcess {
       this.failStart('Agent backend failed to initialize.')
       return
     }
-    if (message.type === 'pi:event') {
-      const listener = this.piSubscriptions.get(message.subscriptionId)
-      if (listener) listener(message.event as PiClientEvent)
-      return
-    }
     if (message.type === 'response') this.handleResponse(message)
   }
 
@@ -209,7 +167,6 @@ export class AgentBackendProcess {
       request.reject(new Error('Agent backend stopped unexpectedly.'))
     }
     this.pendingRequests.clear()
-    this.piSubscriptions.clear()
   }
 
   private failStart(message: string): void {

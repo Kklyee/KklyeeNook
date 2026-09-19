@@ -47,26 +47,3 @@ export function createElectronPiClient(baseUrl: string): PiClient {
 
   return withPendingNewThreadPreferences(attachmentAwareClient)
 }
-
-export function createElectronPiIpcClient(): PiClient {
-  const ipcClient = window.api.pi
-  const attachmentAwareClient: ContextAwarePiClient = {
-    ...ipcClient,
-    async sendMessage(
-      threadId: string,
-      input: PiSendMessageInput,
-      contextAttachmentIds: readonly string[] = [],
-    ) {
-      const pendingIds = takePendingContextAttachmentIds()
-      const attachmentIds = [...new Set([...contextAttachmentIds, ...pendingIds])]
-      try {
-        await ipcClient.sendMessage(threadId, input, attachmentIds)
-      } catch (error) {
-        restorePendingContextAttachmentIds(pendingIds)
-        throw error
-      }
-    },
-  }
-
-  return withPendingNewThreadPreferences(attachmentAwareClient)
-}

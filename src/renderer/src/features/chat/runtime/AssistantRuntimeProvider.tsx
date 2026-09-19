@@ -6,7 +6,7 @@ import type { AgentBackendInfo, AgentBackendStatus } from '@/shared/agentBackend
 import { Skeleton } from '../../../components/ui/skeleton'
 import { assistantToolkit } from '../tools/AssistantToolkit'
 import { ArtifactDataUI } from '../../artifacts/ArtifactRenderer'
-import { createElectronPiClient, createElectronPiIpcClient } from './electronPiClient'
+import { createElectronPiClient } from './electronPiClient'
 import { contextAttachmentAdapter } from '../context/contextAttachmentAdapter'
 
 export function AssistantRuntime({ children }: { children: ReactNode }) {
@@ -67,9 +67,8 @@ function ReadyAssistantRuntime({
   children: ReactNode
 }) {
   const client = useMemo(
-    () =>
-      info.transport === 'ipc' ? createElectronPiIpcClient() : createElectronPiClient(info.baseUrl),
-    [info.baseUrl, info.transport],
+    () => createElectronPiClient(info.baseUrl),
+    [info.baseUrl],
   )
   const runtime = usePiRuntime({
     client,

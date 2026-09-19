@@ -1,6 +1,5 @@
 export interface AgentBackendInfo {
   baseUrl: string
-  transport: 'http' | 'ipc'
 }
 
 export type AgentBackendStatus =
