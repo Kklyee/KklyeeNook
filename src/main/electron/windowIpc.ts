@@ -1,40 +1,47 @@
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
 import { ipcMain, BrowserWindow } from 'electron'
 
-const dragWindowSizes = new WeakMap<BrowserWindow, { width: number; height: number }>()
-
-export function registerWindowIpc() {
-  ipcMain.handle(IPC_CHANNELS.WINDOW_GET_POSITION, (event) => {
-    const window = BrowserWindow.fromWebContents(event.sender)
-
-    if (!window) {
-      return [0, 0] as [number, number]
+export function registerWindowIpc(window: BrowserWindow): () => void {
+  const getSenderWindow = (event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) => {
+    return BrowserWindow.fromWebContents(event.sender) === window ? window : null
+  }
+  const sendMaximizedState = () => {
+    if (!window.isDestroyed()) {
+      window.webContents.send(IPC_CHANNELS.WINDOW_MAXIMIZED_CHANGED, window.isMaximized())
     }
-
-    const { x, y, width, height } = window.getBounds()
-    dragWindowSizes.set(window, { width, height })
-    return [x, y] as [number, number]
-  })
-
-  ipcMain.on(IPC_CHANNELS.WINDOW_SET_POSITION, (event, x: number, y: number) => {
-    const window = BrowserWindow.fromWebContents(event.sender)
-
-    if (!window) return
-
-    const before = window.getBounds()
-    const targetX = Math.round(x)
-    const targetY = Math.round(y)
-    const size = dragWindowSizes.get(window) ?? before
-
-    if (
-      before.x === targetX &&
-      before.y === targetY &&
-      before.width === size.width &&
-      before.height === size.height
-    ) {
-      return
+  }
+  const handleMinimize = (event: Electron.IpcMainEvent) => {
+    getSenderWindow(event)?.minimize()
+  }
+  const handleToggleMaximize = (event: Electron.IpcMainEvent) => {
+    const senderWindow = getSenderWindow(event)
+    if (!senderWindow) return
+    if (senderWindow.isMaximized()) {
+      senderWindow.unmaximize()
+    } else {
+      senderWindow.maximize()
     }
+  }
+  const handleIsMaximized = (event: Electron.IpcMainInvokeEvent) => {
+    return getSenderWindow(event)?.isMaximized() ?? false
+  }
+  const handleClose = (event: Electron.IpcMainEvent) => {
+    getSenderWindow(event)?.close()
+  }
 
-    window.setBounds({ x: targetX, y: targetY, width: size.width, height: size.height }, false)
-  })
+  ipcMain.on(IPC_CHANNELS.WINDOW_MINIMIZE, handleMinimize)
+  ipcMain.on(IPC_CHANNELS.WINDOW_TOGGLE_MAXIMIZE, handleToggleMaximize)
+  ipcMain.handle(IPC_CHANNELS.WINDOW_IS_MAXIMIZED, handleIsMaximized)
+  ipcMain.on(IPC_CHANNELS.WINDOW_CLOSE, handleClose)
+  window.on('maximize', sendMaximizedState)
+  window.on('unmaximize', sendMaximizedState)
+
+  return () => {
+    ipcMain.removeListener(IPC_CHANNELS.WINDOW_MINIMIZE, handleMinimize)
+    ipcMain.removeListener(IPC_CHANNELS.WINDOW_TOGGLE_MAXIMIZE, handleToggleMaximize)
+    ipcMain.removeHandler(IPC_CHANNELS.WINDOW_IS_MAXIMIZED)
+    ipcMain.removeListener(IPC_CHANNELS.WINDOW_CLOSE, handleClose)
+    window.removeListener('maximize', sendMaximizedState)
+    window.removeListener('unmaximize', sendMaximizedState)
+  }
 }

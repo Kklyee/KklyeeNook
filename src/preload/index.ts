@@ -38,6 +38,25 @@ const context = {
 }
 
 const api = {
+  window: {
+    minimize(): void {
+      ipcRenderer.send(IPC_CHANNELS.WINDOW_MINIMIZE)
+    },
+    toggleMaximize(): void {
+      ipcRenderer.send(IPC_CHANNELS.WINDOW_TOGGLE_MAXIMIZE)
+    },
+    isMaximized(): Promise<boolean> {
+      return ipcRenderer.invoke(IPC_CHANNELS.WINDOW_IS_MAXIMIZED)
+    },
+    onMaximizedChanged(listener: (maximized: boolean) => void): () => void {
+      const handler = (_event: Electron.IpcRendererEvent, maximized: boolean) => listener(maximized)
+      ipcRenderer.on(IPC_CHANNELS.WINDOW_MAXIMIZED_CHANGED, handler)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.WINDOW_MAXIMIZED_CHANGED, handler)
+    },
+    close(): void {
+      ipcRenderer.send(IPC_CHANNELS.WINDOW_CLOSE)
+    },
+  },
   agentBackend: {
     getStatus(): Promise<AgentBackendStatus> {
       return ipcRenderer.invoke(IPC_CHANNELS.AGENT_BACKEND_GET_STATUS)

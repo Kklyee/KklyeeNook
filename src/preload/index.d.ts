@@ -26,6 +26,13 @@ import type {
 import type { AgentBackendStatus } from '../shared/agentBackend'
 
 interface API {
+  window: {
+    minimize(): void
+    toggleMaximize(): void
+    isMaximized(): Promise<boolean>
+    onMaximizedChanged(listener: (maximized: boolean) => void): () => void
+    close(): void
+  }
   agentBackend: {
     getStatus(): Promise<AgentBackendStatus>
     onStatus(listener: (status: AgentBackendStatus) => void): () => void

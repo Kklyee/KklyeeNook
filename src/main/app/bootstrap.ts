@@ -107,7 +107,7 @@ export async function bootstrap(): Promise<AppContext> {
       await backendProcess.request({ action: 'settings:cancel' }).catch(() => undefined)
     },
   })
-  registerWindowIpc()
+  const disposeWindowIpc = registerWindowIpc(chatWindow)
   const disposeAgentRunIpc = registerAgentRunIpc(backendProcess)
   registerArtifactIpc(chatWindow, artifactService)
 
@@ -125,6 +125,7 @@ export async function bootstrap(): Promise<AppContext> {
     dispose() {
       disposeAgentBackendIpc()
       disposeAgentRunIpc()
+      disposeWindowIpc()
       disposeContextIpc()
       contextAttachments.clear()
       backendProcess.close()

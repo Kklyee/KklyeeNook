@@ -4,6 +4,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  --window-titlebar-height: 2.5rem;
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.141 0.005 285.823);
@@ -80,6 +81,22 @@ body,
   margin: 0;
   overflow: hidden;
   background: transparent;
+}
+
+.titlebar-drag-region {
+  -webkit-app-region: drag;
+  app-region: drag;
+  user-select: none;
+}
+
+.titlebar-no-drag-region {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.app-sidebar {
+  top: var(--window-titlebar-height);
+  height: calc(100svh - var(--window-titlebar-height));
 }
 
 *,
