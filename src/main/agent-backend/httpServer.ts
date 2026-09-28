@@ -1,7 +1,12 @@
 import { randomBytes } from 'node:crypto'
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { once } from 'node:events'
-import type { AddressInfo } from 'node:net'
+import type { Server } from 'node:http'
+
+import { serve } from '@hono/node-server'
+import { Hono } from 'hono'
+import type { Context } from 'hono'
+import { streamSSE } from 'hono/streaming'
+import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type {
   PiClientEvent,
   PiHostUiResponse,
@@ -42,19 +47,40 @@ export async function startAgentHttpServer(
   const secret = options.secret ?? randomBytes(32).toString('hex')
   const prefix = `/${secret}/api/pi`
   const allowedOrigins = new Set(options.allowedOrigins ?? [])
-  const server = createServer((request, response) => {
-    void handleRequest(request, response, client, prefix, allowedOrigins).catch((error: unknown) => {
-      if (!response.headersSent) sendUnexpectedError(response, error)
-      else response.destroy()
-    })
+  const app = new Hono()
+
+  app.use('*', async (context, next) => {
+    const origin = context.req.header('origin')
+    if (origin && !allowedOrigins.has(origin)) {
+      return sendError(context, 403, 'forbidden', 'Origin is not allowed.')
+    }
+    if (origin) {
+      context.header('Access-Control-Allow-Origin', origin)
+      context.header('Vary', 'Origin')
+    }
+    if (context.req.header('access-control-request-private-network') === 'true') {
+      context.header('Access-Control-Allow-Private-Network', 'true')
+    }
+    if (context.req.method === 'OPTIONS') {
+      context.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS')
+      context.header('Access-Control-Allow-Headers', 'content-type')
+      context.header('Access-Control-Max-Age', '600')
+      return context.body(null, 204)
+    }
+    return next()
   })
 
-  server.listen(0, HOST)
+  app.get('/health', (context) => context.json({ ok: true, service: 'kklyeenook-agent-backend' }))
+  app.all('*', async (context) => handleRequest(context, client, prefix))
+  app.onError((error, context) => sendUnexpectedError(context, error))
+
+  const server = serve({ fetch: app.fetch, port: 0, hostname: HOST }) as Server
   await once(server, 'listening')
   const address = server.address()
-  if (!address || typeof address === 'string') throw new Error('Agent backend did not bind a TCP port')
+  if (!address || typeof address === 'string')
+    throw new Error('Agent backend did not bind a TCP port')
 
-  const { port } = address as AddressInfo
+  const { port } = address
   return {
     baseUrl: `http://${HOST}:${port}/${secret}/api/pi`,
     port,
@@ -63,87 +89,63 @@ export async function startAgentHttpServer(
 }
 
 async function handleRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
+  context: Context,
   client: ContextAwarePiClient,
   prefix: string,
-  allowedOrigins: ReadonlySet<string>,
-): Promise<void> {
-  if (!applyCors(request, response, allowedOrigins)) {
-    sendError(response, 403, 'forbidden', 'Origin is not allowed.')
-    return
-  }
-
-  if (request.method === 'OPTIONS') {
-    response.writeHead(204).end()
-    return
-  }
-
-  const url = new URL(request.url ?? '/', `http://${HOST}`)
-  if (request.method === 'GET' && url.pathname === '/health') {
-    sendJson(response, 200, { ok: true, service: 'kklyeenook-agent-backend' })
-    return
-  }
-
+): Promise<Response> {
+  const url = new URL(context.req.url)
   if (url.pathname !== prefix && !url.pathname.startsWith(`${prefix}/`)) {
-    sendError(response, 404, 'not_found', 'Route not found.')
-    return
+    return sendError(context, 404, 'not_found', 'Route not found.')
   }
 
   const route = url.pathname.slice(prefix.length) || '/'
   const segments = route.split('/').filter(Boolean).map(decodeSegment)
   if (segments.some((segment) => segment === null)) {
-    sendError(response, 400, 'bad_request', 'Invalid route.')
-    return
+    return sendError(context, 400, 'bad_request', 'Invalid route.')
   }
   const parts = segments as string[]
 
-  if (parts.length === 1 && parts[0] === 'threads' && request.method === 'GET') {
-    const workspacePath = url.searchParams.get('workspacePath') ?? undefined
-    const includeArchived = url.searchParams.get('includeArchived') === 'true'
-    sendJson(response, 200, await client.listThreads({ workspacePath, includeArchived }))
-    return
+  if (parts.length === 1 && parts[0] === 'threads' && context.req.method === 'GET') {
+    const workspacePath = context.req.query('workspacePath') ?? undefined
+    const includeArchived = context.req.query('includeArchived') === 'true'
+    return context.json(await client.listThreads({ workspacePath, includeArchived }))
   }
 
-  if (parts.length === 1 && parts[0] === 'threads' && request.method === 'POST') {
-    sendJson(response, 200, await client.createThread(parseCreateThreadInput(await readJsonBody(request))))
-    return
+  if (parts.length === 1 && parts[0] === 'threads' && context.req.method === 'POST') {
+    return context.json(
+      await client.createThread(parseCreateThreadInput(await readJsonBody(context))),
+    )
   }
 
-  if (parts.length === 1 && parts[0] === 'models' && request.method === 'GET') {
-    const workspacePath = url.searchParams.get('workspacePath') ?? undefined
-    sendJson(response, 200, await client.getAvailableModels({ workspacePath }))
-    return
+  if (parts.length === 1 && parts[0] === 'models' && context.req.method === 'GET') {
+    const workspacePath = context.req.query('workspacePath') ?? undefined
+    return context.json(await client.getAvailableModels({ workspacePath }))
   }
 
   if (parts.length < 2 || parts[0] !== 'threads') {
-    sendError(response, 404, 'not_found', 'Route not found.')
-    return
+    return sendError(context, 404, 'not_found', 'Route not found.')
   }
 
   const threadId = parts[1]
   const action = parts.slice(2)
 
-  if (action.length === 0 && request.method === 'GET') {
-    sendJson(response, 200, await client.getThread(threadId))
-    return
+  if (action.length === 0 && context.req.method === 'GET') {
+    return context.json(await client.getThread(threadId))
   }
-  if (action.length === 0 && request.method === 'PATCH') {
-    const body = await readJsonBody(request)
+  if (action.length === 0 && context.req.method === 'PATCH') {
+    const body = await readJsonBody(context)
     if (!isRecord(body) || typeof body.title !== 'string') {
       throw new HttpError(400, 'bad_request', 'Expected a thread title.')
     }
     await client.renameThread(threadId, body.title)
-    sendNoContent(response)
-    return
+    return sendNoContent(context)
   }
-  if (action.length === 0 && request.method === 'DELETE') {
+  if (action.length === 0 && context.req.method === 'DELETE') {
     await client.deleteThread(threadId)
-    sendNoContent(response)
-    return
+    return sendNoContent(context)
   }
-  if (action.length === 1 && action[0] === 'messages' && request.method === 'POST') {
-    const body = await readJsonBody(request)
+  if (action.length === 1 && action[0] === 'messages' && context.req.method === 'POST') {
+    const body = await readJsonBody(context)
     if (!isRecord(body) || !isRecord(body.input) || typeof body.input.content !== 'string') {
       throw new HttpError(400, 'bad_request', 'Expected a message input.')
     }
@@ -151,143 +153,114 @@ async function handleRequest(
     if (ids !== undefined && (!Array.isArray(ids) || !ids.every((id) => typeof id === 'string'))) {
       throw new HttpError(400, 'bad_request', 'Invalid context attachment IDs.')
     }
-    await client.sendMessage(threadId, body.input as unknown as PiSendMessageInput, ids as string[] | undefined)
-    sendNoContent(response)
-    return
+    await client.sendMessage(
+      threadId,
+      body.input as unknown as PiSendMessageInput,
+      ids as string[] | undefined,
+    )
+    return sendNoContent(context)
   }
-  if (action.length === 1 && action[0] === 'cancel' && request.method === 'POST') {
+  if (action.length === 1 && action[0] === 'cancel' && context.req.method === 'POST') {
     await client.cancelRun(threadId)
-    sendNoContent(response)
-    return
+    return sendNoContent(context)
   }
-  if (action.length === 2 && action[0] === 'queue' && action[1] === 'clear' && request.method === 'POST') {
-    sendJson(response, 200, await client.clearQueue(threadId))
-    return
+  if (
+    action.length === 2 &&
+    action[0] === 'queue' &&
+    action[1] === 'clear' &&
+    context.req.method === 'POST'
+  ) {
+    return context.json(await client.clearQueue(threadId))
   }
-  if (action.length === 1 && action[0] === 'model' && request.method === 'POST') {
-    const body = await readJsonBody(request)
-    if (
-      !isRecord(body) ||
-      typeof body.provider !== 'string' ||
-      typeof body.modelId !== 'string'
-    ) {
+  if (action.length === 1 && action[0] === 'model' && context.req.method === 'POST') {
+    const body = await readJsonBody(context)
+    if (!isRecord(body) || typeof body.provider !== 'string' || typeof body.modelId !== 'string') {
       throw new HttpError(400, 'bad_request', 'Expected a provider and model ID.')
     }
     await client.setModel(threadId, { provider: body.provider, modelId: body.modelId })
-    sendNoContent(response)
-    return
+    return sendNoContent(context)
   }
-  if (action.length === 1 && action[0] === 'thinking' && request.method === 'POST') {
-    const body = await readJsonBody(request)
+  if (action.length === 1 && action[0] === 'thinking' && context.req.method === 'POST') {
+    const body = await readJsonBody(context)
     if (!isRecord(body) || typeof body.level !== 'string') {
       throw new HttpError(400, 'bad_request', 'Expected a thinking level.')
     }
     await client.setThinkingLevel(threadId, body.level as PiThinkingLevel)
-    sendNoContent(response)
-    return
+    return sendNoContent(context)
   }
-  if (action.length === 1 && action[0] === 'archive' && request.method === 'POST') {
+  if (action.length === 1 && action[0] === 'archive' && context.req.method === 'POST') {
     await client.archiveThread(threadId)
-    sendNoContent(response)
-    return
+    return sendNoContent(context)
   }
-  if (action.length === 1 && action[0] === 'unarchive' && request.method === 'POST') {
+  if (action.length === 1 && action[0] === 'unarchive' && context.req.method === 'POST') {
     await client.unarchiveThread(threadId)
-    sendNoContent(response)
-    return
+    return sendNoContent(context)
   }
-  if (action.length === 1 && action[0] === 'host-ui' && request.method === 'POST') {
-    const body = await readJsonBody(request)
-    if (!isRecord(body) || !isRecord(body.response) || typeof body.response.requestId !== 'string') {
+  if (action.length === 1 && action[0] === 'host-ui' && context.req.method === 'POST') {
+    const body = await readJsonBody(context)
+    if (
+      !isRecord(body) ||
+      !isRecord(body.response) ||
+      typeof body.response.requestId !== 'string'
+    ) {
       throw new HttpError(400, 'bad_request', 'Expected a host UI response.')
     }
     await client.respondToHostUiRequest(threadId, body.response as unknown as PiHostUiResponse)
-    sendNoContent(response)
-    return
+    return sendNoContent(context)
   }
-  if (action.length === 1 && action[0] === 'events' && request.method === 'GET') {
-    sendEvents(request, response, client, threadId, url.searchParams.get('snapshot') !== 'false')
-    return
+  if (action.length === 1 && action[0] === 'events' && context.req.method === 'GET') {
+    return sendEvents(context, client, threadId, context.req.query('snapshot') !== 'false')
   }
 
-  sendError(response, 404, 'not_found', 'Route not found.')
+  return sendError(context, 404, 'not_found', 'Route not found.')
 }
 
 function sendEvents(
-  request: IncomingMessage,
-  response: ServerResponse,
+  context: Context,
   client: ContextAwarePiClient,
   threadId: string,
   includeSnapshot: boolean,
-): void {
-  response.writeHead(200, {
-    'Content-Type': 'text/event-stream; charset=utf-8',
-    'Cache-Control': 'no-cache, no-transform',
-    Connection: 'keep-alive',
-    'X-Accel-Buffering': 'no',
+): Response {
+  context.header('X-Accel-Buffering', 'no')
+  return streamSSE(context, async (stream) => {
+    let unsubscribe: (() => void) | undefined
+    let resolveClosed!: () => void
+    const closed = new Promise<void>((resolve) => {
+      resolveClosed = resolve
+    })
+    let ended = false
+    const heartbeat = setInterval(() => {
+      void stream.write(': ping\n\n').catch(close)
+    }, 15_000)
+    heartbeat.unref()
+    const close = () => {
+      if (ended) return
+      ended = true
+      clearInterval(heartbeat)
+      unsubscribe?.()
+      resolveClosed()
+    }
+    stream.onAbort(close)
+    unsubscribe = client.subscribe(
+      threadId,
+      (event: PiClientEvent) => {
+        void stream.writeSSE({ data: JSON.stringify(event) }).catch(close)
+      },
+      { includeSnapshot },
+    )
+    if (stream.aborted) close()
+    await closed
   })
-  response.flushHeaders()
-
-  let closed = false
-  let unsubscribe: (() => void) | undefined
-  const heartbeat = setInterval(() => {
-    if (!closed) response.write(': ping\n\n')
-  }, 15_000)
-  heartbeat.unref()
-
-  const close = () => {
-    if (closed) return
-    closed = true
-    clearInterval(heartbeat)
-    unsubscribe?.()
-  }
-
-  response.once('close', close)
-  request.once('aborted', close)
-  unsubscribe = client.subscribe(
-    threadId,
-    (event: PiClientEvent) => {
-      if (!closed && !response.destroyed) response.write(`data: ${JSON.stringify(event)}\n\n`)
-    },
-    { includeSnapshot },
-  )
-  if (closed) unsubscribe()
 }
 
-function applyCors(
-  request: IncomingMessage,
-  response: ServerResponse,
-  allowedOrigins: ReadonlySet<string>,
-): boolean {
-  const origin = request.headers.origin
-  if (origin && !allowedOrigins.has(origin)) return false
-  if (origin) {
-    response.setHeader('Access-Control-Allow-Origin', origin)
-    response.setHeader('Vary', 'Origin')
+async function readJsonBody(context: Context): Promise<unknown> {
+  const body = await context.req.arrayBuffer()
+  if (body.byteLength > MAX_BODY_BYTES) {
+    throw new HttpError(413, 'payload_too_large', 'Request body is too large.')
   }
-  if (request.headers['access-control-request-private-network'] === 'true') {
-    response.setHeader('Access-Control-Allow-Private-Network', 'true')
-  }
-  if (request.method === 'OPTIONS') {
-    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS')
-    response.setHeader('Access-Control-Allow-Headers', 'content-type')
-    response.setHeader('Access-Control-Max-Age', '600')
-  }
-  return true
-}
-
-async function readJsonBody(request: IncomingMessage): Promise<unknown> {
-  const chunks: Buffer[] = []
-  let size = 0
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-    size += buffer.length
-    if (size > MAX_BODY_BYTES) throw new HttpError(413, 'payload_too_large', 'Request body is too large.')
-    chunks.push(buffer)
-  }
-  if (!size) return {}
+  if (!body.byteLength) return {}
   try {
-    return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown
+    return JSON.parse(new TextDecoder().decode(body)) as unknown
   } catch {
     throw new HttpError(400, 'bad_request', 'Request body must be valid JSON.')
   }
@@ -330,36 +303,26 @@ function parseCreateThreadInput(
   }
 }
 
-function sendJson(response: ServerResponse, status: number, value: unknown): void {
-  response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' })
-  response.end(JSON.stringify(value))
+function sendNoContent(context: Context): Response {
+  return context.body(null, 204)
 }
 
-function sendNoContent(response: ServerResponse): void {
-  response.writeHead(204).end()
+function sendError(context: Context, status: number, code: string, message: string): Response {
+  return context.json({ error: { code, message } }, status as ContentfulStatusCode)
 }
 
-function sendError(response: ServerResponse, status: number, code: string, message: string): void {
-  if (response.destroyed || response.writableEnded) return
-  response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' })
-  response.end(JSON.stringify({ error: { code, message } }))
-}
-
-function sendUnexpectedError(response: ServerResponse, error: unknown): void {
+function sendUnexpectedError(context: Context, error: unknown): Response {
   if (error instanceof HttpError) {
-    sendError(response, error.status, error.code, error.message)
-    return
+    return sendError(context, error.status, error.code, error.message)
   }
   const rawMessage = error instanceof Error ? error.message : ''
   if (/not found/i.test(rawMessage)) {
-    sendError(response, 404, 'not_found', 'Thread not found.')
-    return
+    return sendError(context, 404, 'not_found', 'Thread not found.')
   }
   if (/(running|active run|invalid state|cannot .* while)/i.test(rawMessage)) {
-    sendError(response, 409, 'conflict', 'Operation conflicts with the current agent state.')
-    return
+    return sendError(context, 409, 'conflict', 'Operation conflicts with the current agent state.')
   }
-  sendError(response, 500, 'internal_error', 'Agent backend request failed.')
+  return sendError(context, 500, 'internal_error', 'Agent backend request failed.')
 }
 
 function closeServer(server: Server): Promise<void> {
