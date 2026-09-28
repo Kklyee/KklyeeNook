@@ -14,14 +14,14 @@ export interface AgentPlanToolInput {
   steps: Array<{
     id: string
     title: string
-    status?: AgentPlanStepStatus
+    status: AgentPlanStepStatus
   }>
 }
 
-export function completeActivePlanSteps(plan: AgentPlan): AgentPlan {
+export function completePlanSteps(plan: AgentPlan): AgentPlan {
   let changed = false
   const steps = plan.steps.map((step) => {
-    if (step.status !== 'in_progress') return step
+    if (step.status === 'completed' || step.status === 'failed') return step
     changed = true
     return { ...step, status: 'completed' as const }
   })

@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 
-import { completeActivePlanSteps, parseAgentPlan } from './agentPlan'
+import { completePlanSteps, parseAgentPlan } from './agentPlan'
 
 test('normalizes plan steps and fills omitted statuses', () => {
   expect(
@@ -41,7 +41,7 @@ test('rejects plans without stable unique step ids or valid statuses', () => {
   ).toBeUndefined()
 })
 
-test('completes active steps without changing pending or failed steps', () => {
+test('completes remaining steps without changing failed steps', () => {
   const plan = {
     steps: [
       { id: 'active', title: '进行中', status: 'in_progress' as const },
@@ -50,10 +50,10 @@ test('completes active steps without changing pending or failed steps', () => {
     ],
   }
 
-  expect(completeActivePlanSteps(plan)).toEqual({
+  expect(completePlanSteps(plan)).toEqual({
     steps: [
       { id: 'active', title: '进行中', status: 'completed' },
-      { id: 'pending', title: '待处理', status: 'pending' },
+      { id: 'pending', title: '待处理', status: 'completed' },
       { id: 'failed', title: '失败', status: 'failed' },
     ],
   })

@@ -401,7 +401,14 @@ test('turns a successful update_plan tool call into a persisted run plan and eve
   expect(runRepo.runs.get(finalRun.id)?.plan).toEqual(finalRun.plan)
   expect(
     (await service.listExecutionRecords(finalRun.id)).map((record) => record.event.type),
-  ).toEqual(['user_message', 'tool_started', 'tool_finished', 'plan_updated', 'agent_completed'])
+  ).toEqual([
+    'user_message',
+    'tool_started',
+    'tool_finished',
+    'plan_updated',
+    'plan_updated',
+    'agent_completed',
+  ])
 })
 
 test('completes the active plan step when the agent run completes', async () => {
@@ -445,7 +452,7 @@ test('completes the active plan step when the agent run completes', async () => 
   expect(finalRun.plan).toEqual({
     steps: [
       { id: 'analyze', title: '分析项目', status: 'completed' },
-      { id: 'edit', title: '修改实现', status: 'pending' },
+      { id: 'edit', title: '修改实现', status: 'completed' },
     ],
   })
   expect(runRepo.runs.get(finalRun.id)?.plan).toEqual(finalRun.plan)

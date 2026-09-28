@@ -21,7 +21,7 @@ const planSchema = Type.Object({
     Type.Object({
       id: Type.String({ description: 'Stable step identifier' }),
       title: Type.String({ description: 'Short step description' }),
-      status: Type.Optional(stepStatusSchema),
+      status: stepStatusSchema,
     }),
     { minItems: 1 },
   ),
@@ -32,8 +32,8 @@ export function createPlanToolDefinition(): PiToolDefinition<typeof planSchema, 
     name: 'update_plan',
     label: 'Update plan',
     description:
-      'Create or update a concise execution plan for complex tasks. Use stable step IDs and include the current status of every step. Do not use this tool for simple tasks.',
-    promptSnippet: 'Create or update a plan for complex tasks',
+      'Create or update a concise execution plan for complex tasks. Every step must include a stable ID, short title, and current status. For a new plan, set the first active step to in_progress and later steps to pending. After each meaningful step, call this tool again with completed, in_progress, pending, or failed statuses. Before the final answer, mark successful steps completed and blocked steps failed. This tool records state; it does not execute steps. Do not use it for simple tasks.',
+    promptSnippet: 'Create or update a plan and keep every step status current',
     parameters: planSchema,
     async execute(_toolCallId, params) {
       const plan = parseAgentPlan(params as AgentPlanToolInput)

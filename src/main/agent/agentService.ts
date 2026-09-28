@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import type { AgentRuntime, AgentRuntimeInput } from './agentRuntime'
 import { AgentSession } from './agentSession'
-import { parseAgentPlan } from '@/shared/agent/agentPlan'
+import { completePlanSteps, parseAgentPlan } from '@/shared/agent/agentPlan'
 import type { AgentRun, AgentRunOverview } from '@/shared/agent/agentRun'
 import { getAgentRunPatch } from './agentRunState'
 
@@ -178,6 +178,10 @@ export class AgentService {
     const run = session.getRun(runId)
     if (!run) {
       return
+    }
+    if (event.type === 'agent_completed' && run.plan) {
+      const plan = completePlanSteps(run.plan)
+      if (plan !== run.plan) this.handleAgentEvent(session, runId, { type: 'plan_updated', plan })
     }
     const timestamp = Date.now()
     const envelope = { sessionId: session.id, runId, timestamp, event }

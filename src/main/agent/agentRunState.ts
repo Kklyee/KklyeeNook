@@ -1,5 +1,5 @@
 import type { AgentEvent } from '../../shared/agent/agentEvent'
-import { completeActivePlanSteps } from '../../shared/agent/agentPlan'
+import { completePlanSteps } from '../../shared/agent/agentPlan'
 
 import type { AgentRun } from '../../shared/agent/agentRun'
 
@@ -73,7 +73,7 @@ export function getAgentRunPatch(
       return {
         status: 'completed',
         completedAt: timestamp,
-        ...(run.plan ? { plan: completeActivePlanSteps(run.plan) } : {}),
+        ...(run.plan ? { plan: completePlanSteps(run.plan) } : {}),
       }
 
     case 'agent_failed':
