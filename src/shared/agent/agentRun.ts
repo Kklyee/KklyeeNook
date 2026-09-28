@@ -1,3 +1,6 @@
+import type { AgentPlan } from './agentPlan'
+import type { ToolCall, ToolResult } from '../tool/tool'
+
 export type AgentRunStatus =
   | 'created'
   | 'running'
@@ -28,6 +31,7 @@ export interface AgentRun {
   startedAt?: number
   completedAt?: number
   error?: string
+  plan?: AgentPlan
   toolCalls: ToolCall[]
   toolResults: ToolResult[]
   artifactIds: string[]
@@ -36,4 +40,3 @@ export interface AgentRun {
 export interface LoadAgentRunsRequest {
   sessionId: string
 }
-import type { ToolCall, ToolResult } from '../tool/tool'

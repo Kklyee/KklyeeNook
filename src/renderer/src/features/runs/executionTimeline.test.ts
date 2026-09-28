@@ -173,3 +173,22 @@ test('shows completed and failed context compaction events', () => {
     },
   ])
 })
+
+test('shows plan updates in the execution timeline', () => {
+  const model = buildExecutionTimeline(run, [
+    record(1, 120, {
+      type: 'plan_updated',
+      plan: {
+        steps: [
+          { id: 'one', title: '分析项目', status: 'completed' },
+          { id: 'two', title: '修改实现', status: 'in_progress' },
+          { id: 'three', title: '运行测试', status: 'pending' },
+        ],
+      },
+    }),
+  ])
+
+  expect(model.items).toMatchObject([
+    { kind: 'plan', title: '更新计划', summary: '1 / 3', detail: { steps: expect.any(Array) } },
+  ])
+})

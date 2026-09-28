@@ -39,7 +39,7 @@ export async function bootstrap(): Promise<AppContext> {
       contextWindow: 128_000,
       maxTokens: 1_000,
     },
-    tools: { enabled: ['read', 'bash', 'edit', 'write', 'create_artifact'] },
+    tools: { enabled: ['read', 'bash', 'edit', 'write', 'create_artifact', 'update_plan'] },
     cwd: defaultWorkspace,
   }
 

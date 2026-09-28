@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import type { AgentRuntime, AgentRuntimeInput } from './agentRuntime'
 import { AgentSession } from './agentSession'
+import { parseAgentPlan } from '@/shared/agent/agentPlan'
 import type { AgentRun, AgentRunOverview } from '@/shared/agent/agentRun'
 import { getAgentRunPatch } from './agentRunState'
 
@@ -193,6 +194,15 @@ export class AgentService {
       console.error('[AgentService] failed to persist execution event:', error)
     })
     this.publish(envelope)
+
+    if (
+      event.type === 'tool_finished' &&
+      event.result.success &&
+      event.result.toolName === 'update_plan'
+    ) {
+      const plan = parseAgentPlan(event.result.output)
+      if (plan) this.handleAgentEvent(session, runId, { type: 'plan_updated', plan })
+    }
 
     if (
       event.type === 'tool_finished' &&

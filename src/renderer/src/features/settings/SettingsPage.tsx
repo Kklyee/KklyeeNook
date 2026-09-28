@@ -28,6 +28,7 @@ const toolDescriptions: Record<string, string> = {
   edit: '编辑文件',
   write: '写入文件',
   bash: '执行命令',
+  update_plan: '更新计划',
 }
 
 type SettingsTab = 'model' | 'tools' | 'permissions'

@@ -1,3 +1,4 @@
+import type { AgentPlan } from './agentPlan'
 import type { ToolCall, ToolResult } from '../tool/tool'
 import type { Artifact } from '../artifact/artifact'
 
@@ -9,6 +10,7 @@ export type AgentEvent =
   | { type: 'tool_started'; call: ToolCall }
   | { type: 'tool_updated'; toolCallId: string; partialResult: unknown }
   | { type: 'tool_finished'; result: ToolResult }
+  | { type: 'plan_updated'; plan: AgentPlan }
   | { type: 'artifact_created'; artifact: Artifact }
   | {
       type: 'context_compaction_started'

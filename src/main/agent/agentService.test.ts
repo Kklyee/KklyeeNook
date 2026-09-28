@@ -352,3 +352,49 @@ test('turns a successful create_artifact tool call into a durable run artifact',
   ])
   expect(finalRun.artifactIds).toEqual([artifactRepo.artifacts[0]!.id])
 })
+
+test('turns a successful update_plan tool call into a persisted run plan and event', async () => {
+  const runRepo = new MemoryRunRepo()
+  const executionRecordRepo = new MemoryExecutionRecordRepo()
+  const plan = {
+    steps: [
+      { id: 'analyze', title: '分析项目', status: 'completed' as const },
+      { id: 'edit', title: '修改实现', status: 'in_progress' as const },
+    ],
+  }
+  const runtime: AgentRuntime = {
+    async run(_input, emit) {
+      emit({
+        type: 'tool_started',
+        call: { id: 'tool-plan', toolName: 'update_plan', args: plan },
+      })
+      emit({
+        type: 'tool_finished',
+        result: {
+          toolCallId: 'tool-plan',
+          toolName: 'update_plan',
+          output: { content: [{ type: 'text', text: 'updated' }], details: plan },
+          success: true,
+        },
+      })
+      emit({ type: 'agent_completed' })
+    },
+    dispose() {},
+  }
+  const service = new AgentService(
+    { create: () => runtime },
+    new MemorySessionRepo([sessionRecord]),
+    runRepo,
+    executionRecordRepo,
+    new MemoryArtifactRepo(),
+  )
+  await service.initialize()
+
+  const finalRun = await service.startRun(sessionRecord.id, { prompt: '请执行复杂任务' }).completion
+
+  expect(finalRun.plan).toEqual(plan)
+  expect(runRepo.runs.get(finalRun.id)?.plan).toEqual(plan)
+  expect(
+    (await service.listExecutionRecords(finalRun.id)).map((record) => record.event.type),
+  ).toEqual(['user_message', 'tool_started', 'tool_finished', 'plan_updated', 'agent_completed'])
+})

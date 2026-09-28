@@ -49,6 +49,9 @@ export function getAgentRunPatch(
         ],
       }
 
+    case 'plan_updated':
+      return { status: 'running', plan: event.plan }
+
     case 'artifact_created':
       return {
         status: 'running',

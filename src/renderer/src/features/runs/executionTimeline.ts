@@ -6,6 +6,7 @@ export type TimelineItemKind =
   | 'user'
   | 'assistant'
   | 'tool'
+  | 'plan'
   | 'approval'
   | 'compaction'
   | 'error'
@@ -112,6 +113,13 @@ export function buildExecutionTimeline(
         }
         break
       }
+      case 'plan_updated':
+        items.push({
+          ...item(record.id, 'plan', '更新计划', record.timestamp),
+          summary: planSummary(event.plan),
+          detail: event.plan,
+        })
+        break
       case 'context_compaction_started': {
         const compaction = {
           ...item(record.id, 'compaction', 'Compressing context', record.timestamp),
@@ -235,6 +243,11 @@ function timelineText(value: unknown): string {
   } catch {
     return String(value)
   }
+}
+
+function planSummary(plan: { steps: readonly { status: string }[] }): string {
+  const completed = plan.steps.filter((step) => step.status === 'completed').length
+  return `${completed} / ${plan.steps.length}`
 }
 
 function compactionSummary(tokensBefore?: number, estimatedTokensAfter?: number): string {

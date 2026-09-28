@@ -6,6 +6,7 @@ import { PiSessionRuntime } from '@/main/agent/pi/runtime/piSessionRuntime'
 import { PiSessionRuntimeManager } from '@/main/agent/pi/runtime/piSessionRuntimeManager'
 import { registerPiArtifactTool } from '@/main/agent/pi/adapters/piArtifactToolAdapter'
 import { registerPiBuiltinTools } from '@/main/agent/pi/adapters/piBuiltinToolAdapter'
+import { registerPiPlanTool } from '@/main/agent/pi/adapters/piPlanToolAdapter'
 import { ApprovalPolicy } from '@/main/approval/approvalPolicy'
 import { ArtifactService } from '@/main/artifact/artifactService'
 import { ContextAttachmentService } from '@/main/context/contextAttachmentService'
@@ -72,6 +73,7 @@ export async function createAgentBackend(
     }
     registerPiBuiltinTools(toolRegistry, workspace())
     registerPiArtifactTool(toolRegistry)
+    registerPiPlanTool(toolRegistry)
 
     const sessionRuntimeManager = new PiSessionRuntimeManager(
       (sessionId) =>

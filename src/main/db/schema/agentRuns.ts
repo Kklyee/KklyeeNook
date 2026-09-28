@@ -1,5 +1,6 @@
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
+import type { AgentPlan } from '@/shared/agent/agentPlan'
 import type { AgentRunStatus } from '@/shared/agent/agentRun'
 import type { ToolCall, ToolResult } from '@/shared/tool/tool'
 import { conversations } from './conversations'
@@ -17,6 +18,7 @@ export const agentRuns = sqliteTable(
     startedAt: integer('started_at'),
     completedAt: integer('completed_at'),
     error: text('error'),
+    plan: text('plan', { mode: 'json' }).$type<AgentPlan>(),
     toolCalls: text('tool_calls', { mode: 'json' }).$type<ToolCall[]>().notNull().default([]),
     toolResults: text('tool_results', { mode: 'json' }).$type<ToolResult[]>().notNull().default([]),
     artifactIds: text('artifact_ids', { mode: 'json' }).$type<string[]>().notNull().default([]),

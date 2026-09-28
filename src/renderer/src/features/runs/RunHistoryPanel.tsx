@@ -550,6 +550,7 @@ const EVENT_META: Record<
   },
   compaction: { label: '上下文', icon: BotIcon, className: 'bg-cyan-500/12 text-cyan-500' },
   tool: { label: '工具', icon: WrenchIcon, className: 'bg-amber-500/12 text-amber-500' },
+  plan: { label: '计划', icon: BotIcon, className: 'bg-cyan-500/12 text-cyan-500' },
   approval: { label: '审批', icon: KeyRoundIcon, className: 'bg-emerald-500/12 text-emerald-500' },
   error: { label: '错误', icon: CircleAlertIcon, className: 'bg-destructive/10 text-destructive' },
 }
@@ -603,8 +604,8 @@ function buildOverview(timelines: readonly RunTimeline[]) {
             ? 'assistant'
             : event.kind === 'compaction'
               ? 'assistant'
-            : event.kind === 'tool' || event.kind === 'approval'
-              ? 'tool'
+              : event.kind === 'tool' || event.kind === 'plan' || event.kind === 'approval'
+                ? 'tool'
               : undefined
       if (!laneId) continue
       if (event.kind === 'tool') toolCount += 1
@@ -621,7 +622,9 @@ function buildOverview(timelines: readonly RunTimeline[]) {
               ? 'failed'
               : event.kind === 'compaction'
                 ? 'system'
-                : (event.kind as TraceTone),
+                : event.kind === 'plan'
+                  ? 'tool'
+                  : (event.kind as TraceTone),
         })
       events.set(segmentId, { run, event })
     }
