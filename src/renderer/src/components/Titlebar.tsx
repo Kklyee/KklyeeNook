@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { BotIcon, Maximize2Icon, Minimize2Icon, MinusIcon, XIcon } from 'lucide-react'
+import { Maximize2Icon, Minimize2Icon, MinusIcon, XIcon } from 'lucide-react'
 import { Button } from './ui/button'
 
 export function Titlebar() {
@@ -21,9 +21,6 @@ export function Titlebar() {
   return (
     <header className="titlebar-drag-region bg-sidebar text-sidebar-foreground flex h-10 shrink-0 items-center border-b border-sidebar-border">
       <div className="flex min-w-0 flex-1 items-center gap-2 px-3">
-        <span className="bg-sidebar-primary text-sidebar-primary-foreground flex size-5 shrink-0 items-center justify-center rounded-md">
-          <BotIcon className="size-3" />
-        </span>
         <span className="truncate text-xs font-semibold tracking-wide">KklyeeNook</span>
       </div>
       <div className="titlebar-no-drag-region flex h-full shrink-0 items-stretch">
