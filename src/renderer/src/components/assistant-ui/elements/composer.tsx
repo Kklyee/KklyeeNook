@@ -57,9 +57,6 @@ export interface ComposerModel {
 export interface ComposerUsage {
   used: number
   total: number
-  system?: number
-  tools?: number
-  messages?: number
 }
 
 const ATTACHMENT_ICONS: Record<NonNullable<ComposerAttachment['kind']>, LucideIcon> = {
@@ -439,21 +436,6 @@ export function ComposerContext({
   className,
   ...props
 }: Omit<ComponentProps<'div'>, 'children'> & { usage: ComposerUsage }) {
-  const breakdown = [
-    usage.system !== undefined
-      ? { label: 'System', value: usage.system, className: 'bg-foreground/25' }
-      : undefined,
-    usage.tools !== undefined
-      ? { label: 'Tools', value: usage.tools, className: 'bg-foreground/45' }
-      : undefined,
-    usage.messages !== undefined
-      ? { label: 'Messages', value: usage.messages, className: 'bg-foreground/80' }
-      : undefined,
-  ].filter((segment): segment is NonNullable<typeof segment> => segment !== undefined)
-  const segments =
-    breakdown.length === 3
-      ? breakdown
-      : [{ label: 'Used', value: usage.used, className: 'bg-foreground/80' }]
   const used = usage.used
   const fraction = usage.total === 0 ? 0 : used / usage.total
   const warn = fraction > 0.85
@@ -484,32 +466,11 @@ export function ComposerContext({
           </p>
         </div>
         <div className="bg-foreground/[0.06] flex h-[5px] w-full gap-px overflow-hidden rounded-full">
-          {segments.map((segment) => (
-            <span
-              key={segment.label}
-              className={cn(
-                'h-full transition-[width] duration-700 motion-reduce:transition-none',
-                segment.className,
-              )}
-              style={{ width: `${pct(segment.value, usage.total)}%` }}
-            />
-          ))}
+          <span
+            className="bg-foreground/80 h-full transition-[width] duration-700 motion-reduce:transition-none"
+            style={{ width: `${pct(used, usage.total)}%` }}
+          />
         </div>
-        <div className="flex flex-col gap-2">
-          {segments.map((segment) => (
-            <div
-              key={segment.label}
-              className="text-foreground/55 flex items-center gap-2.5 text-[13px]"
-            >
-              <span aria-hidden className={cn('size-1.5 rounded-full', segment.className)} />
-              <span className="flex-1">{segment.label}</span>
-              <span className={cn(mono, 'text-foreground/40 tabular-nums')}>
-                {formatComposerTokens(segment.value)}
-              </span>
-            </div>
-          ))}
-        </div>
-        <div className="bg-foreground/[0.06] h-px" />
         <div className="text-foreground/55 flex items-center justify-between text-[13px]">
           <span>Total</span>
           <span className={cn(mono, 'text-foreground/40 tabular-nums')}>
