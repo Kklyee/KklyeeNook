@@ -60,7 +60,7 @@ function ReasoningRoot({
   variant,
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
-  defaultOpen = false,
+  defaultOpen = true,
   streaming,
   onAnimationStart,
   children,

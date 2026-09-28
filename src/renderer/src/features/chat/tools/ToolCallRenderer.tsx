@@ -52,7 +52,7 @@ export function createToolCallRenderer<TArgs extends ToolArgs>({
     result,
     status,
   }) {
-    const [open, setOpen] = useState(false)
+    const [open, setOpen] = useState(true)
 
     return (
       <div className="flex flex-col gap-2">
