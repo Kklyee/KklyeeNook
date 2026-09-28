@@ -6,6 +6,10 @@ import { Skeleton } from '@/renderer/src/components/ui/skeleton'
 import { useSidebar } from '@/renderer/src/components/ui/sidebar'
 import { cn } from '@/renderer/src/lib/utils'
 import {
+  isActiveRunStatus,
+  useAgentRunOverview,
+} from '@/renderer/src/features/runs/AgentRunOverviewProvider'
+import {
   AuiIf,
   ThreadListItemMorePrimitive,
   ThreadListItemPrimitive,
@@ -305,7 +309,11 @@ const ThreadListSkeleton: FC = () => {
 }
 
 export const ThreadListItem: FC = () => {
-  const isRunning = useAuiState((s) => s.threadListItem.isRunning)
+  const runtimeIsRunning = useAuiState((s) => s.threadListItem.isRunning)
+  const sessionId = useAuiState((s) => s.threadListItem.remoteId)
+  const overview = useAgentRunOverview(sessionId)
+  const isWaiting = overview?.status === 'waiting'
+  const isRunning = overview ? isActiveRunStatus(overview.status) && !isWaiting : runtimeIsRunning
   const [isRenaming, setIsRenaming] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const restoreFocusRef = useRef(false)
@@ -334,17 +342,26 @@ export const ThreadListItem: FC = () => {
           data-slot="aui_thread-list-item-trigger"
           className="flex h-full min-w-0 flex-1 items-center rounded-lg px-2 text-start text-xs outline-none group-hover:pe-8 group-has-focus-visible:pe-8 group-has-data-[state=open]:pe-8 group-data-active:pe-8 focus-visible:ring-1 focus-visible:ring-sidebar-ring"
         >
-          {isRunning && (
+          {isWaiting ? (
+            <span
+              aria-hidden
+              data-slot="aui_thread-list-item-waiting"
+              className="text-muted-foreground me-1.5 flex size-3.5 shrink-0 items-center justify-center text-xs font-semibold"
+            >
+              !
+            </span>
+          ) : isRunning ? (
             <Loader2Icon
               aria-hidden
               data-slot="aui_thread-list-item-running"
               className="text-muted-foreground me-1.5 size-3.5 shrink-0 animate-spin"
             />
-          )}
+          ) : null}
           <span data-slot="aui_thread-list-item-title" className="min-w-0 flex-1 truncate">
             <ThreadListItemPrimitive.Title fallback="新对话" />
           </span>
           {isRunning && <span className="sr-only">Running</span>}
+          {isWaiting && <span className="sr-only">Waiting for approval</span>}
         </ThreadListItemPrimitive.Trigger>
       )}
       <ThreadListItemMore onRename={() => setIsRenaming(true)} />

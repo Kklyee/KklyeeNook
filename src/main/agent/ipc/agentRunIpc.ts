@@ -9,6 +9,9 @@ export function registerAgentRunIpc(backend: AgentBackendProcess): () => void {
   ipcMain.handle(IPC_CHANNELS.AGENT_RUN_LIST, (_event, request: LoadAgentRunsRequest) =>
     backend.request({ action: 'agent-run:list', request }),
   )
+  ipcMain.handle(IPC_CHANNELS.AGENT_RUN_OVERVIEW_LIST, () =>
+    backend.request({ action: 'agent-run:overview-list' }),
+  )
   ipcMain.handle(
     IPC_CHANNELS.AGENT_EXECUTION_RECORD_LIST,
     (_event, request: LoadAgentExecutionRecordsRequest) =>
@@ -16,6 +19,7 @@ export function registerAgentRunIpc(backend: AgentBackendProcess): () => void {
   )
   return () => {
     ipcMain.removeHandler(IPC_CHANNELS.AGENT_RUN_LIST)
+    ipcMain.removeHandler(IPC_CHANNELS.AGENT_RUN_OVERVIEW_LIST)
     ipcMain.removeHandler(IPC_CHANNELS.AGENT_EXECUTION_RECORD_LIST)
   }
 }

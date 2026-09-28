@@ -12,6 +12,7 @@ export const IPC_CHANNELS = {
   AGENT_BACKEND_GET_STATUS: 'agent-backend:get-status',
   AGENT_BACKEND_STATUS: 'agent-backend:status',
   AGENT_RUN_LIST: 'agent-run:list',
+  AGENT_RUN_OVERVIEW_LIST: 'agent-run:overview-list',
   AGENT_EXECUTION_RECORD_LIST: 'agent-execution-record:list',
   ARTIFACT_LIST: 'artifact:list',
   ARTIFACT_APPLY: 'artifact:apply',

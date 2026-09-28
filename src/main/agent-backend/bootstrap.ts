@@ -137,6 +137,8 @@ export async function createAgentBackend(
             return undefined
           case 'agent-run:list':
             return agentService.listRuns(request.request.sessionId)
+          case 'agent-run:overview-list':
+            return agentService.listRunOverviews()
           case 'agent-execution-record:list':
             return agentService.listExecutionRecords(request.request.runId)
         }

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import type { AgentRuntime, AgentRuntimeInput } from './agentRuntime'
 import { AgentSession } from './agentSession'
-import { AgentRun } from '@/shared/agent/agentRun'
+import type { AgentRun, AgentRunOverview } from '@/shared/agent/agentRun'
 import { getAgentRunPatch } from './agentRunState'
 
 import { AgentEventEnvelope } from './agentEventEnvelope'
@@ -113,6 +113,39 @@ export class AgentService {
   async listSessions(): Promise<AgentSessionSummary[]> {
     return Array.from(this.sessions.values())
       .map((session) => session.toSummary())
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+  }
+
+  async listRunOverviews(): Promise<AgentRunOverview[]> {
+    return Array.from(this.sessions.values())
+      .map((session) => {
+        const latestRun = session.getRuns().reduce<AgentRun | undefined>((latest, run) => {
+          if (!latest) return run
+          if (run.updatedAt !== latest.updatedAt) {
+            return run.updatedAt > latest.updatedAt ? run : latest
+          }
+          return run.createdAt > latest.createdAt ? run : latest
+        }, undefined)
+
+        if (!latestRun) {
+          return {
+            sessionId: session.id,
+            sessionTitle: session.title,
+            status: 'idle' as const,
+            updatedAt: session.updatedAt,
+          }
+        }
+
+        return {
+          sessionId: session.id,
+          sessionTitle: session.title,
+          runId: latestRun.id,
+          status: latestRun.status,
+          ...(latestRun.startedAt !== undefined ? { startedAt: latestRun.startedAt } : {}),
+          ...(latestRun.completedAt !== undefined ? { completedAt: latestRun.completedAt } : {}),
+          updatedAt: latestRun.updatedAt,
+        }
+      })
       .sort((a, b) => b.updatedAt - a.updatedAt)
   }
 

@@ -6,7 +6,7 @@ import type {
   UpdateAgentSettingsRequest,
 } from '@/shared/agent/agentSettings'
 import type { DeletePermissionGrantRequest } from '@/shared/approval/approvalTypes'
-import type { AgentRun, LoadAgentRunsRequest } from '../shared/agent/agentRun'
+import type { AgentRun, AgentRunOverview, LoadAgentRunsRequest } from '../shared/agent/agentRun'
 import type {
   AgentExecutionRecord,
   LoadAgentExecutionRecordsRequest,
@@ -47,6 +47,7 @@ interface API {
   selectAgentWorkspace(): Promise<string | null>
   deletePermissionGrant(request: DeletePermissionGrantRequest): Promise<void>
   listAgentRuns(request: LoadAgentRunsRequest): Promise<AgentRun[]>
+  listAgentRunOverviews(): Promise<AgentRunOverview[]>
   listAgentExecutionRecords(
     request: LoadAgentExecutionRecordsRequest,
   ): Promise<AgentExecutionRecord[]>

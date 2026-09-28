@@ -7,6 +7,18 @@ export type AgentRunStatus =
   | 'aborted'
   | 'interrupted'
 
+export type AgentRunOverviewStatus = AgentRunStatus | 'idle'
+
+export interface AgentRunOverview {
+  sessionId: string
+  sessionTitle?: string
+  runId?: string
+  status: AgentRunOverviewStatus
+  startedAt?: number
+  completedAt?: number
+  updatedAt: number
+}
+
 export interface AgentRun {
   id: string
   sessionId: string

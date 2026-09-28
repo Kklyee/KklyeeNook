@@ -23,6 +23,7 @@ export type AgentBackendRequest =
   | { action: 'context:remove'; id: string }
   | { action: 'context:clear' }
   | { action: 'agent-run:list'; request: LoadAgentRunsRequest }
+  | { action: 'agent-run:overview-list' }
   | { action: 'agent-execution-record:list'; request: LoadAgentExecutionRecordsRequest }
 
 export type MainToAgentBackendMessage =

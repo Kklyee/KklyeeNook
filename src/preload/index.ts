@@ -9,7 +9,7 @@ import type {
   UpdateAgentSettingsRequest,
 } from '@/shared/agent/agentSettings'
 import type { ModelCatalogModel } from '@/shared/agent/agentSettings'
-import { AgentRun, LoadAgentRunsRequest } from '@/shared/agent/agentRun'
+import type { AgentRun, AgentRunOverview, LoadAgentRunsRequest } from '@/shared/agent/agentRun'
 import type {
   AgentExecutionRecord,
   LoadAgentExecutionRecordsRequest,
@@ -92,6 +92,10 @@ const api = {
 
   listAgentRuns(request: LoadAgentRunsRequest): Promise<AgentRun[]> {
     return ipcRenderer.invoke(IPC_CHANNELS.AGENT_RUN_LIST, request)
+  },
+
+  listAgentRunOverviews(): Promise<AgentRunOverview[]> {
+    return ipcRenderer.invoke(IPC_CHANNELS.AGENT_RUN_OVERVIEW_LIST)
   },
 
   listAgentExecutionRecords(

@@ -156,6 +156,44 @@ test('initialize recovers active runs and restores run history', async () => {
   expect(service.getSession(sessionRecord.id)?.toSummary().activeRunId).toBeUndefined()
 })
 
+test('lists the latest run overview for every session', async () => {
+  const idleSession: AgentSessionRecord = {
+    id: 'session-2',
+    title: 'Idle session',
+    createdAt: 0,
+    updatedAt: 0,
+    archived: false,
+  }
+  const oldRun = { ...run('failed', 'old-run', 1), updatedAt: 2, completedAt: 2 }
+  const latestRun = { ...run('completed', 'latest-run', 3), updatedAt: 4, completedAt: 4 }
+  const service = new AgentService(
+    { create: () => ({ run: async () => undefined, dispose() {} }) },
+    new MemorySessionRepo([sessionRecord, idleSession]),
+    new MemoryRunRepo([oldRun, latestRun]),
+    new MemoryExecutionRecordRepo(),
+    new MemoryArtifactRepo(),
+  )
+
+  await service.initialize()
+
+  await expect(service.listRunOverviews()).resolves.toEqual([
+    {
+      sessionId: sessionRecord.id,
+      sessionTitle: sessionRecord.title,
+      runId: latestRun.id,
+      status: 'completed',
+      completedAt: latestRun.completedAt,
+      updatedAt: latestRun.updatedAt,
+    },
+    {
+      sessionId: idleSession.id,
+      sessionTitle: idleSession.title,
+      status: 'idle',
+      updatedAt: idleSession.updatedAt,
+    },
+  ])
+})
+
 test('rejects steering when Pi has no active product run', async () => {
   const service = new AgentService(
     { create: () => ({ run: async () => undefined, dispose() {} }) },
