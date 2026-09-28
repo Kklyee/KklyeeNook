@@ -503,7 +503,9 @@ export function ComposerContext({
             >
               <span aria-hidden className={cn('size-1.5 rounded-full', segment.className)} />
               <span className="flex-1">{segment.label}</span>
-              <span className={cn(mono, 'text-foreground/40 tabular-nums')}>{segment.value}k</span>
+              <span className={cn(mono, 'text-foreground/40 tabular-nums')}>
+                {formatComposerTokens(segment.value)}
+              </span>
             </div>
           ))}
         </div>
@@ -511,7 +513,7 @@ export function ComposerContext({
         <div className="text-foreground/55 flex items-center justify-between text-[13px]">
           <span>Total</span>
           <span className={cn(mono, 'text-foreground/40 tabular-nums')}>
-            {used}k / {usage.total}k
+            {formatComposerTokens(used)} / {formatComposerTokens(usage.total)}
           </span>
         </div>
       </div>
@@ -544,6 +546,11 @@ export function ComposerContext({
       </button>
     </div>
   )
+}
+
+function formatComposerTokens(value: number): string {
+  if (value < 1000) return `${value}k`
+  return `${Math.round((value / 1000) * 10) / 10}M`
 }
 
 export function ComposerVoiceButton({
