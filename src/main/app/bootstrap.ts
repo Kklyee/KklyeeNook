@@ -1,4 +1,5 @@
 import type { AgentConfig } from '@/shared/agent/agentConfig'
+import type { UpdateAgentModelSelectionRequest } from '@/shared/agent/agentSettings'
 import { app, Notification, safeStorage } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import { join } from 'node:path'
@@ -137,6 +138,8 @@ export async function bootstrap(): Promise<AppContext> {
     cancel: async () => {
       await backendProcess.request({ action: 'settings:cancel' }).catch(() => undefined)
     },
+    updateModelSelection: (selection: UpdateAgentModelSelectionRequest) =>
+      backendProcess.request({ action: 'settings:model-selection', selection }),
   })
   const disposeWindowIpc = registerWindowIpc(chatWindow)
   const disposeAgentRunIpc = registerAgentRunIpc(backendProcess)

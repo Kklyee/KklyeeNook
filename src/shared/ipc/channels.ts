@@ -1,6 +1,7 @@
 export const IPC_CHANNELS = {
   SETTINGS_GET: 'settings:get',
   SETTINGS_UPDATE: 'settings:update',
+  SETTINGS_UPDATE_MODEL_SELECTION: 'settings:update-model-selection',
   SETTINGS_DISCOVER_MODELS: 'settings:discover-models',
   SETTINGS_SELECT_WORKSPACE: 'settings:select-workspace',
   MEMORY_LIST: 'memory:list',

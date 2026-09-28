@@ -1,5 +1,11 @@
 export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
+export interface AgentModelSelection {
+  provider: string
+  modelID: string
+  thinkingLevel: ThinkingLevel
+}
+
 export type ModelInput = 'text' | 'image'
 
 export type ModelConfig = {
@@ -77,6 +83,29 @@ export function getSavedModels(config: AgentConfig): SavedModelConfig[] {
 export function getActiveModel(config: AgentConfig): SavedModelConfig {
   const models = getSavedModels(config)
   return models.find((model) => model.id === config.activeModelId) ?? models[0]
+}
+
+export function updateAgentModelSelection(
+  config: AgentConfig,
+  selection: AgentModelSelection,
+): AgentConfig {
+  const models = getSavedModels(config)
+  const selected = models.find(
+    (model) => model.provider === selection.provider && model.modelID === selection.modelID,
+  )
+  if (!selected) throw new Error(`模型尚未配置: ${selection.provider}/${selection.modelID}`)
+
+  const updatedModels = models.map((model) =>
+    model.id === selected.id ? { ...model, thinkingLevel: selection.thinkingLevel } : model,
+  )
+  const activeModel = updatedModels.find((model) => model.id === selected.id) ?? selected
+
+  return {
+    ...config,
+    models: updatedModels,
+    activeModelId: activeModel.id,
+    model: { ...activeModel },
+  }
 }
 
 /**

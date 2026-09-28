@@ -4,7 +4,6 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { AgentSettingsSnapshot } from '@/shared/agent/agentSettings'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { clearPendingNewThreadPreferences } from './runtime/pendingNewThreadPreferences'
 
 const mocks = vi.hoisted(() => ({
   runtime: {
@@ -105,7 +104,6 @@ afterEach(() => {
   act(() => root?.unmount())
   root = undefined
   document.body.innerHTML = ''
-  clearPendingNewThreadPreferences()
   vi.clearAllMocks()
 })
 

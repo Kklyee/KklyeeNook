@@ -7,6 +7,7 @@ import type {
   CreateScheduledTaskInput,
   UpdateScheduledTaskInput,
 } from '@/shared/scheduler/scheduledTask'
+import type { UpdateAgentModelSelectionRequest } from '@/shared/agent/agentSettings'
 
 export type { AgentBackendInfo, AgentBackendNotification, AgentBackendStatus } from '@/shared/agentBackend'
 
@@ -31,6 +32,7 @@ export type AgentBackendRequest =
   | { action: 'settings:prepare' }
   | { action: 'settings:commit'; config: AgentConfig; apiKeys: Record<string, string> }
   | { action: 'settings:cancel' }
+  | { action: 'settings:model-selection'; selection: UpdateAgentModelSelectionRequest }
   | { action: 'context:stage'; attachment: ResolvedContextAttachment }
   | { action: 'context:remove'; id: string }
   | { action: 'context:clear' }

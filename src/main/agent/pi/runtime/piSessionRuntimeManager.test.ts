@@ -15,6 +15,7 @@ function createFakeRuntime(): PiSessionRuntimePort {
     cancel: vi.fn(),
     clearQueue: vi.fn(() => ({ steering: [], followUp: [] })),
     getAvailableModels: vi.fn(() => Promise.resolve([])),
+    applyConfiguredModelSelection: vi.fn(),
     setModel: vi.fn(),
     setThinkingLevel: vi.fn(),
     setSessionName: vi.fn(),

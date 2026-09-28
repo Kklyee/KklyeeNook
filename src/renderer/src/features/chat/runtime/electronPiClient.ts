@@ -5,7 +5,6 @@ import {
   restorePendingContextAttachmentIds,
   takePendingContextAttachmentIds,
 } from '../context/pendingContextAttachments'
-import { withPendingNewThreadPreferences } from './pendingNewThreadPreferences'
 
 export function createElectronPiClient(baseUrl: string): PiClient {
   const httpClient = createPiHttpClient({ baseUrl })
@@ -45,5 +44,5 @@ export function createElectronPiClient(baseUrl: string): PiClient {
     },
   }
 
-  return withPendingNewThreadPreferences(attachmentAwareClient)
+  return attachmentAwareClient
 }

@@ -8,6 +8,7 @@ import { DeletePermissionGrantRequest } from '@/shared/approval/approvalTypes'
 import type {
   AgentSettingsSnapshot,
   DiscoverModelsRequest,
+  UpdateAgentModelSelectionRequest,
   UpdateAgentSettingsRequest,
 } from '@/shared/agent/agentSettings'
 import type { ModelCatalogModel } from '@/shared/agent/agentSettings'
@@ -112,6 +113,12 @@ const api = {
 
   updateAgentSettings(request: UpdateAgentSettingsRequest): Promise<AgentSettingsSnapshot> {
     return ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_UPDATE, request)
+  },
+
+  updateAgentModelSelection(
+    request: UpdateAgentModelSelectionRequest,
+  ): Promise<AgentSettingsSnapshot> {
+    return ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_UPDATE_MODEL_SELECTION, request)
   },
 
   discoverModels(request: DiscoverModelsRequest): Promise<ModelCatalogModel[]> {

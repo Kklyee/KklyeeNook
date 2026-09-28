@@ -38,7 +38,7 @@ export function AppShell() {
                 onOpenScheduledTasks={() => setView('scheduled-tasks')}
               />
               <SidebarInset className="min-h-0 overflow-hidden">
-                <ChatPanel settings={settings} />
+                <ChatPanel settings={settings} onSettingsChanged={reload} />
               </SidebarInset>
             </SidebarProvider>
           )}

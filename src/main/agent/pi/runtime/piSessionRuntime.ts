@@ -107,6 +107,7 @@ export interface PiSessionRuntimePort {
   cancel(): Promise<void>
   clearQueue(): { steering: string[]; followUp: string[] }
   getAvailableModels(): Promise<PiModelInfo[]>
+  applyConfiguredModelSelection(): Promise<void>
   setModel(input: { provider: string; modelId: string }): Promise<void>
   setThinkingLevel(level: PiThinkingLevel): void
   setSessionName(title: string): void
@@ -370,6 +371,25 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     }))
   }
 
+  async applyConfiguredModelSelection(): Promise<void> {
+    await this.initialize()
+    if (this.isRunning()) return
+
+    const activeModel = getActiveModel(this.configStore.get())
+    const session = this.getPiSession()
+    if (
+      session.model?.provider !== activeModel.provider ||
+      session.model?.id !== activeModel.modelID
+    ) {
+      await this.setModel({ provider: activeModel.provider, modelId: activeModel.modelID })
+    }
+
+    const thinkingLevel = activeModel.thinkingLevel ?? (activeModel.reasoning ? 'medium' : 'off')
+    if (session.thinkingLevel !== thinkingLevel) {
+      this.setThinkingLevel(thinkingLevel as PiThinkingLevel)
+    }
+  }
+
   async setModel(input: { provider: string; modelId: string }): Promise<void> {
     await this.initialize()
     const configured = getRuntimeModelConfigs(this.configStore.get()).find(
@@ -457,21 +477,16 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     if (!cwd) throw new Error('Agent workspace is not configured')
 
     const sessionManager = await this.createSessionManager(cwd)
-    const sessionContext = sessionManager.buildSessionContext()
     const configuredModels = getRuntimeModelConfigs(config)
     const configuredActiveModel =
       configuredModels.find(
         (model) =>
-          model.provider === config.model.provider && model.modelID === config.model.modelID,
+          model.id === config.activeModelId ||
+          (model.provider === config.model.provider && model.modelID === config.model.modelID),
       ) ?? getActiveModel(config)
-    const activeModel =
-      configuredModels.find(
-        (model) =>
-          model.provider === sessionContext.model?.provider &&
-          model.modelID === sessionContext.model?.modelId,
-      ) ?? configuredActiveModel
+    const activeModel = configuredActiveModel
     const { provider, modelID } = activeModel
-    const thinkingLevel = getSessionThinkingLevel(activeModel, sessionManager, sessionContext)
+    const thinkingLevel = activeModel.thinkingLevel ?? (activeModel.reasoning ? 'medium' : 'off')
 
     let createdSession: PiAgentSession | undefined
     try {
@@ -830,27 +845,19 @@ export function normalizePiSkillCommand(
   return `/skill:${skill.name}${match[2] ?? ''}`
 }
 
-function getSessionThinkingLevel(
-  activeModel: ModelConfig,
-  sessionManager: SessionManager,
-  sessionContext: ReturnType<SessionManager['buildSessionContext']>,
-): ThinkingLevel {
-  const hasPersistedThinkingLevel = sessionManager
-    .getBranch()
-    .some((entry) => entry.type === 'thinking_level_change')
-  if (hasPersistedThinkingLevel && isThinkingLevel(sessionContext.thinkingLevel)) {
-    return sessionContext.thinkingLevel
-  }
-  return activeModel.thinkingLevel ?? (activeModel.reasoning ? 'medium' : 'off')
-}
-
-function isThinkingLevel(value: string): value is ThinkingLevel {
-  return APP_THINKING_LEVELS.includes(value as ThinkingLevel)
-}
-
 function getRuntimeModelConfigs(config: AgentConfig) {
   const providers = getConfiguredProviders(config)
   const catalog = mergeConfiguredProvidersIntoCatalog(getModelCatalog(), providers)
   const expanded = getConfiguredModelConfigs(providers, catalog)
-  return expanded.length ? expanded : getSavedModels(config)
+  if (!expanded.length) return getSavedModels(config)
+
+  const savedModels = getSavedModels(config)
+  return expanded.map((model) => {
+    const saved = savedModels.find(
+      (item) => item.provider === model.provider && item.modelID === model.modelID,
+    )
+    return saved?.thinkingLevel === undefined
+      ? model
+      : { ...model, thinkingLevel: saved.thinkingLevel }
+  })
 }

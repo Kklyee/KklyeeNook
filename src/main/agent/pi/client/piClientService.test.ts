@@ -35,6 +35,7 @@ function setup(running = false) {
     cancel: vi.fn(),
     clearQueue: vi.fn(() => ({ steering: [], followUp: [] })),
     getAvailableModels: vi.fn(() => Promise.resolve([])),
+    applyConfiguredModelSelection: vi.fn(),
     setModel: vi.fn(),
     setThinkingLevel: vi.fn(),
     setSessionName: vi.fn(),
@@ -190,6 +191,7 @@ test('forwards thread controls, queue controls, model settings, and host UI resp
   const response = { requestId: 'approval-1', value: 'Allow once' } as const
 
   await client.getThread('session-1')
+  expect(sessionRuntime.applyConfiguredModelSelection).toHaveBeenCalledOnce()
   await client.cancelRun('session-1')
   expect(await client.clearQueue('session-1')).toEqual({ steering: [], followUp: [] })
   await client.setModel('session-1', { provider: 'test', modelId: 'next' })

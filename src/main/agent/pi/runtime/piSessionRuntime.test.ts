@@ -234,7 +234,7 @@ test('enables image input for the current DeepSeek Flash alias', async () => {
   )
 })
 
-test('restores the model and thinking level saved in the Pi session transcript', async () => {
+test('uses the configured model and thinking level instead of the Pi session transcript', async () => {
   const restoredModel = { provider: 'deepseek', modelId: 'deepseek-v4-pro' }
   const runtime = {
     registerProvider: vi.fn(),
@@ -277,8 +277,8 @@ test('restores the model and thinking level saved in the Pi session transcript',
   const options = vi.mocked(createAgentSession).mock.calls.at(-1)?.[0]
   expect(options).toEqual(
     expect.objectContaining({
-      model: expect.objectContaining({ provider: 'deepseek', id: 'deepseek-v4-pro' }),
-      thinkingLevel: 'max',
+      model: expect.objectContaining({ provider: 'deepseek', id: 'deepseek-v4-flash' }),
+      thinkingLevel: 'off',
       sessionManager,
     }),
   )

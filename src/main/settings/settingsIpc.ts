@@ -4,6 +4,7 @@ import { dialog, ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'el
 import type {
   AgentSettingsSnapshot,
   DiscoverModelsRequest,
+  UpdateAgentModelSelectionRequest,
   UpdateAgentSettingsRequest,
 } from '@/shared/agent/agentSettings'
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
@@ -16,6 +17,7 @@ import type {
   ProviderConfig,
   ProviderModelConfig,
   SavedModelConfig,
+  ThinkingLevel,
 } from '@/shared/agent/agentConfig'
 import type { AgentConfigStore } from './agentConfigStore'
 import {
@@ -24,6 +26,7 @@ import {
   getConfiguredProviders,
   getSavedModels,
   modelConfigId,
+  updateAgentModelSelection,
 } from '@/shared/agent/agentConfig'
 import {
   getConfiguredModelConfigs,
@@ -39,6 +42,7 @@ export interface AgentSettingsChangeHooks {
   prepare(): void | Promise<void>
   commit(): void | Promise<void>
   cancel(): void | Promise<void>
+  updateModelSelection(request: UpdateAgentModelSelectionRequest): void | Promise<void>
 }
 
 export function registerSettingsIpc(
@@ -215,6 +219,31 @@ export function registerSettingsIpc(
     },
   )
   ipcMain.handle(
+    IPC_CHANNELS.SETTINGS_UPDATE_MODEL_SELECTION,
+    async (
+      event,
+      request: UpdateAgentModelSelectionRequest,
+    ): Promise<AgentSettingsSnapshot> => {
+      assertTrustedSender(event)
+      const selection = validateModelSelection(request)
+      const current = configStore.get()
+      const nextConfig = updateAgentModelSelection(current, {
+        provider: selection.provider,
+        modelID: selection.modelId,
+        thinkingLevel: selection.thinkingLevel,
+      })
+
+      configStore.set(nextConfig)
+      try {
+        await settingsChange.updateModelSelection(selection)
+      } catch (error) {
+        configStore.set(current)
+        throw error
+      }
+      return snapshot()
+    },
+  )
+  ipcMain.handle(
     IPC_CHANNELS.SETTINGS_DISCOVER_MODELS,
     async (event, request: DiscoverModelsRequest) => {
       assertTrustedSender(event)
@@ -257,10 +286,27 @@ export function registerSettingsIpc(
   window.once('closed', () => {
     ipcMain.removeHandler(IPC_CHANNELS.SETTINGS_GET)
     ipcMain.removeHandler(IPC_CHANNELS.SETTINGS_UPDATE)
+    ipcMain.removeHandler(IPC_CHANNELS.SETTINGS_UPDATE_MODEL_SELECTION)
     ipcMain.removeHandler(IPC_CHANNELS.SETTINGS_DISCOVER_MODELS)
     ipcMain.removeHandler(IPC_CHANNELS.SETTINGS_SELECT_WORKSPACE)
     ipcMain.removeHandler(IPC_CHANNELS.PERMISSION_GRANT_DELETE)
   })
+}
+
+function validateModelSelection(
+  request: UpdateAgentModelSelectionRequest,
+): UpdateAgentModelSelectionRequest {
+  const provider = request?.provider?.trim()
+  const modelId = request?.modelId?.trim()
+  const thinkingLevel = request?.thinkingLevel
+  if (!provider || !modelId || !isThinkingLevel(thinkingLevel)) {
+    throw new Error('模型选择无效')
+  }
+  return { provider, modelId, thinkingLevel }
+}
+
+function isThinkingLevel(value: unknown): value is ThinkingLevel {
+  return ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(value as string)
 }
 
 function validateProvider(provider: ProviderConfig): ProviderConfig {

@@ -78,7 +78,7 @@ export interface DiscoverModelsRequest {
   apiKey?: string
 }
 
-export interface SwitchThreadModelRequest {
+export interface UpdateAgentModelSelectionRequest {
   provider: string
   modelId: string
   thinkingLevel: ThinkingLevel

@@ -3,6 +3,7 @@ import type {
   AgentSettingsSnapshot,
   DiscoverModelsRequest,
   ModelCatalogModel,
+  UpdateAgentModelSelectionRequest,
   UpdateAgentSettingsRequest,
 } from '@/shared/agent/agentSettings'
 import type { DeletePermissionGrantRequest } from '@/shared/approval/approvalTypes'
@@ -59,6 +60,9 @@ interface API {
   }
   getAgentSettings(): Promise<AgentSettingsSnapshot>
   updateAgentSettings(request: UpdateAgentSettingsRequest): Promise<AgentSettingsSnapshot>
+  updateAgentModelSelection(
+    request: UpdateAgentModelSelectionRequest,
+  ): Promise<AgentSettingsSnapshot>
   discoverModels(request: DiscoverModelsRequest): Promise<ModelCatalogModel[]>
   selectAgentWorkspace(): Promise<string | null>
   listMemories(): Promise<AgentMemory[]>

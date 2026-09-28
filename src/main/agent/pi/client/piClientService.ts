@@ -83,6 +83,7 @@ export class PiClientService implements PiClient {
     const session = this.requireSession(threadId)
     const sessionRuntime = this.sessionRuntimeManager.getOrCreate(threadId)
     await sessionRuntime.initialize()
+    await sessionRuntime.applyConfiguredModelSelection()
     const snapshot = await this.withArtifacts(sessionRuntime.getSnapshot(this.metadataOf(session)))
     await this.messageProjection.project(threadId, snapshot.messages)
     return snapshot
@@ -334,6 +335,7 @@ export class PiClientService implements PiClient {
     )
     this.relays.set(threadId, relay)
     await sessionRuntime.initialize()
+    await sessionRuntime.applyConfiguredModelSelection()
     return relay
   }
 
