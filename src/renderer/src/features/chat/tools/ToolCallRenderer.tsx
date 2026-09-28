@@ -2,6 +2,11 @@ import type { ToolCallMessagePartComponent } from '@assistant-ui/react'
 import { useState } from 'react'
 
 import { ToolCall } from '../../../components/assistant-ui/elements/tool-call'
+import {
+  SubagentProgress,
+  type SubagentProgressStatus,
+} from '../../../components/assistant-ui/elements/subagent-progress.aui'
+import { useAgentRunFocus } from '../../runs/AgentRunFocusContext'
 
 type ToolArgs = Record<string, unknown>
 
@@ -46,12 +51,7 @@ export function createToolCallRenderer<TArgs extends ToolArgs>({
   activeLabel,
   getQuery,
 }: ToolCallRendererOptions<TArgs>): ToolCallMessagePartComponent<TArgs, unknown> {
-  return function ToolCallRenderer({
-    args,
-    argsText,
-    result,
-    status,
-  }) {
+  return function ToolCallRenderer({ args, argsText, result, status }) {
     const [open, setOpen] = useState(true)
 
     return (
@@ -71,4 +71,73 @@ export function createToolCallRenderer<TArgs extends ToolArgs>({
       </div>
     )
   }
+}
+
+type DelegateTaskArgs = { task?: string }
+
+interface DelegateTaskState {
+  runId?: string
+  name?: string
+  task?: string
+  status?: SubagentProgressStatus
+  summary?: string
+  result?: string
+}
+
+export function parseDelegateTaskState(value: unknown): DelegateTaskState | undefined {
+  const text = typeof value === 'string' ? value : formatToolResult(value)
+  if (!text) return undefined
+  try {
+    const parsed: unknown = JSON.parse(text)
+    if (!isRecord(parsed)) return undefined
+    return {
+      ...(typeof parsed.runId === 'string' ? { runId: parsed.runId } : {}),
+      ...(typeof parsed.name === 'string' ? { name: parsed.name } : {}),
+      ...(typeof parsed.task === 'string' ? { task: parsed.task } : {}),
+      ...(parsed.status === 'running' ||
+      parsed.status === 'completed' ||
+      parsed.status === 'failed' ||
+      parsed.status === 'aborted'
+        ? { status: parsed.status }
+        : {}),
+      ...(typeof parsed.summary === 'string' ? { summary: parsed.summary } : {}),
+      ...(typeof parsed.result === 'string' ? { result: parsed.result } : {}),
+    }
+  } catch {
+    return undefined
+  }
+}
+
+export function DelegateTaskToolCall({
+  args,
+  result,
+  status,
+}: {
+  args: DelegateTaskArgs
+  result?: unknown
+  status: { type: string }
+}) {
+  const { focusRun } = useAgentRunFocus()
+  const progress = parseDelegateTaskState(result)
+  const task = progress?.task ?? args.task ?? '未命名任务'
+  const runId = progress?.runId
+  const progressStatus = progress?.status
+  const displayStatus: SubagentProgressStatus =
+    progressStatus ??
+    (status.type === 'running' ? 'running' : status.type === 'complete' ? 'completed' : 'failed')
+  const summary =
+    progress?.summary ??
+    (displayStatus === 'running' ? '正在启动子 Agent' : progress?.result) ??
+    (displayStatus === 'failed' ? '子 Agent 执行失败' : undefined)
+
+  return (
+    <SubagentProgress
+      name={progress?.name ?? '子 Agent'}
+      task={task}
+      status={displayStatus}
+      summary={summary}
+      runId={runId}
+      onOpen={runId ? () => focusRun(runId) : undefined}
+    />
+  )
 }

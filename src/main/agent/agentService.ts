@@ -9,7 +9,11 @@ import type {
 import { AgentSession } from './agentSession'
 import { completePlanSteps, parseAgentPlan } from '@/shared/agent/agentPlan'
 import type { AgentRun, AgentRunOverview } from '@/shared/agent/agentRun'
-import type { DelegateTaskInput, DelegateTaskResult } from '@/shared/agent/delegateTask'
+import type {
+  DelegateTaskInput,
+  DelegateTaskProgress,
+  DelegateTaskResult,
+} from '@/shared/agent/delegateTask'
 import type { AgentRunContext } from '@/main/context/contextBuilder'
 import { getAgentRunPatch } from './agentRunState'
 
@@ -30,6 +34,7 @@ export interface AgentRunHandle {
 type AgentEventListener = (envelope: AgentEventEnvelope) => void
 
 export interface AgentRunStartOptions {
+  displayName?: string
   parentRunId?: string
   rootRunId?: string
   depth?: number
@@ -44,6 +49,38 @@ export interface AgentServiceOptions {
 const MAX_CHILD_DEPTH = 1
 const MAX_CONCURRENT_CHILDREN_PER_RUN = 2
 const activeStatuses = new Set<AgentRun['status']>(['created', 'running', 'waiting'])
+const subagentNameAdjectives = ['星河', '青禾', '松针', '白鹭', '云杉', '霜叶']
+const subagentNameRoles = ['分析员', '检查员', '执行员', '整理员', '探路者']
+
+function createSubagentName(): string {
+  const adjective =
+    subagentNameAdjectives[Math.floor(Math.random() * subagentNameAdjectives.length)] ?? '星河'
+  const role = subagentNameRoles[Math.floor(Math.random() * subagentNameRoles.length)] ?? '分析员'
+  return `${adjective}${role}`
+}
+
+function getDelegateTaskEventSummary(event: AgentEvent): string | undefined {
+  switch (event.type) {
+    case 'agent_started':
+      return '子 Agent 已开始执行'
+    case 'text_delta': {
+      const text = event.text.trim()
+      return text ? text.slice(-160) : undefined
+    }
+    case 'tool_started':
+      return `正在使用 ${event.call.toolName}`
+    case 'tool_finished':
+      return event.result.success
+        ? `已完成 ${event.result.toolName}`
+        : `${event.result.toolName} 执行失败`
+    case 'approval_required':
+      return '等待审批'
+    case 'context_compaction_started':
+      return '正在整理上下文'
+    default:
+      return undefined
+  }
+}
 
 export type AgentServiceInitializationStage = 'sessions_restored' | 'runs_restored'
 
@@ -294,7 +331,11 @@ export class AgentService {
     return this.runRepo.findBySessionId(sessionId)
   }
 
-  async delegateTask(parentRunId: string, input: DelegateTaskInput): Promise<DelegateTaskResult> {
+  async delegateTask(
+    parentRunId: string,
+    input: DelegateTaskInput,
+    onProgress?: (progress: DelegateTaskProgress) => void,
+  ): Promise<DelegateTaskResult> {
     const parentLocation = this.findRun(parentRunId)
     if (!parentLocation) throw new Error(`AgentRun not found: ${parentRunId}`)
 
@@ -325,6 +366,16 @@ export class AgentService {
       const prompt = explicitContext
         ? `${task}\n\nContext provided by the parent:\n${explicitContext}`
         : task
+      const displayName = createSubagentName()
+      let childRunId: string | undefined
+      const unsubscribe = onProgress
+        ? this.subscribe(({ runId, event }) => {
+            if (runId !== childRunId) return
+            const summary = getDelegateTaskEventSummary(event)
+            if (!summary) return
+            onProgress({ runId, name: displayName, task, status: 'running', summary })
+          })
+        : undefined
       const handle = this.startRun(
         parent.sessionId,
         {
@@ -334,6 +385,7 @@ export class AgentService {
         },
         undefined,
         {
+          displayName,
           parentRunId,
           rootRunId: parent.rootRunId ?? parent.id,
           depth: depth + 1,
@@ -341,15 +393,37 @@ export class AgentService {
           ephemeralRuntime: true,
         },
       )
+      childRunId = handle.run.id
+      onProgress?.({
+        runId: handle.run.id,
+        name: displayName,
+        task,
+        status: 'running',
+        summary: '子 Agent 已启动',
+      })
       this.releaseChildReservation(parentRunId)
       reservationHeld = false
 
-      const child = await handle.completion
-      return {
-        runId: child.id,
-        status: child.status === 'completed' ? 'completed' : 'failed',
-        ...(child.result !== undefined ? { result: child.result } : {}),
-        ...(child.artifactIds.length ? { artifactIds: child.artifactIds } : {}),
+      try {
+        const child = await handle.completion
+        const status = child.status === 'completed' ? 'completed' : 'failed'
+        const result = {
+          runId: child.id,
+          status,
+          ...(child.result !== undefined ? { result: child.result } : {}),
+          ...(child.artifactIds.length ? { artifactIds: child.artifactIds } : {}),
+        } satisfies DelegateTaskResult
+        const progressStatus = child.status === 'aborted' ? 'aborted' : status
+        onProgress?.({
+          runId: child.id,
+          name: displayName,
+          task,
+          status: progressStatus,
+          summary: child.result ?? child.error ?? '子 Agent 已完成',
+        })
+        return result
+      } finally {
+        unsubscribe?.()
       }
     } finally {
       if (reservationHeld) this.releaseChildReservation(parentRunId)
@@ -420,6 +494,7 @@ export class AgentService {
     const run: AgentRun = {
       id,
       sessionId,
+      ...(options.displayName ? { displayName: options.displayName } : {}),
       ...(options.parentRunId ? { parentRunId: options.parentRunId } : {}),
       rootRunId: options.rootRunId ?? parent?.rootRunId ?? parent?.id ?? id,
       depth: options.depth ?? (parent ? (parent.depth ?? 0) + 1 : 0),

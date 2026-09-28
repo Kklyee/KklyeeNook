@@ -12,6 +12,7 @@ export const agentRuns = sqliteTable(
     sessionId: text('session_id')
       .notNull()
       .references(() => conversations.id, { onDelete: 'cascade' }),
+    displayName: text('display_name'),
     parentRunId: text('parent_run_id').references(() => agentRuns.id, { onDelete: 'cascade' }),
     rootRunId: text('root_run_id'),
     depth: integer('depth').notNull().default(0),

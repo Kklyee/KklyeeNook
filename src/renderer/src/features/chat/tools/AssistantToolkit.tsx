@@ -6,7 +6,7 @@ import {
   type AgentPlanStep,
 } from '@/shared/agent/agentPlan'
 import { AgentPlan } from '../../../components/assistant-ui/elements/agent-plan'
-import { createToolCallRenderer } from './ToolCallRenderer'
+import { createToolCallRenderer, DelegateTaskToolCall } from './ToolCallRenderer'
 
 type ReadArgs = { path?: string; file_path?: string }
 type BashArgs = { command?: string }
@@ -47,4 +47,5 @@ export const assistantToolkit = {
   bash: { type: 'backend', render: BashToolCall },
   create_artifact: { type: 'backend', render: CreateArtifactToolCall },
   update_plan: { type: 'backend', display: 'standalone', render: UpdatePlanToolCall },
+  delegate_task: { type: 'backend', render: DelegateTaskToolCall },
 } satisfies Toolkit

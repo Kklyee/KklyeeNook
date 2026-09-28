@@ -7,6 +7,7 @@ import type { ThinkingLevel } from '@/shared/agent/agentConfig'
 import { Thread } from '../../components/assistant-ui/elements/thread.aui'
 import { cn } from '@/renderer/src/lib/utils'
 import { RunHistoryPanel } from '../runs/RunHistoryPanel'
+import { AgentRunFocusProvider } from '../runs/AgentRunFocusContext'
 import { PiExtensionUiPrompt } from './runtime/PiExtensionUiPrompt'
 import {
   clearPendingNewThreadPreferences,
@@ -32,6 +33,7 @@ export function ChatPanel({ settings }: { settings: AgentSettingsSnapshot | null
   const [view, setView] = useState<'chat' | 'trace'>('chat')
   const [switchingModel, setSwitchingModel] = useState(false)
   const [modelError, setModelError] = useState<string | null>(null)
+  const [focusedRunId, setFocusedRunId] = useState<string>()
   const threadItemId = useAuiState((state) => state.threadListItem.id)
   const sessionId = useAuiState((state) => state.threadListItem.remoteId)
   const session = usePiSession()
@@ -59,6 +61,7 @@ export function ChatPanel({ settings }: { settings: AgentSettingsSnapshot | null
 
   useEffect(() => {
     clearPendingNewThreadPreferences()
+    setFocusedRunId(undefined)
   }, [threadItemId, sessionId])
 
   const modelOptions = configuredModels.map((model) => {
@@ -130,46 +133,55 @@ export function ChatPanel({ settings }: { settings: AgentSettingsSnapshot | null
   }
 
   return (
-    <div className="relative flex h-full w-full flex-col">
-      <PiExtensionUiPrompt />
-      {modelError && (
-        <p className="bg-destructive/10 text-destructive px-4 py-2 text-xs" role="alert">
-          {modelError}
-        </p>
-      )}
-      <nav
-        className="border-border/60 flex h-11 shrink-0 items-end gap-1 border-b px-4"
-        aria-label="对话视图"
-      >
-        <ViewTab active={view === 'chat'} onClick={() => setView('chat')}>
-          对话
-        </ViewTab>
-        <ViewTab active={view === 'trace'} onClick={() => setView('trace')}>
-          轨迹
-        </ViewTab>
-      </nav>
-      {view === 'chat' ? (
-        <div className="relative min-h-0 flex-1">
-          <Thread
-            contextUsage={toAgentContextUsage(piRuntime.contextUsage)}
-            isCompacting={piRuntime.compaction?.active === true}
-            modelSelector={{
-              models: modelOptions,
-              value: selectedModel?.id ?? settings?.activeModelId,
-              effort:
-                session?.config?.thinkingLevel ??
-                (sessionId ? selectedModel?.thinkingLevel : draftThinkingLevel) ??
-                settings?.thinkingLevel,
-              disabled: switchingModel || session?.status === 'running',
-              onValueChange: (id) => void switchModel(id),
-              onEffortChange: (level) => void switchThinkingLevel(level),
-            }}
-          />
-        </div>
-      ) : (
-        <RunHistoryPanel sessionId={sessionId} />
-      )}
-    </div>
+    <AgentRunFocusProvider
+      value={{
+        focusRun: (runId) => {
+          setFocusedRunId(runId)
+          setView('trace')
+        },
+      }}
+    >
+      <div className="relative flex h-full w-full flex-col">
+        <PiExtensionUiPrompt />
+        {modelError && (
+          <p className="bg-destructive/10 text-destructive px-4 py-2 text-xs" role="alert">
+            {modelError}
+          </p>
+        )}
+        <nav
+          className="border-border/60 flex h-11 shrink-0 items-end gap-1 border-b px-4"
+          aria-label="对话视图"
+        >
+          <ViewTab active={view === 'chat'} onClick={() => setView('chat')}>
+            对话
+          </ViewTab>
+          <ViewTab active={view === 'trace'} onClick={() => setView('trace')}>
+            轨迹
+          </ViewTab>
+        </nav>
+        {view === 'chat' ? (
+          <div className="relative min-h-0 flex-1">
+            <Thread
+              contextUsage={toAgentContextUsage(piRuntime.contextUsage)}
+              isCompacting={piRuntime.compaction?.active === true}
+              modelSelector={{
+                models: modelOptions,
+                value: selectedModel?.id ?? settings?.activeModelId,
+                effort:
+                  session?.config?.thinkingLevel ??
+                  (sessionId ? selectedModel?.thinkingLevel : draftThinkingLevel) ??
+                  settings?.thinkingLevel,
+                disabled: switchingModel || session?.status === 'running',
+                onValueChange: (id) => void switchModel(id),
+                onEffortChange: (level) => void switchThinkingLevel(level),
+              }}
+            />
+          </div>
+        ) : (
+          <RunHistoryPanel sessionId={sessionId} focusedRunId={focusedRunId} />
+        )}
+      </div>
+    </AgentRunFocusProvider>
   )
 }
 

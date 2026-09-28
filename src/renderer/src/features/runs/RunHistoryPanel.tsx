@@ -48,7 +48,13 @@ interface SelectedEvent {
   event: TimelineItem
 }
 
-export function RunHistoryPanel({ sessionId }: { sessionId?: string }) {
+export function RunHistoryPanel({
+  sessionId,
+  focusedRunId,
+}: {
+  sessionId?: string
+  focusedRunId?: string
+}) {
   const [expandedRunIds, setExpandedRunIds] = useState<readonly string[]>([])
   const [selectedEvent, setSelectedEvent] = useState<SelectedEvent>()
   const runsQuery = useQuery({
@@ -84,6 +90,19 @@ export function RunHistoryPanel({ sessionId }: { sessionId?: string }) {
       return isActive(latest.status) || current.length === 0 ? [latest.id, ...current] : current
     })
   }, [runs])
+
+  useEffect(() => {
+    if (!focusedRunId || !runs.length) return
+    const runById = new Map(runs.map((run) => [run.id, run]))
+    const ids: string[] = []
+    let current = runById.get(focusedRunId)
+    while (current) {
+      ids.push(current.id)
+      current = current.parentRunId ? runById.get(current.parentRunId) : undefined
+    }
+    if (!ids.length) return
+    setExpandedRunIds((existing) => [...new Set([...existing, ...ids])])
+  }, [focusedRunId, runs])
 
   const timelines = useMemo<RunTimeline[]>(() => {
     return [...runs]
@@ -225,7 +244,9 @@ function RunGroup({
         <span className="flex min-w-0 items-center gap-2 text-xs font-medium">
           <StatusDot status={run.status} />
           <span className="truncate">
-            {depth ? `Child Run${childTask ? `: ${childTask}` : ''}` : `Run ${turn}`}
+            {depth
+              ? `${run.displayName ?? 'Child Run'}${childTask ? `: ${childTask}` : ''}`
+              : `Run ${turn}`}
           </span>
           <StatusLabel status={run.status} />
           <span className={cn(mono, 'text-foreground/25 hidden truncate lg:inline')}>{run.id}</span>
@@ -651,7 +672,7 @@ function buildOverview(timelines: readonly RunTimeline[]) {
               ? 'assistant'
               : event.kind === 'tool' || event.kind === 'plan' || event.kind === 'approval'
                 ? 'tool'
-              : undefined
+                : undefined
       if (!laneId) continue
       if (event.kind === 'tool') toolCount += 1
       const segmentId = eventSegmentId(run.id, event.id)

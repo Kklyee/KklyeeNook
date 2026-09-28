@@ -4,7 +4,11 @@ import {
 } from '@earendil-works/pi-coding-agent'
 import { Type } from 'typebox'
 
-import type { DelegateTaskInput, DelegateTaskResult } from '@/shared/agent/delegateTask'
+import type {
+  DelegateTaskInput,
+  DelegateTaskProgress,
+  DelegateTaskResult,
+} from '@/shared/agent/delegateTask'
 import type { ToolRegistration } from '@/main/tools/toolRegistry'
 import { ToolRegistry } from '@/main/tools/toolRegistry'
 
@@ -18,10 +22,12 @@ const delegateTaskSchema = Type.Object({
   ),
 })
 
-type DelegateTaskTool = PiToolDefinition<typeof delegateTaskSchema, DelegateTaskResult>
+type DelegateTaskToolDetails = DelegateTaskResult | DelegateTaskProgress
+type DelegateTaskTool = PiToolDefinition<typeof delegateTaskSchema, DelegateTaskToolDetails>
 type DelegateTaskExecutor = (
   parentRunId: string,
   input: DelegateTaskInput,
+  onProgress?: (progress: DelegateTaskProgress) => void,
 ) => Promise<DelegateTaskResult>
 
 function createDelegateTaskToolDefinition(
@@ -35,16 +41,25 @@ function createDelegateTaskToolDefinition(
       'Delegate one focused task to an independent child run. The child receives only the task, selected skills, workspace memory, and explicit context. Up to two child runs can run at once, and child runs cannot delegate further.',
     promptSnippet: 'Delegate one focused task to an independent child run',
     parameters: delegateTaskSchema,
-    async execute(_toolCallId, params) {
+    async execute(_toolCallId, params, _signal, onUpdate) {
       const task = params.task.trim()
       if (!task) throw new Error('Task is required')
       const parentRunId = getParentRunId()
       if (!parentRunId) throw new Error('delegate_task requires an active AgentRun')
-      const result = await execute(parentRunId, {
-        task,
-        ...(params.skillIds?.length ? { skillIds: params.skillIds } : {}),
-        ...(params.context?.trim() ? { context: params.context.trim() } : {}),
-      })
+      const result = await execute(
+        parentRunId,
+        {
+          task,
+          ...(params.skillIds?.length ? { skillIds: params.skillIds } : {}),
+          ...(params.context?.trim() ? { context: params.context.trim() } : {}),
+        },
+        (progress) => {
+          onUpdate?.({
+            content: [{ type: 'text', text: JSON.stringify(progress) }],
+            details: progress,
+          })
+        },
+      )
       return { content: [{ type: 'text', text: JSON.stringify(result) }], details: result }
     },
   })

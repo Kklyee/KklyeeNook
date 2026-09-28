@@ -118,8 +118,8 @@ export async function createAgentBackend(
       artifactRepo,
       { buildChildContext: () => contextBuilder.build([], workspace()) },
     )
-    registerPiDelegateTaskTool(toolRegistry, (parentRunId, input) =>
-      agentService.delegateTask(parentRunId, input),
+    registerPiDelegateTaskTool(toolRegistry, (parentRunId, input, onProgress) =>
+      agentService.delegateTask(parentRunId, input, onProgress),
     )
     const artifactService = new ArtifactService(artifactRepo, workspace)
 

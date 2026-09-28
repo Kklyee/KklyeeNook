@@ -10,6 +10,7 @@ import type { AgentEventEnvelope } from './agentEventEnvelope'
 import type { AgentExecutionRecordRepo } from '../db/repositories/agentExecutionRecordRepo'
 import type { ArtifactRepo } from '../db/repositories/artifactRepo'
 import type { Artifact } from '@/shared/artifact/artifact'
+import type { DelegateTaskProgress } from '@/shared/agent/delegateTask'
 
 class MemorySessionRepo implements AgentSessionRepo {
   constructor(private readonly records: AgentSessionRecord[]) {}
@@ -512,11 +513,16 @@ test('delegates an isolated child run and returns its result', async () => {
   const parent = service.startRun(sessionRecord.id, { prompt: 'parent task' })
   await vi.waitFor(() => expect(parentStarted).toBe(true))
 
-  const result = await service.delegateTask(parent.run.id, {
-    task: 'inspect the database',
-    skillIds: ['database-review'],
-    context: 'Only inspect the schema files.',
-  })
+  const progress: DelegateTaskProgress[] = []
+  const result = await service.delegateTask(
+    parent.run.id,
+    {
+      task: 'inspect the database',
+      skillIds: ['database-review'],
+      context: 'Only inspect the schema files.',
+    },
+    (update) => progress.push(update),
+  )
   const child = service
     .getSession(sessionRecord.id)
     ?.getRuns()
@@ -524,6 +530,7 @@ test('delegates an isolated child run and returns its result', async () => {
 
   expect(result).toEqual({ runId: child?.id, status: 'completed', result: 'child result' })
   expect(child).toMatchObject({
+    displayName: expect.any(String),
     parentRunId: parent.run.id,
     rootRunId: parent.run.id,
     depth: 1,
@@ -534,6 +541,18 @@ test('delegates an isolated child run and returns its result', async () => {
       'inspect the database\n\nContext provided by the parent:\nOnly inspect the schema files.',
     skillIds: ['database-review'],
     context: { attachments: [], memories: [{ id: 'memory-1', content: 'Use the test database' }] },
+  })
+  expect(progress[0]).toMatchObject({
+    runId: child?.id,
+    name: child?.displayName,
+    task: 'inspect the database',
+    status: 'running',
+  })
+  expect(progress.at(-1)).toMatchObject({
+    runId: child?.id,
+    name: child?.displayName,
+    status: 'completed',
+    summary: 'child result',
   })
 
   releaseParent()

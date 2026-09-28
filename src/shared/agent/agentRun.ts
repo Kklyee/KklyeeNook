@@ -26,6 +26,7 @@ export interface AgentRunOverview {
 export interface AgentRun {
   id: string
   sessionId: string
+  displayName?: string
   parentRunId?: string
   rootRunId?: string
   depth?: number
