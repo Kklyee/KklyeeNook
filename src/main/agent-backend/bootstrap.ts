@@ -21,7 +21,11 @@ import { DrizzlePermissionGrantRepo } from '@/main/db/repositories/permissionGra
 import { AgentConfigStore } from '@/main/settings/agentConfigStore'
 import { MemoryCredentialStore } from '@/main/settings/credentialStore'
 import { ToolRegistry } from '@/main/tools/toolRegistry'
-import type { AgentBackendInitOptions, AgentBackendRequest } from './protocol'
+import type {
+  AgentBackendInitOptions,
+  AgentBackendRequest,
+  AgentBackendStartupStage,
+} from './protocol'
 import { startAgentHttpServer, type RunningAgentHttpServer } from './httpServer'
 import { createPiNodeClientAdapter } from './piNodeClientAdapter'
 import type { PiSubscribeRequest } from '@/shared/pi/piClient'
@@ -34,8 +38,16 @@ export interface AgentBackendRuntime {
   close(): Promise<void>
 }
 
+type AgentBackendInitializationStage = Exclude<
+  AgentBackendStartupStage,
+  'process_spawned' | 'ready'
+>
+
+type StartupStageReporter = (stage: AgentBackendInitializationStage, detail?: string) => void
+
 export async function createAgentBackend(
   options: AgentBackendInitOptions,
+  reportStartupStage: StartupStageReporter = () => undefined,
 ): Promise<AgentBackendRuntime> {
   const configStore = new AgentConfigStore(options.config)
   let credentialStore = createCredentialStore(options.apiKeys)
@@ -43,6 +55,7 @@ export async function createAgentBackend(
     options.databaseUrl,
     options.migrationsPath,
   )
+  reportStartupStage('database_connected')
 
   let server: RunningAgentHttpServer | undefined
   let settingsChangePending = false
@@ -86,7 +99,7 @@ export async function createAgentBackend(
     )
     const artifactService = new ArtifactService(artifactRepo, workspace)
 
-    await agentService.initialize()
+    await agentService.initialize((stage, count) => reportStartupStage(stage, String(count)))
     const messageProjection = new MessageProjectionService(new DrizzleAgentMessageRepo(db))
     const contextAttachments = new ContextAttachmentService()
     const contextBuilder = new ContextBuilder(contextAttachments)
@@ -106,6 +119,8 @@ export async function createAgentBackend(
     server = await startAgentHttpServer(piClient, {
       allowedOrigins: options.allowedOrigins,
     })
+    const endpoint = new URL(server.baseUrl)
+    reportStartupStage('http_server_listening', `${endpoint.hostname}:${endpoint.port}`)
 
     return {
       baseUrl: server.baseUrl,

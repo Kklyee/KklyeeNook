@@ -20,6 +20,11 @@ class FakeUtilityProcess extends EventEmitter implements UtilityProcessLike {
   readonly messages: MainToAgentBackendMessage[] = []
   killed = false
 
+  constructor() {
+    super()
+    queueMicrotask(() => this.emit('spawn'))
+  }
+
   postMessage(message: unknown): void {
     const typedMessage = message as MainToAgentBackendMessage
     this.messages.push(typedMessage)
@@ -35,6 +40,39 @@ class FakeUtilityProcess extends EventEmitter implements UtilityProcessLike {
         this.emit('message', { type: 'response', id: typedMessage.id, ok: true, value: 'done' }),
       )
     }
+  }
+
+  kill(): boolean {
+    this.killed = true
+    return true
+  }
+}
+
+class SpawnGatedUtilityProcess extends EventEmitter implements UtilityProcessLike {
+  readonly messages: MainToAgentBackendMessage[] = []
+  killed = false
+  private spawned = false
+
+  constructor(private readonly readyAfterSpawn = true) {
+    super()
+  }
+
+  postMessage(message: unknown): void {
+    const typedMessage = message as MainToAgentBackendMessage
+    this.messages.push(typedMessage)
+    if (typedMessage.type === 'initialize' && this.spawned && this.readyAfterSpawn) {
+      queueMicrotask(() =>
+        this.emit('message', {
+          type: 'ready',
+          info: { baseUrl: 'http://127.0.0.1:12345/x/api/pi' },
+        }),
+      )
+    }
+  }
+
+  emitSpawn(): void {
+    this.spawned = true
+    this.emit('spawn')
   }
 
   kill(): boolean {
@@ -89,4 +127,54 @@ test('marks the backend unavailable when its process exits unexpectedly', async 
   await expect(backend.request({ action: 'context:clear' })).rejects.toThrow(
     'Agent backend is unavailable.',
   )
+})
+
+test('starts the initialization timeout after the utility process spawns', async () => {
+  vi.useFakeTimers()
+  const child = new SpawnGatedUtilityProcess()
+  const backend = new AgentBackendProcess('/agent-backend-entry.mjs', () => child)
+
+  try {
+    const startPromise = backend.start(options, 10)
+    await vi.advanceTimersByTimeAsync(20)
+
+    expect(backend.getStatus()).toEqual({ state: 'starting' })
+    expect(child.killed).toBe(false)
+
+    child.emitSpawn()
+
+    await expect(startPromise).resolves.toEqual({
+      state: 'ready',
+      info: { baseUrl: 'http://127.0.0.1:12345/x/api/pi' },
+    })
+  } finally {
+    backend.close()
+    vi.useRealTimers()
+  }
+})
+
+test('prints the last startup stage when initialization times out', async () => {
+  vi.useFakeTimers()
+  const child = new SpawnGatedUtilityProcess(false)
+  const backend = new AgentBackendProcess('/agent-backend-entry.mjs', () => child)
+  const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+  try {
+    const startPromise = backend.start(options, 10)
+    child.emitSpawn()
+    child.emit('message', { type: 'startup-stage', stage: 'database_connected' })
+    await vi.advanceTimersByTimeAsync(10)
+
+    await expect(startPromise).resolves.toEqual({
+      state: 'unavailable',
+      message: 'Agent backend start timed out.',
+    })
+    expect(error).toHaveBeenCalledWith(
+      '[agent-backend] start timed out after 10ms; last startup stage: database_connected',
+    )
+  } finally {
+    error.mockRestore()
+    backend.close()
+    vi.useRealTimers()
+  }
 })

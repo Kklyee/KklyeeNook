@@ -22,6 +22,8 @@ export interface AgentRunHandle {
 }
 type AgentEventListener = (envelope: AgentEventEnvelope) => void
 
+export type AgentServiceInitializationStage = 'sessions_restored' | 'runs_restored'
+
 export class AgentService {
   private readonly sessions = new Map<string, AgentSession>()
   private readonly runtimes = new Map<string, AgentRuntime>()
@@ -36,7 +38,9 @@ export class AgentService {
     private readonly artifactRepo: ArtifactRepo,
   ) {}
 
-  async initialize(): Promise<void> {
+  async initialize(
+    onStage?: (stage: AgentServiceInitializationStage, count: number) => void,
+  ): Promise<void> {
     await this.runRepo.markActiveAsInterrupted(Date.now())
     const records = await this.sessionRepo.findAll()
 
@@ -45,11 +49,13 @@ export class AgentService {
       const session = new AgentSession(id, title, { createdAt, updatedAt, archived })
       this.sessions.set(id, session)
     }
+    onStage?.('sessions_restored', records.length)
 
     const runs = await this.runRepo.findAll()
     for (const run of runs) {
       this.sessions.get(run.sessionId)?.restoreRun(run)
     }
+    onStage?.('runs_restored', runs.length)
   }
   async createSession(title?: string): Promise<AgentSessionSummary> {
     const session = new AgentSession(randomUUID(), title)

@@ -145,7 +145,13 @@ test('initialize recovers active runs and restores run history', async () => {
     new MemoryArtifactRepo(),
   )
 
-  await service.initialize()
+  const stages: Array<[string, number]> = []
+  await service.initialize((stage, count) => stages.push([stage, count]))
+
+  expect(stages).toEqual([
+    ['sessions_restored', 1],
+    ['runs_restored', 3],
+  ])
 
   const history = await service.listRuns(sessionRecord.id)
   expect(history.map(({ id, status }) => ({ id, status }))).toEqual([

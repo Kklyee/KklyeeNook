@@ -32,6 +32,11 @@ class FakeUtilityProcess extends EventEmitter implements UtilityProcessLike {
   initializeCount = 0
   killed = false
 
+  constructor() {
+    super()
+    queueMicrotask(() => this.emit('spawn'))
+  }
+
   postMessage(message: unknown): void {
     const typedMessage = message as MainToAgentBackendMessage
     this.messages.push(typedMessage)

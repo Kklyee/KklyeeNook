@@ -15,6 +15,14 @@ export interface AgentBackendInitOptions {
   allowedOrigins: string[]
 }
 
+export type AgentBackendStartupStage =
+  | 'process_spawned'
+  | 'database_connected'
+  | 'sessions_restored'
+  | 'runs_restored'
+  | 'http_server_listening'
+  | 'ready'
+
 export type AgentBackendRequest =
   | { action: 'settings:prepare' }
   | { action: 'settings:commit'; config: AgentConfig; apiKeys: Record<string, string> }
@@ -32,6 +40,7 @@ export type MainToAgentBackendMessage =
   | { type: 'shutdown' }
 
 export type AgentBackendToMainMessage =
+  | { type: 'startup-stage'; stage: AgentBackendStartupStage; detail?: string }
   | { type: 'ready'; info: AgentBackendInfo }
   | { type: 'failed'; message: string }
   | { type: 'response'; id: string; ok: true; value?: unknown }

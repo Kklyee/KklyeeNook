@@ -1,5 +1,10 @@
 import { createAgentBackend, type AgentBackendRuntime } from './bootstrap'
-import type { AgentBackendRequest, MainToAgentBackendMessage } from './protocol'
+import type {
+  AgentBackendRequest,
+  AgentBackendStartupStage,
+  AgentBackendToMainMessage,
+  MainToAgentBackendMessage,
+} from './protocol'
 
 const parentPort = process.parentPort
 let backend: AgentBackendRuntime | undefined
@@ -14,13 +19,18 @@ async function handleMessage(message: MainToAgentBackendMessage): Promise<void> 
   if (message.type === 'initialize') {
     if (backend) return
     try {
-      backend = await createAgentBackend(message.options)
+      backend = await createAgentBackend(message.options, (stage, detail) => {
+        postStartupStage(stage, detail)
+      })
+      postStartupStage('ready')
       parentPort?.postMessage({
         type: 'ready',
         info: { baseUrl: backend.baseUrl },
       })
-    } catch {
-      parentPort?.postMessage({ type: 'failed', message: 'Agent backend failed to initialize.' })
+    } catch (error) {
+      const errorMessage = formatError(error)
+      console.error('[agent-backend] failed to initialize', errorMessage)
+      parentPort?.postMessage({ type: 'failed', message: errorMessage })
       process.exit(1)
     }
     return
@@ -39,7 +49,8 @@ async function handleMessage(message: MainToAgentBackendMessage): Promise<void> 
       if (!backend) throw new Error('Agent backend is unavailable')
       const value = await backend.handleRequest(message as AgentBackendRequest)
       parentPort?.postMessage({ type: 'response', id: message.id, ok: true, value })
-    } catch {
+    } catch (error) {
+      console.error('[agent-backend] request failed', formatError(error))
       parentPort?.postMessage({
         type: 'response',
         id: message.id,
@@ -48,4 +59,18 @@ async function handleMessage(message: MainToAgentBackendMessage): Promise<void> 
       })
     }
   }
+}
+
+function postStartupStage(stage: AgentBackendStartupStage, detail?: string): void {
+  const message: AgentBackendToMainMessage = {
+    type: 'startup-stage',
+    stage,
+    ...(detail ? { detail } : {}),
+  }
+  parentPort?.postMessage(message)
+}
+
+function formatError(error: unknown): string {
+  if (error instanceof Error) return error.stack ?? error.message
+  return String(error)
 }
