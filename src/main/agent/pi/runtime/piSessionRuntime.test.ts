@@ -13,7 +13,7 @@ import type { AgentRuntimeStateRepo } from '@/main/db/repositories/agentRuntimeS
 import type { CredentialStore } from '@/main/settings/credentialStore'
 import type { ToolRegistry } from '@/main/tools/toolRegistry'
 import type { AgentEvent } from '@/shared/agent/agentEvent'
-import { PiSessionRuntime } from './piSessionRuntime'
+import { normalizePiSkillCommand, PiSessionRuntime } from './piSessionRuntime'
 
 vi.mock('@earendil-works/pi-coding-agent', () => ({
   createAgentSession: vi.fn(),
@@ -60,6 +60,18 @@ function fakeSession() {
     dispose: vi.fn(),
   }
 }
+
+test('supports short skill slash commands', () => {
+  const skills = [{ name: 'code-review', baseDir: 'C:\\skills\\code-review' }]
+
+  expect(normalizePiSkillCommand('/code-review inspect files', skills)).toBe(
+    '/skill:code-review inspect files',
+  )
+  expect(normalizePiSkillCommand('/skill:code-review inspect files', skills)).toBe(
+    '/skill:code-review inspect files',
+  )
+  expect(normalizePiSkillCommand('/unknown inspect files', skills)).toBe('/unknown inspect files')
+})
 
 function fakeSessionManager(
   context: {

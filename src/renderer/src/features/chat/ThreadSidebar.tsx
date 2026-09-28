@@ -2,13 +2,9 @@ import { useEffect, useRef, useState, type ComponentProps } from 'react'
 import { BotIcon, SettingsIcon } from 'lucide-react'
 import { Button } from '@/renderer/src/components/ui/button'
 import { cn } from '@/renderer/src/lib/utils'
-import type { AgentSkill } from '@/shared/agent/agentSkill'
 import {
   Sidebar,
   SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarFooter,
   SidebarHeader,
   SidebarMenu,
@@ -19,42 +15,6 @@ import {
   useSidebar,
 } from '@/renderer/src/components/ui/sidebar'
 import { ThreadList } from '@/renderer/src/components/assistant-ui/elements/thread-list.aui'
-
-function SkillsList() {
-  const [skills, setSkills] = useState<AgentSkill[]>([])
-
-  useEffect(() => {
-    let cancelled = false
-    void window.api.listAgentSkills().then(
-      (nextSkills) => {
-        if (!cancelled) setSkills(nextSkills)
-      },
-      () => undefined,
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  if (skills.length === 0) return null
-
-  return (
-    <SidebarGroup className="pt-0">
-      <SidebarGroupLabel>Skills</SidebarGroupLabel>
-      <SidebarGroupContent>
-        <SidebarMenu>
-          {skills.map((skill) => (
-            <SidebarMenuItem key={skill.id}>
-              <SidebarMenuButton type="button" size="sm" title={skill.name}>
-                <span>{skill.name}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
-        </SidebarMenu>
-      </SidebarGroupContent>
-    </SidebarGroup>
-  )
-}
 
 function SidebarBrand({ canCollapse }: { canCollapse: boolean }) {
   const { isMobile, state, toggleSidebar } = useSidebar()
@@ -183,7 +143,6 @@ export function ThreadSidebar({
       </SidebarHeader>
       <SidebarContent className="px-2 pb-2 group-data-[collapsible=icon]:px-1.5">
         <ThreadList />
-        <SkillsList />
       </SidebarContent>
       {canCollapse && <SidebarRail />}
       <SidebarFooter className="border-sidebar-border  px-2 py-2 group-data-[collapsible=icon]:px-1.5">

@@ -6,8 +6,11 @@ import {
   ShieldCheckIcon,
   Trash2Icon,
   PlusIcon,
+  RefreshCwIcon,
+  SparklesIcon,
   WrenchIcon,
 } from 'lucide-react'
+import type { AgentSkill } from '@/shared/agent/agentSkill'
 import type {
   AgentSettingsSnapshot,
   ModelCatalogModel,
@@ -31,7 +34,7 @@ const toolDescriptions: Record<string, string> = {
   update_plan: '更新计划',
 }
 
-type SettingsTab = 'model' | 'tools' | 'permissions'
+type SettingsTab = 'model' | 'tools' | 'permissions' | 'skills'
 
 const settingsTabs: Array<{
   id: SettingsTab
@@ -47,6 +50,7 @@ const settingsTabs: Array<{
   },
   { id: 'tools', label: '工具', description: '可用工具与审批方式', icon: WrenchIcon },
   { id: 'permissions', label: '权限管理', description: '查看和撤销授权', icon: ShieldCheckIcon },
+  { id: 'skills', label: 'Skills', description: '查看可用的本地 Skills', icon: SparklesIcon },
 ]
 
 export function SettingsPage({
@@ -165,6 +169,8 @@ export function SettingsPage({
             <ModelSettings settings={settings} onChanged={onChanged} />
           ) : tab === 'tools' ? (
             <ToolSettings settings={settings} />
+          ) : tab === 'skills' ? (
+            <SkillSettings />
           ) : (
             <PermissionSettings
               settings={settings}
@@ -945,6 +951,91 @@ function ToolSettings({ settings }: { settings: AgentSettingsSnapshot }) {
       <p className="text-muted-foreground mt-4 text-xs">
         受保护的工具在没有匹配 Permission Grant 时会请求审批。
       </p>
+    </section>
+  )
+}
+
+function SkillSettings() {
+  const [skills, setSkills] = useState<AgentSkill[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [reloading, setReloading] = useState(false)
+
+  const loadSkills = async (reload: boolean) => {
+    if (reload) setReloading(true)
+    else setLoading(true)
+    setError(null)
+    try {
+      const nextSkills = reload
+        ? await window.api.reloadAgentSkills()
+        : await window.api.listAgentSkills()
+      setSkills(nextSkills)
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Skills 读取失败，请重试。')
+    } finally {
+      if (reload) setReloading(false)
+      else setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadSkills(false)
+  }, [])
+
+  return (
+    <section aria-labelledby="skills-section-title">
+      <div className="mb-3 flex items-end justify-between gap-4">
+        <div>
+          <h2 id="skills-section-title" className="text-xs font-medium">
+            可用 Skills
+          </h2>
+          <p className="text-muted-foreground mt-1 text-xs">
+            在对话中输入 /skill-name 调用，也可以使用 Pi 原生的 /skill:skill-name。
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={reloading}
+          onClick={() => void loadSkills(true)}
+        >
+          <RefreshCwIcon className={reloading ? 'animate-spin' : undefined} />
+          刷新
+        </Button>
+      </div>
+      {error && (
+        <p role="alert" className="text-destructive mb-3 text-sm">
+          {error}
+        </p>
+      )}
+      {loading ? (
+        <p role="status" className="text-muted-foreground text-sm">
+          正在读取 Skills…
+        </p>
+      ) : skills.length === 0 ? (
+        <div className="rounded-xl border border-dashed px-5 py-9 text-center">
+          <SparklesIcon className="text-muted-foreground/60 mx-auto size-5" />
+          <p className="mt-3 text-sm font-medium">暂无可用 Skills</p>
+          <p className="text-muted-foreground mt-1 text-xs">
+            将 Skill 放入 ~/.agents/skills 后点击刷新。
+          </p>
+        </div>
+      ) : (
+        <SettingsCard>
+          {skills.map((skill) => (
+            <div key={skill.id} className="px-4 py-3.5">
+              <p className="text-sm font-medium">{skill.name}</p>
+              <p className="text-muted-foreground mt-1 break-all font-mono text-xs">
+                /{skill.id}
+              </p>
+              {skill.description && (
+                <p className="text-muted-foreground mt-1 text-xs">{skill.description}</p>
+              )}
+            </div>
+          ))}
+        </SettingsCard>
+      )}
     </section>
   )
 }

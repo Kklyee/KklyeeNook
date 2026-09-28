@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 
 import type {
   PiClientEventBody,
@@ -22,6 +22,7 @@ import {
   SettingsManager,
   type AgentSession as PiAgentSession,
   type AgentSessionEvent,
+  type Skill as PiSkill,
   type ToolDefinition as PiToolDefinition,
 } from '@earendil-works/pi-coding-agent'
 
@@ -49,6 +50,7 @@ import type { AgentConfigStore } from '@/main/settings/agentConfigStore'
 import type { CredentialStore } from '@/main/settings/credentialStore'
 import type { ToolRegistry } from '@/main/tools/toolRegistry'
 import type { AgentEvent } from '@/shared/agent/agentEvent'
+import type { AgentSkill } from '@/shared/agent/agentSkill'
 import {
   toAgentContextUsage,
   type AgentContextUsage,
@@ -137,6 +139,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     private readonly toolRegistry: ToolRegistry,
     private readonly sessionDir: string,
     private readonly skillDirectory = join(homedir(), '.agents', 'skills'),
+    private readonly getLoadedSkills: () => readonly AgentSkill[] = () => [],
   ) {}
 
   async initialize(): Promise<void> {
@@ -268,7 +271,11 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     options: NonNullable<Parameters<PiAgentSession['prompt']>[1]>,
   ): Promise<void> {
     try {
-      await this.getPiSession().prompt(content, options)
+      const session = this.getPiSession()
+      const prompt = content.startsWith('/')
+        ? normalizePiSkillCommand(content, session.resourceLoader.getSkills().skills)
+        : content
+      await session.prompt(prompt, options)
       this.lastError = undefined
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : String(error)
@@ -422,6 +429,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
         cwd,
         agentDir: cwd,
         additionalSkillPaths: [this.skillDirectory],
+        skillsOverride: (result) => mergeLoadedSkills(result, this.getLoadedSkills()),
         settingsManager,
         extensionFactories: [
           createPiApprovalExtension(this.sessionId, this.approvalPolicy, (event) =>
@@ -675,6 +683,57 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     }
     return manager
   }
+}
+
+function mergeLoadedSkills(
+  result: ReturnType<DefaultResourceLoader['getSkills']>,
+  loadedSkills: readonly AgentSkill[],
+): ReturnType<DefaultResourceLoader['getSkills']> {
+  const existingPaths = new Set(result.skills.map((skill) => resolve(skill.filePath)))
+  const existingNames = new Set(result.skills.map((skill) => skill.name))
+  const skills = [...result.skills]
+
+  for (const skill of loadedSkills) {
+    const filePath = join(skill.directory, 'SKILL.md')
+    const nativeSkill: PiSkill = {
+      name: skill.name,
+      description: skill.description ?? '',
+      filePath,
+      baseDir: skill.directory,
+      sourceInfo: {
+        path: filePath,
+        source: 'local',
+        scope: 'user',
+        origin: 'top-level',
+        baseDir: skill.directory,
+      },
+      disableModelInvocation: false,
+    }
+    if (existingPaths.has(resolve(filePath)) || existingNames.has(nativeSkill.name)) continue
+    skills.push(nativeSkill)
+    existingPaths.add(resolve(filePath))
+    existingNames.add(nativeSkill.name)
+  }
+
+  return { ...result, skills }
+}
+
+export function normalizePiSkillCommand(
+  content: string,
+  skills: readonly Pick<PiSkill, 'name' | 'baseDir'>[],
+): string {
+  if (!content.startsWith('/') || content.startsWith('/skill:')) return content
+
+  const match = /^\/([a-z0-9][a-z0-9-]*)(?=$|\s)([\s\S]*)$/.exec(content)
+  if (!match) return content
+
+  const commandName = match[1]
+  const skill = skills.find(
+    (item) => item.name === commandName || basename(item.baseDir) === commandName,
+  )
+  if (!skill) return content
+
+  return `/skill:${skill.name}${match[2] ?? ''}`
 }
 
 function getSessionThinkingLevel(

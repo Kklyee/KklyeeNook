@@ -89,6 +89,7 @@ export async function createAgentBackend(
           toolRegistry,
           sessionDir,
           skillLoader.directory,
+          () => skillLoader.listSkills(),
         ),
     )
     const runtimeFactory = createPiAgentRuntimeFactory(sessionRuntimeManager)
