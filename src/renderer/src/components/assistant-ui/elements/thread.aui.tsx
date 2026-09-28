@@ -102,11 +102,13 @@ export type ThreadComponents = {
   ToolFallback?: ToolCallMessagePartComponent | undefined
   ToolGroup?: ComponentType<PropsWithChildren<{ group: ThreadGroupPart }>> | undefined
   ReasoningGroup?: ComponentType<PropsWithChildren<{ group: ThreadGroupPart }>> | undefined
+  readOnly?: boolean | undefined
 }
 
 export type ThreadProps = {
   components?: ThreadComponents | undefined
   autoFocus?: boolean | undefined
+  readOnly?: boolean | undefined
   modelSelector?: {
     models: readonly ModelOption[]
     value?: string
@@ -164,17 +166,19 @@ const ThreadHistorySkeleton: FC = () => (
 export const Thread: FC<ThreadProps> = ({
   components = EMPTY_COMPONENTS,
   autoFocus = true,
+  readOnly = false,
   modelSelector,
   contextUsage,
   isCompacting = false,
 }) => {
-  const isEmpty = useAuiState(isNewChatView)
+  const isEmpty = useAuiState((state) => !readOnly && isNewChatView(state))
 
   return (
-    <ThreadComponentsContext.Provider value={components}>
+    <ThreadComponentsContext.Provider value={{ ...components, readOnly }}>
       <ThreadRoot
         isEmpty={isEmpty}
         autoFocus={autoFocus}
+        readOnly={readOnly}
         modelSelector={modelSelector}
         contextUsage={contextUsage}
         isCompacting={isCompacting}
@@ -186,10 +190,11 @@ export const Thread: FC<ThreadProps> = ({
 const ThreadRoot: FC<{
   isEmpty: boolean
   autoFocus: boolean
+  readOnly: boolean
   modelSelector?: ThreadProps['modelSelector']
   contextUsage?: AgentContextUsage
   isCompacting: boolean
-}> = ({ isEmpty, autoFocus, modelSelector, contextUsage, isCompacting }) => {
+}> = ({ isEmpty, autoFocus, readOnly, modelSelector, contextUsage, isCompacting }) => {
   const { Welcome = ThreadWelcome } = useContext(ThreadComponentsContext)
 
   return (
@@ -217,7 +222,7 @@ const ThreadRoot: FC<{
             isEmpty && 'justify-center',
           )}
         >
-          <AuiIf condition={isNewChatView}>
+          <AuiIf condition={(state) => !readOnly && isNewChatView(state)}>
             <Welcome />
           </AuiIf>
           <AuiIf condition={isHistoryLoadingView}>
@@ -228,24 +233,26 @@ const ThreadRoot: FC<{
             <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
           </div>
 
-          <ThreadPrimitive.ViewportFooter
-            className={cn(
-              'aui-thread-viewport-footer bg-background flex flex-col gap-4 overflow-visible pb-4 md:pb-6',
-              !isEmpty && 'sticky bottom-0 mt-auto rounded-t-(--composer-radius)',
-            )}
-          >
-            <ThreadScrollToBottom />
-            <ThreadFollowupSuggestions />
-            <Composer
-              autoFocus={autoFocus}
-              modelSelector={modelSelector}
-              contextUsage={contextUsage}
-              isCompacting={isCompacting}
-            />
-            <AuiIf condition={(s) => isNewChatView(s) && s.composer.isEmpty}>
-              <ThreadSuggestions />
-            </AuiIf>
-          </ThreadPrimitive.ViewportFooter>
+          {!readOnly && (
+            <ThreadPrimitive.ViewportFooter
+              className={cn(
+                'aui-thread-viewport-footer bg-background flex flex-col gap-4 overflow-visible pb-4 md:pb-6',
+                !isEmpty && 'sticky bottom-0 mt-auto rounded-t-(--composer-radius)',
+              )}
+            >
+              <ThreadScrollToBottom />
+              <ThreadFollowupSuggestions />
+              <Composer
+                autoFocus={autoFocus}
+                modelSelector={modelSelector}
+                contextUsage={contextUsage}
+                isCompacting={isCompacting}
+              />
+              <AuiIf condition={(s) => isNewChatView(s) && s.composer.isEmpty}>
+                <ThreadSuggestions />
+              </AuiIf>
+            </ThreadPrimitive.ViewportFooter>
+          )}
         </div>
       </ThreadPrimitive.Viewport>
     </ThreadPrimitive.Root>
@@ -253,12 +260,14 @@ const ThreadRoot: FC<{
 }
 
 const ThreadMessage: FC = () => {
-  const { AssistantMessage: AssistantMessageComponent = AssistantMessage } =
-    useContext(ThreadComponentsContext)
+  const {
+    AssistantMessage: AssistantMessageComponent = AssistantMessage,
+    readOnly,
+  } = useContext(ThreadComponentsContext)
   const role = useAuiState((s) => s.message.role)
   const isEditing = useAuiState((s) => s.message.composer.isEditing)
 
-  if (isEditing) return <EditComposer />
+  if (isEditing && !readOnly) return <EditComposer />
   if (role === 'user') return <UserMessage />
   return <AssistantMessageComponent />
 }
@@ -553,6 +562,7 @@ const AssistantMessage: FC = () => {
     ToolFallback: ToolFallbackComponent = ToolFallback,
     ToolGroup,
     ReasoningGroup,
+    readOnly,
   } = useContext(ThreadComponentsContext)
 
   const ACTION_BAR_PT = 'pt-1.5'
@@ -641,13 +651,15 @@ const AssistantMessage: FC = () => {
         <MessageError />
       </div>
 
-      <div
-        data-slot="aui_assistant-message-footer"
-        className={cn('ms-2 flex items-center', ACTION_BAR_HEIGHT)}
-      >
-        <BranchPicker />
-        <AssistantActionBar />
-      </div>
+      {!readOnly && (
+        <div
+          data-slot="aui_assistant-message-footer"
+          className={cn('ms-2 flex items-center', ACTION_BAR_HEIGHT)}
+        >
+          <BranchPicker />
+          <AssistantActionBar />
+        </div>
+      )}
     </MessagePrimitive.Root>
   )
 }
@@ -732,6 +744,8 @@ const UserImagePart: ImageMessagePartComponent = (part) => (
 )
 
 const UserMessage: FC = () => {
+  const { readOnly } = useContext(ThreadComponentsContext)
+
   return (
     <MessagePrimitive.Root
       data-slot="aui_user-message-root"
@@ -744,15 +758,19 @@ const UserMessage: FC = () => {
         <div className="aui-user-message-content peer bg-muted text-foreground rounded-xl px-4 py-2 wrap-break-word empty:hidden">
           <MessagePrimitive.Parts components={{ File: UserFilePart, Image: UserImagePart }} />
         </div>
-        <div className="aui-user-action-bar-wrapper absolute start-0 top-1/2 -translate-x-full -translate-y-1/2 pe-2 peer-empty:hidden rtl:translate-x-full">
-          <UserActionBar />
-        </div>
+        {!readOnly && (
+          <div className="aui-user-action-bar-wrapper absolute start-0 top-1/2 -translate-x-full -translate-y-1/2 pe-2 peer-empty:hidden rtl:translate-x-full">
+            <UserActionBar />
+          </div>
+        )}
       </div>
 
-      <BranchPicker
-        data-slot="aui_user-branch-picker"
-        className="col-span-full col-start-1 row-start-3 -me-1 justify-end"
-      />
+      {!readOnly && (
+        <BranchPicker
+          data-slot="aui_user-branch-picker"
+          className="col-span-full col-start-1 row-start-3 -me-1 justify-end"
+        />
+      )}
     </MessagePrimitive.Root>
   )
 }
