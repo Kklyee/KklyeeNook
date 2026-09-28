@@ -31,7 +31,7 @@ const isThinkingLevel = (value: string): value is ThinkingLevel =>
 const toPiThinkingLevel = (level: ThinkingLevel): PiThinkingLevel => level as PiThinkingLevel
 
 export function ChatPanel({ settings }: { settings: AgentSettingsSnapshot | null }) {
-  const [view, setView] = useState<'chat' | 'trace'>('chat')
+  const [view, setView] = useState<'chat' | 'trace' | 'subagent'>('chat')
   const [switchingModel, setSwitchingModel] = useState(false)
   const [modelError, setModelError] = useState<string | null>(null)
   const [focusedRunId, setFocusedRunId] = useState<string>()
@@ -63,6 +63,7 @@ export function ChatPanel({ settings }: { settings: AgentSettingsSnapshot | null
   useEffect(() => {
     clearPendingNewThreadPreferences()
     setFocusedRunId(undefined)
+    setView('chat')
   }, [threadItemId, sessionId])
 
   const modelOptions = configuredModels.map((model) => {
@@ -138,6 +139,7 @@ export function ChatPanel({ settings }: { settings: AgentSettingsSnapshot | null
       value={{
         focusRun: (runId) => {
           setFocusedRunId(runId)
+          setView('subagent')
         },
       }}
     >
@@ -158,6 +160,11 @@ export function ChatPanel({ settings }: { settings: AgentSettingsSnapshot | null
           <ViewTab active={view === 'trace'} onClick={() => setView('trace')}>
             轨迹
           </ViewTab>
+          {focusedRunId && (
+            <ViewTab active={view === 'subagent'} onClick={() => setView('subagent')}>
+              子 Agent
+            </ViewTab>
+          )}
         </nav>
         {view === 'chat' ? (
           <div className="relative min-h-0 flex-1">
@@ -177,18 +184,19 @@ export function ChatPanel({ settings }: { settings: AgentSettingsSnapshot | null
               }}
             />
           </div>
-        ) : (
+        ) : view === 'trace' ? (
           <RunHistoryPanel sessionId={sessionId} focusedRunId={focusedRunId} />
-        )}
-        {sessionId && focusedRunId && (
+        ) : focusedRunId && sessionId ? (
           <SubagentSessionPanel
-            open
             sessionId={sessionId}
             runId={focusedRunId}
-            onOpenChange={(open) => {
-              if (!open) setFocusedRunId(undefined)
+            onBack={() => {
+              setFocusedRunId(undefined)
+              setView('chat')
             }}
           />
+        ) : (
+          <div className="min-h-0 flex-1" />
         )}
       </div>
     </AgentRunFocusProvider>

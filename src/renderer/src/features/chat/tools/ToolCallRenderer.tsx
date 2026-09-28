@@ -82,8 +82,6 @@ interface DelegateTaskState {
   avatar?: SubagentAvatar
   task?: string
   status?: SubagentProgressStatus
-  summary?: string
-  result?: string
 }
 
 export function parseDelegateTaskState(value: unknown): DelegateTaskState | undefined {
@@ -106,8 +104,6 @@ export function parseDelegateTaskState(value: unknown): DelegateTaskState | unde
       parsed.status === 'aborted'
         ? { status: parsed.status }
         : {}),
-      ...(typeof parsed.summary === 'string' ? { summary: parsed.summary } : {}),
-      ...(typeof parsed.result === 'string' ? { result: parsed.result } : {}),
     }
   } catch {
     return undefined
@@ -131,18 +127,12 @@ export function DelegateTaskToolCall({
   const displayStatus: SubagentProgressStatus =
     progressStatus ??
     (status.type === 'running' ? 'running' : status.type === 'complete' ? 'completed' : 'failed')
-  const summary =
-    progress?.summary ??
-    (displayStatus === 'running' ? '正在启动子 Agent' : progress?.result) ??
-    (displayStatus === 'failed' ? '子 Agent 执行失败' : undefined)
-
   return (
     <SubagentProgress
       name={progress?.name ?? '子 Agent'}
       avatar={progress?.avatar}
       task={task}
       status={displayStatus}
-      summary={summary}
       runId={runId}
       onOpen={runId ? () => focusRun(runId) : undefined}
     />

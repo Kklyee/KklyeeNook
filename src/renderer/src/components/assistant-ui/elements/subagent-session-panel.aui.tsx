@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
+  ArrowLeftIcon,
   CheckIcon,
   CircleAlertIcon,
   CircleDotIcon,
@@ -12,7 +13,6 @@ import {
 
 import type { AgentExecutionRecord } from '@/shared/agent/agentExecutionRecord'
 import type { AgentRunStatus } from '@/shared/agent/agentRun'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../ui/dialog'
 import { cn } from '@/renderer/src/lib/utils'
 import { field, mono, ShimmerLabel } from '@/renderer/src/lib/surfaces'
 import { SubagentAvatar } from './subagent-avatar.aui'
@@ -36,28 +36,24 @@ type ViewerItem =
     }
 
 export function SubagentSessionPanel({
-  open,
   sessionId,
   runId,
-  onOpenChange,
+  onBack,
 }: {
-  open: boolean
   sessionId: string
   runId: string
-  onOpenChange: (open: boolean) => void
+  onBack: () => void
 }) {
   const runsQuery = useQuery({
     queryKey: ['agent-runs', sessionId, 'subagent-view'],
     queryFn: () => window.api.listAgentRuns({ sessionId }),
-    enabled: open,
-    refetchInterval: open ? 500 : false,
+    refetchInterval: 500,
   })
   const run = runsQuery.data?.find((candidate) => candidate.id === runId)
   const recordsQuery = useQuery({
     queryKey: ['agent-execution-records', 'subagent-view', runId],
     queryFn: () => window.api.listAgentExecutionRecords({ runId }),
-    enabled: open,
-    refetchInterval: open && run && isActive(run.status) ? 350 : false,
+    refetchInterval: run && isActive(run.status) ? 350 : false,
     retry: false,
   })
   const items = useMemo(
@@ -67,62 +63,64 @@ export function SubagentSessionPanel({
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (!open) return
     const element = scrollRef.current
     if (element) element.scrollTop = element.scrollHeight
-  }, [items, open])
+  }, [items])
 
   const task = findTask(recordsQuery.data ?? [])
   const active = run ? isActive(run.status) : true
   const latest = items.at(-1)
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[min(80vh,720px)] max-w-2xl flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-border/60 flex shrink-0 flex-row items-center gap-3 border-b px-5 py-4">
-          <SubagentAvatar avatar={run?.avatar} size="lg" />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <DialogTitle className="truncate text-sm">
-                {run?.displayName ?? '子 Agent'}
-              </DialogTitle>
-              <StatusBadge status={run?.status} />
-            </div>
-            <DialogDescription className="mt-1 truncate text-xs">
-              {task ?? '正在加载子任务'}
-            </DialogDescription>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <header className="border-border/60 flex shrink-0 items-center gap-4 border-b px-5 py-4">
+        <button
+          type="button"
+          onClick={onBack}
+          className="text-foreground/45 hover:bg-foreground/[0.06] hover:text-foreground flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors"
+        >
+          <ArrowLeftIcon className="size-3.5" />
+          返回对话
+        </button>
+        <div className="bg-border/60 h-7 w-px" />
+        <SubagentAvatar avatar={run?.avatar} size="lg" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h2 className="truncate text-sm font-medium">{run?.displayName ?? '子 Agent'}</h2>
+            <StatusBadge status={run?.status} />
           </div>
-        </DialogHeader>
-
-        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-          {recordsQuery.isError ? (
-            <div className="text-destructive flex items-center gap-2 text-xs">
-              <CircleAlertIcon className="size-4" />
-              无法加载子 Agent 的实时输出
-            </div>
-          ) : items.length ? (
-            <div className="flex flex-col gap-3">
-              {items.map((item) => (
-                <ViewerItemView key={item.id} item={item} active={active && item === latest} />
-              ))}
-            </div>
-          ) : (
-            <div className="text-foreground/45 flex items-center gap-2 py-8 text-xs">
-              <LoaderCircleIcon className="size-4 animate-spin" />
-              子 Agent 正在准备工作环境
-            </div>
-          )}
+          <p className="text-foreground/45 mt-1 truncate text-xs">
+            {task ?? '正在加载子任务'}
+          </p>
         </div>
+      </header>
 
-        <div className="border-border/60 flex shrink-0 items-center gap-2 border-t px-5 py-2.5 text-[11px] text-foreground/40">
-          <span className={cn('size-1.5 rounded-full', active ? 'bg-blue-500' : 'bg-emerald-500')} />
-          <ShimmerLabel active={active}>{run ? runStatusLabel(run.status) : '连接中'}</ShimmerLabel>
-          {latest && latest.kind === 'tool' && (
-            <span className="truncate">· {latest.toolName}</span>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-6">
+        {recordsQuery.isError ? (
+          <div className="text-destructive flex items-center gap-2 text-xs">
+            <CircleAlertIcon className="size-4" />
+            无法加载子 Agent 的实时输出
+          </div>
+        ) : items.length ? (
+          <div className="flex flex-col gap-3">
+            {items.map((item) => (
+              <ViewerItemView key={item.id} item={item} active={active && item === latest} />
+            ))}
+          </div>
+        ) : (
+          <div className="text-foreground/45 flex items-center gap-2 py-8 text-xs">
+            <LoaderCircleIcon className="size-4 animate-spin" />
+            子 Agent 正在准备工作环境
+          </div>
+        )}
+      </div>
+
+      <div className="border-border/60 flex shrink-0 items-center gap-2 border-t px-5 py-2.5 text-[11px] text-foreground/40">
+        <span className={cn('size-1.5 rounded-full', active ? 'bg-blue-500' : 'bg-emerald-500')} />
+        <ShimmerLabel active={active}>{run ? runStatusLabel(run.status) : '连接中'}</ShimmerLabel>
+        {latest && latest.kind === 'tool' && <span className="truncate">· {latest.toolName}</span>}
+      </div>
+    </div>
   )
 }
 
