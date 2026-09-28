@@ -1,4 +1,6 @@
 import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 
 import type {
   PiClientEventBody,
@@ -134,6 +136,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     private readonly runtimeStateRepo: AgentRuntimeStateRepo,
     private readonly toolRegistry: ToolRegistry,
     private readonly sessionDir: string,
+    private readonly skillDirectory = join(homedir(), '.agents', 'skills'),
   ) {}
 
   async initialize(): Promise<void> {
@@ -418,6 +421,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
       const resourceLoader = new DefaultResourceLoader({
         cwd,
         agentDir: cwd,
+        additionalSkillPaths: [this.skillDirectory],
         settingsManager,
         extensionFactories: [
           createPiApprovalExtension(this.sessionId, this.approvalPolicy, (event) =>

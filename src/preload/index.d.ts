@@ -24,6 +24,7 @@ import type {
   StageContextAttachmentRequest,
 } from '../shared/context/contextAttachment'
 import type { AgentBackendStatus } from '../shared/agentBackend'
+import type { AgentSkill } from '../shared/agent/agentSkill'
 
 interface API {
   window: {
@@ -37,6 +38,9 @@ interface API {
     getStatus(): Promise<AgentBackendStatus>
     onStatus(listener: (status: AgentBackendStatus) => void): () => void
   }
+  listAgentSkills(): Promise<AgentSkill[]>
+  getAgentSkill(id: string): Promise<AgentSkill | null>
+  reloadAgentSkills(): Promise<AgentSkill[]>
   context: {
     stage(request: StageContextAttachmentRequest): Promise<ContextAttachmentRef>
     remove(request: RemoveContextAttachmentRequest): Promise<void>

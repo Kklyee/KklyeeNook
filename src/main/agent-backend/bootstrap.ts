@@ -29,6 +29,7 @@ import type {
 } from './protocol'
 import { startAgentHttpServer, type RunningAgentHttpServer } from './httpServer'
 import { createPiNodeClientAdapter } from './piNodeClientAdapter'
+import { SkillLoader } from './skillLoader'
 import type { PiSubscribeRequest } from '@/shared/pi/piClient'
 import type { PiClientEvent } from '@assistant-ui/react-pi'
 
@@ -65,6 +66,8 @@ export async function createAgentBackend(
     const approvalPolicy = new ApprovalPolicy(permissionGrantRepo)
     const runtimeStateRepo = new DrizzleAgentRuntimeStateRepo(db)
     const sessionDir = options.sessionDir
+    const skillLoader = new SkillLoader()
+    await skillLoader.reload()
     const toolRegistry = new ToolRegistry()
     const workspace = () => {
       const cwd = configStore.get().cwd
@@ -85,6 +88,7 @@ export async function createAgentBackend(
           runtimeStateRepo,
           toolRegistry,
           sessionDir,
+          skillLoader.directory,
         ),
     )
     const runtimeFactory = createPiAgentRuntimeFactory(sessionRuntimeManager)
@@ -152,6 +156,16 @@ export async function createAgentBackend(
           case 'context:clear':
             contextAttachments.clear()
             return undefined
+          case 'skills:list':
+            return skillLoader.listSkills()
+          case 'skills:get':
+            return skillLoader.getSkill(request.id) ?? null
+          case 'skills:reload': {
+            sessionRuntimeManager.assertCanReloadConfiguration()
+            const skills = await skillLoader.reload()
+            sessionRuntimeManager.reloadConfiguration()
+            return skills
+          }
           case 'agent-run:list':
             return agentService.listRuns(request.request.sessionId)
           case 'agent-run:overview-list':

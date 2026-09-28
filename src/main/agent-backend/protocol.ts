@@ -30,6 +30,9 @@ export type AgentBackendRequest =
   | { action: 'context:stage'; attachment: ResolvedContextAttachment }
   | { action: 'context:remove'; id: string }
   | { action: 'context:clear' }
+  | { action: 'skills:list' }
+  | { action: 'skills:get'; id: string }
+  | { action: 'skills:reload' }
   | { action: 'agent-run:list'; request: LoadAgentRunsRequest }
   | { action: 'agent-run:overview-list' }
   | { action: 'agent-execution-record:list'; request: LoadAgentExecutionRecordsRequest }

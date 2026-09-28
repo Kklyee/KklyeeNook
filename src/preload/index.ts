@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
 import type { AgentBackendStatus } from '@/shared/agentBackend'
+import type { AgentSkill } from '@/shared/agent/agentSkill'
 import { DeletePermissionGrantRequest } from '@/shared/approval/approvalTypes'
 import type {
   AgentSettingsSnapshot,
@@ -67,6 +68,17 @@ const api = {
       ipcRenderer.on(IPC_CHANNELS.AGENT_BACKEND_STATUS, handler)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.AGENT_BACKEND_STATUS, handler)
     },
+  },
+  listAgentSkills(): Promise<AgentSkill[]> {
+    return ipcRenderer.invoke(IPC_CHANNELS.AGENT_SKILLS_LIST)
+  },
+
+  getAgentSkill(id: string): Promise<AgentSkill | null> {
+    return ipcRenderer.invoke(IPC_CHANNELS.AGENT_SKILLS_GET, id)
+  },
+
+  reloadAgentSkills(): Promise<AgentSkill[]> {
+    return ipcRenderer.invoke(IPC_CHANNELS.AGENT_SKILLS_RELOAD)
   },
   context,
 

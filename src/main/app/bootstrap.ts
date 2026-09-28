@@ -7,6 +7,7 @@ import { createAgentBackendProcess } from '../agent-backend/electronProcess'
 import type { AgentBackendInitOptions } from '../agent-backend/protocol'
 import { registerAgentBackendIpc } from '../agent-backend/agentBackendIpc'
 import { registerAgentRunIpc } from '../agent/ipc/agentRunIpc'
+import { registerAgentSkillIpc } from '../agent/ipc/agentSkillIpc'
 import { connectDatabase } from '../db/client'
 import { getDatabaseUrl, getMigrationsPath } from '../db/databasePath'
 import { DrizzleArtifactRepo } from '../db/repositories/artifactRepo'
@@ -109,6 +110,7 @@ export async function bootstrap(): Promise<AppContext> {
   })
   const disposeWindowIpc = registerWindowIpc(chatWindow)
   const disposeAgentRunIpc = registerAgentRunIpc(backendProcess)
+  const disposeAgentSkillIpc = registerAgentSkillIpc(backendProcess)
   registerArtifactIpc(chatWindow, artifactService)
 
   loadRenderer(chatWindow, 'chat')
@@ -125,6 +127,7 @@ export async function bootstrap(): Promise<AppContext> {
     dispose() {
       disposeAgentBackendIpc()
       disposeAgentRunIpc()
+      disposeAgentSkillIpc()
       disposeWindowIpc()
       disposeContextIpc()
       contextAttachments.clear()
