@@ -55,10 +55,11 @@ export interface ComposerModel {
 }
 
 export interface ComposerUsage {
-  system: number
-  tools: number
-  messages: number
+  used: number
   total: number
+  system?: number
+  tools?: number
+  messages?: number
 }
 
 const ATTACHMENT_ICONS: Record<NonNullable<ComposerAttachment['kind']>, LucideIcon> = {
@@ -438,15 +439,25 @@ export function ComposerContext({
   className,
   ...props
 }: Omit<ComponentProps<'div'>, 'children'> & { usage: ComposerUsage }) {
-  const used = usage.system + usage.tools + usage.messages
+  const breakdown = [
+    usage.system !== undefined
+      ? { label: 'System', value: usage.system, className: 'bg-foreground/25' }
+      : undefined,
+    usage.tools !== undefined
+      ? { label: 'Tools', value: usage.tools, className: 'bg-foreground/45' }
+      : undefined,
+    usage.messages !== undefined
+      ? { label: 'Messages', value: usage.messages, className: 'bg-foreground/80' }
+      : undefined,
+  ].filter((segment): segment is NonNullable<typeof segment> => segment !== undefined)
+  const segments =
+    breakdown.length === 3
+      ? breakdown
+      : [{ label: 'Used', value: usage.used, className: 'bg-foreground/80' }]
+  const used = usage.used
   const fraction = usage.total === 0 ? 0 : used / usage.total
   const warn = fraction > 0.85
   const circumference = 2 * Math.PI * 6
-  const segments = [
-    { label: 'System', value: usage.system, className: 'bg-foreground/25' },
-    { label: 'Tools', value: usage.tools, className: 'bg-foreground/45' },
-    { label: 'Messages', value: usage.messages, className: 'bg-foreground/80' },
-  ]
 
   return (
     <div data-slot="composer-context" className={cn('group/ctx relative', className)} {...props}>

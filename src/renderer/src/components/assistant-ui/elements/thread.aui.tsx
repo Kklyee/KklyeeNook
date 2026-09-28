@@ -347,12 +347,7 @@ const ComposerAction: FC<{
   const composerUsage = useMemo<ComposerUsage | undefined>(
     () =>
       hasContextUsage
-        ? {
-            system: 0,
-            tools: 0,
-            messages: Math.round(tokens / 1000),
-            total: Math.round(contextWindow / 1000),
-          }
+        ? { used: Math.round(tokens / 1000), total: Math.round(contextWindow / 1000) }
         : undefined,
     [contextWindow, hasContextUsage, tokens],
   )
