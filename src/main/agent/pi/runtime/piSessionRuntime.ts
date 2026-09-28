@@ -111,6 +111,7 @@ export interface PiSessionRuntimePort {
   setThinkingLevel(level: PiThinkingLevel): void
   setSessionName(title: string): void
   respondToExtensionUiRequest(response: PiExtensionUiResponse): void
+  forwardClientEvent?(event: PiClientEventBody): void
   reloadConfiguration(): void
   subscribe(listener: PiSessionEventListener): () => void
   subscribeClientEvents(listener: PiSessionClientEventListener): () => void
@@ -121,6 +122,7 @@ export interface PiSessionRuntimePort {
 export interface PiSessionRuntimeOptions {
   persistState?: boolean
   permissionSessionId?: string
+  hostUiEventSink?: (event: PiClientEventBody) => void
 }
 
 /**
@@ -155,10 +157,12 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
   ) {
     this.persistState = options.persistState ?? true
     this.permissionSessionId = options.permissionSessionId ?? sessionId
+    this.hostUiEventSink = options.hostUiEventSink
   }
 
   private readonly persistState: boolean
   private readonly permissionSessionId: string
+  private readonly hostUiEventSink?: (event: PiClientEventBody) => void
 
   async initialize(): Promise<void> {
     if (this.piSession) return
@@ -394,6 +398,10 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     }
   }
 
+  forwardClientEvent(event: PiClientEventBody): void {
+    this.publishClientEvent(event)
+  }
+
   reloadConfiguration(): void {
     if (this.isRunning()) throw new Error('Cannot change agent settings while a run is active')
     this.resetPiSession()
@@ -522,9 +530,16 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
           const pending = session.state.pendingToolCalls
           return pending.size === 1 ? pending.values().next().value : undefined
         },
-        onRequest: (request) => this.publishClientEvent({ type: 'extension_ui_request', request }),
-        onResolved: (requestId) =>
-          this.publishClientEvent({ type: 'extension_ui_resolved', requestId }),
+        onRequest: (request) => {
+          const event = { type: 'extension_ui_request' as const, request }
+          this.publishClientEvent(event)
+          this.hostUiEventSink?.(event)
+        },
+        onResolved: (requestId) => {
+          const event = { type: 'extension_ui_resolved' as const, requestId }
+          this.publishClientEvent(event)
+          this.hostUiEventSink?.(event)
+        },
       })
       await session.bindExtensions({ uiContext: this.extensionUiBridge.ui })
       if (this.persistState) {

@@ -16,6 +16,7 @@ function toAgentRun(row: AgentRunRow): AgentRun {
     id: row.id,
     sessionId: row.sessionId,
     ...(row.displayName ? { displayName: row.displayName } : {}),
+    ...(row.avatar ? { avatar: row.avatar } : {}),
     ...(row.parentRunId ? { parentRunId: row.parentRunId } : {}),
     ...(row.rootRunId ? { rootRunId: row.rootRunId } : {}),
     depth: row.depth,
@@ -59,6 +60,7 @@ export class DrizzleAgentRunRepo implements AgentRunRepo {
         id: run.id,
         sessionId: run.sessionId,
         displayName: run.displayName ?? null,
+        avatar: run.avatar ?? null,
         parentRunId: run.parentRunId ?? null,
         rootRunId: run.rootRunId ?? null,
         depth: run.depth ?? 0,
@@ -80,6 +82,7 @@ export class DrizzleAgentRunRepo implements AgentRunRepo {
         set: {
           status: run.status,
           displayName: run.displayName ?? null,
+          avatar: run.avatar ?? null,
           parentRunId: run.parentRunId ?? null,
           rootRunId: run.rootRunId ?? null,
           depth: run.depth ?? 0,

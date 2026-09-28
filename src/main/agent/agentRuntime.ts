@@ -6,6 +6,7 @@ export interface AgentRuntimeFactoryOptions {
   runtimeSessionId?: string
   permissionSessionId?: string
   persistState?: boolean
+  parentRuntimeSessionId?: string
 }
 
 export interface AgentRuntimeInput {

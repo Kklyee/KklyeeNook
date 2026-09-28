@@ -13,7 +13,9 @@ import type {
   DelegateTaskInput,
   DelegateTaskProgress,
   DelegateTaskResult,
+  SubagentAvatar,
 } from '@/shared/agent/delegateTask'
+import { SUBAGENT_AVATARS } from '@/shared/agent/delegateTask'
 import type { AgentRunContext } from '@/main/context/contextBuilder'
 import { getAgentRunPatch } from './agentRunState'
 
@@ -35,10 +37,12 @@ type AgentEventListener = (envelope: AgentEventEnvelope) => void
 
 export interface AgentRunStartOptions {
   displayName?: string
+  avatar?: SubagentAvatar
   parentRunId?: string
   rootRunId?: string
   depth?: number
   runtimeSessionId?: string
+  parentRuntimeSessionId?: string
   ephemeralRuntime?: boolean
 }
 
@@ -59,10 +63,18 @@ function createSubagentName(): string {
   return `${adjective}${role}`
 }
 
+function createSubagentAvatar(): SubagentAvatar {
+  return SUBAGENT_AVATARS[Math.floor(Math.random() * SUBAGENT_AVATARS.length)] ?? '🦊'
+}
+
 function getDelegateTaskEventSummary(event: AgentEvent): string | undefined {
   switch (event.type) {
     case 'agent_started':
       return '子 Agent 已开始执行'
+    case 'thinking_delta': {
+      const text = event.text.trim()
+      return text ? `思考：${text.slice(-160)}` : undefined
+    }
     case 'text_delta': {
       const text = event.text.trim()
       return text ? text.slice(-160) : undefined
@@ -367,13 +379,14 @@ export class AgentService {
         ? `${task}\n\nContext provided by the parent:\n${explicitContext}`
         : task
       const displayName = createSubagentName()
+      const avatar = createSubagentAvatar()
       let childRunId: string | undefined
       const unsubscribe = onProgress
         ? this.subscribe(({ runId, event }) => {
             if (runId !== childRunId) return
             const summary = getDelegateTaskEventSummary(event)
             if (!summary) return
-            onProgress({ runId, name: displayName, task, status: 'running', summary })
+            onProgress({ runId, name: displayName, avatar, task, status: 'running', summary })
           })
         : undefined
       const handle = this.startRun(
@@ -386,10 +399,12 @@ export class AgentService {
         undefined,
         {
           displayName,
+          avatar,
           parentRunId,
           rootRunId: parent.rootRunId ?? parent.id,
           depth: depth + 1,
           runtimeSessionId: randomUUID(),
+          parentRuntimeSessionId: parent.sessionId,
           ephemeralRuntime: true,
         },
       )
@@ -397,6 +412,7 @@ export class AgentService {
       onProgress?.({
         runId: handle.run.id,
         name: displayName,
+        avatar,
         task,
         status: 'running',
         summary: '子 Agent 已启动',
@@ -410,6 +426,8 @@ export class AgentService {
         const result = {
           runId: child.id,
           status,
+          name: displayName,
+          avatar,
           ...(child.result !== undefined ? { result: child.result } : {}),
           ...(child.artifactIds.length ? { artifactIds: child.artifactIds } : {}),
         } satisfies DelegateTaskResult
@@ -417,6 +435,7 @@ export class AgentService {
         onProgress?.({
           runId: child.id,
           name: displayName,
+          avatar,
           task,
           status: progressStatus,
           summary: child.result ?? child.error ?? '子 Agent 已完成',
@@ -495,6 +514,7 @@ export class AgentService {
       id,
       sessionId,
       ...(options.displayName ? { displayName: options.displayName } : {}),
+      ...(options.avatar ? { avatar: options.avatar } : {}),
       ...(options.parentRunId ? { parentRunId: options.parentRunId } : {}),
       rootRunId: options.rootRunId ?? parent?.rootRunId ?? parent?.id ?? id,
       depth: options.depth ?? (parent ? (parent.depth ?? 0) + 1 : 0),
@@ -518,6 +538,7 @@ export class AgentService {
         controller.signal,
         runtimeSessionId,
         options.ephemeralRuntime ?? runtimeSessionId !== sessionId,
+        options.parentRuntimeSessionId,
       ),
     )
 
@@ -555,11 +576,13 @@ export class AgentService {
     signal?: AbortSignal,
     runtimeSessionId = session.id,
     ephemeralRuntime = false,
+    parentRuntimeSessionId?: string,
   ): Promise<AgentRun> {
     const runtime = this.getOrCreateRuntime(runtimeSessionId, {
       runtimeSessionId,
       permissionSessionId: session.id,
       persistState: !ephemeralRuntime,
+      ...(parentRuntimeSessionId ? { parentRuntimeSessionId } : {}),
     })
     try {
       await runtime.run(

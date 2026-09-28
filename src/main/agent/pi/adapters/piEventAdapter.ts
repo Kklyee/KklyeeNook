@@ -13,6 +13,10 @@ export function convertPiEvent(event: PIAgentEvent): AgentEvent | undefined {
         return { type: 'text_delta', text: update.delta }
       }
 
+      if (update.type === 'thinking_delta') {
+        return { type: 'thinking_delta', text: update.delta }
+      }
+
       return undefined
     }
 

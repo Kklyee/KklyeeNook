@@ -8,10 +8,16 @@ export function createPiAgentRuntimeFactory(
   return {
     create(sessionId, options) {
       const runtimeSessionId = options?.runtimeSessionId ?? sessionId
+      const parentRuntime = options?.parentRuntimeSessionId
+        ? sessionRuntimeManager.get(options.parentRuntimeSessionId)
+        : undefined
       return new PiAgentRuntime(
         sessionRuntimeManager.getOrCreate(runtimeSessionId, {
           persistState: options?.persistState,
           permissionSessionId: options?.permissionSessionId ?? sessionId,
+          ...(parentRuntime
+            ? { hostUiEventSink: (event) => parentRuntime.forwardClientEvent?.(event) }
+            : {}),
         }),
         () => {
           sessionRuntimeManager.delete(runtimeSessionId)

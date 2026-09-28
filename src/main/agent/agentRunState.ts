@@ -28,6 +28,10 @@ export function getAgentRunPatch(
       if (run.status === 'running') return undefined
       return { status: 'running', startedAt: run.startedAt ?? timestamp }
 
+    case 'thinking_delta':
+      if (run.status === 'running') return undefined
+      return { status: 'running' }
+
     case 'text_delta':
     case 'tool_updated':
       if (event.type === 'text_delta') {

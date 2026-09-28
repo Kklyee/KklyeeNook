@@ -2,11 +2,14 @@ import { CheckIcon, CircleAlertIcon, ChevronRightIcon, LoaderCircleIcon } from '
 
 import { cn } from '@/renderer/src/lib/utils'
 import { fieldInteractive, mono, ShimmerLabel } from '@/renderer/src/lib/surfaces'
+import { SubagentAvatar } from './subagent-avatar.aui'
+import type { SubagentAvatar as SubagentAvatarValue } from '@/shared/agent/delegateTask'
 
 export type SubagentProgressStatus = 'running' | 'completed' | 'failed' | 'aborted'
 
 export interface SubagentProgressProps {
   name: string
+  avatar?: SubagentAvatarValue
   task: string
   status: SubagentProgressStatus
   summary?: string
@@ -16,6 +19,7 @@ export interface SubagentProgressProps {
 
 export function SubagentProgress({
   name,
+  avatar,
   task,
   status,
   summary,
@@ -36,6 +40,7 @@ export function SubagentProgress({
       )}
       aria-label={`${name}：${task}`}
     >
+      <SubagentAvatar avatar={avatar} />
       <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground/[0.07]">
         {running ? (
           <LoaderCircleIcon className="size-3.5 animate-spin text-blue-500 motion-reduce:animate-none" />

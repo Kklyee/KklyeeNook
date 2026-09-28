@@ -1,5 +1,6 @@
 import type { AgentPlan } from './agentPlan'
 import type { ToolCall, ToolResult } from '../tool/tool'
+import type { SubagentAvatar } from './delegateTask'
 
 export type AgentRunStatus =
   | 'created'
@@ -27,6 +28,7 @@ export interface AgentRun {
   id: string
   sessionId: string
   displayName?: string
+  avatar?: SubagentAvatar
   parentRunId?: string
   rootRunId?: string
   depth?: number

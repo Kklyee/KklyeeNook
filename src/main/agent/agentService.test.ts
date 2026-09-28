@@ -528,9 +528,16 @@ test('delegates an isolated child run and returns its result', async () => {
     ?.getRuns()
     .find((run) => run.id === result.runId)
 
-  expect(result).toEqual({ runId: child?.id, status: 'completed', result: 'child result' })
+  expect(result).toMatchObject({
+    runId: child?.id,
+    status: 'completed',
+    result: 'child result',
+    name: child?.displayName,
+    avatar: child?.avatar,
+  })
   expect(child).toMatchObject({
     displayName: expect.any(String),
+    avatar: expect.any(String),
     parentRunId: parent.run.id,
     rootRunId: parent.run.id,
     depth: 1,
@@ -545,6 +552,7 @@ test('delegates an isolated child run and returns its result', async () => {
   expect(progress[0]).toMatchObject({
     runId: child?.id,
     name: child?.displayName,
+    avatar: child?.avatar,
     task: 'inspect the database',
     status: 'running',
   })

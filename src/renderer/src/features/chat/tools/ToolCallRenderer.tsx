@@ -7,6 +7,7 @@ import {
   type SubagentProgressStatus,
 } from '../../../components/assistant-ui/elements/subagent-progress.aui'
 import { useAgentRunFocus } from '../../runs/AgentRunFocusContext'
+import { SUBAGENT_AVATARS, type SubagentAvatar } from '@/shared/agent/delegateTask'
 
 type ToolArgs = Record<string, unknown>
 
@@ -78,6 +79,7 @@ type DelegateTaskArgs = { task?: string }
 interface DelegateTaskState {
   runId?: string
   name?: string
+  avatar?: SubagentAvatar
   task?: string
   status?: SubagentProgressStatus
   summary?: string
@@ -93,6 +95,10 @@ export function parseDelegateTaskState(value: unknown): DelegateTaskState | unde
     return {
       ...(typeof parsed.runId === 'string' ? { runId: parsed.runId } : {}),
       ...(typeof parsed.name === 'string' ? { name: parsed.name } : {}),
+      ...(typeof parsed.avatar === 'string' &&
+      (SUBAGENT_AVATARS as readonly string[]).includes(parsed.avatar)
+        ? { avatar: parsed.avatar as SubagentAvatar }
+        : {}),
       ...(typeof parsed.task === 'string' ? { task: parsed.task } : {}),
       ...(parsed.status === 'running' ||
       parsed.status === 'completed' ||
@@ -133,6 +139,7 @@ export function DelegateTaskToolCall({
   return (
     <SubagentProgress
       name={progress?.name ?? '子 Agent'}
+      avatar={progress?.avatar}
       task={task}
       status={displayStatus}
       summary={summary}

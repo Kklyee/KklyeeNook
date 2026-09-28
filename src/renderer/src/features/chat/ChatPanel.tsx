@@ -9,6 +9,7 @@ import { cn } from '@/renderer/src/lib/utils'
 import { RunHistoryPanel } from '../runs/RunHistoryPanel'
 import { AgentRunFocusProvider } from '../runs/AgentRunFocusContext'
 import { PiExtensionUiPrompt } from './runtime/PiExtensionUiPrompt'
+import { SubagentSessionPanel } from '../../components/assistant-ui/elements/subagent-session-panel.aui'
 import {
   clearPendingNewThreadPreferences,
   setPendingNewThreadPreferences,
@@ -137,7 +138,6 @@ export function ChatPanel({ settings }: { settings: AgentSettingsSnapshot | null
       value={{
         focusRun: (runId) => {
           setFocusedRunId(runId)
-          setView('trace')
         },
       }}
     >
@@ -179,6 +179,16 @@ export function ChatPanel({ settings }: { settings: AgentSettingsSnapshot | null
           </div>
         ) : (
           <RunHistoryPanel sessionId={sessionId} focusedRunId={focusedRunId} />
+        )}
+        {sessionId && focusedRunId && (
+          <SubagentSessionPanel
+            open
+            sessionId={sessionId}
+            runId={focusedRunId}
+            onOpenChange={(open) => {
+              if (!open) setFocusedRunId(undefined)
+            }}
+          />
         )}
       </div>
     </AgentRunFocusProvider>

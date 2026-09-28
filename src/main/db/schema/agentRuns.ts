@@ -2,6 +2,7 @@ import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 import type { AgentPlan } from '@/shared/agent/agentPlan'
 import type { AgentRunStatus } from '@/shared/agent/agentRun'
+import type { SubagentAvatar } from '@/shared/agent/delegateTask'
 import type { ToolCall, ToolResult } from '@/shared/tool/tool'
 import { conversations } from './conversations'
 
@@ -13,6 +14,7 @@ export const agentRuns = sqliteTable(
       .notNull()
       .references(() => conversations.id, { onDelete: 'cascade' }),
     displayName: text('display_name'),
+    avatar: text('avatar').$type<SubagentAvatar>(),
     parentRunId: text('parent_run_id').references(() => agentRuns.id, { onDelete: 'cascade' }),
     rootRunId: text('root_run_id'),
     depth: integer('depth').notNull().default(0),

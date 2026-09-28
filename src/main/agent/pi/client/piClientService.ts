@@ -217,7 +217,7 @@ export class PiClientService implements PiClient {
   async respondToHostUiRequest(threadId: string, response: PiExtensionUiResponse): Promise<void> {
     const sessionRuntime = this.sessionRuntimeManager.getOrCreate(threadId)
     await sessionRuntime.initialize()
-    sessionRuntime.respondToExtensionUiRequest(response)
+    this.sessionRuntimeManager.respondToExtensionUiRequest(threadId, response)
   }
 
   subscribe(

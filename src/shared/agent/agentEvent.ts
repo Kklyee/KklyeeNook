@@ -6,6 +6,7 @@ export type AgentEvent =
   | { type: 'user_message'; text: string }
   | { type: 'system_prompt'; text: string }
   | { type: 'agent_started' }
+  | { type: 'thinking_delta'; text: string }
   | { type: 'text_delta'; text: string }
   | { type: 'tool_started'; call: ToolCall }
   | { type: 'tool_updated'; toolCallId: string; partialResult: unknown }

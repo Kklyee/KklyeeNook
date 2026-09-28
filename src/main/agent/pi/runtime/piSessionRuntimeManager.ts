@@ -1,5 +1,6 @@
 import type { PiSessionRuntimePort } from './piSessionRuntime'
 import type { PiSessionRuntimeOptions } from './piSessionRuntime'
+import type { PiHostUiResponse } from '@assistant-ui/react-pi/node'
 
 export type PiSessionRuntimeFactory = (
   sessionId: string,
@@ -23,6 +24,26 @@ export class PiSessionRuntimeManager {
     const runtime = options ? this.createRuntime(sessionId, options) : this.createRuntime(sessionId)
     this.runtimes.set(sessionId, runtime)
     return runtime
+  }
+
+  respondToExtensionUiRequest(sessionId: string, response: PiHostUiResponse): void {
+    const preferred = this.runtimes.get(sessionId)
+    const candidates = preferred
+      ? [preferred, ...Array.from(this.runtimes.values()).filter((runtime) => runtime !== preferred)]
+      : Array.from(this.runtimes.values())
+    let lastError: unknown
+
+    for (const runtime of candidates) {
+      try {
+        runtime.respondToExtensionUiRequest(response)
+        return
+      } catch (error) {
+        lastError = error
+      }
+    }
+
+    if (lastError instanceof Error) throw lastError
+    throw new Error(`Unknown Pi extension UI request: ${response.requestId}`)
   }
 
   delete(sessionId: string): void {
