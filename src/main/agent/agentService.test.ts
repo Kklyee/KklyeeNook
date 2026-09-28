@@ -392,9 +392,61 @@ test('turns a successful update_plan tool call into a persisted run plan and eve
 
   const finalRun = await service.startRun(sessionRecord.id, { prompt: '请执行复杂任务' }).completion
 
-  expect(finalRun.plan).toEqual(plan)
-  expect(runRepo.runs.get(finalRun.id)?.plan).toEqual(plan)
+  expect(finalRun.plan).toEqual({
+    steps: [
+      { id: 'analyze', title: '分析项目', status: 'completed' },
+      { id: 'edit', title: '修改实现', status: 'completed' },
+    ],
+  })
+  expect(runRepo.runs.get(finalRun.id)?.plan).toEqual(finalRun.plan)
   expect(
     (await service.listExecutionRecords(finalRun.id)).map((record) => record.event.type),
   ).toEqual(['user_message', 'tool_started', 'tool_finished', 'plan_updated', 'agent_completed'])
+})
+
+test('completes the active plan step when the agent run completes', async () => {
+  const runRepo = new MemoryRunRepo()
+  const plan = {
+    steps: [
+      { id: 'analyze', title: '分析项目', status: 'in_progress' as const },
+      { id: 'edit', title: '修改实现', status: 'pending' as const },
+    ],
+  }
+  const runtime: AgentRuntime = {
+    async run(_input, emit) {
+      emit({
+        type: 'tool_started',
+        call: { id: 'tool-plan', toolName: 'update_plan', args: plan },
+      })
+      emit({
+        type: 'tool_finished',
+        result: {
+          toolCallId: 'tool-plan',
+          toolName: 'update_plan',
+          output: { content: [{ type: 'text', text: 'updated' }], details: plan },
+          success: true,
+        },
+      })
+      emit({ type: 'agent_completed' })
+    },
+    dispose() {},
+  }
+  const service = new AgentService(
+    { create: () => runtime },
+    new MemorySessionRepo([sessionRecord]),
+    runRepo,
+    new MemoryExecutionRecordRepo(),
+    new MemoryArtifactRepo(),
+  )
+  await service.initialize()
+
+  const finalRun = await service.startRun(sessionRecord.id, { prompt: '请完成复杂任务' }).completion
+
+  expect(finalRun.plan).toEqual({
+    steps: [
+      { id: 'analyze', title: '分析项目', status: 'completed' },
+      { id: 'edit', title: '修改实现', status: 'pending' },
+    ],
+  })
+  expect(runRepo.runs.get(finalRun.id)?.plan).toEqual(finalRun.plan)
 })

@@ -18,6 +18,16 @@ export interface AgentPlanToolInput {
   }>
 }
 
+export function completeActivePlanSteps(plan: AgentPlan): AgentPlan {
+  let changed = false
+  const steps = plan.steps.map((step) => {
+    if (step.status !== 'in_progress') return step
+    changed = true
+    return { ...step, status: 'completed' as const }
+  })
+  return changed ? { steps } : plan
+}
+
 const PLAN_STEP_STATUSES = new Set<AgentPlanStepStatus>([
   'pending',
   'in_progress',

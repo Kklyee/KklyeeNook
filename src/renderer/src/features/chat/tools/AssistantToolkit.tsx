@@ -1,7 +1,10 @@
-import type { Toolkit } from '@assistant-ui/react'
-import type { ToolCallMessagePartComponent } from '@assistant-ui/react'
+import { useAuiState, type Toolkit, type ToolCallMessagePartComponent } from '@assistant-ui/react'
 
-import { parseAgentPlan, type AgentPlanStep } from '@/shared/agent/agentPlan'
+import {
+  completeActivePlanSteps,
+  parseAgentPlan,
+  type AgentPlanStep,
+} from '@/shared/agent/agentPlan'
 import { AgentPlan } from '../../../components/assistant-ui/elements/agent-plan'
 import { createToolCallRenderer } from './ToolCallRenderer'
 
@@ -29,9 +32,12 @@ const CreateArtifactToolCall = createToolCallRenderer<CreateArtifactArgs>({
 })
 
 const UpdatePlanToolCall: ToolCallMessagePartComponent<UpdatePlanArgs, unknown> = ({ args }) => {
+  const isThreadRunning = useAuiState((state) => state.thread.isRunning)
+  const isLastMessage = useAuiState((state) => state.message.isLast)
   const plan = parseAgentPlan(args)
   if (!plan) return null
-  return <AgentPlan steps={plan.steps} className="max-w-none" />
+  const displayPlan = isThreadRunning && isLastMessage ? plan : completeActivePlanSteps(plan)
+  return <AgentPlan steps={displayPlan.steps} className="max-w-none" />
 }
 
 export const assistantToolkit = {
