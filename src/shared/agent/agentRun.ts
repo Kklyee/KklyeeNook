@@ -26,6 +26,9 @@ export interface AgentRunOverview {
 export interface AgentRun {
   id: string
   sessionId: string
+  parentRunId?: string
+  rootRunId?: string
+  depth?: number
   scheduledTaskId?: string
   status: AgentRunStatus
   createdAt: number
@@ -33,6 +36,7 @@ export interface AgentRun {
   startedAt?: number
   completedAt?: number
   error?: string
+  result?: string
   plan?: AgentPlan
   toolCalls: ToolCall[]
   toolResults: ToolResult[]

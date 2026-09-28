@@ -35,6 +35,7 @@ const toolDescriptions: Record<string, string> = {
   bash: '执行命令',
   update_plan: '更新计划',
   save_memory: '保存 Memory',
+  delegate_task: '委派子任务',
 }
 
 type SettingsTab = 'model' | 'tools' | 'permissions' | 'skills' | 'memory'

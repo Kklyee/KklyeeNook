@@ -44,17 +44,29 @@ export async function bootstrap(): Promise<AppContext> {
       maxTokens: 1_000,
     },
     tools: {
-      enabled: ['read', 'bash', 'edit', 'write', 'create_artifact', 'update_plan', 'save_memory'],
+      enabled: [
+        'read',
+        'bash',
+        'edit',
+        'write',
+        'create_artifact',
+        'update_plan',
+        'save_memory',
+        'delegate_task',
+      ],
     },
     cwd: defaultWorkspace,
   }
 
   const configStore = new AgentConfigStore(defaultConfig, join(userDataPath, 'agent-settings.json'))
   const savedConfig = configStore.get()
-  if (!savedConfig.tools.enabled.includes('save_memory')) {
+  const requiredTools = ['save_memory', 'delegate_task'].filter(
+    (toolName) => !savedConfig.tools.enabled.includes(toolName),
+  )
+  if (requiredTools.length) {
     configStore.set({
       ...savedConfig,
-      tools: { ...savedConfig.tools, enabled: [...savedConfig.tools.enabled, 'save_memory'] },
+      tools: { ...savedConfig.tools, enabled: [...savedConfig.tools.enabled, ...requiredTools] },
     })
   }
   const credentialStore = new PersistentCredentialStore(

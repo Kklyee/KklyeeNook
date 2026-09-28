@@ -30,6 +30,9 @@ export function getAgentRunPatch(
 
     case 'text_delta':
     case 'tool_updated':
+      if (event.type === 'text_delta') {
+        return { status: 'running', result: `${run.result ?? ''}${event.text}` }
+      }
       if (run.status === 'running') return undefined
       return { status: 'running' }
 

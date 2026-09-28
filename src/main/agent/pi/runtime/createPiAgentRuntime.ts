@@ -6,10 +6,17 @@ export function createPiAgentRuntimeFactory(
   sessionRuntimeManager: PiSessionRuntimeManager,
 ): AgentRuntimeFactory {
   return {
-    create(sessionId) {
-      return new PiAgentRuntime(sessionRuntimeManager.getOrCreate(sessionId), () => {
-        sessionRuntimeManager.delete(sessionId)
-      })
+    create(sessionId, options) {
+      const runtimeSessionId = options?.runtimeSessionId ?? sessionId
+      return new PiAgentRuntime(
+        sessionRuntimeManager.getOrCreate(runtimeSessionId, {
+          persistState: options?.persistState,
+          permissionSessionId: options?.permissionSessionId ?? sessionId,
+        }),
+        () => {
+          sessionRuntimeManager.delete(runtimeSessionId)
+        },
+      )
     },
   }
 }

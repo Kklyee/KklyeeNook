@@ -8,6 +8,7 @@ import { registerPiArtifactTool } from '@/main/agent/pi/adapters/piArtifactToolA
 import { registerPiBuiltinTools } from '@/main/agent/pi/adapters/piBuiltinToolAdapter'
 import { registerPiMemoryTool } from '@/main/agent/pi/adapters/piMemoryToolAdapter'
 import { registerPiPlanTool } from '@/main/agent/pi/adapters/piPlanToolAdapter'
+import { registerPiDelegateTaskTool } from '@/main/agent/pi/adapters/piDelegateTaskToolAdapter'
 import { ApprovalPolicy } from '@/main/approval/approvalPolicy'
 import { ArtifactService } from '@/main/artifact/artifactService'
 import { ContextAttachmentService } from '@/main/context/contextAttachmentService'
@@ -88,7 +89,7 @@ export async function createAgentBackend(
     registerPiPlanTool(toolRegistry)
 
     const sessionRuntimeManager = new PiSessionRuntimeManager(
-      (sessionId) =>
+      (sessionId, runtimeOptions) =>
         new PiSessionRuntime(
           sessionId,
           configStore,
@@ -99,6 +100,7 @@ export async function createAgentBackend(
           sessionDir,
           skillLoader.directory,
           () => skillLoader.listSkills(),
+          runtimeOptions,
         ),
     )
     const runtimeFactory = createPiAgentRuntimeFactory(sessionRuntimeManager)
@@ -106,19 +108,23 @@ export async function createAgentBackend(
     const runRepo = new DrizzleAgentRunRepo(db)
     const executionRecordRepo = new DrizzleAgentExecutionRecordRepo(db)
     const artifactRepo = new DrizzleArtifactRepo(db)
+    const contextAttachments = new ContextAttachmentService()
+    const contextBuilder = new ContextBuilder(contextAttachments, memoryRepo)
     const agentService = new AgentService(
       runtimeFactory,
       sessionRepo,
       runRepo,
       executionRecordRepo,
       artifactRepo,
+      { buildChildContext: () => contextBuilder.build([], workspace()) },
+    )
+    registerPiDelegateTaskTool(toolRegistry, (parentRunId, input) =>
+      agentService.delegateTask(parentRunId, input),
     )
     const artifactService = new ArtifactService(artifactRepo, workspace)
 
     await agentService.initialize((stage, count) => reportStartupStage(stage, String(count)))
     const messageProjection = new MessageProjectionService(new DrizzleAgentMessageRepo(db))
-    const contextAttachments = new ContextAttachmentService()
-    const contextBuilder = new ContextBuilder(contextAttachments, memoryRepo)
     const piClientService = new PiClientService(
       agentService,
       sessionRuntimeManager,

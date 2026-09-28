@@ -145,6 +145,7 @@ export class PiClientService implements PiClient {
   }
 
   async cancelRun(threadId: string): Promise<void> {
+    this.agentService.abortSession?.(threadId)
     await this.sessionRuntimeManager.get(threadId)?.cancel()
   }
 

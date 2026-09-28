@@ -2,6 +2,7 @@ import type { ToolDefinition } from '@/shared/tool/tool'
 
 export interface ToolAdapterContext {
   cwd: string
+  getRunId?: () => string | undefined
 }
 
 export interface ToolAdapter<TTool = unknown> {

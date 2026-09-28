@@ -38,6 +38,11 @@ interface RunTimeline {
   model: ExecutionTimelineModel
 }
 
+interface RunTreeNode {
+  timeline: RunTimeline
+  children: RunTreeNode[]
+}
+
 interface SelectedEvent {
   run: AgentRun
   event: TimelineItem
@@ -89,6 +94,7 @@ export function RunHistoryPanel({ sessionId }: { sessionId?: string }) {
         model: buildExecutionTimeline(run, recordQuery.data?.get(run.id) ?? []),
       }))
   }, [recordQuery.data, runs])
+  const runTree = useMemo(() => buildRunTree(timelines), [timelines])
   const overview = useMemo(() => buildOverview(timelines), [timelines])
   const selectedSegmentId = selectedEvent
     ? eventSegmentId(selectedEvent.run.id, selectedEvent.event.id)
@@ -156,16 +162,16 @@ export function RunHistoryPanel({ sessionId }: { sessionId?: string }) {
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {timelines.map((timeline) => (
+          {runTree.map((node) => (
             <RunGroup
-              key={timeline.run.id}
-              timeline={timeline}
-              open={expandedRunIds.includes(timeline.run.id)}
-              selectedEventId={
-                selectedEvent?.run.id === timeline.run.id ? selectedEvent.event.id : undefined
-              }
-              onToggle={() => toggleRun(timeline.run.id)}
-              onSelect={(event) => setSelectedEvent({ run: timeline.run, event })}
+              key={node.timeline.run.id}
+              node={node}
+              depth={0}
+              open={expandedRunIds.includes(node.timeline.run.id)}
+              selectedEvent={selectedEvent}
+              onToggleRun={toggleRun}
+              onSelect={(run, event) => setSelectedEvent({ run, event })}
+              expandedRunIds={expandedRunIds}
             />
           ))}
         </div>
@@ -183,35 +189,44 @@ export function RunHistoryPanel({ sessionId }: { sessionId?: string }) {
 }
 
 function RunGroup({
-  timeline,
+  node,
+  depth,
   open,
-  selectedEventId,
-  onToggle,
+  selectedEvent,
+  expandedRunIds,
+  onToggleRun,
   onSelect,
 }: {
-  timeline: RunTimeline
+  node: RunTreeNode
+  depth: number
   open: boolean
-  selectedEventId?: string
-  onToggle: () => void
-  onSelect: (event: TimelineItem) => void
+  selectedEvent?: SelectedEvent
+  expandedRunIds: readonly string[]
+  onToggleRun: (runId: string) => void
+  onSelect: (run: AgentRun, event: TimelineItem) => void
 }) {
+  const { timeline, children } = node
   const { run, turn, model } = timeline
+  const childTask = depth ? model.items.find((event) => event.kind === 'user')?.summary : undefined
 
   return (
     <div className="border-border/60 border-b">
       <button
         type="button"
         aria-expanded={open}
-        onClick={onToggle}
+        onClick={() => onToggleRun(run.id)}
         className="bg-foreground/[0.018] hover:bg-foreground/[0.04] grid h-8 w-full grid-cols-[4rem_minmax(0,1fr)_5rem] items-center px-3 text-left transition-colors"
+        style={{ paddingLeft: `${12 + depth * 20}px` }}
       >
         <span className="flex items-center gap-1 text-[10px] text-foreground/40">
-          <ChevronDownIcon className={cn('size-3 transition-transform', !open && '-rotate-90')} />第{' '}
-          {turn} 轮
+          <ChevronDownIcon className={cn('size-3 transition-transform', !open && '-rotate-90')} />
+          {depth ? 'Child Run' : `第 ${turn} 轮`}
         </span>
         <span className="flex min-w-0 items-center gap-2 text-xs font-medium">
           <StatusDot status={run.status} />
-          <span className="truncate">Run {turn}</span>
+          <span className="truncate">
+            {depth ? `Child Run${childTask ? `: ${childTask}` : ''}` : `Run ${turn}`}
+          </span>
           <StatusLabel status={run.status} />
           <span className={cn(mono, 'text-foreground/25 hidden truncate lg:inline')}>{run.id}</span>
         </span>
@@ -227,8 +242,8 @@ function RunGroup({
               key={event.id}
               event={event}
               run={run}
-              selected={selectedEventId === event.id}
-              onClick={() => onSelect(event)}
+              selected={selectedEvent?.run.id === run.id && selectedEvent.event.id === event.id}
+              onClick={() => onSelect(run, event)}
             />
           ))}
           {!model.items.length && (
@@ -238,8 +253,35 @@ function RunGroup({
           )}
         </div>
       )}
+      {children.map((child) => (
+        <RunGroup
+          key={child.timeline.run.id}
+          node={child}
+          depth={depth + 1}
+          open={expandedRunIds.includes(child.timeline.run.id)}
+          selectedEvent={selectedEvent}
+          expandedRunIds={expandedRunIds}
+          onToggleRun={onToggleRun}
+          onSelect={onSelect}
+        />
+      ))}
     </div>
   )
+}
+
+function buildRunTree(timelines: readonly RunTimeline[]): RunTreeNode[] {
+  const nodes = new Map<string, RunTreeNode>()
+  for (const timeline of timelines) nodes.set(timeline.run.id, { timeline, children: [] })
+  const roots: RunTreeNode[] = []
+
+  for (const node of nodes.values()) {
+    const parentId = node.timeline.run.parentRunId
+    const parent = parentId ? nodes.get(parentId) : undefined
+    if (parent) parent.children.push(node)
+    else roots.push(node)
+  }
+
+  return roots
 }
 
 function EventRow({
@@ -367,6 +409,9 @@ function EventDetailPanel({ selected, onClose }: { selected: SelectedEvent; onCl
                 value={event.status === 'running' ? '进行中' : formatDuration(event.durationMs)}
               />
               <DetailRow label="Run" value={run.id} monoValue />
+              {run.parentRunId && (
+                <DetailRow label="Parent Run" value={run.parentRunId} monoValue />
+              )}
             </dl>
             {sections.input !== undefined && (
               <DetailPreview

@@ -43,7 +43,11 @@ export class PiAgentRuntime implements AgentRuntime {
       const runInput = input.attachments?.length
         ? { content: input.prompt, attachments: input.attachments }
         : { content: input.prompt }
-      if (input.skillIds?.length) {
+      if (input.runId !== undefined && input.skillIds?.length) {
+        await this.sessionRuntime.runMessage(runInput, input.context, input.skillIds, input.runId)
+      } else if (input.runId !== undefined) {
+        await this.sessionRuntime.runMessage(runInput, input.context, undefined, input.runId)
+      } else if (input.skillIds?.length) {
         await this.sessionRuntime.runMessage(runInput, input.context, input.skillIds)
       } else {
         await this.sessionRuntime.runMessage(runInput, input.context)

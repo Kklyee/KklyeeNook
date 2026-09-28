@@ -2,7 +2,7 @@ import { expect, test, vi } from 'vitest'
 
 import type { AgentEvent } from '@/shared/agent/agentEvent'
 import type { AgentRun } from '@/shared/agent/agentRun'
-import type { AgentRuntime, AgentRuntimeFactory } from './agentRuntime'
+import type { AgentRuntime, AgentRuntimeFactory, AgentRuntimeInput } from './agentRuntime'
 import { AgentService } from './agentService'
 import type { AgentRunRepo } from '../db/repositories/agentRunRepo'
 import type { AgentSessionRecord, AgentSessionRepo } from '../db/repositories/agentSessionRepo'
@@ -456,4 +456,155 @@ test('completes the active plan step when the agent run completes', async () => 
     ],
   })
   expect(runRepo.runs.get(finalRun.id)?.plan).toEqual(finalRun.plan)
+})
+
+test('delegates an isolated child run and returns its result', async () => {
+  const runRepo = new MemoryRunRepo()
+  const childInputs: AgentRuntimeInput[] = []
+  let parentStarted = false
+  let releaseParent: () => void = () => undefined
+  const parentRuntime: AgentRuntime = {
+    async run(_input, emit) {
+      parentStarted = true
+      await new Promise<void>((resolve) => {
+        releaseParent = resolve
+      })
+      emit({ type: 'agent_completed' })
+    },
+    dispose() {},
+  }
+  const childRuntime: AgentRuntime = {
+    async run(input, emit) {
+      childInputs.push(input)
+      emit({ type: 'text_delta', text: 'child result' })
+      emit({ type: 'agent_completed' })
+    },
+    dispose() {},
+  }
+  const runtimeFactory: AgentRuntimeFactory = {
+    create(_sessionId, options) {
+      return options?.persistState === false ? childRuntime : parentRuntime
+    },
+  }
+  const service = new AgentService(
+    runtimeFactory,
+    new MemorySessionRepo([sessionRecord]),
+    runRepo,
+    new MemoryExecutionRecordRepo(),
+    new MemoryArtifactRepo(),
+    {
+      buildChildContext: async () => ({
+        attachments: [],
+        memories: [
+          {
+            id: 'memory-1',
+            scope: 'workspace',
+            content: 'Use the test database',
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        ],
+      }),
+    },
+  )
+  await service.initialize()
+
+  const parent = service.startRun(sessionRecord.id, { prompt: 'parent task' })
+  await vi.waitFor(() => expect(parentStarted).toBe(true))
+
+  const result = await service.delegateTask(parent.run.id, {
+    task: 'inspect the database',
+    skillIds: ['database-review'],
+    context: 'Only inspect the schema files.',
+  })
+  const child = service
+    .getSession(sessionRecord.id)
+    ?.getRuns()
+    .find((run) => run.id === result.runId)
+
+  expect(result).toEqual({ runId: child?.id, status: 'completed', result: 'child result' })
+  expect(child).toMatchObject({
+    parentRunId: parent.run.id,
+    rootRunId: parent.run.id,
+    depth: 1,
+    status: 'completed',
+  })
+  expect(childInputs[0]).toMatchObject({
+    prompt:
+      'inspect the database\n\nContext provided by the parent:\nOnly inspect the schema files.',
+    skillIds: ['database-review'],
+    context: { attachments: [], memories: [{ id: 'memory-1', content: 'Use the test database' }] },
+  })
+
+  releaseParent()
+  await expect(parent.completion).resolves.toMatchObject({ status: 'completed' })
+})
+
+test('limits child depth and concurrency and aborts children with the parent', async () => {
+  const runRepo = new MemoryRunRepo()
+  const waitForAbort = async (
+    _input: AgentRuntimeInput,
+    emit: (event: AgentEvent) => void,
+    signal?: AbortSignal,
+  ) => {
+    await new Promise<void>((resolve) => {
+      if (signal?.aborted) resolve()
+      else signal?.addEventListener('abort', () => resolve(), { once: true })
+    })
+    emit({ type: 'agent_aborted' })
+  }
+  const service = new AgentService(
+    { create: () => ({ run: waitForAbort, dispose() {} }) },
+    new MemorySessionRepo([sessionRecord]),
+    runRepo,
+    new MemoryExecutionRecordRepo(),
+    new MemoryArtifactRepo(),
+  )
+  await service.initialize()
+
+  const parent = service.startRun(sessionRecord.id, { prompt: 'parent task' })
+  await vi.waitFor(() => expect(service.getSession(sessionRecord.id)?.getRuns()).toHaveLength(1))
+  const first = service.delegateTask(parent.run.id, { task: 'first child' })
+  await vi.waitFor(() =>
+    expect(
+      service
+        .getSession(sessionRecord.id)
+        ?.getRuns()
+        .filter((run) => run.parentRunId === parent.run.id),
+    ).toHaveLength(1),
+  )
+  const child = service
+    .getSession(sessionRecord.id)
+    ?.getRuns()
+    .find((run) => run.parentRunId === parent.run.id)
+  expect(child).toBeDefined()
+  await expect(service.delegateTask(child!.id, { task: 'nested child' })).rejects.toThrow(
+    'Subagent depth limit exceeded',
+  )
+
+  const second = service.delegateTask(parent.run.id, { task: 'second child' })
+  await vi.waitFor(() =>
+    expect(
+      service
+        .getSession(sessionRecord.id)
+        ?.getRuns()
+        .filter((run) => run.parentRunId === parent.run.id),
+    ).toHaveLength(2),
+  )
+  await expect(service.delegateTask(parent.run.id, { task: 'third child' })).rejects.toThrow(
+    'Maximum concurrent child runs reached',
+  )
+
+  service.abortSession(sessionRecord.id)
+
+  await expect(first).resolves.toMatchObject({ status: 'failed' })
+  await expect(second).resolves.toMatchObject({ status: 'failed' })
+  await expect(parent.completion).resolves.toMatchObject({ status: 'aborted' })
+  expect(
+    service
+      .getSession(sessionRecord.id)
+      ?.getRuns()
+      .filter((run) => run.parentRunId === parent.run.id)
+      .every((run) => run.status === 'aborted'),
+  ).toBe(true)
 })

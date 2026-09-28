@@ -2,8 +2,15 @@ import { AgentEvent } from '@/shared/agent/agentEvent'
 import type { PiSendMessageInput } from '@assistant-ui/react-pi/node'
 import type { AgentRunContext } from '../context/contextBuilder'
 
+export interface AgentRuntimeFactoryOptions {
+  runtimeSessionId?: string
+  permissionSessionId?: string
+  persistState?: boolean
+}
+
 export interface AgentRuntimeInput {
   prompt: string
+  runId?: string
   context?: AgentRunContext
   attachments?: PiSendMessageInput['attachments']
   skillIds?: string[]
@@ -20,5 +27,5 @@ export interface AgentRuntime {
 }
 
 export interface AgentRuntimeFactory {
-  create(sessionId: string): AgentRuntime
+  create(sessionId: string, options?: AgentRuntimeFactoryOptions): AgentRuntime
 }

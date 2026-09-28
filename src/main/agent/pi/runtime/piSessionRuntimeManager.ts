@@ -1,6 +1,10 @@
 import type { PiSessionRuntimePort } from './piSessionRuntime'
+import type { PiSessionRuntimeOptions } from './piSessionRuntime'
 
-export type PiSessionRuntimeFactory = (sessionId: string) => PiSessionRuntimePort
+export type PiSessionRuntimeFactory = (
+  sessionId: string,
+  options?: PiSessionRuntimeOptions,
+) => PiSessionRuntimePort
 
 /** Owns the per-session runtime registry and its lifecycle. */
 export class PiSessionRuntimeManager {
@@ -12,11 +16,11 @@ export class PiSessionRuntimeManager {
     return this.runtimes.get(sessionId)
   }
 
-  getOrCreate(sessionId: string): PiSessionRuntimePort {
+  getOrCreate(sessionId: string, options?: PiSessionRuntimeOptions): PiSessionRuntimePort {
     const existing = this.runtimes.get(sessionId)
     if (existing) return existing
 
-    const runtime = this.createRuntime(sessionId)
+    const runtime = options ? this.createRuntime(sessionId, options) : this.createRuntime(sessionId)
     this.runtimes.set(sessionId, runtime)
     return runtime
   }

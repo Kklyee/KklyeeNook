@@ -1,15 +1,21 @@
 import { randomUUID } from 'node:crypto'
 
-import type { AgentRuntime, AgentRuntimeInput } from './agentRuntime'
+import type {
+  AgentRuntime,
+  AgentRuntimeFactory,
+  AgentRuntimeFactoryOptions,
+  AgentRuntimeInput,
+} from './agentRuntime'
 import { AgentSession } from './agentSession'
 import { completePlanSteps, parseAgentPlan } from '@/shared/agent/agentPlan'
 import type { AgentRun, AgentRunOverview } from '@/shared/agent/agentRun'
+import type { DelegateTaskInput, DelegateTaskResult } from '@/shared/agent/delegateTask'
+import type { AgentRunContext } from '@/main/context/contextBuilder'
 import { getAgentRunPatch } from './agentRunState'
 
 import { AgentEventEnvelope } from './agentEventEnvelope'
 import { AgentEvent } from '@/shared/agent/agentEvent'
 import { AgentSessionSummary } from '@/shared/agent/agentSession'
-import type { AgentRuntimeFactory } from './agentRuntime'
 import { AgentSessionRepo } from '../db/repositories/agentSessionRepo'
 import { AgentRunRepo } from '../db/repositories/agentRunRepo'
 import type { AgentExecutionRecord } from '@/shared/agent/agentExecutionRecord'
@@ -23,6 +29,22 @@ export interface AgentRunHandle {
 }
 type AgentEventListener = (envelope: AgentEventEnvelope) => void
 
+export interface AgentRunStartOptions {
+  parentRunId?: string
+  rootRunId?: string
+  depth?: number
+  runtimeSessionId?: string
+  ephemeralRuntime?: boolean
+}
+
+export interface AgentServiceOptions {
+  buildChildContext?: () => Promise<AgentRunContext | undefined>
+}
+
+const MAX_CHILD_DEPTH = 1
+const MAX_CONCURRENT_CHILDREN_PER_RUN = 2
+const activeStatuses = new Set<AgentRun['status']>(['created', 'running', 'waiting'])
+
 export type AgentServiceInitializationStage = 'sessions_restored' | 'runs_restored'
 
 export class AgentService {
@@ -30,6 +52,8 @@ export class AgentService {
   private readonly runtimes = new Map<string, AgentRuntime>()
   private readonly listeners = new Set<AgentEventListener>()
   private readonly runPersistence = new Map<string, Promise<void>>()
+  private readonly runControllers = new Map<string, AbortController>()
+  private readonly childReservations = new Map<string, number>()
 
   constructor(
     private readonly runtimeFactory: AgentRuntimeFactory,
@@ -37,6 +61,7 @@ export class AgentService {
     private readonly runRepo: AgentRunRepo,
     private readonly executionRecordRepo: AgentExecutionRecordRepo,
     private readonly artifactRepo: ArtifactRepo,
+    private readonly options: AgentServiceOptions = {},
   ) {}
 
   async initialize(
@@ -113,6 +138,21 @@ export class AgentService {
     this.handleAgentEvent(session, runId, { type: 'user_message', text })
   }
 
+  abortSession(sessionId: string): void {
+    const session = this.sessions.get(sessionId)
+    if (!session) return
+
+    for (const run of session.getRuns()) {
+      if (activeStatuses.has(run.status)) this.abortRun(run.id)
+    }
+  }
+
+  abortRun(runId: string): void {
+    if (!this.findRun(runId)) return
+    this.runControllers.get(runId)?.abort()
+    this.abortDescendants(runId)
+  }
+
   getSessions(): AgentSession[] {
     return Array.from(this.sessions.values())
   }
@@ -157,18 +197,6 @@ export class AgentService {
       .sort((a, b) => b.updatedAt - a.updatedAt)
   }
 
-  private getOrCreateRuntime(sessionId: string): AgentRuntime {
-    const existing = this.runtimes.get(sessionId)
-
-    if (existing) {
-      console.log('[AgentService] reuse runtime', { sessionId })
-      return existing
-    }
-    console.log('[AgentService] create runtime', { sessionId })
-    const runtime = this.runtimeFactory.create(sessionId)
-    this.runtimes.set(sessionId, runtime)
-    return runtime
-  }
   async prompt(sessionId: string, input: AgentRuntimeInput): Promise<AgentRun> {
     const handle = this.startRun(sessionId, input)
 
@@ -199,6 +227,8 @@ export class AgentService {
       console.error('[AgentService] failed to persist execution event:', error)
     })
     this.publish(envelope)
+
+    if (event.type === 'agent_aborted') this.abortDescendants(runId)
 
     if (
       event.type === 'tool_finished' &&
@@ -264,6 +294,68 @@ export class AgentService {
     return this.runRepo.findBySessionId(sessionId)
   }
 
+  async delegateTask(parentRunId: string, input: DelegateTaskInput): Promise<DelegateTaskResult> {
+    const parentLocation = this.findRun(parentRunId)
+    if (!parentLocation) throw new Error(`AgentRun not found: ${parentRunId}`)
+
+    const parent = parentLocation.run
+    const depth = parent.depth ?? 0
+    if (depth >= MAX_CHILD_DEPTH) {
+      throw new Error('Subagent depth limit exceeded')
+    }
+    if (!activeStatuses.has(parent.status)) {
+      throw new Error('Cannot delegate from an inactive AgentRun')
+    }
+
+    const activeChildren = parentLocation.session
+      .getRuns()
+      .filter((run) => run.parentRunId === parentRunId && activeStatuses.has(run.status)).length
+    const reservations = this.childReservations.get(parentRunId) ?? 0
+    if (activeChildren + reservations >= MAX_CONCURRENT_CHILDREN_PER_RUN) {
+      throw new Error('Maximum concurrent child runs reached')
+    }
+
+    this.childReservations.set(parentRunId, reservations + 1)
+    let reservationHeld = true
+    try {
+      const context = await this.options.buildChildContext?.()
+      const task = input.task.trim()
+      if (!task) throw new Error('Task is required')
+      const explicitContext = input.context?.trim()
+      const prompt = explicitContext
+        ? `${task}\n\nContext provided by the parent:\n${explicitContext}`
+        : task
+      const handle = this.startRun(
+        parent.sessionId,
+        {
+          prompt,
+          ...(context ? { context } : {}),
+          ...(input.skillIds?.length ? { skillIds: [...new Set(input.skillIds)] } : {}),
+        },
+        undefined,
+        {
+          parentRunId,
+          rootRunId: parent.rootRunId ?? parent.id,
+          depth: depth + 1,
+          runtimeSessionId: randomUUID(),
+          ephemeralRuntime: true,
+        },
+      )
+      this.releaseChildReservation(parentRunId)
+      reservationHeld = false
+
+      const child = await handle.completion
+      return {
+        runId: child.id,
+        status: child.status === 'completed' ? 'completed' : 'failed',
+        ...(child.result !== undefined ? { result: child.result } : {}),
+        ...(child.artifactIds.length ? { artifactIds: child.artifactIds } : {}),
+      }
+    } finally {
+      if (reservationHeld) this.releaseChildReservation(parentRunId)
+    }
+  }
+
   async listExecutionRecords(runId: string): Promise<AgentExecutionRecord[]> {
     const pendingWrite = this.runPersistence.get(runId)
     if (pendingWrite) await pendingWrite
@@ -287,17 +379,50 @@ export class AgentService {
     }
   }
 
-  startRun(sessionId: string, input: AgentRuntimeInput, signal?: AbortSignal): AgentRunHandle {
+  startRun(
+    sessionId: string,
+    input: AgentRuntimeInput,
+    signal?: AbortSignal,
+    options?: AgentRunStartOptions,
+  ): AgentRunHandle {
+    return this.startRunWithOptions(sessionId, input, signal, options)
+  }
+
+  private startRunWithOptions(
+    sessionId: string,
+    input: AgentRuntimeInput,
+    signal?: AbortSignal,
+    options: AgentRunStartOptions = {},
+  ): AgentRunHandle {
     const session = this.getSession(sessionId)
 
     if (!session) {
       throw new Error(`AgentSession not found: ${sessionId}`)
     }
 
+    const parent = options.parentRunId ? this.findRun(options.parentRunId)?.run : undefined
+    if (options.parentRunId && (!parent || parent.sessionId !== sessionId)) {
+      throw new Error(`Parent AgentRun not found: ${options.parentRunId}`)
+    }
+
     const now = Date.now()
+    const id = randomUUID()
+    const runtimeSessionId = options.runtimeSessionId ?? sessionId
+    const controller = new AbortController()
+    const removeSignalListeners = [
+      linkAbortSignal(signal, controller),
+      linkAbortSignal(
+        options.parentRunId ? this.runControllers.get(options.parentRunId)?.signal : undefined,
+        controller,
+      ),
+    ]
+    this.runControllers.set(id, controller)
     const run: AgentRun = {
-      id: randomUUID(),
+      id,
       sessionId,
+      ...(options.parentRunId ? { parentRunId: options.parentRunId } : {}),
+      rootRunId: options.rootRunId ?? parent?.rootRunId ?? parent?.id ?? id,
+      depth: options.depth ?? (parent ? (parent.depth ?? 0) + 1 : 0),
       ...(input.scheduledTaskId ? { scheduledTaskId: input.scheduledTaskId } : {}),
       status: 'running',
       createdAt: now,
@@ -310,11 +435,28 @@ export class AgentService {
     session.addRun(run)
     const initialSave = this.queueRunSave(run)
     this.handleAgentEvent(session, run.id, { type: 'user_message', text: input.prompt })
-    const completion = initialSave.then(() => this.executeRun(session, run.id, input, signal))
+    const completion = initialSave.then(() =>
+      this.executeRun(
+        session,
+        run.id,
+        { ...input, runId: run.id },
+        controller.signal,
+        runtimeSessionId,
+        options.ephemeralRuntime ?? runtimeSessionId !== sessionId,
+      ),
+    )
 
     void completion.then(
-      () => this.runPersistence.delete(run.id),
-      () => this.runPersistence.delete(run.id),
+      () => {
+        this.runPersistence.delete(run.id)
+        this.runControllers.delete(run.id)
+        for (const remove of removeSignalListeners) remove()
+      },
+      () => {
+        this.runPersistence.delete(run.id)
+        this.runControllers.delete(run.id)
+        for (const remove of removeSignalListeners) remove()
+      },
     )
 
     return { run, completion }
@@ -336,8 +478,14 @@ export class AgentService {
     runId: string,
     input: AgentRuntimeInput,
     signal?: AbortSignal,
+    runtimeSessionId = session.id,
+    ephemeralRuntime = false,
   ): Promise<AgentRun> {
-    const runtime = this.getOrCreateRuntime(session.id)
+    const runtime = this.getOrCreateRuntime(runtimeSessionId, {
+      runtimeSessionId,
+      permissionSessionId: session.id,
+      persistState: !ephemeralRuntime,
+    })
     try {
       await runtime.run(
         input,
@@ -359,6 +507,11 @@ export class AgentService {
           error: error instanceof Error ? error.message : String(error),
         })
       }
+    } finally {
+      if (ephemeralRuntime) {
+        runtime.dispose()
+        this.runtimes.delete(runtimeSessionId)
+      }
     }
 
     const pendingWrite = this.runPersistence.get(runId)
@@ -374,4 +527,52 @@ export class AgentService {
 
     return finalRun
   }
+
+  private getOrCreateRuntime(
+    sessionId: string,
+    options?: AgentRuntimeFactoryOptions,
+  ): AgentRuntime {
+    const existing = this.runtimes.get(sessionId)
+
+    if (existing) {
+      console.log('[AgentService] reuse runtime', { sessionId })
+      return existing
+    }
+    console.log('[AgentService] create runtime', { sessionId })
+    const runtime = this.runtimeFactory.create(sessionId, options)
+    this.runtimes.set(sessionId, runtime)
+    return runtime
+  }
+
+  private findRun(runId: string): { session: AgentSession; run: AgentRun } | undefined {
+    for (const session of this.sessions.values()) {
+      const run = session.getRun(runId)
+      if (run) return { session, run }
+    }
+    return undefined
+  }
+
+  private abortDescendants(parentRunId: string): void {
+    for (const session of this.sessions.values()) {
+      for (const run of session.getRuns()) {
+        if (run.parentRunId !== parentRunId || !activeStatuses.has(run.status)) continue
+        this.runControllers.get(run.id)?.abort()
+        this.abortDescendants(run.id)
+      }
+    }
+  }
+
+  private releaseChildReservation(parentRunId: string): void {
+    const reservations = this.childReservations.get(parentRunId) ?? 0
+    if (reservations <= 1) this.childReservations.delete(parentRunId)
+    else this.childReservations.set(parentRunId, reservations - 1)
+  }
+}
+
+function linkAbortSignal(source: AbortSignal | undefined, target: AbortController): () => void {
+  if (!source) return () => undefined
+  const abort = () => target.abort()
+  if (source.aborted) target.abort()
+  else source.addEventListener('abort', abort, { once: true })
+  return () => source.removeEventListener('abort', abort)
 }

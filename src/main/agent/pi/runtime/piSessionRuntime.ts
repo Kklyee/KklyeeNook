@@ -102,6 +102,7 @@ export interface PiSessionRuntimePort {
     input: PiSendMessageInput,
     context?: AgentRunContext,
     skillIds?: readonly string[],
+    runId?: string,
   ): Promise<void>
   cancel(): Promise<void>
   clearQueue(): { steering: string[]; followUp: string[] }
@@ -117,6 +118,11 @@ export interface PiSessionRuntimePort {
   dispose(): void
 }
 
+export interface PiSessionRuntimeOptions {
+  persistState?: boolean
+  permissionSessionId?: string
+}
+
 /**
  * Long-lived runtime for one persisted Pi conversation. It owns the live Pi
  * SDK session and its model, tools, extensions, queues, and event streams.
@@ -130,6 +136,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
   private requestCounter = 0
   private turnIndex = -1
   private lastError: string | undefined
+  private activeRunId: string | undefined
   private readonly listeners = new Set<PiSessionEventListener>()
   private readonly clientEventListeners = new Set<PiSessionClientEventListener>()
   private readonly productEventListeners = new Set<PiSessionProductEventListener>()
@@ -144,7 +151,14 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     private readonly sessionDir: string,
     private readonly skillDirectory = join(homedir(), '.agents', 'skills'),
     private readonly getLoadedSkills: () => readonly AgentSkill[] = () => [],
-  ) {}
+    options: PiSessionRuntimeOptions = {},
+  ) {
+    this.persistState = options.persistState ?? true
+    this.permissionSessionId = options.permissionSessionId ?? sessionId
+  }
+
+  private readonly persistState: boolean
+  private readonly permissionSessionId: string
 
   async initialize(): Promise<void> {
     if (this.piSession) return
@@ -230,36 +244,42 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     input: PiSendMessageInput,
     context?: AgentRunContext,
     skillIds: readonly string[] = [],
+    runId?: string,
   ): Promise<void> {
     await this.initialize()
-
-    const message = context ? toPiContextMessage(context) : undefined
-    if (!message) {
-      await this.prompt(input, 'settled', skillIds)
-      return
-    }
-    if (!context?.memories?.length) {
-      await this.getPiSession().sendCustomMessage(message, { deliverAs: 'nextTurn' })
-      await this.prompt(input, 'settled', skillIds)
-      return
-    }
-
-    const session = this.getPiSession()
-    const transientMessage = {
-      role: 'custom' as const,
-      customType: message.customType,
-      content: message.content,
-      display: message.display,
-      details: message.details,
-      timestamp: Date.now(),
-    }
-    session.state.messages = [...session.state.messages, transientMessage]
+    const previousRunId = this.activeRunId
+    this.activeRunId = runId
     try {
-      await this.prompt(input, 'settled', skillIds)
+      const message = context ? toPiContextMessage(context) : undefined
+      if (!message) {
+        await this.prompt(input, 'settled', skillIds)
+        return
+      }
+      if (!context?.memories?.length) {
+        await this.getPiSession().sendCustomMessage(message, { deliverAs: 'nextTurn' })
+        await this.prompt(input, 'settled', skillIds)
+        return
+      }
+
+      const session = this.getPiSession()
+      const transientMessage = {
+        role: 'custom' as const,
+        customType: message.customType,
+        content: message.content,
+        display: message.display,
+        details: message.details,
+        timestamp: Date.now(),
+      }
+      session.state.messages = [...session.state.messages, transientMessage]
+      try {
+        await this.prompt(input, 'settled', skillIds)
+      } finally {
+        session.state.messages = session.state.messages.filter(
+          (candidate) => candidate !== transientMessage,
+        )
+      }
     } finally {
-      session.state.messages = session.state.messages.filter(
-        (candidate) => candidate !== transientMessage,
-      )
+      this.activeRunId = previousRunId
     }
   }
 
@@ -455,7 +475,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
       const tools = this.toolRegistry.resolve<PiToolDefinition<any, any, any>>(
         'pi',
         config.tools.enabled,
-        { cwd },
+        { cwd, getRunId: () => this.activeRunId },
       )
       const settingsManager = SettingsManager.create(cwd, cwd)
       settingsManager.applyOverrides({ compaction: getAgentCompactionSettings(config) })
@@ -466,7 +486,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
         skillsOverride: (result) => mergeLoadedSkills(result, this.getLoadedSkills()),
         settingsManager,
         extensionFactories: [
-          createPiApprovalExtension(this.sessionId, this.approvalPolicy, (event) =>
+          createPiApprovalExtension(this.permissionSessionId, this.approvalPolicy, (event) =>
             this.publishProductEvent(event),
           ),
         ],
@@ -507,12 +527,14 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
           this.publishClientEvent({ type: 'extension_ui_resolved', requestId }),
       })
       await session.bindExtensions({ uiContext: this.extensionUiBridge.ui })
-      await this.runtimeStateRepo.save({
-        sessionId: this.sessionId,
-        runtimeKind: 'pi',
-        resumeRef: session.sessionFile,
-        updatedAt: Date.now(),
-      })
+      if (this.persistState) {
+        await this.runtimeStateRepo.save({
+          sessionId: this.sessionId,
+          runtimeKind: 'pi',
+          resumeRef: session.sessionFile,
+          updatedAt: Date.now(),
+        })
+      }
       createdSession = undefined
       this.unsubscribePiSession = session.subscribe((event) => this.onSessionEvent(event))
     } catch (error) {
@@ -703,6 +725,8 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
   }
 
   private async createSessionManager(cwd: string): Promise<SessionManager> {
+    if (!this.persistState)
+      return SessionManager.create(cwd, this.sessionDir, { id: this.sessionId })
     const state = await this.runtimeStateRepo.findBySessionId(this.sessionId)
     if (!state || !existsSync(state.resumeRef)) {
       return SessionManager.create(cwd, this.sessionDir, { id: this.sessionId })
