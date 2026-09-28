@@ -11,8 +11,9 @@ import { Image } from '@/renderer/src/features/artifacts/ImagePreview'
 import { MarkdownText } from '@/renderer/src/components/assistant-ui/elements/markdown-text'
 import {
   ComposerBar,
-  ComposerContextUsage,
+  ComposerContext,
   ComposerSend,
+  type ComposerUsage,
 } from '@/renderer/src/components/assistant-ui/elements/composer'
 import type { AgentContextUsage } from '@/shared/agent/agentContextUsage'
 import {
@@ -77,6 +78,7 @@ import {
   type FC,
   type PropsWithChildren,
   useEffect,
+  useMemo,
   useState,
 } from 'react'
 
@@ -339,6 +341,21 @@ const ComposerAction: FC<{
   isCompacting: boolean
 }> = ({ modelSelector, contextUsage, isCompacting }) => {
   const canSend = useAuiState((s) => s.composer.canSend)
+  const tokens = contextUsage?.tokens
+  const contextWindow = contextUsage?.contextWindow
+  const hasContextUsage = typeof tokens === 'number' && typeof contextWindow === 'number'
+  const composerUsage = useMemo<ComposerUsage | undefined>(
+    () =>
+      hasContextUsage
+        ? {
+            system: 0,
+            tools: 0,
+            messages: Math.round(tokens / 1000),
+            total: Math.round(contextWindow / 1000),
+          }
+        : undefined,
+    [contextWindow, hasContextUsage, tokens],
+  )
 
   return (
     <div className="aui-composer-action-wrapper relative flex items-center justify-between">
@@ -360,7 +377,17 @@ const ComposerAction: FC<{
         )}
       </div>
       <div className="flex items-center gap-1.5">
-        <ComposerContextUsage usage={contextUsage} compacting={isCompacting} />
+        {isCompacting ? (
+          <span
+            data-slot="composer-context-compaction"
+            aria-live="polite"
+            className="text-foreground/40 whitespace-nowrap text-[11px]"
+          >
+            Compressing context…
+          </span>
+        ) : composerUsage ? (
+          <ComposerContext usage={composerUsage} />
+        ) : null}
         <AuiIf condition={(s) => s.thread.capabilities.dictation}>
           <AuiIf condition={(s) => s.composer.dictation == null}>
             <ComposerPrimitive.Dictate
