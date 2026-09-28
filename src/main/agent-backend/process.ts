@@ -5,6 +5,7 @@ import type {
   AgentBackendInitOptions,
   AgentBackendRequest,
   AgentBackendStatus,
+  AgentBackendNotification,
   AgentBackendStartupStage,
   AgentBackendToMainMessage,
   MainToAgentBackendMessage,
@@ -34,6 +35,7 @@ export class AgentBackendProcess {
   private child: UtilityProcessLike | undefined
   private status: AgentBackendStatus = { state: 'starting' }
   private readonly statusListeners = new Set<(status: AgentBackendStatus) => void>()
+  private readonly notificationListeners = new Set<(notification: AgentBackendNotification) => void>()
   private readonly pendingRequests = new Map<string, PendingRequest>()
   private resolveStart: ((status: AgentBackendStatus) => void) | undefined
   private startTimer: ReturnType<typeof setTimeout> | undefined
@@ -53,6 +55,11 @@ export class AgentBackendProcess {
   onStatusChange(listener: (status: AgentBackendStatus) => void): () => void {
     this.statusListeners.add(listener)
     return () => this.statusListeners.delete(listener)
+  }
+
+  onNotification(listener: (notification: AgentBackendNotification) => void): () => void {
+    this.notificationListeners.add(listener)
+    return () => this.notificationListeners.delete(listener)
   }
 
   async start(
@@ -174,6 +181,10 @@ export class AgentBackendProcess {
     if (message.type === 'failed') {
       console.error('[agent-backend] initialization failed', message.message)
       this.failStart(message.message || 'Agent backend failed to initialize.')
+      return
+    }
+    if (message.type === 'notification') {
+      for (const listener of this.notificationListeners) listener(message.notification)
       return
     }
     if (message.type === 'response') this.handleResponse(message)

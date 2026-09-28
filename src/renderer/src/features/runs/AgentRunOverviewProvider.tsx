@@ -35,6 +35,7 @@ export function AgentRunOverviewProvider({ children }: { children: ReactNode }) 
     for (const overview of data) {
       const previous = previousRef.current.get(overview.sessionId)
       if (
+        overview.scheduledTaskId ||
         !previous ||
         previous.runId !== overview.runId ||
         !isActiveRunStatus(previous.status) ||

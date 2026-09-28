@@ -40,12 +40,14 @@ export class PiAgentRuntime implements AgentRuntime {
       }
 
       signal?.addEventListener('abort', handleAbort, { once: true })
-      await this.sessionRuntime.runMessage(
-        input.attachments?.length
-          ? { content: input.prompt, attachments: input.attachments }
-          : { content: input.prompt },
-        input.context,
-      )
+      const runInput = input.attachments?.length
+        ? { content: input.prompt, attachments: input.attachments }
+        : { content: input.prompt }
+      if (input.skillIds?.length) {
+        await this.sessionRuntime.runMessage(runInput, input.context, input.skillIds)
+      } else {
+        await this.sessionRuntime.runMessage(runInput, input.context)
+      }
 
       if (terminalEventReceived) return
       if (signal?.aborted) {

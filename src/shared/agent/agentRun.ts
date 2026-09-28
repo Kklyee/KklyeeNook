@@ -16,6 +16,7 @@ export interface AgentRunOverview {
   sessionId: string
   sessionTitle?: string
   runId?: string
+  scheduledTaskId?: string
   status: AgentRunOverviewStatus
   startedAt?: number
   completedAt?: number
@@ -25,6 +26,7 @@ export interface AgentRunOverview {
 export interface AgentRun {
   id: string
   sessionId: string
+  scheduledTaskId?: string
   status: AgentRunStatus
   createdAt: number
   updatedAt: number

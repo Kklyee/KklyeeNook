@@ -1,5 +1,5 @@
 import type { AgentConfig } from '@/shared/agent/agentConfig'
-import { app, safeStorage } from 'electron'
+import { app, Notification, safeStorage } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import { join } from 'node:path'
 
@@ -8,6 +8,7 @@ import type { AgentBackendInitOptions } from '../agent-backend/protocol'
 import { registerAgentBackendIpc } from '../agent-backend/agentBackendIpc'
 import { registerAgentRunIpc } from '../agent/ipc/agentRunIpc'
 import { registerAgentSkillIpc } from '../agent/ipc/agentSkillIpc'
+import { registerScheduledTaskIpc } from '../agent/ipc/scheduledTaskIpc'
 import { connectDatabase } from '../db/client'
 import { getDatabaseUrl, getMigrationsPath } from '../db/databasePath'
 import { DrizzleArtifactRepo } from '../db/repositories/artifactRepo'
@@ -81,6 +82,10 @@ export async function bootstrap(): Promise<AppContext> {
   const artifactService = new ArtifactService(artifactRepo, workspace)
   const contextAttachments = new ContextAttachmentService()
   const backendProcess = createAgentBackendProcess()
+  const disposeBackendNotifications = backendProcess.onNotification((notification) => {
+    if (!Notification.isSupported()) return
+    new Notification(notification).show()
+  })
   const rendererUrl = is.dev ? process.env.ELECTRON_RENDERER_URL : undefined
   const backendOptions: AgentBackendInitOptions = {
     config: configStore.get(),
@@ -124,6 +129,7 @@ export async function bootstrap(): Promise<AppContext> {
   const disposeWindowIpc = registerWindowIpc(chatWindow)
   const disposeAgentRunIpc = registerAgentRunIpc(backendProcess)
   const disposeAgentSkillIpc = registerAgentSkillIpc(backendProcess)
+  const disposeScheduledTaskIpc = registerScheduledTaskIpc(backendProcess)
   registerArtifactIpc(chatWindow, artifactService)
 
   loadRenderer(chatWindow, 'chat')
@@ -141,6 +147,8 @@ export async function bootstrap(): Promise<AppContext> {
       disposeAgentBackendIpc()
       disposeAgentRunIpc()
       disposeAgentSkillIpc()
+      disposeScheduledTaskIpc()
+      disposeBackendNotifications()
       disposeWindowIpc()
       disposeContextIpc()
       disposeMemoryIpc()

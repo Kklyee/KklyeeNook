@@ -20,6 +20,7 @@ import { DrizzleAgentRunRepo } from '@/main/db/repositories/agentRunRepo'
 import { DrizzleAgentRuntimeStateRepo } from '@/main/db/repositories/agentRuntimeStateRepo'
 import { DrizzleAgentSessionRepo } from '@/main/db/repositories/agentSessionRepo'
 import { DrizzleArtifactRepo } from '@/main/db/repositories/artifactRepo'
+import { DrizzleScheduledTaskRepo } from '@/main/db/repositories/scheduledTaskRepo'
 import { DrizzlePermissionGrantRepo } from '@/main/db/repositories/permissionGrantRepo'
 import { AgentConfigStore } from '@/main/settings/agentConfigStore'
 import { MemoryCredentialStore } from '@/main/settings/credentialStore'
@@ -34,6 +35,8 @@ import { createPiNodeClientAdapter } from './piNodeClientAdapter'
 import { SkillLoader } from './skillLoader'
 import type { PiSubscribeRequest } from '@/shared/pi/piClient'
 import type { PiClientEvent } from '@assistant-ui/react-pi'
+import type { AgentBackendNotification } from '@/shared/agentBackend'
+import { ScheduledTaskScheduler } from '@/main/scheduler/scheduledTaskScheduler'
 
 export interface AgentBackendRuntime {
   baseUrl: string
@@ -52,6 +55,7 @@ type StartupStageReporter = (stage: AgentBackendInitializationStage, detail?: st
 export async function createAgentBackend(
   options: AgentBackendInitOptions,
   reportStartupStage: StartupStageReporter = () => undefined,
+  notify: (notification: AgentBackendNotification) => void = () => undefined,
 ): Promise<AgentBackendRuntime> {
   const configStore = new AgentConfigStore(options.config)
   let credentialStore = createCredentialStore(options.apiKeys)
@@ -62,6 +66,7 @@ export async function createAgentBackend(
   reportStartupStage('database_connected')
 
   let server: RunningAgentHttpServer | undefined
+  let scheduledTaskScheduler: ScheduledTaskScheduler | undefined
   let settingsChangePending = false
   try {
     const permissionGrantRepo = new DrizzlePermissionGrantRepo(db)
@@ -123,6 +128,18 @@ export async function createAgentBackend(
       contextBuilder,
       contextAttachments,
     )
+    scheduledTaskScheduler = new ScheduledTaskScheduler(
+      new DrizzleScheduledTaskRepo(db),
+      agentService,
+      {
+        buildContext: () => contextBuilder.build([], workspace()),
+        projectSession: async (sessionId) => {
+          await piClientService.getThread(sessionId)
+        },
+        notify,
+      },
+    )
+    await scheduledTaskScheduler.start()
     const piClient = createPiNodeClientAdapter(piClientService, {
       workspacePath: workspace(),
       agentDir: sessionDir,
@@ -177,12 +194,25 @@ export async function createAgentBackend(
             return agentService.listRunOverviews()
           case 'agent-execution-record:list':
             return agentService.listExecutionRecords(request.request.runId)
+          case 'scheduled-task:list':
+            return scheduledTaskScheduler!.list()
+          case 'scheduled-task:create':
+            return scheduledTaskScheduler!.create(request.input)
+          case 'scheduled-task:update':
+            return scheduledTaskScheduler!.update(request.id, request.input)
+          case 'scheduled-task:delete':
+            return scheduledTaskScheduler!.delete(request.id)
+          case 'scheduled-task:enable':
+            return scheduledTaskScheduler!.setEnabled(request.id, true)
+          case 'scheduled-task:disable':
+            return scheduledTaskScheduler!.setEnabled(request.id, false)
         }
       },
       subscribePi(request, listener) {
         return piClient.subscribe(request.threadId, listener, request.options)
       },
       async close() {
+        scheduledTaskScheduler?.stop()
         await server?.close()
         contextAttachments.clear()
         piClientService.dispose()
@@ -191,6 +221,7 @@ export async function createAgentBackend(
       },
     }
   } catch (error) {
+    scheduledTaskScheduler?.stop()
     await server?.close()
     closeDb()
     throw error

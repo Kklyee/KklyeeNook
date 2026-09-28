@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 
@@ -98,7 +98,11 @@ export interface PiSessionRuntimePort {
   getSnapshot(metadata: PiThreadMetadata): PiThreadSnapshot
   isRunning(): boolean
   sendMessage(input: PiSendMessageInput): Promise<void>
-  runMessage(input: PiSendMessageInput, context?: AgentRunContext): Promise<void>
+  runMessage(
+    input: PiSendMessageInput,
+    context?: AgentRunContext,
+    skillIds?: readonly string[],
+  ): Promise<void>
   cancel(): Promise<void>
   clearQueue(): { steering: string[]; followUp: string[] }
   getAvailableModels(): Promise<PiModelInfo[]>
@@ -222,17 +226,21 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     await this.prompt(input, 'accepted')
   }
 
-  async runMessage(input: PiSendMessageInput, context?: AgentRunContext): Promise<void> {
+  async runMessage(
+    input: PiSendMessageInput,
+    context?: AgentRunContext,
+    skillIds: readonly string[] = [],
+  ): Promise<void> {
     await this.initialize()
 
     const message = context ? toPiContextMessage(context) : undefined
     if (!message) {
-      await this.prompt(input, 'settled')
+      await this.prompt(input, 'settled', skillIds)
       return
     }
     if (!context?.memories?.length) {
       await this.getPiSession().sendCustomMessage(message, { deliverAs: 'nextTurn' })
-      await this.prompt(input, 'settled')
+      await this.prompt(input, 'settled', skillIds)
       return
     }
 
@@ -247,7 +255,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     }
     session.state.messages = [...session.state.messages, transientMessage]
     try {
-      await this.prompt(input, 'settled')
+      await this.prompt(input, 'settled', skillIds)
     } finally {
       session.state.messages = session.state.messages.filter(
         (candidate) => candidate !== transientMessage,
@@ -255,7 +263,11 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     }
   }
 
-  private async prompt(input: PiSendMessageInput, waitFor: 'accepted' | 'settled'): Promise<void> {
+  private async prompt(
+    input: PiSendMessageInput,
+    waitFor: 'accepted' | 'settled',
+    skillIds: readonly string[] = [],
+  ): Promise<void> {
     await this.initialize()
     const options: NonNullable<Parameters<PiAgentSession['prompt']>[1]> = {}
     if (input.streamingBehavior) options.streamingBehavior = input.streamingBehavior
@@ -275,23 +287,26 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
       options.preflightResult = (success) => {
         if (success) settle()
       }
-      void this.executePrompt(input.content, options).then(
+      void this.executePrompt(input.content, options, skillIds).then(
         () => settle(),
         (error: unknown) => settle(error),
       )
       return accepted
     }
 
-    await this.executePrompt(input.content, options)
+    await this.executePrompt(input.content, options, skillIds)
   }
 
   private async executePrompt(
     content: string,
     options: NonNullable<Parameters<PiAgentSession['prompt']>[1]>,
+    skillIds: readonly string[] = [],
   ): Promise<void> {
     try {
       const session = this.getPiSession()
-      const prompt = content.startsWith('/')
+      const prompt = skillIds.length
+        ? expandPiSkills(content, skillIds, session.resourceLoader.getSkills().skills)
+        : content.startsWith('/')
         ? normalizePiSkillCommand(content, session.resourceLoader.getSkills().skills)
         : content
       await session.prompt(prompt, options)
@@ -702,6 +717,27 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     }
     return manager
   }
+}
+
+function expandPiSkills(
+  content: string,
+  skillIds: readonly string[],
+  skills: readonly Pick<PiSkill, 'name' | 'baseDir' | 'filePath'>[],
+): string {
+  const blocks: string[] = []
+  for (const skillId of skillIds) {
+    const skill = skills.find((item) => item.name === skillId || basename(item.baseDir) === skillId)
+    if (!skill) continue
+    const body = stripSkillFrontmatter(readFileSync(skill.filePath, 'utf8')).trim()
+    blocks.push(
+      `<skill name="${skill.name}" location="${skill.filePath}">\nReferences are relative to ${skill.baseDir}.\n\n${body}\n</skill>`,
+    )
+  }
+  return blocks.length ? `${blocks.join('\n\n')}\n\n${content}` : content
+}
+
+function stripSkillFrontmatter(content: string): string {
+  return content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '')
 }
 
 function mergeLoadedSkills(

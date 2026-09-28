@@ -7,9 +7,10 @@ import { SettingsPage } from '../features/settings/SettingsPage'
 import { useAgentSettings } from '../features/settings/useAgentSettings'
 import { Titlebar } from '../components/Titlebar'
 import { AgentRunOverviewProvider } from '../features/runs/AgentRunOverviewProvider'
+import { ScheduledTasksPage } from '../features/scheduled-tasks/ScheduledTasksPage'
 
 export function AppShell() {
-  const [view, setView] = useState<'chat' | 'settings'>('chat')
+  const [view, setView] = useState<'chat' | 'settings' | 'scheduled-tasks'>('chat')
   const { settings, error, reload } = useAgentSettings()
 
   useAuiEvent('threads.selectionChanged', () => setView('chat'))
@@ -26,12 +27,15 @@ export function AppShell() {
               onClose={() => setView('chat')}
               onChanged={reload}
             />
+          ) : view === 'scheduled-tasks' ? (
+            <ScheduledTasksPage onClose={() => setView('chat')} />
           ) : (
             <SidebarProvider className="h-full min-h-0 overflow-hidden">
               <ThreadSidebar
                 className="app-sidebar"
                 collapsible="icon"
                 onOpenSettings={() => setView('settings')}
+                onOpenScheduledTasks={() => setView('scheduled-tasks')}
               />
               <SidebarInset className="min-h-0 overflow-hidden">
                 <ChatPanel settings={settings} />

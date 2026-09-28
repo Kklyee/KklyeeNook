@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ComponentProps } from 'react'
-import { BotIcon, SettingsIcon } from 'lucide-react'
+import { BotIcon, CalendarClockIcon, SettingsIcon } from 'lucide-react'
 import { Button } from '@/renderer/src/components/ui/button'
 import { cn } from '@/renderer/src/lib/utils'
 import {
@@ -49,7 +49,13 @@ function SidebarBrand({ canCollapse }: { canCollapse: boolean }) {
   )
 }
 
-function SidebarAccountMenu({ onOpenSettings }: { onOpenSettings: () => void }) {
+function SidebarAccountMenu({
+  onOpenSettings,
+  onOpenScheduledTasks,
+}: {
+  onOpenSettings: () => void
+  onOpenScheduledTasks: () => void
+}) {
   const { isMobile, state } = useSidebar()
   const collapsed = state === 'collapsed' && !isMobile
   const [open, setOpen] = useState(false)
@@ -102,6 +108,18 @@ function SidebarAccountMenu({ onOpenSettings }: { onOpenSettings: () => void }) 
             <SettingsIcon className="text-muted-foreground size-4" />
             <span className="flex-1">设置</span>
           </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="hover:bg-accent hover:text-accent-foreground flex h-9 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            onClick={() => {
+              setOpen(false)
+              onOpenScheduledTasks()
+            }}
+          >
+            <CalendarClockIcon className="text-muted-foreground size-4" />
+            <span className="flex-1">Scheduled Tasks</span>
+          </button>
         </div>
       )}
       <SidebarMenu>
@@ -132,8 +150,12 @@ function SidebarAccountMenu({ onOpenSettings }: { onOpenSettings: () => void }) 
 export function ThreadSidebar({
   className,
   onOpenSettings,
+  onOpenScheduledTasks,
   ...props
-}: ComponentProps<typeof Sidebar> & { onOpenSettings: () => void }) {
+}: ComponentProps<typeof Sidebar> & {
+  onOpenSettings: () => void
+  onOpenScheduledTasks: () => void
+}) {
   const canCollapse = props.collapsible !== 'none'
 
   return (
@@ -146,7 +168,10 @@ export function ThreadSidebar({
       </SidebarContent>
       {canCollapse && <SidebarRail />}
       <SidebarFooter className="border-sidebar-border  px-2 py-2 group-data-[collapsible=icon]:px-1.5">
-        <SidebarAccountMenu onOpenSettings={onOpenSettings} />
+        <SidebarAccountMenu
+          onOpenSettings={onOpenSettings}
+          onOpenScheduledTasks={onOpenScheduledTasks}
+        />
       </SidebarFooter>
     </Sidebar>
   )

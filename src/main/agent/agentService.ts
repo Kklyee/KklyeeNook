@@ -147,6 +147,7 @@ export class AgentService {
           sessionId: session.id,
           sessionTitle: session.title,
           runId: latestRun.id,
+          ...(latestRun.scheduledTaskId ? { scheduledTaskId: latestRun.scheduledTaskId } : {}),
           status: latestRun.status,
           ...(latestRun.startedAt !== undefined ? { startedAt: latestRun.startedAt } : {}),
           ...(latestRun.completedAt !== undefined ? { completedAt: latestRun.completedAt } : {}),
@@ -297,6 +298,7 @@ export class AgentService {
     const run: AgentRun = {
       id: randomUUID(),
       sessionId,
+      ...(input.scheduledTaskId ? { scheduledTaskId: input.scheduledTaskId } : {}),
       status: 'running',
       createdAt: now,
       updatedAt: now,

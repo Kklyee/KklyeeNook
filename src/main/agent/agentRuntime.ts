@@ -6,6 +6,8 @@ export interface AgentRuntimeInput {
   prompt: string
   context?: AgentRunContext
   attachments?: PiSendMessageInput['attachments']
+  skillIds?: string[]
+  scheduledTaskId?: string
 }
 
 export interface AgentRuntime {

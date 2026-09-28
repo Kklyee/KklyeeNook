@@ -28,6 +28,11 @@ import type {
   RemoveContextAttachmentRequest,
   StageContextAttachmentRequest,
 } from '@/shared/context/contextAttachment'
+import type {
+  CreateScheduledTaskInput,
+  ScheduledTask,
+  UpdateScheduledTaskInput,
+} from '@/shared/scheduler/scheduledTask'
 
 const context = {
   stage(request: StageContextAttachmentRequest): Promise<ContextAttachmentRef> {
@@ -80,6 +85,24 @@ const api = {
 
   reloadAgentSkills(): Promise<AgentSkill[]> {
     return ipcRenderer.invoke(IPC_CHANNELS.AGENT_SKILLS_RELOAD)
+  },
+  listScheduledTasks(): Promise<ScheduledTask[]> {
+    return ipcRenderer.invoke(IPC_CHANNELS.SCHEDULED_TASK_LIST)
+  },
+  createScheduledTask(input: CreateScheduledTaskInput): Promise<ScheduledTask> {
+    return ipcRenderer.invoke(IPC_CHANNELS.SCHEDULED_TASK_CREATE, input)
+  },
+  updateScheduledTask(id: string, input: UpdateScheduledTaskInput): Promise<ScheduledTask> {
+    return ipcRenderer.invoke(IPC_CHANNELS.SCHEDULED_TASK_UPDATE, { id, input })
+  },
+  deleteScheduledTask(id: string): Promise<void> {
+    return ipcRenderer.invoke(IPC_CHANNELS.SCHEDULED_TASK_DELETE, id)
+  },
+  enableScheduledTask(id: string): Promise<ScheduledTask> {
+    return ipcRenderer.invoke(IPC_CHANNELS.SCHEDULED_TASK_ENABLE, id)
+  },
+  disableScheduledTask(id: string): Promise<ScheduledTask> {
+    return ipcRenderer.invoke(IPC_CHANNELS.SCHEDULED_TASK_DISABLE, id)
   },
   context,
 

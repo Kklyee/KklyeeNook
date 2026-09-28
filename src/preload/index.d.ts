@@ -26,6 +26,11 @@ import type {
 import type { AgentBackendStatus } from '../shared/agentBackend'
 import type { AgentSkill } from '../shared/agent/agentSkill'
 import type { AgentMemory, DeleteAgentMemoryRequest } from '../shared/memory/agentMemory'
+import type {
+  CreateScheduledTaskInput,
+  ScheduledTask,
+  UpdateScheduledTaskInput,
+} from '../shared/scheduler/scheduledTask'
 
 interface API {
   window: {
@@ -42,6 +47,12 @@ interface API {
   listAgentSkills(): Promise<AgentSkill[]>
   getAgentSkill(id: string): Promise<AgentSkill | null>
   reloadAgentSkills(): Promise<AgentSkill[]>
+  listScheduledTasks(): Promise<ScheduledTask[]>
+  createScheduledTask(input: CreateScheduledTaskInput): Promise<ScheduledTask>
+  updateScheduledTask(id: string, input: UpdateScheduledTaskInput): Promise<ScheduledTask>
+  deleteScheduledTask(id: string): Promise<void>
+  enableScheduledTask(id: string): Promise<ScheduledTask>
+  disableScheduledTask(id: string): Promise<ScheduledTask>
   context: {
     stage(request: StageContextAttachmentRequest): Promise<ContextAttachmentRef>
     remove(request: RemoveContextAttachmentRequest): Promise<void>

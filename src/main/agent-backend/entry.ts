@@ -19,9 +19,13 @@ async function handleMessage(message: MainToAgentBackendMessage): Promise<void> 
   if (message.type === 'initialize') {
     if (backend) return
     try {
-      backend = await createAgentBackend(message.options, (stage, detail) => {
-        postStartupStage(stage, detail)
-      })
+      backend = await createAgentBackend(
+        message.options,
+        (stage, detail) => {
+          postStartupStage(stage, detail)
+        },
+        (notification) => parentPort?.postMessage({ type: 'notification', notification }),
+      )
       postStartupStage('ready')
       parentPort?.postMessage({
         type: 'ready',

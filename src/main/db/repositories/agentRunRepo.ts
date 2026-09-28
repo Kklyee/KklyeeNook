@@ -15,6 +15,7 @@ function toAgentRun(row: AgentRunRow): AgentRun {
   return {
     id: row.id,
     sessionId: row.sessionId,
+    ...(row.scheduledTaskId ? { scheduledTaskId: row.scheduledTaskId } : {}),
     status: row.status,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -52,6 +53,7 @@ export class DrizzleAgentRunRepo implements AgentRunRepo {
       .values({
         id: run.id,
         sessionId: run.sessionId,
+        scheduledTaskId: run.scheduledTaskId ?? null,
         status: run.status,
         createdAt: run.createdAt,
         updatedAt: run.updatedAt,
@@ -67,6 +69,7 @@ export class DrizzleAgentRunRepo implements AgentRunRepo {
         target: agentRuns.id,
         set: {
           status: run.status,
+          scheduledTaskId: run.scheduledTaskId ?? null,
           updatedAt: run.updatedAt,
           startedAt: run.startedAt,
           completedAt: run.completedAt,

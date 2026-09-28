@@ -12,6 +12,7 @@ export const agentRuns = sqliteTable(
     sessionId: text('session_id')
       .notNull()
       .references(() => conversations.id, { onDelete: 'cascade' }),
+    scheduledTaskId: text('scheduled_task_id'),
     status: text('status').$type<AgentRunStatus>().notNull(),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
@@ -26,6 +27,7 @@ export const agentRuns = sqliteTable(
   (table) => [
     index('agent_runs_session_created_at_idx').on(table.sessionId, table.createdAt),
     index('agent_runs_status_idx').on(table.status),
+    index('agent_runs_scheduled_task_idx').on(table.scheduledTaskId),
   ],
 )
 
