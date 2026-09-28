@@ -106,7 +106,10 @@ export class PiClientService implements PiClient {
       throw new Error('File context cannot be added while the agent is running')
     }
 
-    const context = this.contextBuilder.build(uniqueContextAttachmentIds)
+    const context = await this.contextBuilder.build(
+      uniqueContextAttachmentIds,
+      this.configStore.get().cwd,
+    )
 
     if (session.title === 'New Task') {
       const text = input.content.trim()

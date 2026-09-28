@@ -225,15 +225,34 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
   async runMessage(input: PiSendMessageInput, context?: AgentRunContext): Promise<void> {
     await this.initialize()
 
-    if (context) {
-      const message = toPiContextMessage(context)
-
-      if (message) {
-        await this.getPiSession().sendCustomMessage(message, { deliverAs: 'nextTurn' })
-      }
+    const message = context ? toPiContextMessage(context) : undefined
+    if (!message) {
+      await this.prompt(input, 'settled')
+      return
+    }
+    if (!context?.memories?.length) {
+      await this.getPiSession().sendCustomMessage(message, { deliverAs: 'nextTurn' })
+      await this.prompt(input, 'settled')
+      return
     }
 
-    await this.prompt(input, 'settled')
+    const session = this.getPiSession()
+    const transientMessage = {
+      role: 'custom' as const,
+      customType: message.customType,
+      content: message.content,
+      display: message.display,
+      details: message.details,
+      timestamp: Date.now(),
+    }
+    session.state.messages = [...session.state.messages, transientMessage]
+    try {
+      await this.prompt(input, 'settled')
+    } finally {
+      session.state.messages = session.state.messages.filter(
+        (candidate) => candidate !== transientMessage,
+      )
+    }
   }
 
   private async prompt(input: PiSendMessageInput, waitFor: 'accepted' | 'settled'): Promise<void> {

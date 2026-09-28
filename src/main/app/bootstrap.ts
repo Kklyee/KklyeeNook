@@ -12,6 +12,7 @@ import { connectDatabase } from '../db/client'
 import { getDatabaseUrl, getMigrationsPath } from '../db/databasePath'
 import { DrizzleArtifactRepo } from '../db/repositories/artifactRepo'
 import { DrizzlePermissionGrantRepo } from '../db/repositories/permissionGrantRepo'
+import { DrizzleAgentMemoryRepo } from '../db/repositories/memoryRepo'
 import { ArtifactService } from '../artifact/artifactService'
 import { registerArtifactIpc } from '../artifact/artifactIpc'
 import { ContextAttachmentService } from '../context/contextAttachmentService'
@@ -22,6 +23,7 @@ import { ApprovalPolicy } from '../approval/approvalPolicy'
 import { AgentConfigStore } from '../settings/agentConfigStore'
 import { PersistentCredentialStore, type CredentialStore } from '../settings/credentialStore'
 import { registerSettingsIpc } from '../settings/settingsIpc'
+import { registerMemoryIpc } from '../memory/memoryIpc'
 import { loadRenderer } from './loadRenderer'
 
 export interface AppContext {
@@ -40,11 +42,20 @@ export async function bootstrap(): Promise<AppContext> {
       contextWindow: 128_000,
       maxTokens: 1_000,
     },
-    tools: { enabled: ['read', 'bash', 'edit', 'write', 'create_artifact', 'update_plan'] },
+    tools: {
+      enabled: ['read', 'bash', 'edit', 'write', 'create_artifact', 'update_plan', 'save_memory'],
+    },
     cwd: defaultWorkspace,
   }
 
   const configStore = new AgentConfigStore(defaultConfig, join(userDataPath, 'agent-settings.json'))
+  const savedConfig = configStore.get()
+  if (!savedConfig.tools.enabled.includes('save_memory')) {
+    configStore.set({
+      ...savedConfig,
+      tools: { ...savedConfig.tools, enabled: [...savedConfig.tools.enabled, 'save_memory'] },
+    })
+  }
   const credentialStore = new PersistentCredentialStore(
     join(userDataPath, 'agent-credentials.json'),
     safeStorage,
@@ -59,6 +70,7 @@ export async function bootstrap(): Promise<AppContext> {
   const migrationsPath = getMigrationsPath()
   const { database: db, close: closeDb } = await connectDatabase(databaseUrl, migrationsPath)
   const permissionGrantRepo = new DrizzlePermissionGrantRepo(db)
+  const memoryRepo = new DrizzleAgentMemoryRepo(db)
   const artifactRepo = new DrizzleArtifactRepo(db)
   const approvalPolicy = new ApprovalPolicy(permissionGrantRepo)
   const workspace = () => {
@@ -91,6 +103,7 @@ export async function bootstrap(): Promise<AppContext> {
       await backendProcess.request({ action: 'context:remove', id })
     },
   })
+  const disposeMemoryIpc = registerMemoryIpc(chatWindow, memoryRepo, workspace)
 
   registerSettingsIpc(chatWindow, configStore, credentialStore, approvalPolicy, {
     prepare: async () => {
@@ -130,6 +143,7 @@ export async function bootstrap(): Promise<AppContext> {
       disposeAgentSkillIpc()
       disposeWindowIpc()
       disposeContextIpc()
+      disposeMemoryIpc()
       contextAttachments.clear()
       backendProcess.close()
       closeMainDatabase()

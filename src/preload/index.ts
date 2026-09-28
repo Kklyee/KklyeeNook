@@ -3,6 +3,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
 import type { AgentBackendStatus } from '@/shared/agentBackend'
 import type { AgentSkill } from '@/shared/agent/agentSkill'
+import type { AgentMemory, DeleteAgentMemoryRequest } from '@/shared/memory/agentMemory'
 import { DeletePermissionGrantRequest } from '@/shared/approval/approvalTypes'
 import type {
   AgentSettingsSnapshot,
@@ -96,6 +97,14 @@ const api = {
 
   selectAgentWorkspace(): Promise<string | null> {
     return ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_SELECT_WORKSPACE)
+  },
+
+  listMemories(): Promise<AgentMemory[]> {
+    return ipcRenderer.invoke(IPC_CHANNELS.MEMORY_LIST)
+  },
+
+  deleteMemory(request: DeleteAgentMemoryRequest): Promise<void> {
+    return ipcRenderer.invoke(IPC_CHANNELS.MEMORY_DELETE, request)
   },
 
   deletePermissionGrant(request: DeletePermissionGrantRequest): Promise<void> {

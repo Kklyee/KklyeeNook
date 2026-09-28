@@ -6,6 +6,7 @@ import { PiSessionRuntime } from '@/main/agent/pi/runtime/piSessionRuntime'
 import { PiSessionRuntimeManager } from '@/main/agent/pi/runtime/piSessionRuntimeManager'
 import { registerPiArtifactTool } from '@/main/agent/pi/adapters/piArtifactToolAdapter'
 import { registerPiBuiltinTools } from '@/main/agent/pi/adapters/piBuiltinToolAdapter'
+import { registerPiMemoryTool } from '@/main/agent/pi/adapters/piMemoryToolAdapter'
 import { registerPiPlanTool } from '@/main/agent/pi/adapters/piPlanToolAdapter'
 import { ApprovalPolicy } from '@/main/approval/approvalPolicy'
 import { ArtifactService } from '@/main/artifact/artifactService'
@@ -14,6 +15,7 @@ import { ContextBuilder } from '@/main/context/contextBuilder'
 import { connectDatabase } from '@/main/db/client'
 import { DrizzleAgentExecutionRecordRepo } from '@/main/db/repositories/agentExecutionRecordRepo'
 import { DrizzleAgentMessageRepo } from '@/main/db/repositories/agentMessageRepo'
+import { DrizzleAgentMemoryRepo } from '@/main/db/repositories/memoryRepo'
 import { DrizzleAgentRunRepo } from '@/main/db/repositories/agentRunRepo'
 import { DrizzleAgentRuntimeStateRepo } from '@/main/db/repositories/agentRuntimeStateRepo'
 import { DrizzleAgentSessionRepo } from '@/main/db/repositories/agentSessionRepo'
@@ -63,6 +65,7 @@ export async function createAgentBackend(
   let settingsChangePending = false
   try {
     const permissionGrantRepo = new DrizzlePermissionGrantRepo(db)
+    const memoryRepo = new DrizzleAgentMemoryRepo(db)
     const approvalPolicy = new ApprovalPolicy(permissionGrantRepo)
     const runtimeStateRepo = new DrizzleAgentRuntimeStateRepo(db)
     const sessionDir = options.sessionDir
@@ -76,6 +79,7 @@ export async function createAgentBackend(
     }
     registerPiBuiltinTools(toolRegistry, workspace())
     registerPiArtifactTool(toolRegistry)
+    registerPiMemoryTool(toolRegistry, memoryRepo, workspace())
     registerPiPlanTool(toolRegistry)
 
     const sessionRuntimeManager = new PiSessionRuntimeManager(
@@ -109,7 +113,7 @@ export async function createAgentBackend(
     await agentService.initialize((stage, count) => reportStartupStage(stage, String(count)))
     const messageProjection = new MessageProjectionService(new DrizzleAgentMessageRepo(db))
     const contextAttachments = new ContextAttachmentService()
-    const contextBuilder = new ContextBuilder(contextAttachments)
+    const contextBuilder = new ContextBuilder(contextAttachments, memoryRepo)
     const piClientService = new PiClientService(
       agentService,
       sessionRuntimeManager,

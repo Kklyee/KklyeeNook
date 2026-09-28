@@ -25,6 +25,7 @@ import type {
 } from '../shared/context/contextAttachment'
 import type { AgentBackendStatus } from '../shared/agentBackend'
 import type { AgentSkill } from '../shared/agent/agentSkill'
+import type { AgentMemory, DeleteAgentMemoryRequest } from '../shared/memory/agentMemory'
 
 interface API {
   window: {
@@ -49,6 +50,8 @@ interface API {
   updateAgentSettings(request: UpdateAgentSettingsRequest): Promise<AgentSettingsSnapshot>
   discoverModels(request: DiscoverModelsRequest): Promise<ModelCatalogModel[]>
   selectAgentWorkspace(): Promise<string | null>
+  listMemories(): Promise<AgentMemory[]>
+  deleteMemory(request: DeleteAgentMemoryRequest): Promise<void>
   deletePermissionGrant(request: DeletePermissionGrantRequest): Promise<void>
   listAgentRuns(request: LoadAgentRunsRequest): Promise<AgentRun[]>
   listAgentRunOverviews(): Promise<AgentRunOverview[]>

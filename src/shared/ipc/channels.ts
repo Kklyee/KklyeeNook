@@ -3,6 +3,8 @@ export const IPC_CHANNELS = {
   SETTINGS_UPDATE: 'settings:update',
   SETTINGS_DISCOVER_MODELS: 'settings:discover-models',
   SETTINGS_SELECT_WORKSPACE: 'settings:select-workspace',
+  MEMORY_LIST: 'memory:list',
+  MEMORY_DELETE: 'memory:delete',
   PERMISSION_GRANT_DELETE: 'permission-grant:delete',
   WINDOW_MINIMIZE: 'window:minimize',
   WINDOW_TOGGLE_MAXIMIZE: 'window:toggle-maximize',

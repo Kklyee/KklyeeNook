@@ -1,6 +1,7 @@
 import { useEffect, useState, type ComponentType, type ReactNode } from 'react'
 import {
   ArrowLeftIcon,
+  BrainIcon,
   BotIcon,
   SearchIcon,
   ShieldCheckIcon,
@@ -11,6 +12,7 @@ import {
   WrenchIcon,
 } from 'lucide-react'
 import type { AgentSkill } from '@/shared/agent/agentSkill'
+import type { AgentMemory } from '@/shared/memory/agentMemory'
 import type {
   AgentSettingsSnapshot,
   ModelCatalogModel,
@@ -32,9 +34,10 @@ const toolDescriptions: Record<string, string> = {
   write: '写入文件',
   bash: '执行命令',
   update_plan: '更新计划',
+  save_memory: '保存 Memory',
 }
 
-type SettingsTab = 'model' | 'tools' | 'permissions' | 'skills'
+type SettingsTab = 'model' | 'tools' | 'permissions' | 'skills' | 'memory'
 
 const settingsTabs: Array<{
   id: SettingsTab
@@ -51,6 +54,7 @@ const settingsTabs: Array<{
   { id: 'tools', label: '工具', description: '可用工具与审批方式', icon: WrenchIcon },
   { id: 'permissions', label: '权限管理', description: '查看和撤销授权', icon: ShieldCheckIcon },
   { id: 'skills', label: 'Skills', description: '查看可用的本地 Skills', icon: SparklesIcon },
+  { id: 'memory', label: 'Memory', description: '查看和删除长期记忆', icon: BrainIcon },
 ]
 
 export function SettingsPage({
@@ -171,6 +175,8 @@ export function SettingsPage({
             <ToolSettings settings={settings} />
           ) : tab === 'skills' ? (
             <SkillSettings />
+          ) : tab === 'memory' ? (
+            <MemorySettings workspacePath={settings.cwd} />
           ) : (
             <PermissionSettings
               settings={settings}
@@ -1037,6 +1043,110 @@ function SkillSettings() {
         </SettingsCard>
       )}
     </section>
+  )
+}
+
+function MemorySettings({ workspacePath }: { workspacePath: string }) {
+  const [memories, setMemories] = useState<AgentMemory[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
+
+  const loadMemories = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      setMemories(await window.api.listMemories())
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Memory 读取失败，请重试。')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const removeMemory = async (id: string) => {
+    setDeleting(id)
+    setError(null)
+    try {
+      await window.api.deleteMemory({ id })
+      setMemories((current) => current.filter((memory) => memory.id !== id))
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Memory 删除失败，请重试。')
+    } finally {
+      setDeleting(null)
+    }
+  }
+
+  useEffect(() => {
+    void loadMemories()
+  }, [workspacePath])
+
+  return (
+    <section aria-labelledby="memory-section-title">
+      <div className="mb-3 flex items-end justify-between gap-4">
+        <div>
+          <h2 id="memory-section-title" className="text-xs font-medium">
+            已保存的 Memory
+          </h2>
+          <p className="text-muted-foreground mt-1 text-xs">
+            Agent 只会在明确调用 save_memory 时保存长期信息。
+          </p>
+        </div>
+        <span className="text-muted-foreground text-xs">{memories.length} 条</span>
+      </div>
+      {error && (
+        <p role="alert" className="text-destructive mb-3 text-sm">
+          {error}
+        </p>
+      )}
+      {loading ? (
+        <p role="status" className="text-muted-foreground text-sm">
+          正在读取 Memory…
+        </p>
+      ) : memories.length === 0 ? (
+        <div className="rounded-xl border border-dashed px-5 py-9 text-center">
+          <BrainIcon className="text-muted-foreground/60 mx-auto size-5" />
+          <p className="mt-3 text-sm font-medium">暂无已保存的 Memory</p>
+          <p className="text-muted-foreground mt-1 text-xs">
+            Agent 保存长期信息后，会在这里显示。
+          </p>
+        </div>
+      ) : (
+        <SettingsCard>
+          {memories.map((memory) => (
+            <div key={memory.id} className="flex items-start justify-between gap-4 px-4 py-3.5">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="bg-secondary text-secondary-foreground rounded-full px-2 py-0.5 text-[10px]">
+                    {memory.scope === 'global' ? '全局' : '当前 Workspace'}
+                  </span>
+                  <span className="text-muted-foreground text-[11px]">
+                    更新于 {formatMemoryTime(memory.updatedAt)}
+                  </span>
+                </div>
+                <p className="mt-2 whitespace-pre-wrap break-words text-sm">{memory.content}</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="删除 Memory"
+                title="删除 Memory"
+                disabled={deleting === memory.id}
+                onClick={() => void removeMemory(memory.id)}
+              >
+                <Trash2Icon />
+              </Button>
+            </div>
+          ))}
+        </SettingsCard>
+      )}
+    </section>
+  )
+}
+
+function formatMemoryTime(timestamp: number): string {
+  return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(
+    timestamp,
   )
 }
 
