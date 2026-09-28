@@ -1,7 +1,14 @@
 import type { AgentExecutionRecord } from '@/shared/agent/agentExecutionRecord'
 import type { AgentRun } from '@/shared/agent/agentRun'
 
-export type TimelineItemKind = 'system' | 'user' | 'assistant' | 'tool' | 'approval' | 'error'
+export type TimelineItemKind =
+  | 'system'
+  | 'user'
+  | 'assistant'
+  | 'tool'
+  | 'approval'
+  | 'compaction'
+  | 'error'
 export type TimelineItemStatus = 'running' | 'completed' | 'failed'
 
 export interface TimelineItem {
@@ -31,6 +38,7 @@ export function buildExecutionTimeline(
   const items: TimelineItem[] = []
   const tools = new Map<string, TimelineItem>()
   const approvals = new Map<string, TimelineItem>()
+  let activeCompaction: TimelineItem | undefined
 
   for (const record of records) {
     const event = record.event
@@ -104,6 +112,47 @@ export function buildExecutionTimeline(
         }
         break
       }
+      case 'context_compaction_started': {
+        const compaction = {
+          ...item(record.id, 'compaction', 'Compressing context', record.timestamp),
+          detail: { reason: event.reason },
+          status: 'running' as const,
+        }
+        activeCompaction = compaction
+        items.push(compaction)
+        break
+      }
+      case 'context_compaction_completed': {
+        const compaction =
+          activeCompaction ?? item(record.id, 'compaction', 'Context compressed', record.timestamp)
+        if (!activeCompaction) items.push(compaction)
+        compaction.title = 'Context compressed'
+        compaction.durationMs = Math.max(0, record.timestamp - compaction.timestamp)
+        compaction.summary = compactionSummary(event.tokensBefore, event.estimatedTokensAfter)
+        compaction.detail = {
+          reason: event.reason,
+          ...(event.tokensBefore !== undefined ? { tokensBefore: event.tokensBefore } : {}),
+          ...(event.estimatedTokensAfter !== undefined
+            ? { estimatedTokensAfter: event.estimatedTokensAfter }
+            : {}),
+        }
+        compaction.status = 'completed'
+        activeCompaction = undefined
+        break
+      }
+      case 'context_compaction_failed': {
+        const compaction =
+          activeCompaction ??
+          item(record.id, 'compaction', 'Context compaction failed', record.timestamp)
+        if (!activeCompaction) items.push(compaction)
+        compaction.title = 'Context compaction failed'
+        compaction.durationMs = Math.max(0, record.timestamp - compaction.timestamp)
+        compaction.summary = event.error
+        compaction.detail = { reason: event.reason, error: event.error }
+        compaction.status = 'failed'
+        activeCompaction = undefined
+        break
+      }
       case 'approval_required': {
         const approval = {
           ...item(record.id, 'approval', `审批 · ${event.call.toolName}`, record.timestamp),
@@ -139,6 +188,10 @@ export function buildExecutionTimeline(
       case 'agent_completed':
         break
     }
+  }
+
+  if (activeCompaction) {
+    activeCompaction.durationMs = Math.max(0, end - activeCompaction.timestamp)
   }
 
   const systemPromptIndex = items.findIndex((timelineItem) => timelineItem.kind === 'system')
@@ -182,4 +235,17 @@ function timelineText(value: unknown): string {
   } catch {
     return String(value)
   }
+}
+
+function compactionSummary(tokensBefore?: number, estimatedTokensAfter?: number): string {
+  const before = formatTokens(tokensBefore)
+  const after = formatTokens(estimatedTokensAfter)
+  if (before && after) return `${before} → ~${after}`
+  return before ?? after ?? ''
+}
+
+function formatTokens(value: number | undefined): string | undefined {
+  if (typeof value !== 'number') return undefined
+  if (value < 1_000) return String(value)
+  return `${Math.round(value / 1_000)}k`
 }

@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
 import {
+  DEFAULT_AGENT_COMPACTION_SETTINGS,
   getActiveModel,
   getSavedModels,
   modelConfigId,
@@ -12,6 +13,7 @@ const DEFAULT_CONFIG: AgentConfig = {
   model: { provider: 'anthropic', modelID: '...', thinkingLevel: 'medium' },
 
   tools: { enabled: ['read', 'bash', 'edit', 'write'] },
+  compaction: DEFAULT_AGENT_COMPACTION_SETTINGS,
 }
 
 export class AgentConfigStore {
@@ -67,6 +69,7 @@ function mergeConfig(config?: Partial<AgentConfig>): AgentConfig {
     ...config,
     model: { ...DEFAULT_CONFIG.model, ...config?.model },
     tools: { ...DEFAULT_CONFIG.tools, ...config?.tools },
+    compaction: { ...DEFAULT_AGENT_COMPACTION_SETTINGS, ...config?.compaction },
   }
   merged.models = getSavedModels(merged)
   const savedActive = merged.models.find((model) => model.id === merged.activeModelId)
@@ -108,7 +111,18 @@ function isAgentConfig(value: unknown): value is AgentConfig {
     config.tools &&
     Array.isArray(config.tools.enabled) &&
     config.tools.enabled.every((name) => typeof name === 'string') &&
+    (config.compaction === undefined || isCompactionConfig(config.compaction)) &&
     (config.cwd === undefined || typeof config.cwd === 'string'),
+  )
+}
+
+function isCompactionConfig(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false
+  const compaction = value as Partial<NonNullable<AgentConfig['compaction']>>
+  return Boolean(
+    typeof compaction.enabled === 'boolean' &&
+      isNonNegativeInteger(compaction.reserveTokens) &&
+      isNonNegativeInteger(compaction.keepRecentTokens),
   )
 }
 
@@ -181,4 +195,8 @@ function isModelConfig(value: unknown): boolean {
 
 function isPositiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0
 }

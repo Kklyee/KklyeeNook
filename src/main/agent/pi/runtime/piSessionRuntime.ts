@@ -17,6 +17,7 @@ import {
   DefaultResourceLoader,
   ModelRuntime,
   SessionManager,
+  SettingsManager,
   type AgentSession as PiAgentSession,
   type AgentSessionEvent,
   type ToolDefinition as PiToolDefinition,
@@ -26,6 +27,7 @@ import {
   getActiveModel,
   getConfiguredProviders,
   getSavedModels,
+  getAgentCompactionSettings,
   type AgentConfig,
   type ModelConfig,
   type ThinkingLevel,
@@ -45,6 +47,10 @@ import type { AgentConfigStore } from '@/main/settings/agentConfigStore'
 import type { CredentialStore } from '@/main/settings/credentialStore'
 import type { ToolRegistry } from '@/main/tools/toolRegistry'
 import type { AgentEvent } from '@/shared/agent/agentEvent'
+import {
+  toAgentContextUsage,
+  type AgentContextUsage,
+} from '@/shared/agent/agentContextUsage'
 import { toPiClientEventBody } from '../client/piClientEventAdapter'
 import {
   createPiExtensionUiBridge,
@@ -84,6 +90,7 @@ function usesBearerAuth(api: string): boolean {
 export interface PiSessionRuntimePort {
   initialize(): Promise<void>
   getSystemPrompt(): string
+  getContextUsage(): AgentContextUsage | undefined
   getSnapshot(metadata: PiThreadMetadata): PiThreadSnapshot
   isRunning(): boolean
   sendMessage(input: PiSendMessageInput): Promise<void>
@@ -142,6 +149,10 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
 
   getSystemPrompt(): string {
     return this.getPiSession().systemPrompt
+  }
+
+  getContextUsage(): AgentContextUsage | undefined {
+    return toAgentContextUsage(this.getPiSession().getContextUsage())
   }
 
   getSnapshot(metadata: PiThreadMetadata): PiThreadSnapshot {
@@ -402,9 +413,12 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
         config.tools.enabled,
         { cwd },
       )
+      const settingsManager = SettingsManager.create(cwd, cwd)
+      settingsManager.applyOverrides({ compaction: getAgentCompactionSettings(config) })
       const resourceLoader = new DefaultResourceLoader({
         cwd,
         agentDir: cwd,
+        settingsManager,
         extensionFactories: [
           createPiApprovalExtension(this.sessionId, this.approvalPolicy, (event) =>
             this.publishProductEvent(event),
@@ -417,6 +431,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
         modelRuntime,
         model,
         thinkingLevel: thinkingLevel ?? 'medium',
+        settingsManager,
         noTools: 'builtin',
         tools: config.tools.enabled,
         customTools: tools,
@@ -589,6 +604,32 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     if (event.type === 'turn_start') this.turnIndex += 1
     for (const listener of this.listeners) this.notify(listener, event)
     this.publishClientEvent(toPiClientEventBody(event, this.turnIndex))
+    if (event.type === 'compaction_start') {
+      this.publishProductEvent({
+        type: 'context_compaction_started',
+        reason: event.reason,
+      })
+    }
+    if (event.type === 'compaction_end') {
+      if (!event.aborted && event.result) {
+        this.publishProductEvent({
+          type: 'context_compaction_completed',
+          reason: event.reason,
+          tokensBefore: event.result.tokensBefore,
+          ...(event.result.estimatedTokensAfter !== undefined
+            ? { estimatedTokensAfter: event.result.estimatedTokensAfter }
+            : {}),
+        })
+      } else {
+        this.publishProductEvent({
+          type: 'context_compaction_failed',
+          reason: event.reason,
+          error:
+            event.errorMessage ??
+            (event.aborted ? 'Context compaction aborted' : 'Context compaction failed'),
+        })
+      }
+    }
     if (
       event.type === 'turn_end' ||
       event.type === 'agent_end' ||

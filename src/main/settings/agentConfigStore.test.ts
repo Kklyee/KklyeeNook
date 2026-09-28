@@ -14,6 +14,7 @@ test('persists agent settings without exposing mutable store state', () => {
     model: { provider: 'test', modelID: 'first', thinkingLevel: 'off' as const },
     tools: { enabled: ['read'] },
     cwd: directory,
+    compaction: { enabled: false, reserveTokens: 2_048, keepRecentTokens: 4_096 },
   }
   const store = new AgentConfigStore(initial, path)
   const updated = store.get()
@@ -23,5 +24,10 @@ test('persists agent settings without exposing mutable store state', () => {
   store.set(updated)
   const restored = new AgentConfigStore(initial, path)
   expect(restored.get().model.modelID).toBe('second')
+  expect(restored.get().compaction).toEqual({
+    enabled: false,
+    reserveTokens: 2_048,
+    keepRecentTokens: 4_096,
+  })
   expect(JSON.parse(readFileSync(path, 'utf8'))).toMatchObject({ cwd: directory })
 })

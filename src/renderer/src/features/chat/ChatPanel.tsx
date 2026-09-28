@@ -1,6 +1,7 @@
 import { useEffect, useState, type ButtonHTMLAttributes } from 'react'
 import { useAuiState } from '@assistant-ui/react'
 import { usePiRuntimeExtras, usePiSession, type PiThinkingLevel } from '@assistant-ui/react-pi'
+import { toAgentContextUsage } from '@/shared/agent/agentContextUsage'
 import type { AgentSettingsSnapshot } from '@/shared/agent/agentSettings'
 import type { ThinkingLevel } from '@/shared/agent/agentConfig'
 import { Thread } from '../../components/assistant-ui/elements/thread.aui'
@@ -150,6 +151,8 @@ export function ChatPanel({ settings }: { settings: AgentSettingsSnapshot | null
       {view === 'chat' ? (
         <div className="relative min-h-0 flex-1">
           <Thread
+            contextUsage={toAgentContextUsage(piRuntime.contextUsage)}
+            isCompacting={piRuntime.compaction?.active === true}
             modelSelector={{
               models: modelOptions,
               value: selectedModel?.id ?? settings?.activeModelId,

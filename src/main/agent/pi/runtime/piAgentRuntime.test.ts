@@ -26,6 +26,7 @@ test('keeps the AgentRuntime projection on top of the shared session runtime', a
   const sessionRuntime: PiSessionRuntimePort = {
     initialize: vi.fn(),
     getSystemPrompt: vi.fn(() => 'system'),
+    getContextUsage: vi.fn(() => undefined),
     getSnapshot: vi.fn(),
     isRunning: vi.fn(() => false),
     sendMessage: vi.fn(),
@@ -85,6 +86,7 @@ test('passes image attachments through to the Pi session runtime', async () => {
   const sessionRuntime: PiSessionRuntimePort = {
     initialize: vi.fn(),
     getSystemPrompt: vi.fn(() => 'system'),
+    getContextUsage: vi.fn(() => undefined),
     getSnapshot: vi.fn(),
     isRunning: vi.fn(() => false),
     sendMessage: vi.fn(),

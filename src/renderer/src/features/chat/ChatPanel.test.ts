@@ -96,6 +96,7 @@ const settings: AgentSettingsSnapshot = {
   credentialPersistenceAvailable: true,
   tools: [],
   permissionGrants: [],
+  compaction: { enabled: true, reserveTokens: 16_384, keepRecentTokens: 20_000 },
 }
 
 let root: Root | undefined

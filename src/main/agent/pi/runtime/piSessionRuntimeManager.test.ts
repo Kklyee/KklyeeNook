@@ -7,6 +7,7 @@ function createFakeRuntime(): PiSessionRuntimePort {
   return {
     initialize: vi.fn(),
     getSystemPrompt: vi.fn(() => ''),
+    getContextUsage: vi.fn(() => undefined),
     getSnapshot: vi.fn(),
     isRunning: vi.fn(() => false),
     sendMessage: vi.fn(),

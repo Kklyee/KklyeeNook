@@ -38,13 +38,30 @@ export type ProviderConfig = {
 
 export type ToolConfig = { enabled: string[] }
 
+export interface AgentCompactionSettings {
+  enabled: boolean
+  reserveTokens: number
+  keepRecentTokens: number
+}
+
+export const DEFAULT_AGENT_COMPACTION_SETTINGS: AgentCompactionSettings = {
+  enabled: true,
+  reserveTokens: 16_384,
+  keepRecentTokens: 20_000,
+}
+
 export type AgentConfig = {
   model: ModelConfig
   models?: SavedModelConfig[]
   activeModelId?: string
   providers?: ProviderConfig[]
   tools: ToolConfig
+  compaction?: AgentCompactionSettings
   cwd?: string
+}
+
+export function getAgentCompactionSettings(config: AgentConfig): AgentCompactionSettings {
+  return { ...DEFAULT_AGENT_COMPACTION_SETTINGS, ...config.compaction }
 }
 
 export function modelConfigId(provider: string, modelID: string): string {

@@ -43,6 +43,7 @@ const settings: AgentSettingsSnapshot = {
   credentialPersistenceAvailable: true,
   tools: [{ name: 'read', requiresApproval: true }],
   permissionGrants: [],
+  compaction: { enabled: true, reserveTokens: 16_384, keepRecentTokens: 20_000 },
 }
 
 test('renders settings as a dedicated page with navigation back to the app', () => {

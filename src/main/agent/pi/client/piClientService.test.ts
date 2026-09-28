@@ -24,6 +24,7 @@ function setup(running = false) {
   const sessionRuntime: PiSessionRuntimePort = {
     initialize: vi.fn(),
     getSystemPrompt: vi.fn(() => 'system'),
+    getContextUsage: vi.fn(() => undefined),
     getSnapshot: vi.fn((metadata: PiThreadMetadata) => ({
       metadata,
       messages: [{ role: 'user', content: 'hello', timestamp: 1 }],

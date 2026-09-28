@@ -13,7 +13,12 @@ import type {
   ModelCatalogModel,
   UpdateAgentSettingsRequest,
 } from '@/shared/agent/agentSettings'
-import type { ProviderConfig, ProviderModelConfig } from '@/shared/agent/agentConfig'
+import {
+  DEFAULT_AGENT_COMPACTION_SETTINGS,
+  type AgentCompactionSettings,
+  type ProviderConfig,
+  type ProviderModelConfig,
+} from '@/shared/agent/agentConfig'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { cn } from '../../lib/utils'
@@ -287,6 +292,9 @@ function ModelSettings({
 
   const [providerEntries, setProviderEntries] = useState<SavedProvider[]>(initialProviders)
   const [cwd, setCwd] = useState(settings.cwd)
+  const [compaction, setCompaction] = useState<AgentCompactionSettings>(
+    settings.compaction ?? DEFAULT_AGENT_COMPACTION_SETTINGS,
+  )
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editorMode, setEditorMode] = useState<EditorMode>('builtin')
   const [provider, setProvider] = useState(initialBuiltinProvider?.id ?? '')
@@ -310,6 +318,7 @@ function ModelSettings({
     const nextProviderEntries = getProviderEntries(settings)
     setProviderEntries(nextProviderEntries)
     setCwd(settings.cwd)
+    setCompaction(settings.compaction ?? DEFAULT_AGENT_COMPACTION_SETTINGS)
     setEditingId(null)
     setEditorMode('builtin')
     setProvider(findAvailableBuiltinProvider(settings.catalog, nextProviderEntries)?.id ?? '')
@@ -373,12 +382,18 @@ function ModelSettings({
   const persistProviders = async (
     nextProviders: ProviderConfig[],
     credential?: UpdateAgentSettingsRequest['credential'],
+    nextCompaction: AgentCompactionSettings = compaction,
   ) => {
     setSaving(true)
     setSaveError(null)
     setSaved(false)
     try {
-      await window.api.updateAgentSettings({ providers: nextProviders, cwd, credential })
+      await window.api.updateAgentSettings({
+        providers: nextProviders,
+        cwd,
+        credential,
+        compaction: nextCompaction,
+      })
       await onChanged()
       setSaved(true)
       setEditingId(null)
@@ -792,6 +807,81 @@ function ModelSettings({
             onClick={() => void persistProviders(providerEntries.map(toProviderConfig))}
           >
             保存工作目录
+          </Button>
+        </div>
+      </SettingsCard>
+
+      <h2 className="mt-8 mb-3 text-xs font-medium">上下文</h2>
+      <SettingsCard>
+        <div className="flex items-start justify-between gap-4 px-4 py-3.5">
+          <div>
+            <p className="text-sm font-medium">Automatic context compaction</p>
+            <p className="text-muted-foreground mt-0.5 text-xs">
+              使用 Pi 的自动压缩，在新建 Session 时应用。
+            </p>
+          </div>
+          <input
+            type="checkbox"
+            aria-label="Automatic context compaction"
+            className="accent-foreground mt-0.5 size-4"
+            checked={compaction.enabled}
+            onChange={(event) => {
+              setCompaction((current) => ({ ...current, enabled: event.target.checked }))
+              setSaved(false)
+            }}
+          />
+        </div>
+        <details className="border-border/70 border-t px-4 py-3.5">
+          <summary className="cursor-pointer text-sm font-medium">高级参数</summary>
+          <div className="mt-3 grid gap-3">
+            <SettingsField
+              label="Reserve tokens"
+              description="为压缩后的继续执行保留的 token 数量"
+            >
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                value={compaction.reserveTokens}
+                onChange={(event) => {
+                  setCompaction((current) => ({
+                    ...current,
+                    reserveTokens: Number(event.target.value),
+                  }))
+                  setSaved(false)
+                }}
+              />
+            </SettingsField>
+            <SettingsField
+              label="Keep recent tokens"
+              description="压缩时保留最近消息的 token 数量"
+            >
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                value={compaction.keepRecentTokens}
+                onChange={(event) => {
+                  setCompaction((current) => ({
+                    ...current,
+                    keepRecentTokens: Number(event.target.value),
+                  }))
+                  setSaved(false)
+                }}
+              />
+            </SettingsField>
+          </div>
+        </details>
+        <div className="flex justify-end px-4 py-3.5">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={saving}
+            onClick={() =>
+              void persistProviders(providerEntries.map(toProviderConfig), undefined, compaction)
+            }
+          >
+            保存上下文设置
           </Button>
         </div>
       </SettingsCard>

@@ -548,6 +548,7 @@ const EVENT_META: Record<
     icon: MessageSquareTextIcon,
     className: 'bg-violet-500/12 text-violet-500',
   },
+  compaction: { label: '上下文', icon: BotIcon, className: 'bg-cyan-500/12 text-cyan-500' },
   tool: { label: '工具', icon: WrenchIcon, className: 'bg-amber-500/12 text-amber-500' },
   approval: { label: '审批', icon: KeyRoundIcon, className: 'bg-emerald-500/12 text-emerald-500' },
   error: { label: '错误', icon: CircleAlertIcon, className: 'bg-destructive/10 text-destructive' },
@@ -600,6 +601,8 @@ function buildOverview(timelines: readonly RunTimeline[]) {
           ? 'user'
           : event.kind === 'assistant'
             ? 'assistant'
+            : event.kind === 'compaction'
+              ? 'assistant'
             : event.kind === 'tool' || event.kind === 'approval'
               ? 'tool'
               : undefined
@@ -613,7 +616,12 @@ function buildOverview(timelines: readonly RunTimeline[]) {
           label: event.title,
           startMs: runOffset + Math.max(0, event.timestamp - runStart),
           durationMs: event.durationMs,
-          tone: event.status === 'failed' ? 'failed' : (event.kind as TraceTone),
+          tone:
+            event.status === 'failed'
+              ? 'failed'
+              : event.kind === 'compaction'
+                ? 'system'
+                : (event.kind as TraceTone),
         })
       events.set(segmentId, { run, event })
     }

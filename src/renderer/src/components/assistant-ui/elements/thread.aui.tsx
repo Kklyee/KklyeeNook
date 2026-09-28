@@ -9,7 +9,12 @@ import { File } from '@/renderer/src/features/artifacts/FilePreview'
 import { ThreadFollowupSuggestions } from '@/renderer/src/components/assistant-ui/elements/follow-up-suggestions.aui'
 import { Image } from '@/renderer/src/features/artifacts/ImagePreview'
 import { MarkdownText } from '@/renderer/src/components/assistant-ui/elements/markdown-text'
-import { ComposerBar, ComposerSend } from '@/renderer/src/components/assistant-ui/elements/composer'
+import {
+  ComposerBar,
+  ComposerContextUsage,
+  ComposerSend,
+} from '@/renderer/src/components/assistant-ui/elements/composer'
+import type { AgentContextUsage } from '@/shared/agent/agentContextUsage'
 import {
   ModelSelectorContent,
   ModelSelectorRoot,
@@ -103,6 +108,8 @@ export type ThreadProps = {
     onValueChange: (value: string) => void
     onEffortChange: (effort: string) => void
   }
+  contextUsage?: AgentContextUsage
+  isCompacting?: boolean
 }
 
 const EMPTY_COMPONENTS: ThreadComponents = {}
@@ -146,12 +153,20 @@ export const Thread: FC<ThreadProps> = ({
   components = EMPTY_COMPONENTS,
   autoFocus = true,
   modelSelector,
+  contextUsage,
+  isCompacting = false,
 }) => {
   const isEmpty = useAuiState(isNewChatView)
 
   return (
     <ThreadComponentsContext.Provider value={components}>
-      <ThreadRoot isEmpty={isEmpty} autoFocus={autoFocus} modelSelector={modelSelector} />
+      <ThreadRoot
+        isEmpty={isEmpty}
+        autoFocus={autoFocus}
+        modelSelector={modelSelector}
+        contextUsage={contextUsage}
+        isCompacting={isCompacting}
+      />
     </ThreadComponentsContext.Provider>
   )
 }
@@ -160,7 +175,9 @@ const ThreadRoot: FC<{
   isEmpty: boolean
   autoFocus: boolean
   modelSelector?: ThreadProps['modelSelector']
-}> = ({ isEmpty, autoFocus, modelSelector }) => {
+  contextUsage?: AgentContextUsage
+  isCompacting: boolean
+}> = ({ isEmpty, autoFocus, modelSelector, contextUsage, isCompacting }) => {
   const { Welcome = ThreadWelcome } = useContext(ThreadComponentsContext)
 
   return (
@@ -207,7 +224,12 @@ const ThreadRoot: FC<{
           >
             <ThreadScrollToBottom />
             <ThreadFollowupSuggestions />
-            <Composer autoFocus={autoFocus} modelSelector={modelSelector} />
+            <Composer
+              autoFocus={autoFocus}
+              modelSelector={modelSelector}
+              contextUsage={contextUsage}
+              isCompacting={isCompacting}
+            />
             <AuiIf condition={(s) => isNewChatView(s) && s.composer.isEmpty}>
               <ThreadSuggestions />
             </AuiIf>
@@ -281,10 +303,12 @@ const ThreadSuggestionItem: FC = () => {
   )
 }
 
-const Composer: FC<{ autoFocus: boolean; modelSelector?: ThreadProps['modelSelector'] }> = ({
-  autoFocus,
-  modelSelector,
-}) => {
+const Composer: FC<{
+  autoFocus: boolean
+  modelSelector?: ThreadProps['modelSelector']
+  contextUsage?: AgentContextUsage
+  isCompacting: boolean
+}> = ({ autoFocus, modelSelector, contextUsage, isCompacting }) => {
   return (
     <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
       <ComposerPrimitive.AttachmentDropzone
@@ -299,15 +323,21 @@ const Composer: FC<{ autoFocus: boolean; modelSelector?: ThreadProps['modelSelec
           enterKeyHint="send"
           aria-label="Message input"
         />
-        <ComposerAction modelSelector={modelSelector} />
+        <ComposerAction
+          modelSelector={modelSelector}
+          contextUsage={contextUsage}
+          isCompacting={isCompacting}
+        />
       </ComposerPrimitive.AttachmentDropzone>
     </ComposerPrimitive.Root>
   )
 }
 
-const ComposerAction: FC<{ modelSelector?: ThreadProps['modelSelector'] }> = ({
-  modelSelector,
-}) => {
+const ComposerAction: FC<{
+  modelSelector?: ThreadProps['modelSelector']
+  contextUsage?: AgentContextUsage
+  isCompacting: boolean
+}> = ({ modelSelector, contextUsage, isCompacting }) => {
   const canSend = useAuiState((s) => s.composer.canSend)
 
   return (
@@ -330,6 +360,7 @@ const ComposerAction: FC<{ modelSelector?: ThreadProps['modelSelector'] }> = ({
         )}
       </div>
       <div className="flex items-center gap-1.5">
+        <ComposerContextUsage usage={contextUsage} compacting={isCompacting} />
         <AuiIf condition={(s) => s.thread.capabilities.dictation}>
           <AuiIf condition={(s) => s.composer.dictation == null}>
             <ComposerPrimitive.Dictate

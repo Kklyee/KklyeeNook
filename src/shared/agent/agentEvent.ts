@@ -10,6 +10,21 @@ export type AgentEvent =
   | { type: 'tool_updated'; toolCallId: string; partialResult: unknown }
   | { type: 'tool_finished'; result: ToolResult }
   | { type: 'artifact_created'; artifact: Artifact }
+  | {
+      type: 'context_compaction_started'
+      reason: 'manual' | 'threshold' | 'overflow'
+    }
+  | {
+      type: 'context_compaction_completed'
+      reason: 'manual' | 'threshold' | 'overflow'
+      tokensBefore?: number
+      estimatedTokensAfter?: number
+    }
+  | {
+      type: 'context_compaction_failed'
+      reason: 'manual' | 'threshold' | 'overflow'
+      error: string
+    }
   | { type: 'approval_required'; approvalId: string; call: ToolCall }
   | {
       type: 'approval_resolved'

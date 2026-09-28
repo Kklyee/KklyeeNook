@@ -11,6 +11,7 @@ import type { ApprovalPolicy } from '../approval/approvalPolicy'
 import type { CredentialStore } from './credentialStore'
 import type { DeletePermissionGrantRequest } from '@/shared/approval/approvalTypes'
 import type {
+  AgentCompactionSettings,
   AgentConfig,
   ProviderConfig,
   ProviderModelConfig,
@@ -18,6 +19,7 @@ import type {
 } from '@/shared/agent/agentConfig'
 import type { AgentConfigStore } from './agentConfigStore'
 import {
+  getAgentCompactionSettings,
   getActiveModel,
   getConfiguredProviders,
   getSavedModels,
@@ -104,6 +106,7 @@ export function registerSettingsIpc(
         requiresApproval: policy.protects(name),
       })),
       permissionGrants: await policy.listGrants(),
+      compaction: getAgentCompactionSettings(config),
     }
   }
 
@@ -117,7 +120,9 @@ export function registerSettingsIpc(
       assertTrustedSender(event)
       if (
         !request ||
-        (!Array.isArray(request.providers) && !Array.isArray(request.models)) ||
+        (!Array.isArray(request.providers) &&
+          !Array.isArray(request.models) &&
+          request.compaction === undefined) ||
         typeof request.cwd !== 'string'
       ) {
         throw new Error('Agent 设置格式无效')
@@ -152,10 +157,19 @@ export function registerSettingsIpc(
               model.provider === current.model.provider && model.modelID === current.model.modelID,
           ) ??
           models[0]
-      } else {
+      } else if (Array.isArray(request.models)) {
         if (!request.models?.length) throw new Error('至少需要配置一个模型')
         models = request.models.map(validateModel)
         activeModel = models.find((model) => model.id === request.activeModelId)
+      } else {
+        models = getSavedModels(current).map(validateModel)
+        activeModel =
+          models.find((model) => model.id === current.activeModelId) ??
+          models.find(
+            (model) =>
+              model.provider === current.model.provider && model.modelID === current.model.modelID,
+          ) ??
+          models[0]
       }
       if (new Set(models.map((model) => model.id)).size !== models.length) {
         throw new Error('不能重复添加同一个模型')
@@ -169,6 +183,10 @@ export function registerSettingsIpc(
         activeModelId: activeModel.id,
         model: activeModel,
         ...(providerUpdate ? { providers } : {}),
+        compaction:
+          request.compaction === undefined
+            ? getAgentCompactionSettings(current)
+            : validateCompaction(request.compaction),
       }
       const credentialProvider = request.credential?.provider
       const previousApiKey = credentialProvider
@@ -275,6 +293,26 @@ function validateProvider(provider: ProviderConfig): ProviderConfig {
     ...(api ? { api } : {}),
     ...(models.length ? { models } : {}),
   }
+}
+
+function validateCompaction(compaction: AgentCompactionSettings): AgentCompactionSettings {
+  if (
+    !compaction ||
+    typeof compaction.enabled !== 'boolean' ||
+    !isNonNegativeInteger(compaction.reserveTokens) ||
+    !isNonNegativeInteger(compaction.keepRecentTokens)
+  ) {
+    throw new Error('上下文压缩设置无效')
+  }
+  return {
+    enabled: compaction.enabled,
+    reserveTokens: compaction.reserveTokens,
+    keepRecentTokens: compaction.keepRecentTokens,
+  }
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0
 }
 
 function validateProviderModel(model: ProviderModelConfig): ProviderModelConfig {

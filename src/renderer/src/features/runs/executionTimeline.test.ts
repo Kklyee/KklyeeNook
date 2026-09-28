@@ -132,3 +132,44 @@ test('uses text content from structured tool results in the row preview', () => 
 
   expect(model.items[0]?.summary).toBe('{"command":"npm test"} → 12 tests passed')
 })
+
+test('shows completed and failed context compaction events', () => {
+  const completed = buildExecutionTimeline(run, [
+    record(1, 120, { type: 'context_compaction_started', reason: 'threshold' }),
+    record(2, 180, {
+      type: 'context_compaction_completed',
+      reason: 'threshold',
+      tokensBefore: 112_000,
+      estimatedTokensAfter: 36_000,
+    }),
+  ])
+
+  expect(completed.items).toMatchObject([
+    {
+      kind: 'compaction',
+      title: 'Context compressed',
+      summary: '112k → ~36k',
+      status: 'completed',
+      durationMs: 60,
+    },
+  ])
+
+  const failed = buildExecutionTimeline(run, [
+    record(3, 120, { type: 'context_compaction_started', reason: 'overflow' }),
+    record(4, 150, {
+      type: 'context_compaction_failed',
+      reason: 'overflow',
+      error: 'context window is full',
+    }),
+  ])
+
+  expect(failed.items).toMatchObject([
+    {
+      kind: 'compaction',
+      title: 'Context compaction failed',
+      summary: 'context window is full',
+      status: 'failed',
+      durationMs: 30,
+    },
+  ])
+})

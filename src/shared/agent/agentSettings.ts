@@ -1,5 +1,6 @@
 import type { PermissionGrant } from '../approval/approvalTypes'
 import type {
+  AgentCompactionSettings,
   ProviderConfig,
   ProviderModelConfig,
   SavedModelConfig,
@@ -57,6 +58,7 @@ export interface AgentSettingsSnapshot {
   credentialPersistenceAvailable: boolean
   tools: Array<{ name: string; requiresApproval: boolean }>
   permissionGrants: PermissionGrant[]
+  compaction: AgentCompactionSettings
 }
 
 export interface UpdateAgentSettingsRequest {
@@ -66,6 +68,7 @@ export interface UpdateAgentSettingsRequest {
   activeModelId?: string
   cwd: string
   credential?: { provider: string; apiKey?: string; deleteApiKey?: boolean }
+  compaction?: AgentCompactionSettings
 }
 
 export interface DiscoverModelsRequest {

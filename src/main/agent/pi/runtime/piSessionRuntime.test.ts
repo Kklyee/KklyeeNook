@@ -4,6 +4,7 @@ import {
   createAgentSession,
   ModelRuntime,
   SessionManager,
+  SettingsManager,
   type AgentSessionEvent,
 } from '@earendil-works/pi-coding-agent'
 import { AgentConfigStore } from '@/main/settings/agentConfigStore'
@@ -11,6 +12,7 @@ import type { ApprovalPolicy } from '@/main/approval/approvalPolicy'
 import type { AgentRuntimeStateRepo } from '@/main/db/repositories/agentRuntimeStateRepo'
 import type { CredentialStore } from '@/main/settings/credentialStore'
 import type { ToolRegistry } from '@/main/tools/toolRegistry'
+import type { AgentEvent } from '@/shared/agent/agentEvent'
 import { PiSessionRuntime } from './piSessionRuntime'
 
 vi.mock('@earendil-works/pi-coding-agent', () => ({
@@ -20,6 +22,9 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
   },
   ModelRuntime: { create: vi.fn() },
   SessionManager: { create: vi.fn() },
+  SettingsManager: {
+    create: vi.fn(() => ({ applyOverrides: vi.fn() })),
+  },
 }))
 
 function fakeSession() {
@@ -100,7 +105,10 @@ test('uses configured custom-provider limits and keeps client subscriptions acro
     },
     tools: { enabled: [] },
     cwd: 'C:\\workspace',
+    compaction: { enabled: false, reserveTokens: 2_048, keepRecentTokens: 4_096 },
   })
+  const settingsManager = { applyOverrides: vi.fn() }
+  vi.mocked(SettingsManager.create).mockReturnValue(settingsManager as never)
   const sessionRuntime = new PiSessionRuntime(
     'session-1',
     configStore,
@@ -111,9 +119,46 @@ test('uses configured custom-provider limits and keeps client subscriptions acro
     'sessions',
   )
   const events: string[] = []
+  const productEvents: AgentEvent[] = []
   sessionRuntime.subscribeClientEvents((event) => events.push(event.type))
+  sessionRuntime.subscribeProductEvents((event) => productEvents.push(event))
 
   await sessionRuntime.initialize()
+  expect(settingsManager.applyOverrides).toHaveBeenCalledWith({
+    compaction: { enabled: false, reserveTokens: 2_048, keepRecentTokens: 4_096 },
+  })
+  firstSession.getContextUsage.mockReturnValue({
+    tokens: 42_000,
+    contextWindow: 128_000,
+    percent: 32.8125,
+  })
+  expect(sessionRuntime.getContextUsage()).toEqual({
+    tokens: 42_000,
+    contextWindow: 128_000,
+    percent: 32.8125,
+  })
+  firstSession.emit({ type: 'compaction_start', reason: 'threshold' })
+  firstSession.emit({
+    type: 'compaction_end',
+    reason: 'threshold',
+    result: {
+      summary: 'private summary',
+      firstKeptEntryId: 'entry-1',
+      tokensBefore: 112_000,
+      estimatedTokensAfter: 36_000,
+    },
+    aborted: false,
+    willRetry: false,
+  })
+  expect(productEvents).toEqual([
+    { type: 'context_compaction_started', reason: 'threshold' },
+    {
+      type: 'context_compaction_completed',
+      reason: 'threshold',
+      tokensBefore: 112_000,
+      estimatedTokensAfter: 36_000,
+    },
+  ])
   expect(runtime.registerProvider).toHaveBeenCalledWith(
     'custom',
     expect.objectContaining({
