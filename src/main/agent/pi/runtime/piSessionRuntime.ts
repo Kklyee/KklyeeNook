@@ -376,12 +376,17 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     const sessionManager = await this.createSessionManager(cwd)
     const sessionContext = sessionManager.buildSessionContext()
     const configuredModels = getRuntimeModelConfigs(config)
+    const configuredActiveModel =
+      configuredModels.find(
+        (model) =>
+          model.provider === config.model.provider && model.modelID === config.model.modelID,
+      ) ?? getActiveModel(config)
     const activeModel =
       configuredModels.find(
         (model) =>
           model.provider === sessionContext.model?.provider &&
           model.modelID === sessionContext.model?.modelId,
-      ) ?? getActiveModel(config)
+      ) ?? configuredActiveModel
     const { provider, modelID } = activeModel
     const thinkingLevel = getSessionThinkingLevel(activeModel, sessionManager, sessionContext)
 
