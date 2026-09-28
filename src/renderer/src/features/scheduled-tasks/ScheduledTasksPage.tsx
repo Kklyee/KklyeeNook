@@ -12,6 +12,13 @@ import {
   DialogTitle,
 } from '@/renderer/src/components/ui/dialog'
 import { Input } from '@/renderer/src/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/renderer/src/components/ui/select'
 import { Textarea } from '@/renderer/src/components/ui/textarea'
 import type {
   CreateScheduledTaskInput,
@@ -280,29 +287,37 @@ function ScheduledTaskEditor({
           </Field>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Schedule">
-              <select
+              <Select
                 value={form.type}
-                onChange={(event) => update('type', event.target.value as FormState['type'])}
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                onValueChange={(value) => update('type', value as FormState['type'])}
               >
-                <option value="once">Once</option>
-                <option value="daily">Every day</option>
-                <option value="weekly">Every week</option>
-              </select>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="once">Once</SelectItem>
+                  <SelectItem value="daily">Every day</SelectItem>
+                  <SelectItem value="weekly">Every week</SelectItem>
+                </SelectContent>
+              </Select>
             </Field>
             {form.type === 'weekly' ? (
               <Field label="Weekday">
-                <select
-                  value={form.weekday}
-                  onChange={(event) => update('weekday', Number(event.target.value))}
-                  className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                <Select
+                  value={String(form.weekday)}
+                  onValueChange={(value) => update('weekday', Number(value))}
                 >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
                   {WEEKDAYS.map((weekday) => (
-                    <option key={weekday.value} value={weekday.value}>
+                    <SelectItem key={weekday.value} value={String(weekday.value)}>
                       {weekday.label}
-                    </option>
+                    </SelectItem>
                   ))}
-                </select>
+                  </SelectContent>
+                </Select>
               </Field>
             ) : (
               <Field label={form.type === 'once' ? 'Run at' : 'Time'}>
