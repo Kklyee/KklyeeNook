@@ -180,7 +180,7 @@ const ThreadRoot: FC<{
         scrollToBottomOnInitialize
         scrollToBottomOnThreadSwitch
         data-slot="aui_thread-viewport"
-        className="relative flex min-h-0  flex-1 flex-col overflow-x-auto overflow-y-scroll scroll-smooth"
+        className="relative flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         <div
           className={cn(
