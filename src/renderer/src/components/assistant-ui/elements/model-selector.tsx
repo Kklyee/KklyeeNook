@@ -199,9 +199,12 @@ export const modelSelectorTriggerVariants = cva(
   {
     variants: {
       variant: {
-        outline: 'border-input hover:bg-accent hover:text-accent-foreground border bg-transparent',
-        ghost: 'hover:bg-accent hover:text-accent-foreground',
-        muted: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+        outline:
+          'border border-input bg-transparent text-text-default hover:bg-interactive-hover hover:text-text-default active:bg-interactive-pressed data-[popup-open]:border-interactive-border-hover data-[popup-open]:bg-interactive-selected data-[popup-open]:text-text-strong',
+        ghost:
+          'bg-transparent text-text-muted hover:bg-interactive-hover hover:text-text-default active:bg-interactive-pressed data-[popup-open]:bg-interactive-selected data-[popup-open]:text-text-strong',
+        muted:
+          'bg-interactive-selected text-text-default hover:bg-interactive-selected-hover active:bg-interactive-pressed data-[popup-open]:bg-interactive-selected-hover data-[popup-open]:text-text-strong',
       },
       size: {
         default: 'h-9 px-3 py-2',
@@ -233,7 +236,11 @@ function ModelSelectorTrigger({
       data-size={size ?? 'default'}
       role="combobox"
       aria-haspopup="listbox"
-      className={cn(modelSelectorTriggerVariants({ variant, size }), className)}
+      className={cn(
+        modelSelectorTriggerVariants({ variant, size }),
+        'hover:bg-interactive-hover',
+        className,
+      )}
       onKeyDown={(e) => {
         onKeyDown?.(e)
         if (e.defaultPrevented) return
@@ -247,7 +254,7 @@ function ModelSelectorTrigger({
       {...props}
     >
       {children ?? <ModelSelectorValue />}
-      <ChevronDownIcon className="size-4 opacity-50" />
+      <ChevronDownIcon className="text-text-muted size-4" />
     </PopoverTrigger>
   )
 }
@@ -280,7 +287,7 @@ function ModelSelectorValue({
 
   if (!selectedModel) {
     return (
-      <span data-slot="model-selector-value" className={cn('text-muted-foreground', className)}>
+      <span data-slot="model-selector-value" className={cn('text-text-muted', className)}>
         {placeholder}
       </span>
     )
@@ -295,9 +302,9 @@ function ModelSelectorValue({
       className={cn('flex min-w-0 items-center gap-2', className)}
     >
       {selectedModel.icon && <ModelIcon>{selectedModel.icon}</ModelIcon>}
-      <span className="truncate font-medium">{selectedModel.name}</span>
+      <span className="text-text-strong truncate font-medium">{selectedModel.name}</span>
       {effortName && (
-        <span className="text-muted-foreground min-w-7.5 truncate text-center">{effortName}</span>
+        <span className="text-text-muted min-w-7.5 truncate text-center">{effortName}</span>
       )}
     </span>
   )
@@ -365,20 +372,20 @@ function ModelSelectorContent({
       side={renderedSide ?? side ?? 'bottom'}
       sideOffset={sideOffset}
       className={cn(
-        'bg-popover w-72 min-w-(--anchor-width) overflow-hidden rounded-xl p-0',
+        'popover-glass w-72 min-w-(--anchor-width) overflow-hidden rounded-[12px] p-0',
         className,
       )}
       {...props}
     >
       <Command
-        className="bg-transparent"
+        className="!bg-transparent"
         shouldFilter={isCompactLayout ? expandedSection === 'model' : !unfiltered}
         {...(value !== undefined ? { defaultValue: value } : {})}
       >
         {children ? (
           children
         ) : (
-          <div className="flex flex-col gap-0.5 p-1.5">
+          <div className="flex flex-col gap-0.5 p-1.5 ">
             <ModelSelectorSection
               data-section="model"
               value={selectedModel?.name ?? '选择模型'}
@@ -428,7 +435,10 @@ function ModelSelectorSection({
   return (
     <div
       data-slot="model-selector-section"
-      className={cn('overflow-hidden rounded-lg', expanded && 'bg-muted/35')}
+      className={cn(
+        'overflow-hidden rounded-lg bg-transparent',
+        expanded && 'bg-interactive-selected',
+      )}
       {...props}
     >
       <button
@@ -437,12 +447,12 @@ function ModelSelectorSection({
         aria-expanded={expanded}
         disabled={disabled}
         onClick={onClick}
-        className="hover:bg-muted/70 flex h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex h-10 w-full items-center gap-2 rounded-lg bg-transparent px-3 text-left text-xs text-text-default transition-colors outline-none hover:bg-interactive-hover active:bg-interactive-pressed focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 aria-expanded:bg-interactive-selected aria-expanded:hover:bg-interactive-selected-hover"
       >
         <span className="min-w-0 flex-1 truncate font-medium">{value}</span>
         <ChevronRightIcon
           className={cn(
-            'text-muted-foreground size-4 shrink-0 transition-transform',
+            'text-text-muted size-4 shrink-0 transition-transform',
             expanded && 'rotate-90',
           )}
         />
@@ -457,12 +467,17 @@ export type ModelSelectorSearchProps = ComponentPropsWithoutRef<typeof CommandIn
 function ModelSelectorSearch({
   placeholder = 'Search models...',
   className,
+  inputGroupClassName,
   ...props
 }: ModelSelectorSearchProps) {
   return (
     <CommandInput
       data-slot="model-selector-search"
-      className={cn('text-xs', className)}
+      className={cn('text-text-default placeholder:text-text-faint text-xs', className)}
+      inputGroupClassName={cn(
+        'border-glass-border-subtle !bg-white/[0.025] transition-[background-color,border-color,box-shadow] hover:!border-interactive-border-hover hover:!bg-interactive-hover focus-within:!border-brand-border focus-within:!bg-white/[0.04] focus-within:!ring-0',
+        inputGroupClassName,
+      )}
       placeholder={placeholder}
       {...props}
     />
@@ -486,7 +501,7 @@ function ModelSelectorList({ className, children, ...props }: ModelSelectorListP
       {children ?? (
         <>
           <ModelSelectorEmpty />
-          <CommandGroup className="**:[[cmdk-group-items]]:flex **:[[cmdk-group-items]]:flex-col **:[[cmdk-group-items]]:gap-1.5">
+          <CommandGroup className="**:[[cmdk-group-items]]:flex **:[[cmdk-group-items]]:flex-col **:[[cmdk-group-items]]:gap-1">
             {models.map((model) => (
               <ModelSelectorItem key={model.id} model={model} />
             ))}
@@ -544,8 +559,9 @@ function ModelSelectorItem({
         setOpen(false)
         onSelect?.(selectedValue)
       }}
+      data-model-selected={isSelected || undefined}
       className={cn(
-        "relative items-start gap-2 rounded-lg py-1.5 ps-3 pe-9 text-[11px] leading-4 [&_svg:not([class*='size-'])]:size-3.5",
+        'relative items-start gap-2 rounded-lg bg-transparent py-1.5 ps-3 pe-9 text-text-default text-[11px] leading-4 transition-colors hover:bg-interactive-hover data-selected:bg-interactive-hover data-selected:text-text-default data-[model-selected=true]:bg-interactive-selected data-[model-selected=true]:text-text-strong data-[model-selected=true]:hover:bg-interactive-selected-hover [&_svg:not([class*="size-"])]:size-3.5',
         className,
       )}
       {...props}
@@ -554,18 +570,20 @@ function ModelSelectorItem({
         <>
           {model.icon && <ModelIcon className="mt-[3px]">{model.icon}</ModelIcon>}
           <span className="flex min-w-0 flex-col">
-            <span className="truncate font-medium">{model.name}</span>
-            {/*{model.description && (
-              <span className="text-muted-foreground truncate text-[10px] leading-4">
-                {model.description}
-              </span>
-            )}*/}
+            <span
+              className={cn(
+                'text-text-default truncate font-medium',
+                isSelected && 'text-text-strong',
+              )}
+            >
+              {model.name}
+            </span>
           </span>
         </>
       )}
       {isSelected && (
         <span className="absolute end-3 top-2.5 flex size-4 items-center justify-center">
-          <CheckIcon className="size-4" />
+          <CheckIcon className="text-text-muted size-4" />
         </span>
       )}
     </CommandItem>
@@ -589,7 +607,7 @@ function ModelSelectorEffort({
     <div
       data-slot="model-selector-effort"
       className={cn(
-        'flex cursor-default items-center justify-between gap-3 border-t px-3 py-2',
+        'flex cursor-default items-center justify-between gap-3 border-t bg-transparent px-3 py-2',
         className,
       )}
       onKeyDownCapture={(e) => {
@@ -624,7 +642,7 @@ function ModelSelectorEffort({
       }}
       {...props}
     >
-      <span className="text-muted-foreground text-[11px]">{label}</span>
+      <span className="text-text-muted text-[11px]">{label}</span>
       <RadioGroup
         value={effort ?? ''}
         onValueChange={setEffort}
@@ -636,8 +654,8 @@ function ModelSelectorEffort({
             key={option.id}
             value={option.id}
             className={cn(
-              'focus-visible:ring-ring/50 text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer rounded-md px-1.5 py-1 text-[11px] transition-colors outline-none focus-visible:ring-1',
-              'data-checked:bg-accent data-checked:text-accent-foreground data-checked:font-medium',
+              'focus-visible:ring-ring/50 text-text-muted cursor-pointer rounded-md bg-transparent px-1.5 py-1 text-[11px] transition-colors outline-none hover:bg-interactive-hover hover:text-text-default active:bg-interactive-pressed focus-visible:ring-1',
+              'data-checked:bg-interactive-selected data-checked:text-text-strong data-checked:font-medium data-checked:hover:bg-interactive-selected-hover',
             )}
           >
             {option.name}
