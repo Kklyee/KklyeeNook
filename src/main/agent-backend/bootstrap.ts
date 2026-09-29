@@ -31,7 +31,7 @@ import type {
   AgentBackendRequest,
   AgentBackendStartupStage,
 } from './protocol'
-import { updateAgentModelSelection } from '@/shared/agent/agentConfig'
+import { updateAgentModelSelectionFromCatalog } from '@/main/settings/modelCatalog'
 import { startAgentHttpServer, type RunningAgentHttpServer } from './httpServer'
 import { createPiNodeClientAdapter } from './piNodeClientAdapter'
 import { SkillLoader } from './skillLoader'
@@ -178,7 +178,7 @@ export async function createAgentBackend(
             return undefined
           case 'settings:model-selection':
             configStore.set(
-              updateAgentModelSelection(configStore.get(), {
+              updateAgentModelSelectionFromCatalog(configStore.get(), {
                 provider: request.selection.provider,
                 modelID: request.selection.modelId,
                 thinkingLevel: request.selection.thinkingLevel,

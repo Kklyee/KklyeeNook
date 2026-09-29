@@ -1,7 +1,14 @@
 import { getSupportedThinkingLevels } from '@earendil-works/pi-ai'
 import { builtinModels } from '@earendil-works/pi-ai/providers/all'
 import type { ModelCatalogProvider } from '@/shared/agent/agentSettings'
+import {
+  getConfiguredProviders,
+  getSavedModels,
+  updateAgentModelSelection,
+} from '@/shared/agent/agentConfig'
 import type {
+  AgentConfig,
+  AgentModelSelection,
   ProviderConfig,
   ProviderModelConfig,
   SavedModelConfig,
@@ -182,6 +189,26 @@ export function getConfiguredModelConfigs(
   }
 
   return models
+}
+
+export function getAgentModelChoices(config: AgentConfig) {
+  const providers = getConfiguredProviders(config)
+  const catalog = mergeConfiguredProvidersIntoCatalog(getModelCatalog(), providers)
+  const expandedModels = getConfiguredModelConfigs(providers, catalog)
+
+  return {
+    providers,
+    catalog,
+    models: expandedModels.length ? expandedModels : getSavedModels(config),
+  }
+}
+
+export function updateAgentModelSelectionFromCatalog(
+  config: AgentConfig,
+  selection: AgentModelSelection,
+): AgentConfig {
+  const { models } = getAgentModelChoices(config)
+  return updateAgentModelSelection({ ...config, models }, selection)
 }
 
 function toCatalogModel(

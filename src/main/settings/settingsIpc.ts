@@ -26,15 +26,16 @@ import {
   getConfiguredProviders,
   getSavedModels,
   modelConfigId,
-  updateAgentModelSelection,
 } from '@/shared/agent/agentConfig'
 import {
+  getAgentModelChoices,
   getConfiguredModelConfigs,
   getModelCatalog,
   hasBuiltinModel,
   hasBuiltinProvider,
   mergeConfiguredProvidersIntoCatalog,
   mergeSavedModelsIntoCatalog,
+  updateAgentModelSelectionFromCatalog,
 } from './modelCatalog'
 import { discoverRemoteModels } from './modelDiscovery'
 
@@ -61,10 +62,8 @@ export function registerSettingsIpc(
   const snapshot = async (): Promise<AgentSettingsSnapshot> => {
     const config = configStore.get()
     if (!config.cwd) throw new Error('Agent workspace is not configured')
-    const configuredProviders = getConfiguredProviders(config)
-    const catalog = mergeConfiguredProvidersIntoCatalog(getModelCatalog(), configuredProviders)
-    const expandedModels = getConfiguredModelConfigs(configuredProviders, catalog)
-    const savedModels = expandedModels.length ? expandedModels : getSavedModels(config)
+    const { providers: configuredProviders, catalog, models: savedModels } =
+      getAgentModelChoices(config)
     const activeModel =
       savedModels.find((model) => model.id === config.activeModelId) ??
       savedModels.find(
@@ -227,7 +226,7 @@ export function registerSettingsIpc(
       assertTrustedSender(event)
       const selection = validateModelSelection(request)
       const current = configStore.get()
-      const nextConfig = updateAgentModelSelection(current, {
+      const nextConfig = updateAgentModelSelectionFromCatalog(current, {
         provider: selection.provider,
         modelID: selection.modelId,
         thinkingLevel: selection.thinkingLevel,

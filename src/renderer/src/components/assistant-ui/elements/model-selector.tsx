@@ -561,7 +561,7 @@ function ModelSelectorItem({
       }}
       data-model-selected={isSelected || undefined}
       className={cn(
-        'relative items-start gap-2 rounded-lg bg-transparent py-1.5 ps-3 pe-9 text-text-default text-[11px] leading-4 transition-colors hover:bg-interactive-hover data-selected:bg-interactive-hover data-selected:text-text-default data-[model-selected=true]:bg-interactive-selected data-[model-selected=true]:text-text-strong data-[model-selected=true]:hover:bg-interactive-selected-hover [&_svg:not([class*="size-"])]:size-3.5',
+        'relative items-start gap-2 rounded-lg bg-transparent! py-1.5 ps-3 pe-9 text-text-default text-[11px] leading-4 transition-colors hover:bg-interactive-hover! data-selected:text-text-default data-[model-selected=true]:bg-interactive-selected! data-[model-selected=true]:text-text-strong data-[model-selected=true]:hover:bg-interactive-selected-hover! [&_svg:not([class*="size-"])]:size-3.5',
         className,
       )}
       {...props}
