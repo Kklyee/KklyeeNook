@@ -26,7 +26,7 @@ function SidebarBrand({ canCollapse }: { canCollapse: boolean }) {
         type="button"
         variant="ghost"
         size="icon"
-        className="mx-auto size-8 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+        className="mx-auto size-8 rounded-lg text-text-muted hover:bg-interactive-hover hover:text-text-default active:bg-interactive-pressed focus-visible:border-brand-border focus-visible:ring-0"
         aria-label="展开侧边栏"
         title="展开侧边栏"
         onClick={toggleSidebar}
@@ -38,12 +38,14 @@ function SidebarBrand({ canCollapse }: { canCollapse: boolean }) {
 
   return (
     <div className="flex h-9 min-w-0 items-center gap-2 px-1.5">
-      <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
+      <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-brand-soft text-brand">
         <BotIcon className="size-3.5" />
       </div>
-      <span className="min-w-0 flex-1 truncate text-sm font-semibold">KklyeeNook</span>
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-text-strong">
+        KklyeeNook
+      </span>
       {canCollapse && (
-        <SidebarTrigger className="size-7 shrink-0 rounded-md text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" />
+        <SidebarTrigger className="size-7 shrink-0 rounded-md text-text-faint hover:bg-interactive-hover hover:text-text-default active:bg-interactive-pressed focus-visible:border-brand-border focus-visible:ring-0" />
       )}
     </div>
   )
@@ -86,7 +88,7 @@ function SidebarAccountMenu({
           role="menu"
           aria-label="应用菜单"
           className={cn(
-            'bg-popover text-popover-foreground absolute bottom-full z-50 mb-2 w-56 rounded-2xl border p-2 shadow-xl',
+            'bg-surface-raised text-text-default absolute bottom-full z-50 mb-2 w-56 rounded-2xl border border-glass-border p-2 shadow-[var(--shadow-raised)]',
             collapsed ? 'left-0' : 'inset-x-0 w-auto',
           )}
         >
@@ -99,25 +101,25 @@ function SidebarAccountMenu({
           <button
             type="button"
             role="menuitem"
-            className="hover:bg-accent hover:text-accent-foreground flex h-9 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="text-text-muted hover:bg-interactive-hover hover:text-text-strong active:bg-interactive-pressed flex h-9 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm outline-none focus-visible:border-brand-border focus-visible:ring-0"
             onClick={() => {
               setOpen(false)
               onOpenSettings()
             }}
           >
-            <SettingsIcon className="text-muted-foreground size-4" />
+            <SettingsIcon className="text-text-faint size-4" />
             <span className="flex-1">设置</span>
           </button>
           <button
             type="button"
             role="menuitem"
-            className="hover:bg-accent hover:text-accent-foreground flex h-9 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="text-text-muted hover:bg-interactive-hover hover:text-text-strong active:bg-interactive-pressed flex h-9 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm outline-none focus-visible:border-brand-border focus-visible:ring-0"
             onClick={() => {
               setOpen(false)
               onOpenScheduledTasks()
             }}
           >
-            <CalendarClockIcon className="text-muted-foreground size-4" />
+            <CalendarClockIcon className="text-text-faint size-4" />
             <span className="flex-1">Scheduled Tasks</span>
           </button>
         </div>
@@ -132,7 +134,7 @@ function SidebarAccountMenu({
             onClick={() => setOpen((value) => !value)}
             className={cn(
               collapsed ? 'mx-auto size-8! justify-center rounded-lg p-0!' : 'h-10 rounded-lg px-2',
-              'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+              'text-text-muted hover:bg-interactive-hover hover:text-text-default aria-expanded:bg-interactive-selected aria-expanded:hover:bg-interactive-selected-hover aria-expanded:text-text-strong active:bg-interactive-pressed focus-visible:border-brand-border focus-visible:ring-0',
             )}
           >
             {!collapsed && (
@@ -159,7 +161,7 @@ export function ThreadSidebar({
   const canCollapse = props.collapsible !== 'none'
 
   return (
-    <Sidebar className={cn('border-sidebar-border', className)} {...props}>
+    <Sidebar className={cn('border-glass-border-subtle', className)} {...props}>
       <SidebarHeader className="px-2 pt-2 pb-1 group-data-[collapsible=icon]:px-1.5">
         <SidebarBrand canCollapse={canCollapse} />
       </SidebarHeader>
@@ -167,7 +169,7 @@ export function ThreadSidebar({
         <ThreadList />
       </SidebarContent>
       {canCollapse && <SidebarRail />}
-      <SidebarFooter className="border-sidebar-border  px-2 py-2 group-data-[collapsible=icon]:px-1.5">
+      <SidebarFooter className="border-glass-border-subtle  px-2 py-2 group-data-[collapsible=icon]:px-1.5">
         <SidebarAccountMenu
           onOpenSettings={onOpenSettings}
           onOpenScheduledTasks={onOpenScheduledTasks}
