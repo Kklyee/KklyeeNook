@@ -150,7 +150,7 @@ function Sidebar({
       <div
         data-slot="sidebar"
         className={cn(
-          'flex h-full w-(--sidebar-width) flex-col bg-surface-strong text-text-default',
+          'glass-sidebar flex h-full w-(--sidebar-width) flex-col bg-surface-strong/80 text-text-default',
           className,
         )}
         {...props}
@@ -168,7 +168,7 @@ function Sidebar({
           data-sidebar="sidebar"
           data-slot="sidebar"
           data-mobile="true"
-          className="w-(--sidebar-width) border-glass-border-subtle bg-surface-strong p-0 text-text-default [&>button]:hidden"
+          className="glass-sidebar w-(--sidebar-width) border-glass-border-subtle bg-surface-strong/80 p-0 text-text-default [&>button]:hidden"
           style={{ '--sidebar-width': SIDEBAR_WIDTH_MOBILE } as React.CSSProperties}
           side={side}
         >
@@ -219,7 +219,7 @@ function Sidebar({
         <div
           data-sidebar="sidebar"
           data-slot="sidebar-inner"
-          className="flex size-full flex-col bg-surface-strong backdrop-blur-[22px] backdrop-saturate-[108%] group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:shadow-sm group-data-[variant=floating]:ring-1 group-data-[variant=floating]:ring-glass-border"
+          className="glass-sidebar flex size-full flex-col bg-surface-strong/80 backdrop-blur-[22px] backdrop-saturate-[108%] group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:shadow-sm group-data-[variant=floating]:ring-1 group-data-[variant=floating]:ring-glass-border"
         >
           {children}
         </div>
