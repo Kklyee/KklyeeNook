@@ -1,82 +1,220 @@
 'use client'
 
-import { CheckIcon, ChevronRightIcon } from 'lucide-react'
+import { useCallback, useRef, useState, type ReactNode } from 'react'
+import {
+  AlertCircleIcon,
+  BotIcon,
+  CheckIcon,
+  ChevronRightIcon,
+  LoaderIcon,
+  WrenchIcon,
+  XCircleIcon,
+} from 'lucide-react'
+import {
+  useScrollLock,
+  useToolCallElapsed,
+  type ToolCallMessagePartStatus,
+} from '@assistant-ui/react'
+
+import bashIcon from '@/renderer/src/assets/icon/bash.svg'
+import editFileIcon from '@/renderer/src/assets/icon/edit-file.svg'
+import readFileIcon from '@/renderer/src/assets/icon/read-file.svg'
+import writeFileIcon from '@/renderer/src/assets/icon/write-file.svg'
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/renderer/src/components/ui/collapsible'
 import { cn } from '@/renderer/src/lib/utils'
-import { collapsePanel, field, mono, ShimmerLabel, SwapLabel } from '@/renderer/src/lib/surfaces'
+import { collapsePanel } from '@/renderer/src/lib/surfaces'
 
-export interface ToolCallProps {
+const ANIMATION_DURATION = 200
+
+export type ToolIconKind = 'read' | 'bash' | 'edit' | 'write' | 'agent' | 'generic'
+
+export interface ToolCardProps {
+  toolName: string
   label: string
-  activeLabel: string
-  query: string
-  request: string
-  result: string
-  running: boolean
-  completed?: boolean
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  summary?: string
+  status?: ToolCallMessagePartStatus
+  children: ReactNode
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  defaultOpen?: boolean
   className?: string
 }
 
-export function ToolCall({
+const iconAssets: Partial<Record<ToolIconKind, string>> = {
+  read: readFileIcon,
+  bash: bashIcon,
+  edit: editFileIcon,
+  write: writeFileIcon,
+}
+
+const iconClassNames: Record<ToolIconKind, string> = {
+  read: 'text-tool-file',
+  bash: 'text-tool-exec',
+  edit: 'text-tool-write',
+  write: 'text-tool-write',
+  agent: 'text-tool-agent',
+  generic: 'text-text-muted',
+}
+
+export function getToolIconKind(toolName: string): ToolIconKind {
+  const name = toolName.toLowerCase()
+  if (name.includes('read')) return 'read'
+  if (name.includes('bash') || name.includes('shell') || name.includes('command')) return 'bash'
+  if (name.includes('edit')) return 'edit'
+  if (name.includes('write') || name.includes('artifact')) return 'write'
+  if (name.includes('delegate') || name.includes('subagent')) return 'agent'
+  return 'generic'
+}
+
+export function getToolDisplayName(toolName: string): string {
+  const labels: Record<string, string> = {
+    read: 'Read file',
+    bash: 'Bash',
+    edit: 'Edit file',
+    write: 'Write file',
+    delegate_task: 'Subagent',
+    create_artifact: 'Create artifact',
+  }
+  return labels[toolName] ?? toolName
+}
+
+function ToolIcon({ kind }: { kind: ToolIconKind }) {
+  const icon = iconAssets[kind]
+  const className = cn('size-3.5 shrink-0', iconClassNames[kind])
+
+  if (icon) {
+    return (
+      <span
+        aria-hidden="true"
+        className={cn('shrink-0 bg-current', className)}
+        style={{
+          maskImage: `url("${icon}")`,
+          maskPosition: 'center',
+          maskRepeat: 'no-repeat',
+          maskSize: 'contain',
+          WebkitMaskImage: `url("${icon}")`,
+          WebkitMaskPosition: 'center',
+          WebkitMaskRepeat: 'no-repeat',
+          WebkitMaskSize: 'contain',
+        }}
+      />
+    )
+  }
+
+  const Icon = kind === 'agent' ? BotIcon : WrenchIcon
+  return <Icon aria-hidden="true" className={className} />
+}
+
+function formatToolDuration(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`
+  if (ms < 10_000) return `${(ms / 1000).toFixed(1)}s`
+  if (ms < 60_000) return `${Math.floor(ms / 1000)}s`
+  return `${Math.floor(ms / 60_000)}m ${Math.floor((ms % 60_000) / 1000)}s`
+}
+
+export function ToolDetailSection({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <section className="min-w-0 space-y-1.5">
+      <p className="text-[10px] font-medium text-text-faint">{label}</p>
+      {children}
+    </section>
+  )
+}
+
+export const toolCodeClassName =
+  'max-h-72 overflow-auto rounded-md border border-glass-border-subtle bg-surface-subtle p-2 font-mono text-[11px] leading-5 whitespace-pre-wrap break-words text-text-default'
+
+export function ToolCard({
+  toolName,
   label,
-  activeLabel,
-  query,
-  request,
-  result,
-  running,
-  completed = !running,
-  open,
-  onOpenChange,
+  summary,
+  status,
+  children,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+  defaultOpen = false,
   className,
-}: ToolCallProps) {
+}: ToolCardProps) {
+  const cardRef = useRef<HTMLDivElement>(null)
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen)
+  const lockScroll = useScrollLock(cardRef, ANIMATION_DURATION)
+  const elapsedMs = useToolCallElapsed()
+  const isControlled = controlledOpen !== undefined
+  const open = isControlled ? controlledOpen : uncontrolledOpen
+  const statusType = status?.type ?? 'complete'
+  const StatusIcon =
+    statusType === 'running'
+      ? LoaderIcon
+      : statusType === 'complete'
+        ? CheckIcon
+        : statusType === 'requires-action'
+          ? AlertCircleIcon
+          : XCircleIcon
+  const statusClassName =
+    statusType === 'running'
+      ? 'text-text-muted'
+      : statusType === 'complete'
+        ? 'text-success'
+        : statusType === 'requires-action'
+          ? 'text-warning'
+          : status?.type === 'incomplete' && status.reason === 'cancelled'
+            ? 'text-text-faint'
+            : 'text-danger'
+
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      lockScroll()
+      if (!isControlled) setUncontrolledOpen(nextOpen)
+      controlledOnOpenChange?.(nextOpen)
+    },
+    [controlledOnOpenChange, isControlled, lockScroll],
+  )
+
   return (
     <Collapsible
-      data-slot="tool-call"
+      ref={cardRef}
+      data-slot="tool-card"
       open={open}
-      onOpenChange={onOpenChange}
-      className={cn('w-full max-w-sm', className)}
+      onOpenChange={handleOpenChange}
+      style={{ '--animation-duration': `${ANIMATION_DURATION}ms` } as React.CSSProperties}
+      className={cn(
+        'w-full overflow-hidden rounded-lg border border-glass-border bg-surface transition-colors hover:border-glass-border-hover hover:bg-surface-raised',
+        className,
+      )}
     >
-      <CollapsibleTrigger className="group/trigger text-foreground/55 hover:text-foreground/90 flex w-full min-w-0 items-center gap-2 rounded-md py-1 text-[13.5px] transition-colors outline-none">
-        <ChevronRightIcon className="size-3.5 shrink-0 opacity-60 transition-transform duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] group-data-open/trigger:rotate-90 group-data-panel-open/trigger:rotate-90 motion-reduce:transition-none" />
-        <SwapLabel active={running ? 0 : 1} className="text-start">
-          <ShimmerLabel active={running} className="relative inline-block leading-none">
-            {activeLabel}
-          </ShimmerLabel>
-          <>{label}</>
-        </SwapLabel>
+      <CollapsibleTrigger className="group/trigger flex h-8 w-full min-w-0 items-center gap-2 bg-transparent px-2.5 text-left outline-none hover:bg-interactive-hover data-[state=open]:bg-interactive-selected focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-glass-border-hover">
+        <ToolIcon kind={getToolIconKind(toolName)} />
+        <span className="shrink-0 truncate text-[13px] font-medium text-text-default" title={label}>
+          {label}
+        </span>
         <span
-          className={cn(
-            mono,
-            'bg-foreground/[0.06] text-foreground/70 min-w-0 flex-1 truncate rounded-md px-1.5 py-0.5 text-start whitespace-nowrap',
-          )}
-          title={query}
+          className="min-w-0 flex-1 truncate font-mono text-[11px] text-text-muted"
+          title={summary}
         >
-          {query}
+          {summary}
         </span>
-        <span className="ms-auto flex w-4 items-center justify-end">
-          {completed && (
-            <CheckIcon className="fade-in zoom-in-90 animate-in size-3.5 text-emerald-500 duration-200" />
+        <StatusIcon
+          aria-hidden="true"
+          className={cn(
+            'size-3.5 shrink-0',
+            statusClassName,
+            statusType === 'running' && 'animate-spin [animation-duration:0.8s]',
           )}
-        </span>
+        />
+        {elapsedMs !== undefined && (
+          <span className="shrink-0 font-mono text-[10px] tabular-nums text-text-faint">
+            {formatToolDuration(elapsedMs)}
+          </span>
+        )}
+        <ChevronRightIcon className="size-3.5 shrink-0 text-text-faint transition-[color,transform] group-hover/trigger:text-text-default group-data-open/trigger:rotate-90 group-data-panel-open/trigger:rotate-90 motion-reduce:transition-none" />
       </CollapsibleTrigger>
       <CollapsibleContent className={cn(collapsePanel, 'outline-none')}>
-        <div className={cn(field, 'mt-2 overflow-hidden rounded-2xl text-xs')}>
-          <div className="px-3.5 pt-2.5 pb-2">
-            <p className={cn(mono, 'text-foreground/35 mb-1')}>Request</p>
-            <p className="text-foreground/55 font-mono">{request}</p>
-          </div>
-          <div className="bg-foreground/[0.06] mx-3.5 h-px" />
-          <div className="px-3.5 pt-2 pb-2.5">
-            <p className={cn(mono, 'text-foreground/35 mb-1')}>Result</p>
-            <pre className="text-foreground/90 m-0 whitespace-pre-wrap font-sans break-words">
-              {result}
-            </pre>
-          </div>
+        <div className="flex min-w-0 flex-col gap-2 border-t border-glass-border-subtle px-2.5 py-2.5 text-xs">
+          {children}
         </div>
       </CollapsibleContent>
     </Collapsible>
