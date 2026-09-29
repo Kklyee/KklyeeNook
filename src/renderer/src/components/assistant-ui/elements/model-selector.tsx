@@ -394,7 +394,7 @@ function ModelSelectorContent({
                 setExpandedSection((current) => (current === 'model' ? null : 'model'))
               }
             >
-              {searchable && <ModelSelectorSearch />}
+              {/*{searchable && <ModelSelectorSearch />}*/}
               <ModelSelectorList className="max-h-52" />
             </ModelSelectorSection>
             <ModelSelectorSection
@@ -436,8 +436,8 @@ function ModelSelectorSection({
     <div
       data-slot="model-selector-section"
       className={cn(
-        'overflow-hidden rounded-lg bg-transparent',
-        expanded && 'bg-interactive-selected',
+        'overflow-hidden rounded-lg ',
+        // expanded && 'bg-interactive-selected',
       )}
       {...props}
     >
@@ -447,7 +447,7 @@ function ModelSelectorSection({
         aria-expanded={expanded}
         disabled={disabled}
         onClick={onClick}
-        className="flex h-10 w-full items-center gap-2 rounded-lg bg-transparent px-3 text-left text-xs text-text-default transition-colors outline-none hover:bg-interactive-hover active:bg-interactive-pressed focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 aria-expanded:bg-interactive-selected aria-expanded:hover:bg-interactive-selected-hover"
+        className="flex h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-xs text-text-default transition-colors outline-none hover:bg-interactive-hover active:bg-interactive-pressed focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 aria-expanded:bg-interactive-selected aria-expanded:hover:bg-interactive-selected-hover"
       >
         <span className="min-w-0 flex-1 truncate font-medium">{value}</span>
         <ChevronRightIcon
