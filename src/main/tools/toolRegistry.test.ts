@@ -11,7 +11,7 @@ const definition = {
 
 test('registers product definitions and resolves runtime adapters', () => {
   const registry = new ToolRegistry()
-  registry.register({
+  const dispose = registry.register({
     definition,
     adapter: { runtime: 'pi', create: ({ cwd }) => ({ name: 'read', cwd }) },
   })
@@ -21,6 +21,10 @@ test('registers product definitions and resolves runtime adapters', () => {
   expect(registry.resolve<{ name: string; cwd: string }>('pi', ['read'], { cwd: '/repo' })).toEqual(
     [{ name: 'read', cwd: '/repo' }],
   )
+
+  dispose()
+  expect(registry.get('read')).toBeUndefined()
+  expect(registry.getRevision()).toBe(2)
 })
 
 test('rejects duplicate, unknown, and unsupported tool registrations', () => {

@@ -52,7 +52,6 @@ import {
   ErrorPrimitive,
   groupPartByType,
   MessagePrimitive,
-  SuggestionPrimitive,
   ThreadPrimitive,
   type Unstable_DirectiveFormatter,
   type FileMessagePartComponent,

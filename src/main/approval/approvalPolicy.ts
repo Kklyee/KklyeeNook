@@ -17,7 +17,7 @@ export class ApprovalPolicy {
   constructor(private readonly repo: PermissionGrantRepo) {}
 
   protects(toolName: string): boolean {
-    return protectedTools.has(toolName)
+    return protectedTools.has(toolName) || toolName.startsWith('mcp__')
   }
 
   async evaluate(
@@ -90,13 +90,16 @@ export class ApprovalPolicy {
   }
 
   private describe(toolName: string): PermissionDescriptor {
+    const description = toolName.startsWith('mcp__')
+      ? `允许 MCP 工具 ${toolName} 自动执行`
+      : `允许内置工具 ${toolName} 自动执行`
     return {
       toolName,
       action: 'tool.execute',
       resourceKind: 'tool',
       resource: toolName,
       recursive: false,
-      description: `允许内置工具 ${toolName} 自动执行`,
+      description,
     }
   }
 

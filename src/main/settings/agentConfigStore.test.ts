@@ -15,6 +15,16 @@ test('persists agent settings without exposing mutable store state', () => {
     tools: { enabled: ['read'] },
     cwd: directory,
     compaction: { enabled: false, reserveTokens: 2_048, keepRecentTokens: 4_096 },
+    mcpServers: [
+      {
+        id: 'filesystem',
+        name: 'Filesystem',
+        enabled: true,
+        transport: 'stdio' as const,
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-filesystem', directory],
+      },
+    ],
   }
   const store = new AgentConfigStore(initial, path)
   const updated = store.get()
@@ -29,5 +39,6 @@ test('persists agent settings without exposing mutable store state', () => {
     reserveTokens: 2_048,
     keepRecentTokens: 4_096,
   })
+  expect(restored.get().mcpServers).toEqual(initial.mcpServers)
   expect(JSON.parse(readFileSync(path, 'utf8'))).toMatchObject({ cwd: directory })
 })

@@ -38,7 +38,7 @@ import {
 } from 'react'
 
 export const ThreadList: FC = () => {
-  const [search, setSearch] = useState('')
+  const [search] = useState('')
   const hasThreads = useAuiState((s) => s.threads.threadIds.length > 0)
   const { isMobile, state } = useSidebar()
   const collapsed = state === 'collapsed' && !isMobile

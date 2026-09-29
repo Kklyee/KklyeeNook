@@ -11,7 +11,7 @@ import { AgentConfigStore } from '@/main/settings/agentConfigStore'
 import type { ApprovalPolicy } from '@/main/approval/approvalPolicy'
 import type { AgentRuntimeStateRepo } from '@/main/db/repositories/agentRuntimeStateRepo'
 import type { CredentialStore } from '@/main/settings/credentialStore'
-import type { ToolRegistry } from '@/main/tools/toolRegistry'
+import { ToolRegistry } from '@/main/tools/toolRegistry'
 import type { AgentEvent } from '@/shared/agent/agentEvent'
 import { normalizePiSkillCommand, PiSessionRuntime } from './piSessionRuntime'
 
@@ -119,6 +119,22 @@ test('uses configured custom-provider limits and keeps client subscriptions acro
     cwd: 'C:\\workspace',
     compaction: { enabled: false, reserveTokens: 2_048, keepRecentTokens: 4_096 },
   })
+  const toolRegistry = new ToolRegistry()
+  toolRegistry.register({
+    definition: {
+      name: 'mcp__filesystem__search',
+      label: 'Filesystem: search',
+      description: 'Search files',
+      parameters: { type: 'object' },
+      origin: {
+        kind: 'mcp',
+        serverId: 'filesystem',
+        serverName: 'Filesystem',
+        remoteName: 'search',
+      },
+    },
+    adapter: { runtime: 'pi', create: () => ({ name: 'mcp__filesystem__search' }) },
+  })
   const settingsManager = { applyOverrides: vi.fn() }
   vi.mocked(SettingsManager.create).mockReturnValue(settingsManager as never)
   const sessionRuntime = new PiSessionRuntime(
@@ -127,7 +143,7 @@ test('uses configured custom-provider limits and keeps client subscriptions acro
     { getApiKey: () => 'secret' } as unknown as CredentialStore,
     {} as ApprovalPolicy,
     { findBySessionId: vi.fn(), save: vi.fn() } as unknown as AgentRuntimeStateRepo,
-    { resolve: vi.fn(() => []) } as unknown as ToolRegistry,
+    toolRegistry,
     'sessions',
   )
   const events: string[] = []
@@ -136,6 +152,10 @@ test('uses configured custom-provider limits and keeps client subscriptions acro
   sessionRuntime.subscribeProductEvents((event) => productEvents.push(event))
 
   await sessionRuntime.initialize()
+  expect(vi.mocked(createAgentSession).mock.calls.at(-1)?.[0]?.tools).toEqual([
+    'mcp__filesystem__search',
+  ])
+  expect(configStore.get().tools.enabled).toEqual([])
   expect(settingsManager.applyOverrides).toHaveBeenCalledWith({
     compaction: { enabled: false, reserveTokens: 2_048, keepRecentTokens: 4_096 },
   })
@@ -179,9 +199,27 @@ test('uses configured custom-provider limits and keeps client subscriptions acro
     }),
   )
 
-  sessionRuntime.reloadConfiguration()
-  expect(firstSession.dispose).toHaveBeenCalledOnce()
+  toolRegistry.register({
+    definition: {
+      name: 'mcp__github__search',
+      label: 'GitHub: search',
+      description: 'Search repositories',
+      parameters: { type: 'object' },
+      origin: {
+        kind: 'mcp',
+        serverId: 'github',
+        serverName: 'GitHub',
+        remoteName: 'search',
+      },
+    },
+    adapter: { runtime: 'pi', create: () => ({ name: 'mcp__github__search' }) },
+  })
   await sessionRuntime.initialize()
+  expect(firstSession.dispose).toHaveBeenCalledOnce()
+  expect(vi.mocked(createAgentSession).mock.calls.at(-1)?.[0]?.tools).toEqual([
+    'mcp__filesystem__search',
+    'mcp__github__search',
+  ])
   secondSession.emit({ type: 'agent_start' })
   expect(events).toContain('agent_start')
 })
@@ -220,7 +258,7 @@ test('enables image input for the current DeepSeek Flash alias', async () => {
     { getApiKey: () => 'secret' } as unknown as CredentialStore,
     {} as ApprovalPolicy,
     { findBySessionId: vi.fn(), save: vi.fn() } as unknown as AgentRuntimeStateRepo,
-    { resolve: vi.fn(() => []) } as unknown as ToolRegistry,
+    new ToolRegistry(),
     'sessions',
   )
 
@@ -268,7 +306,7 @@ test('uses the configured model and thinking level instead of the Pi session tra
     { getApiKey: () => 'secret' } as unknown as CredentialStore,
     {} as ApprovalPolicy,
     { findBySessionId: vi.fn(), save: vi.fn() } as unknown as AgentRuntimeStateRepo,
-    { resolve: vi.fn(() => []) } as unknown as ToolRegistry,
+    new ToolRegistry(),
     'sessions',
   )
 

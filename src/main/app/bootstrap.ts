@@ -23,6 +23,7 @@ import { createChatWindow } from '../electron/chatWindow'
 import { registerWindowIpc } from '../electron/windowIpc'
 import { ApprovalPolicy } from '../approval/approvalPolicy'
 import { AgentConfigStore } from '../settings/agentConfigStore'
+import { registerMcpIpc } from '@/main/mcp/mcpIpc'
 import { PersistentCredentialStore, type CredentialStore } from '../settings/credentialStore'
 import { registerSettingsIpc } from '../settings/settingsIpc'
 import { registerMemoryIpc } from '../memory/memoryIpc'
@@ -122,6 +123,7 @@ export async function bootstrap(): Promise<AppContext> {
     },
   })
   const disposeMemoryIpc = registerMemoryIpc(chatWindow, memoryRepo, workspace)
+  const disposeMcpIpc = registerMcpIpc(chatWindow, backendProcess)
 
   registerSettingsIpc(chatWindow, configStore, credentialStore, approvalPolicy, {
     prepare: async () => {
@@ -167,6 +169,7 @@ export async function bootstrap(): Promise<AppContext> {
       disposeWindowIpc()
       disposeContextIpc()
       disposeMemoryIpc()
+      disposeMcpIpc()
       contextAttachments.clear()
       backendProcess.close()
       closeMainDatabase()

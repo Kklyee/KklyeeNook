@@ -7,6 +7,7 @@ import type {
   ThinkingLevel,
 } from './agentConfig'
 import type { ModelInput } from './agentConfig'
+import type { McpServerConfig } from '../mcp/mcpServer'
 
 export interface ModelCatalogProvider {
   id: string
@@ -59,6 +60,7 @@ export interface AgentSettingsSnapshot {
   tools: Array<{ name: string; requiresApproval: boolean }>
   permissionGrants: PermissionGrant[]
   compaction: AgentCompactionSettings
+  mcpServers: McpServerConfig[]
 }
 
 export interface UpdateAgentSettingsRequest {
@@ -69,6 +71,7 @@ export interface UpdateAgentSettingsRequest {
   cwd: string
   credential?: { provider: string; apiKey?: string; deleteApiKey?: boolean }
   compaction?: AgentCompactionSettings
+  mcpServers?: McpServerConfig[]
 }
 
 export interface DiscoverModelsRequest {

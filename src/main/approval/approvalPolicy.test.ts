@@ -63,6 +63,24 @@ test('a read grant does not allow a bash deletion', async () => {
   })
 })
 
+test('MCP tools require approval and grants are scoped to their namespaced tool', async () => {
+  const policy = new ApprovalPolicy(new MemoryPermissionGrantRepo())
+  const request = await policy.evaluate('session-1', 'mcp__filesystem__read_file', {
+    path: '/workspace/README.md',
+  })
+
+  expect(request.outcome).toBe('prompt')
+  if (request.outcome !== 'prompt') throw new Error('Expected a prompt')
+  await policy.grant('session', 'session-1', request.permission)
+
+  await expect(
+    policy.evaluate('session-1', 'mcp__filesystem__read_file', { path: '/other/file' }),
+  ).resolves.toMatchObject({ outcome: 'allow' })
+  await expect(
+    policy.evaluate('session-1', 'mcp__github__read_file', { path: '/other/file' }),
+  ).resolves.toMatchObject({ outcome: 'prompt' })
+})
+
 test('a bash grant allows later commands without matching their text', async () => {
   const repo = new MemoryPermissionGrantRepo()
   const policy = new ApprovalPolicy(repo)

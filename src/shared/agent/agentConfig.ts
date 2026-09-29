@@ -1,3 +1,5 @@
+import type { McpServerConfig } from '../mcp/mcpServer'
+
 export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
 export interface AgentModelSelection {
@@ -64,6 +66,7 @@ export type AgentConfig = {
   tools: ToolConfig
   compaction?: AgentCompactionSettings
   cwd?: string
+  mcpServers?: McpServerConfig[]
 }
 
 export function getAgentCompactionSettings(config: AgentConfig): AgentCompactionSettings {

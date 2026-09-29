@@ -140,6 +140,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
   private turnIndex = -1
   private lastError: string | undefined
   private activeRunId: string | undefined
+  private registeredToolRegistryRevision = -1
   private readonly listeners = new Set<PiSessionEventListener>()
   private readonly clientEventListeners = new Set<PiSessionClientEventListener>()
   private readonly productEventListeners = new Set<PiSessionProductEventListener>()
@@ -166,6 +167,13 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
   private readonly hostUiEventSink?: (event: PiClientEventBody) => void
 
   async initialize(): Promise<void> {
+    if (
+      this.piSession &&
+      !this.isRunning() &&
+      this.registeredToolRegistryRevision !== this.toolRegistry.getRevision()
+    ) {
+      this.resetPiSession()
+    }
     if (this.piSession) return
     if (this.initializePromise) return this.initializePromise
     this.initializePromise = this.createPiSession()
@@ -457,6 +465,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     this.piSession?.dispose()
     this.piSession = null
     this.modelRuntime = null
+    this.registeredToolRegistryRevision = -1
     this.lastError = undefined
     this.turnIndex = -1
   }
@@ -495,9 +504,19 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
       const model = modelRuntime.getModel(provider, modelID)
       if (!model) throw new Error(`找不到模型: ${provider}/${modelID}`)
 
+      const enabledTools = [
+        ...new Set([
+          ...config.tools.enabled.filter((name) => !name.startsWith('mcp__')),
+          ...this.toolRegistry
+            .list()
+            .filter((definition) => definition.origin?.kind === 'mcp')
+            .map((definition) => definition.name),
+        ]),
+      ]
+      const registryRevision = this.toolRegistry.getRevision()
       const tools = this.toolRegistry.resolve<PiToolDefinition<any, any, any>>(
         'pi',
-        config.tools.enabled,
+        enabledTools,
         { cwd, getRunId: () => this.activeRunId },
       )
       const settingsManager = SettingsManager.create(cwd, cwd)
@@ -522,7 +541,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
         thinkingLevel: thinkingLevel ?? 'medium',
         settingsManager,
         noTools: 'builtin',
-        tools: config.tools.enabled,
+        tools: enabledTools,
         customTools: tools,
         resourceLoader,
         sessionManager,
@@ -539,6 +558,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
 
       this.piSession = session
       this.modelRuntime = modelRuntime
+      this.registeredToolRegistryRevision = registryRevision
       this.extensionUiBridge = createPiExtensionUiBridge({
         nextRequestId: () => `${this.sessionId}:ui:${++this.requestCounter}`,
         currentToolCallId: () => {

@@ -3,6 +3,12 @@ export interface ToolDefinition {
   label: string
   description: string
   parameters: unknown
+  origin?: {
+    kind: 'mcp'
+    serverId: string
+    serverName: string
+    remoteName: string
+  }
 }
 
 export interface ToolCall {

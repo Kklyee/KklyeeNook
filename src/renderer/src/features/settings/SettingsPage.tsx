@@ -4,6 +4,7 @@ import {
   BrainIcon,
   BotIcon,
   SearchIcon,
+  ServerIcon,
   ShieldCheckIcon,
   Trash2Icon,
   PlusIcon,
@@ -27,6 +28,7 @@ import {
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { cn } from '../../lib/utils'
+import { McpSettings } from './McpSettings'
 
 const toolDescriptions: Record<string, string> = {
   read: '读取文件',
@@ -38,7 +40,7 @@ const toolDescriptions: Record<string, string> = {
   delegate_task: '委派子任务',
 }
 
-type SettingsTab = 'model' | 'tools' | 'permissions' | 'skills' | 'memory'
+type SettingsTab = 'model' | 'tools' | 'permissions' | 'skills' | 'memory' | 'mcp'
 
 const settingsTabs: Array<{
   id: SettingsTab
@@ -56,6 +58,7 @@ const settingsTabs: Array<{
   { id: 'permissions', label: '权限管理', description: '查看和撤销授权', icon: ShieldCheckIcon },
   { id: 'skills', label: 'Skills', description: '查看可用的本地 Skills', icon: SparklesIcon },
   { id: 'memory', label: 'Memory', description: '查看和删除长期记忆', icon: BrainIcon },
+  { id: 'mcp', label: 'MCP Servers', description: '配置和连接 MCP 工具', icon: ServerIcon },
 ]
 
 export function SettingsPage({
@@ -178,6 +181,8 @@ export function SettingsPage({
             <SkillSettings />
           ) : tab === 'memory' ? (
             <MemorySettings workspacePath={settings.cwd} />
+          ) : tab === 'mcp' ? (
+            <McpSettings settings={settings} onChanged={onChanged} />
           ) : (
             <PermissionSettings
               settings={settings}

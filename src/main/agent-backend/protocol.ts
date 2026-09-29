@@ -33,6 +33,10 @@ export type AgentBackendRequest =
   | { action: 'settings:commit'; config: AgentConfig; apiKeys: Record<string, string> }
   | { action: 'settings:cancel' }
   | { action: 'settings:model-selection'; selection: UpdateAgentModelSelectionRequest }
+  | { action: 'mcp:list' }
+  | { action: 'mcp:connect'; serverId: string }
+  | { action: 'mcp:disconnect'; serverId: string }
+  | { action: 'mcp:retry'; serverId: string }
   | { action: 'context:stage'; attachment: ResolvedContextAttachment }
   | { action: 'context:remove'; id: string }
   | { action: 'context:clear' }

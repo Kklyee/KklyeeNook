@@ -114,7 +114,30 @@ function isAgentConfig(value: unknown): value is AgentConfig {
     Array.isArray(config.tools.enabled) &&
     config.tools.enabled.every((name) => typeof name === 'string') &&
     (config.compaction === undefined || isCompactionConfig(config.compaction)) &&
+    (config.mcpServers === undefined ||
+      (Array.isArray(config.mcpServers) && config.mcpServers.every(isMcpServerConfig))) &&
     (config.cwd === undefined || typeof config.cwd === 'string'),
+  )
+}
+
+function isMcpServerConfig(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false
+  const server = value as {
+    id?: unknown
+    name?: unknown
+    enabled?: unknown
+    transport?: unknown
+    command?: unknown
+    args?: unknown
+  }
+  return Boolean(
+    typeof server.id === 'string' &&
+      typeof server.name === 'string' &&
+      typeof server.enabled === 'boolean' &&
+      server.transport === 'stdio' &&
+      typeof server.command === 'string' &&
+      Array.isArray(server.args) &&
+      server.args.every((arg) => typeof arg === 'string'),
   )
 }
 

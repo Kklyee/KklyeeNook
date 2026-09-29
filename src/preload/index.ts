@@ -12,6 +12,7 @@ import type {
   UpdateAgentSettingsRequest,
 } from '@/shared/agent/agentSettings'
 import type { ModelCatalogModel } from '@/shared/agent/agentSettings'
+import type { McpServerState } from '@/shared/mcp/mcpServer'
 import type { AgentRun, AgentRunOverview, LoadAgentRunsRequest } from '@/shared/agent/agentRun'
 import type {
   AgentExecutionRecord,
@@ -127,6 +128,22 @@ const api = {
 
   selectAgentWorkspace(): Promise<string | null> {
     return ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_SELECT_WORKSPACE)
+  },
+
+  listMcpServers(): Promise<McpServerState[]> {
+    return ipcRenderer.invoke(IPC_CHANNELS.MCP_LIST)
+  },
+
+  connectMcpServer(serverId: string): Promise<McpServerState> {
+    return ipcRenderer.invoke(IPC_CHANNELS.MCP_CONNECT, serverId)
+  },
+
+  disconnectMcpServer(serverId: string): Promise<void> {
+    return ipcRenderer.invoke(IPC_CHANNELS.MCP_DISCONNECT, serverId)
+  },
+
+  retryMcpServer(serverId: string): Promise<McpServerState> {
+    return ipcRenderer.invoke(IPC_CHANNELS.MCP_RETRY, serverId)
   },
 
   listMemories(): Promise<AgentMemory[]> {

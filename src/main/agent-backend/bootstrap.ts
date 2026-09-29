@@ -26,6 +26,7 @@ import { DrizzlePermissionGrantRepo } from '@/main/db/repositories/permissionGra
 import { AgentConfigStore } from '@/main/settings/agentConfigStore'
 import { MemoryCredentialStore } from '@/main/settings/credentialStore'
 import { ToolRegistry } from '@/main/tools/toolRegistry'
+import { McpServerManager } from '@/main/mcp/mcpServerManager'
 import type {
   AgentBackendInitOptions,
   AgentBackendRequest,
@@ -69,6 +70,7 @@ export async function createAgentBackend(
 
   let server: RunningAgentHttpServer | undefined
   let scheduledTaskScheduler: ScheduledTaskScheduler | undefined
+  let mcpServerManager: McpServerManager | undefined
   let settingsChangePending = false
   try {
     const permissionGrantRepo = new DrizzlePermissionGrantRepo(db)
@@ -102,8 +104,16 @@ export async function createAgentBackend(
           skillLoader.directory,
           () => skillLoader.listSkills(),
           runtimeOptions,
-        ),
+      ),
     )
+    mcpServerManager = new McpServerManager(toolRegistry, () => {
+      try {
+        sessionRuntimeManager.reloadConfiguration()
+      } catch {
+        return
+      }
+    })
+    await mcpServerManager.reconcile(configStore.get().mcpServers ?? [])
     const runtimeFactory = createPiAgentRuntimeFactory(sessionRuntimeManager)
     const sessionRepo = new DrizzleAgentSessionRepo(db)
     const runRepo = new DrizzleAgentRunRepo(db)
@@ -171,6 +181,7 @@ export async function createAgentBackend(
             sessionRuntimeManager.reloadConfiguration()
             configStore.set(request.config)
             credentialStore = createCredentialStore(request.apiKeys)
+            await mcpServerManager!.reconcile(request.config.mcpServers ?? [])
             settingsChangePending = false
             return undefined
           case 'settings:cancel':
@@ -185,6 +196,15 @@ export async function createAgentBackend(
               }),
             )
             return undefined
+          case 'mcp:list':
+            return mcpServerManager!.listStates()
+          case 'mcp:connect':
+            return mcpServerManager!.connect(request.serverId)
+          case 'mcp:disconnect':
+            await mcpServerManager!.disconnect(request.serverId)
+            return undefined
+          case 'mcp:retry':
+            return mcpServerManager!.retry(request.serverId)
           case 'context:stage':
             contextAttachments.storeResolved(request.attachment)
             return undefined
@@ -229,6 +249,7 @@ export async function createAgentBackend(
       },
       async close() {
         scheduledTaskScheduler?.stop()
+        await mcpServerManager?.close()
         await server?.close()
         contextAttachments.clear()
         piClientService.dispose()
@@ -238,6 +259,7 @@ export async function createAgentBackend(
     }
   } catch (error) {
     scheduledTaskScheduler?.stop()
+    await mcpServerManager?.close()
     await server?.close()
     closeDb()
     throw error

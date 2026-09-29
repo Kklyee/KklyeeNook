@@ -20,6 +20,7 @@ import type {
   ThinkingLevel,
 } from '@/shared/agent/agentConfig'
 import type { AgentConfigStore } from './agentConfigStore'
+import type { McpServerConfig } from '@/shared/mcp/mcpServer'
 import {
   getAgentCompactionSettings,
   getActiveModel,
@@ -110,6 +111,7 @@ export function registerSettingsIpc(
       })),
       permissionGrants: await policy.listGrants(),
       compaction: getAgentCompactionSettings(config),
+      mcpServers: config.mcpServers ?? [],
     }
   }
 
@@ -125,7 +127,9 @@ export function registerSettingsIpc(
         !request ||
         (!Array.isArray(request.providers) &&
           !Array.isArray(request.models) &&
-          request.compaction === undefined) ||
+          request.compaction === undefined &&
+          request.mcpServers === undefined) ||
+        (request.mcpServers !== undefined && !Array.isArray(request.mcpServers)) ||
         typeof request.cwd !== 'string'
       ) {
         throw new Error('Agent 设置格式无效')
@@ -144,6 +148,13 @@ export function registerSettingsIpc(
       }
       if (new Set(providers.map((provider) => provider.id)).size !== providers.length) {
         throw new Error('不能重复添加同一个提供商')
+      }
+      const mcpServers =
+        request.mcpServers === undefined
+          ? current.mcpServers
+          : request.mcpServers.map(validateMcpServer)
+      if (mcpServers && new Set(mcpServers.map((server) => server.id)).size !== mcpServers.length) {
+        throw new Error('不能重复添加同一个 MCP Server')
       }
 
       let models: ReturnType<typeof validateModel>[]
@@ -185,6 +196,7 @@ export function registerSettingsIpc(
         models,
         activeModelId: activeModel.id,
         model: activeModel,
+        ...(mcpServers ? { mcpServers } : {}),
         ...(providerUpdate ? { providers } : {}),
         compaction:
           request.compaction === undefined
@@ -353,6 +365,32 @@ function validateCompaction(compaction: AgentCompactionSettings): AgentCompactio
     enabled: compaction.enabled,
     reserveTokens: compaction.reserveTokens,
     keepRecentTokens: compaction.keepRecentTokens,
+  }
+}
+
+function validateMcpServer(server: McpServerConfig): McpServerConfig {
+  if (
+    !server ||
+    typeof server.id !== 'string' ||
+    !server.id.trim() ||
+    typeof server.name !== 'string' ||
+    !server.name.trim() ||
+    typeof server.enabled !== 'boolean' ||
+    server.transport !== 'stdio' ||
+    typeof server.command !== 'string' ||
+    !server.command.trim() ||
+    !Array.isArray(server.args) ||
+    !server.args.every((arg) => typeof arg === 'string')
+  ) {
+    throw new Error('MCP Server 配置无效')
+  }
+  return {
+    id: server.id.trim(),
+    name: server.name.trim(),
+    enabled: server.enabled,
+    transport: 'stdio',
+    command: server.command.trim(),
+    args: [...server.args],
   }
 }
 

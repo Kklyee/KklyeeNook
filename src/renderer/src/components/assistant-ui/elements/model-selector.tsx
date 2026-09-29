@@ -578,6 +578,9 @@ function ModelSelectorItem({
             >
               {model.name}
             </span>
+            {model.description && (
+              <span className="text-text-muted truncate text-[10px]">{model.description}</span>
+            )}
           </span>
         </>
       )}

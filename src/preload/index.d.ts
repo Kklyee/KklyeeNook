@@ -27,6 +27,7 @@ import type {
 import type { AgentBackendStatus } from '../shared/agentBackend'
 import type { AgentSkill } from '../shared/agent/agentSkill'
 import type { AgentMemory, DeleteAgentMemoryRequest } from '../shared/memory/agentMemory'
+import type { McpServerState } from '../shared/mcp/mcpServer'
 import type {
   CreateScheduledTaskInput,
   ScheduledTask,
@@ -65,6 +66,10 @@ interface API {
   ): Promise<AgentSettingsSnapshot>
   discoverModels(request: DiscoverModelsRequest): Promise<ModelCatalogModel[]>
   selectAgentWorkspace(): Promise<string | null>
+  listMcpServers(): Promise<McpServerState[]>
+  connectMcpServer(serverId: string): Promise<McpServerState>
+  disconnectMcpServer(serverId: string): Promise<void>
+  retryMcpServer(serverId: string): Promise<McpServerState>
   listMemories(): Promise<AgentMemory[]>
   deleteMemory(request: DeleteAgentMemoryRequest): Promise<void>
   deletePermissionGrant(request: DeletePermissionGrantRequest): Promise<void>

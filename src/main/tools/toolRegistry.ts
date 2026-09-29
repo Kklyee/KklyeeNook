@@ -17,14 +17,26 @@ export interface ToolRegistration<TTool = unknown> {
 
 export class ToolRegistry {
   private readonly registrations = new Map<string, ToolRegistration>()
+  private revision = 0
 
-  register<TTool>(registration: ToolRegistration<TTool>): void {
+  register<TTool>(registration: ToolRegistration<TTool>): () => void {
     const { name } = registration.definition
     if (this.registrations.has(name)) {
       throw new Error(`Tool already registered: ${name}`)
     }
 
-    this.registrations.set(name, registration as ToolRegistration)
+    const stored = registration as ToolRegistration
+    this.registrations.set(name, stored)
+    this.revision += 1
+    return () => {
+      if (this.registrations.get(name) !== stored) return
+      this.registrations.delete(name)
+      this.revision += 1
+    }
+  }
+
+  getRevision(): number {
+    return this.revision
   }
 
   get(name: string): ToolDefinition | undefined {

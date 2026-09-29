@@ -222,7 +222,7 @@ function sendEvents(
   includeSnapshot: boolean,
 ): Response {
   context.header('X-Accel-Buffering', 'no')
-  return streamSSE(context, async (stream) => {
+  const response = streamSSE(context, async (stream) => {
     let unsubscribe: (() => void) | undefined
     let resolveClosed!: () => void
     const closed = new Promise<void>((resolve) => {
@@ -251,6 +251,8 @@ function sendEvents(
     if (stream.aborted) close()
     await closed
   })
+  response.headers.set('Content-Type', 'text/event-stream; charset=utf-8')
+  return response
 }
 
 async function readJsonBody(context: Context): Promise<unknown> {
