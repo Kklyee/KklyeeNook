@@ -25,7 +25,6 @@ import {
   iconSwapOut,
   inkButton,
   mono,
-  paper,
   ShimmerLabel,
 } from '@/renderer/src/lib/surfaces'
 import { clamp, pct } from '@/renderer/src/lib/range'
@@ -118,9 +117,8 @@ export function ComposerBar({
       data-slot="composer-bar"
       data-drag-active={dragActive || undefined}
       className={cn(
-        paper,
-        'flex w-full flex-col gap-2 rounded-[24px] p-2.5 transition-colors',
-        dragActive && 'bg-blue-500/[0.04] dark:bg-blue-500/10',
+        'composer-glass flex w-full flex-col gap-2 rounded-[14px] p-2.5 transition-colors',
+        dragActive && 'border-brand-border bg-brand-soft',
         className,
       )}
       {...props}

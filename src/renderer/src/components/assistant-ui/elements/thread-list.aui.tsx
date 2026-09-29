@@ -46,7 +46,7 @@ export const ThreadList: FC = () => {
   return (
     <ThreadListRoot>
       <ThreadListNew />
-      {hasThreads && <ThreadListSearch value={search} onValueChange={setSearch} />}
+      {/*{hasThreads && <ThreadListSearch value={search} onValueChange={setSearch} />}*/}
       {hasThreads && !collapsed && (
         <div className="px-2 pt-3 pb-0.5 text-[11px] font-medium text-text-faint">会话</div>
       )}

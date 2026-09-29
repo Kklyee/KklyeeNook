@@ -248,9 +248,6 @@ const ThreadRoot: FC<{
                 contextUsage={contextUsage}
                 isCompacting={isCompacting}
               />
-              <AuiIf condition={(s) => isNewChatView(s) && s.composer.isEmpty}>
-                <ThreadSuggestions />
-              </AuiIf>
             </ThreadPrimitive.ViewportFooter>
           )}
         </div>
@@ -260,10 +257,8 @@ const ThreadRoot: FC<{
 }
 
 const ThreadMessage: FC = () => {
-  const {
-    AssistantMessage: AssistantMessageComponent = AssistantMessage,
-    readOnly,
-  } = useContext(ThreadComponentsContext)
+  const { AssistantMessage: AssistantMessageComponent = AssistantMessage, readOnly } =
+    useContext(ThreadComponentsContext)
   const role = useAuiState((s) => s.message.role)
   const isEditing = useAuiState((s) => s.message.composer.isEditing)
 
@@ -298,32 +293,6 @@ const ThreadWelcome: FC = () => {
   )
 }
 
-const ThreadSuggestions: FC = () => {
-  return (
-    <div className="aui-thread-welcome-suggestions flex w-full flex-wrap items-center justify-center gap-2 px-4">
-      <ThreadPrimitive.Suggestions>{() => <ThreadSuggestionItem />}</ThreadPrimitive.Suggestions>
-    </div>
-  )
-}
-
-const ThreadSuggestionItem: FC = () => {
-  return (
-    <div className="aui-thread-welcome-suggestion-display fade-in slide-in-from-bottom-2 animate-in fill-mode-both duration-200">
-      <SuggestionPrimitive.Trigger
-        render={
-          <Button
-            variant="ghost"
-            className="aui-thread-welcome-suggestion text-foreground hover:bg-muted border-border/60 h-auto gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-normal whitespace-nowrap transition-colors"
-          />
-        }
-      >
-        <SuggestionPrimitive.Title className="aui-thread-welcome-suggestion-text-1" />
-        <SuggestionPrimitive.Description className="aui-thread-welcome-suggestion-text-2 empty:hidden" />
-      </SuggestionPrimitive.Trigger>
-    </div>
-  )
-}
-
 const Composer: FC<{
   autoFocus: boolean
   modelSelector?: ThreadProps['modelSelector']
@@ -345,9 +314,11 @@ const Composer: FC<{
 
   return (
     <ComposerPrimitive.Unstable_TriggerPopoverRoot>
-      <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
+      <ComposerPrimitive.Root className="aui-composer-root  relative  flex w-full flex-col ">
         <ComposerPrimitive.AttachmentDropzone
-          render={<ComposerBar data-slot="aui_composer-shell" className="max-w-none" />}
+          render={
+            <ComposerBar data-slot="aui_composer-shell" className="max-w-none glass-raised" />
+          }
         >
           <ComposerAttachments />
           <ComposerPrimitive.Input
@@ -374,7 +345,7 @@ const Composer: FC<{
             )}
             aria-label="Skills"
           >
-            <div className="text-foreground/40 px-2.5 py-1.5 text-[11px] font-medium">Skills</div>
+            {/*<div className="text-foreground/40 px-2.5 py-1.5 text-[11px] font-medium">Skills</div>*/}
             <ComposerPrimitive.Unstable_TriggerPopover.Action
               {...slash.action}
               formatter={SKILL_COMMAND_FORMATTER}
