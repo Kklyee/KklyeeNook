@@ -1,0 +1,4 @@
+docling>=2.60,<3
+sentence-transformers>=5,<6
+rapidocr>=3,<4
+onnxruntime>=1.20,<2
