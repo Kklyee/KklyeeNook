@@ -120,8 +120,8 @@ export class AgentService {
     const records = await this.sessionRepo.findAll()
 
     for (const record of records) {
-      const { id, title, createdAt, updatedAt, archived } = record
-      const session = new AgentSession(id, title, { createdAt, updatedAt, archived })
+      const { id, title, createdAt, updatedAt, archived, workspaceId } = record
+      const session = new AgentSession(id, title, { createdAt, updatedAt, archived, workspaceId })
       this.sessions.set(id, session)
     }
     onStage?.('sessions_restored', records.length)
@@ -132,10 +132,23 @@ export class AgentService {
     }
     onStage?.('runs_restored', runs.length)
   }
-  async createSession(title?: string): Promise<AgentSessionSummary> {
+  async createSession(title?: string, workspaceId: string | null = null): Promise<AgentSessionSummary> {
     const session = new AgentSession(randomUUID(), title)
+    session.workspaceId = workspaceId
     await this.sessionRepo.save(session.toRecord())
     this.sessions.set(session.id, session)
+    return session.toSummary()
+  }
+
+  async moveSession(sessionId: string, workspaceId: string | null): Promise<AgentSessionSummary> {
+    const session = this.sessions.get(sessionId)
+    if (!session) throw new Error('会话不存在')
+    if (session.toSummary().activeRunId) throw new Error('请等待当前 Agent 运行结束后再移动会话')
+    session.workspaceId = workspaceId
+    session.touch()
+    await this.sessionRepo.save(session.toRecord())
+    this.runtimes.get(sessionId)?.dispose()
+    this.runtimes.delete(sessionId)
     return session.toSummary()
   }
 

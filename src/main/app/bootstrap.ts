@@ -29,6 +29,7 @@ import { registerSettingsIpc } from '../settings/settingsIpc'
 import { registerMemoryIpc } from '../memory/memoryIpc'
 import { loadRenderer } from './loadRenderer'
 import { registerKnowledgeIpc } from '../knowledge/knowledgeIpc'
+import { registerWorkspaceIpc } from '../workspace/workspaceIpc'
 
 export interface AppContext {
   dispose(): Promise<void>
@@ -116,6 +117,7 @@ export async function bootstrap(): Promise<AppContext> {
   if (backendStatus.state === 'unavailable') console.error('[bootstrap] agent backend unavailable')
 
   const chatWindow = createChatWindow()
+  const disposeWorkspaceIpc = registerWorkspaceIpc(chatWindow, backendProcess)
   const disposeAgentBackendIpc = registerAgentBackendIpc(chatWindow, backendProcess)
   const disposeContextIpc = registerContextIpc(chatWindow, contextAttachments, {
     stage: async (attachment) => {
@@ -165,6 +167,7 @@ export async function bootstrap(): Promise<AppContext> {
 
   return {
     async dispose() {
+      disposeWorkspaceIpc()
       disposeAgentBackendIpc()
       disposeAgentRunIpc()
       disposeAgentSkillIpc()

@@ -1,0 +1,1 @@
+ALTER TABLE `conversations` ADD `workspace_id` text REFERENCES workspaces(id);

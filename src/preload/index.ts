@@ -1,3 +1,5 @@
+import type { AgentSessionSummary } from '@/shared/agent/agentSession'
+import type { Workspace, WorkspaceAttachResult } from '@/shared/workspace/workspace'
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { KnowledgeReadResult, KnowledgeSearchRequest, KnowledgeSearchResult, KnowledgeSource } from '@/shared/knowledge/knowledge'
 import { electronAPI } from '@electron-toolkit/preload'
@@ -48,6 +50,17 @@ const context = {
 }
 
 const api = {
+  conversations: {
+    list(): Promise<AgentSessionSummary[]> { return ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_LIST) },
+    create(input: { title?: string; workspaceId: string | null }): Promise<AgentSessionSummary> { return ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_CREATE, input) },
+    move(input: { id: string; workspaceId: string | null }): Promise<AgentSessionSummary> { return ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_MOVE, input) },
+  },
+  workspaces: {
+    list(): Promise<Workspace[]> { return ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_LIST) },
+    pick(relinkId?: string): Promise<WorkspaceAttachResult | null> { return ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_PICK, relinkId) },
+    attach(input: { path: string; relinkId?: string; createNew?: boolean }): Promise<WorkspaceAttachResult> { return ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_ATTACH, input) },
+    detach(id: string): Promise<void> { return ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_DETACH, id) },
+  },
   knowledge: {
     list(): Promise<KnowledgeSource[]> { return ipcRenderer.invoke(IPC_CHANNELS.KNOWLEDGE_LIST) },
     add(path: string, kind: KnowledgeSource['kind']): Promise<KnowledgeSource> { return ipcRenderer.invoke(IPC_CHANNELS.KNOWLEDGE_ADD, { path, kind }) },

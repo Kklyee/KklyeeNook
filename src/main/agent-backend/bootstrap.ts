@@ -1,4 +1,6 @@
 import { AgentService } from '@/main/agent/agentService'
+import { WorkspaceService } from '@/main/workspace/workspaceService'
+import { DrizzleWorkspaceRepo } from '@/main/db/repositories/workspaceRepo'
 import { PiClientService } from '@/main/agent/pi/client/piClientService'
 import { MessageProjectionService } from '@/main/agent/messageProjectionService'
 import { createPiAgentRuntimeFactory } from '@/main/agent/pi/runtime/createPiAgentRuntime'
@@ -78,6 +80,7 @@ export async function createAgentBackend(
   let knowledge: KnowledgeRuntime | undefined
   let settingsChangePending = false
   try {
+    const workspaceService = new WorkspaceService(new DrizzleWorkspaceRepo(db))
     const permissionGrantRepo = new DrizzlePermissionGrantRepo(db)
     const memoryRepo = new DrizzleAgentMemoryRepo(db)
     const approvalPolicy = new ApprovalPolicy(permissionGrantRepo)
@@ -178,6 +181,25 @@ export async function createAgentBackend(
       baseUrl: server.baseUrl,
       async handleRequest(request) {
         switch (request.action) {
+          case 'conversation:list':
+            return agentService.listSessions()
+          case 'conversation:create':
+            if (request.workspaceId) await workspaceService.resolve(request.workspaceId)
+            return agentService.createSession(request.title, request.workspaceId)
+          case 'conversation:move': {
+            if (request.workspaceId) await workspaceService.resolve(request.workspaceId)
+            const moved = await agentService.moveSession(request.id, request.workspaceId)
+            sessionRuntimeManager.get(request.id)?.reloadConfiguration()
+            return moved
+          }
+          case 'workspace:list':
+            return workspaceService.list()
+          case 'workspace:attach':
+            sessionRuntimeManager.assertCanReloadConfiguration()
+            return workspaceService.attach(request.path, request)
+          case 'workspace:detach':
+            sessionRuntimeManager.assertCanReloadConfiguration()
+            return workspaceService.detach(request.id)
           case 'knowledge:list':
             return knowledge!.service.listSources()
           case 'knowledge:add':

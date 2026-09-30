@@ -6,6 +6,7 @@ interface AgentSessionTimestamps {
   createdAt: number
   updatedAt: number
   archived?: boolean
+  workspaceId?: string | null
 }
 
 export class AgentSession {
@@ -14,6 +15,7 @@ export class AgentSession {
   title: string
   updatedAt: number
   archived: boolean
+  workspaceId: string | null
 
   private runs = new Map<string, AgentRun>()
 
@@ -24,6 +26,7 @@ export class AgentSession {
     this.createdAt = timestamp?.createdAt ?? now
     this.updatedAt = timestamp?.updatedAt ?? now
     this.archived = timestamp?.archived ?? false
+    this.workspaceId = timestamp?.workspaceId ?? null
   }
 
   addRun(run: AgentRun): void {
@@ -96,6 +99,7 @@ export class AgentSession {
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
       archived: this.archived,
+      workspaceId: this.workspaceId,
       activeRunId: activeRun?.id,
     }
   }
@@ -107,6 +111,7 @@ export class AgentSession {
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
       archived: this.archived,
+      workspaceId: this.workspaceId,
     }
   }
 }

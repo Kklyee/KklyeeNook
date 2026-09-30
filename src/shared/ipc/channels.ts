@@ -1,4 +1,11 @@
 export const IPC_CHANNELS = {
+  CONVERSATION_LIST: 'conversation:list',
+  CONVERSATION_CREATE: 'conversation:create',
+  CONVERSATION_MOVE: 'conversation:move',
+  WORKSPACE_LIST: 'workspace:list',
+  WORKSPACE_PICK: 'workspace:pick',
+  WORKSPACE_ATTACH: 'workspace:attach',
+  WORKSPACE_DETACH: 'workspace:detach',
   KNOWLEDGE_LIST: 'knowledge:list',
   KNOWLEDGE_ADD: 'knowledge:add',
   KNOWLEDGE_PICK: 'knowledge:pick',
