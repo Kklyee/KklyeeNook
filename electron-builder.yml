@@ -3,6 +3,7 @@ productName: kklyeenook
 directories:
   buildResources: build
 files:
+  - '!.tmp*/**'
   - '!**/.vscode/*'
   - '!src/*'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
@@ -11,6 +12,11 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 asarUnpack:
   - resources/**
+  - node_modules/officeparser/**
+  - node_modules/pdfjs-dist/**
+  - node_modules/tesseract.js/**
+  - node_modules/tesseract.js-core/**
+  - node_modules/onnxruntime-node/**
 win:
   executableName: kklyeenook
 nsis:

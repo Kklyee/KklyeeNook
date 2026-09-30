@@ -7,12 +7,15 @@ out
 .agents
 docs/*
 !docs/architecture.md
+!docs/dsh-reference.md
 .tmp*
 .env
 .env*
 dev.db*
 kklyeenook.db*
 data/kklyeenook.db*
+data/knowledge.db*
+*.traineddata
 .pi-sessions
 .pi
 CONTEXT.md

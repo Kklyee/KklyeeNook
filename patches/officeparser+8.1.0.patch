@@ -1,0 +1,59 @@
+diff --git a/node_modules/officeparser/dist/defaults.js b/node_modules/officeparser/dist/defaults.js
+index b097eec..1163cb5 100644
+--- a/node_modules/officeparser/dist/defaults.js
++++ b/node_modules/officeparser/dist/defaults.js
+@@ -27,6 +27,7 @@ const DEFAULT_OCR_CONFIG = {
+     workerPath: '',
+     corePath: '',
+     langPath: '',
++    cachePath: '',
+     preserveLayout: true,
+     timeout: DEFAULT_OCR_TIMEOUT,
+     abortSignal: null,
+diff --git a/node_modules/officeparser/dist/types.d.ts b/node_modules/officeparser/dist/types.d.ts
+index 3820172..99bee79 100644
+--- a/node_modules/officeparser/dist/types.d.ts
++++ b/node_modules/officeparser/dist/types.d.ts
+@@ -247,6 +247,7 @@ export interface OcrTimeoutConfig {
+  * Configuration options for OCR.
+  */
+ export interface OcrConfig {
++    cachePath?: string;
+     /**
+      * Language for OCR.
+      * Default is 'eng'.
+diff --git a/node_modules/officeparser/dist/utils/configUtils.js b/node_modules/officeparser/dist/utils/configUtils.js
+index fe753d7..0dcd1f8 100644
+--- a/node_modules/officeparser/dist/utils/configUtils.js
++++ b/node_modules/officeparser/dist/utils/configUtils.js
+@@ -143,8 +143,7 @@ function isFullParserConfig(config) {
+         typeof config === 'object' &&
+         'ocrConfig' in config &&
+         typeof config.ocrConfig === 'object' &&
+-        'language' in config.ocrConfig &&
+-        'workerPath' in config.ocrConfig);
++        Object.keys(defaults_js_1.DEFAULT_OFFICE_PARSER_CONFIG).every((key) => key in config));
+ }
+ /**
+  * Resolves a full parser configuration by merging defaults and user-provided overrides.
+diff --git a/node_modules/officeparser/dist/utils/ocrUtils.js b/node_modules/officeparser/dist/utils/ocrUtils.js
+index 7545b36..f6c9988 100644
+--- a/node_modules/officeparser/dist/utils/ocrUtils.js
++++ b/node_modules/officeparser/dist/utils/ocrUtils.js
+@@ -373,13 +373,15 @@ class OcrSchedulerManager {
+         let managed = null;
+         try {
+             const { createWorker } = await import('tesseract.js');
+-            const options = { logger: () => { } };
++            const options = { logger: () => { }, errorHandler: () => { } };
+             if (job.config.workerPath)
+                 options.workerPath = job.config.workerPath;
+             if (job.config.corePath)
+                 options.corePath = job.config.corePath;
+             if (job.config.langPath)
+                 options.langPath = job.config.langPath;
++            if (job.config.cachePath)
++                options.cachePath = job.config.cachePath;
+             const workerPromise = exports.ocrTestHooks.createWorker ? exports.ocrTestHooks.createWorker(requestedLanguage) : createWorker(requestedLanguage, 1, options);
+             // To prevent dangling worker threads on timeout or abort, we register a post-resolution hook
+             // that terminates the worker if the promise finishes after the timeout has fired or the job is finished.

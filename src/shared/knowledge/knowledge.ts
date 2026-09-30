@@ -112,6 +112,8 @@ export function knowledgeCitationLabel(citation: KnowledgeCitation): string {
     ? ` · Page ${citation.page}${citation.pageEnd && citation.pageEnd !== citation.page ? `–${citation.pageEnd}` : ''}`
     : citation.lineStart
       ? ` · L${citation.lineStart}–L${citation.lineEnd ?? citation.lineStart}`
-      : citation.heading ? ` · ${citation.heading}` : ''
+      : citation.heading
+        ? ` · ${citation.heading}`
+        : ''
   return `${citation.title}${location}`
 }

@@ -11,13 +11,19 @@ export class KnowledgeRepo {
   }
 
   async getSource(id: string): Promise<KnowledgeSource> {
-    const [source] = await this.db.select().from(knowledgeSources).where(eq(knowledgeSources.id, id))
+    const [source] = await this.db
+      .select()
+      .from(knowledgeSources)
+      .where(eq(knowledgeSources.id, id))
     if (!source) throw new Error('Knowledge source not found')
     return source
   }
 
   async saveSource(source: KnowledgeSource): Promise<void> {
-    await this.db.insert(knowledgeSources).values(source).onConflictDoUpdate({ target: knowledgeSources.id, set: source })
+    await this.db
+      .insert(knowledgeSources)
+      .values(source)
+      .onConflictDoUpdate({ target: knowledgeSources.id, set: source })
   }
 
   async updateSource(id: string, values: Partial<Omit<KnowledgeSource, 'id'>>): Promise<void> {
@@ -25,11 +31,17 @@ export class KnowledgeRepo {
   }
 
   listDocuments(sourceId: string): Promise<KnowledgeDocument[]> {
-    return this.db.select().from(knowledgeDocuments).where(eq(knowledgeDocuments.sourceId, sourceId))
+    return this.db
+      .select()
+      .from(knowledgeDocuments)
+      .where(eq(knowledgeDocuments.sourceId, sourceId))
   }
 
   async saveDocument(document: KnowledgeDocument): Promise<void> {
-    await this.db.insert(knowledgeDocuments).values(document).onConflictDoUpdate({ target: knowledgeDocuments.id, set: document })
+    await this.db
+      .insert(knowledgeDocuments)
+      .values(document)
+      .onConflictDoUpdate({ target: knowledgeDocuments.id, set: document })
   }
 
   async deleteDocument(id: string): Promise<void> {
