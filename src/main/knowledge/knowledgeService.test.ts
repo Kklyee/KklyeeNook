@@ -58,6 +58,8 @@ test('indexes incrementally, updates changed files, removes deleted files and ex
   )
   await mkdir(join(directory, 'node_modules'))
   await writeFile(join(directory, 'node_modules', 'ignored.ts'), 'export class Ignored {}')
+  await mkdir(join(directory, '.tmp-models'))
+  await writeFile(join(directory, '.tmp-models', 'tokenizer.json'), '{"unused":true}')
   const source = await service.addSource(directory, 'workspace')
   await service.waitForIdle()
   expect(await repo.getSource(source.id)).toMatchObject({
@@ -143,6 +145,26 @@ test('supports Chinese BM25 and safely treats punctuation as literal query text'
   expect(searchTerms('独立进程')).toEqual(['独立', '立进', '进程'])
   expect(await index.lexical('为什么独立进程', [source.id], 'test-model')).toHaveLength(1)
   await expect(service.search({ query: '" OR * - (独立进程)' })).resolves.toHaveLength(1)
+})
+
+test('reads the nearest neighboring chunks on both sides of a long section', async () => {
+  const { directory, service } = await setup()
+  await writeFile(
+    join(directory, 'long.md'),
+    '# Agent\n\n' +
+      Array.from({ length: 16 }, () => 'Process isolation. '.repeat(100)).join('\n\n'),
+  )
+  await service.addSource(directory, 'folder')
+  await service.waitForIdle()
+  const hits = (await service.search({ query: 'isolation' })).sort(
+    (a, b) => a.chunk.ordinal - b.chunk.ordinal,
+  )
+  expect(hits.length).toBeGreaterThan(2)
+  const result = await service.read(hits[1].chunk.id)
+  expect(result.adjacent).toHaveLength(2)
+  expect(result.adjacent[0].ordinal).toBeLessThan(result.context.ordinal)
+  expect(result.adjacent[1].ordinal).toBeGreaterThan(hits[1].chunk.ordinal)
+  expect(result.adjacent.every((chunk) => chunk.parentId !== result.context.id)).toBe(true)
 })
 
 test('marks indexing errors, retries successfully and detects incompatible embedding models', async () => {

@@ -324,7 +324,8 @@ async function collectFiles(path: string, file: boolean): Promise<string[]> {
   }
   const result: string[] = []
   for (const entry of await readdir(path, { withFileTypes: true })) {
-    if (entry.isSymbolicLink() || entry.name.startsWith('.env')) continue
+    if (entry.isSymbolicLink() || entry.name.startsWith('.env') || entry.name.startsWith('.tmp'))
+      continue
     const child = join(path, entry.name)
     if (entry.isDirectory() && !ignoredDirectories.has(entry.name))
       result.push(...(await collectFiles(child, false)))
