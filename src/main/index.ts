@@ -4,6 +4,7 @@ import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { AppContext, bootstrap } from './app/bootstrap'
 
 let appContext: AppContext | null = null
+let quitting = false
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.electron')
 
@@ -25,7 +26,11 @@ app.on('window-all-closed', () => {
   }
 })
 
-app.on('before-quit', () => {
-  appContext?.dispose()
+app.on('before-quit', (event) => {
+  if (!appContext || quitting) return
+  event.preventDefault()
+  quitting = true
+  const context = appContext
+  void context.dispose().finally(() => app.quit())
   appContext = null
 })

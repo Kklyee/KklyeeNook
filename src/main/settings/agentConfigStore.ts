@@ -129,15 +129,25 @@ function isMcpServerConfig(value: unknown): boolean {
     transport?: unknown
     command?: unknown
     args?: unknown
+    env?: unknown
+    cwd?: unknown
   }
   return Boolean(
     typeof server.id === 'string' &&
-      typeof server.name === 'string' &&
-      typeof server.enabled === 'boolean' &&
-      server.transport === 'stdio' &&
-      typeof server.command === 'string' &&
-      Array.isArray(server.args) &&
-      server.args.every((arg) => typeof arg === 'string'),
+    typeof server.name === 'string' &&
+    typeof server.enabled === 'boolean' &&
+    server.transport === 'stdio' &&
+    typeof server.command === 'string' &&
+    Array.isArray(server.args) &&
+    server.args.every((arg) => typeof arg === 'string') &&
+    (server.cwd === undefined || typeof server.cwd === 'string') &&
+    (server.env === undefined ||
+      (server.env !== null &&
+        typeof server.env === 'object' &&
+        !Array.isArray(server.env) &&
+        Object.entries(server.env).every(
+          ([key, value]) => key.trim() && typeof value === 'string',
+        ))),
   )
 }
 

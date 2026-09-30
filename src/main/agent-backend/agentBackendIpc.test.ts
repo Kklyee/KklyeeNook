@@ -103,9 +103,11 @@ test('renderer window recreation keeps the backend alive until app shutdown', as
   expect(getStatus?.(event)).toEqual(readyStatus)
   expect(child.initializeCount).toBe(1)
 
-  backend.close()
+  const closed = backend.close()
   expect(child.messages.at(-1)).toEqual({ type: 'shutdown' })
-  expect(child.killed).toBe(true)
+  expect(child.killed).toBe(false)
+  child.emit('exit', 0)
+  await closed
 })
 
 test('forwards an unexpected backend exit to the active renderer', async () => {

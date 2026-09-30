@@ -42,6 +42,7 @@ export class AgentBackendProcess {
   private lastStartupStage: AgentBackendStartupStage | undefined
   private startupStartedAt: number | undefined
   private closing = false
+  private closePromise: Promise<void> | undefined
 
   constructor(
     private readonly entryPath: string,
@@ -115,7 +116,7 @@ export class AgentBackendProcess {
 
   request<T = unknown>(request: AgentBackendRequest, timeoutMs = 15_000): Promise<T> {
     const child = this.child
-    if (!child || this.status.state !== 'ready') {
+    if (!child || this.closing || this.status.state !== 'ready') {
       return Promise.reject(new Error('Agent backend is unavailable.'))
     }
 
@@ -140,7 +141,8 @@ export class AgentBackendProcess {
     })
   }
 
-  close(): void {
+  close(): Promise<void> {
+    if (this.closePromise) return this.closePromise
     this.closing = true
     const child = this.child
     this.child = undefined
@@ -152,13 +154,27 @@ export class AgentBackendProcess {
     if (this.startTimer) clearTimeout(this.startTimer)
     this.resolveStart?.({ state: 'unavailable', message: 'Agent backend is shutting down.' })
     this.resolveStart = undefined
-    if (!child) return
-    try {
-      child.postMessage({ type: 'shutdown' } satisfies MainToAgentBackendMessage)
-    } catch {
-      // The process may already have exited.
-    }
-    child.kill()
+    if (!child) return Promise.resolve()
+    this.closePromise = new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        child.kill()
+        resolve()
+      }, 10_000)
+      child.once('exit', () => {
+        clearTimeout(timer)
+        resolve()
+      })
+      try {
+        child.postMessage({
+          type: 'shutdown',
+        } satisfies MainToAgentBackendMessage)
+      } catch {
+        clearTimeout(timer)
+        child.kill()
+        resolve()
+      }
+    })
+    return this.closePromise
   }
 
   private handleMessage(rawMessage: unknown): void {

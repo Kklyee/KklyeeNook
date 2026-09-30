@@ -30,7 +30,7 @@ import { registerMemoryIpc } from '../memory/memoryIpc'
 import { loadRenderer } from './loadRenderer'
 
 export interface AppContext {
-  dispose(): void
+  dispose(): Promise<void>
 }
 
 export async function bootstrap(): Promise<AppContext> {
@@ -160,7 +160,7 @@ export async function bootstrap(): Promise<AppContext> {
   app.once('will-quit', closeMainDatabase)
 
   return {
-    dispose() {
+    async dispose() {
       disposeAgentBackendIpc()
       disposeAgentRunIpc()
       disposeAgentSkillIpc()
@@ -171,7 +171,7 @@ export async function bootstrap(): Promise<AppContext> {
       disposeMemoryIpc()
       disposeMcpIpc()
       contextAttachments.clear()
-      backendProcess.close()
+      await backendProcess.close()
       closeMainDatabase()
     },
   }

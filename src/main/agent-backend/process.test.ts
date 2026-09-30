@@ -94,7 +94,7 @@ function makeProcess() {
   return { backend, child }
 }
 
-test('waits for backend readiness, proxies low-frequency requests, and kills the child on close', async () => {
+test('waits for backend readiness, proxies requests, and lets the backend finish shutdown', async () => {
   const { backend, child } = makeProcess()
   const status = await backend.start(options)
   expect(status).toEqual({
@@ -104,11 +104,32 @@ test('waits for backend readiness, proxies low-frequency requests, and kills the
 
   await expect(backend.request({ action: 'context:clear' })).resolves.toBe('done')
   expect(child.messages[0]?.type).toBe('initialize')
-  expect(child.messages[1]).toMatchObject({ type: 'request', action: 'context:clear' })
+  expect(child.messages[1]).toMatchObject({
+    type: 'request',
+    action: 'context:clear',
+  })
 
-  backend.close()
-  expect(child.killed).toBe(true)
+  const closed = backend.close()
+  expect(child.killed).toBe(false)
   expect(child.messages.at(-1)).toEqual({ type: 'shutdown' })
+  child.emit('exit', 0)
+  await closed
+  expect(child.killed).toBe(false)
+})
+
+test('kills an unresponsive backend after the shutdown deadline', async () => {
+  vi.useFakeTimers()
+  try {
+    const { backend, child } = makeProcess()
+    await backend.start(options)
+    const closed = backend.close()
+    expect(backend.close()).toBe(closed)
+    await vi.advanceTimersByTimeAsync(10_000)
+    await closed
+    expect(child.killed).toBe(true)
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 test('marks the backend unavailable when its process exits unexpectedly', async () => {
@@ -149,6 +170,7 @@ test('starts the initialization timeout after the utility process spawns', async
     })
   } finally {
     backend.close()
+    child.emit('exit', 0)
     vi.useRealTimers()
   }
 })
@@ -175,6 +197,7 @@ test('prints the last startup stage when initialization times out', async () => 
   } finally {
     error.mockRestore()
     backend.close()
+    child.emit('exit', 0)
     vi.useRealTimers()
   }
 })

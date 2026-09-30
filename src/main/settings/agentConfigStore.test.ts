@@ -23,6 +23,8 @@ test('persists agent settings without exposing mutable store state', () => {
         transport: 'stdio' as const,
         command: 'npx',
         args: ['-y', '@modelcontextprotocol/server-filesystem', directory],
+        cwd: directory,
+        env: { MCP_TEST: 'value with spaces' },
       },
     ],
   }

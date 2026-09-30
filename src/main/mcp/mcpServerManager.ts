@@ -17,7 +17,8 @@ interface McpConnection {
 
 type McpConnectionFactory = (
   config: McpServerConfig,
-  onClose: () => void,
+  onClose: (error?: Error) => void,
+  onToolsChanged: (tools: McpTool[]) => void,
 ) => McpConnection
 
 interface McpConnectionEntry {
@@ -38,8 +39,8 @@ export class McpServerManager {
   constructor(
     private readonly registry: ToolRegistry,
     private readonly onToolsChanged: () => void = () => undefined,
-    private readonly createConnection: McpConnectionFactory = (config, onClose) =>
-      new McpClientConnection(config, onClose),
+    private readonly createConnection: McpConnectionFactory = (config, onClose, onToolsChanged) =>
+      new McpClientConnection(config, onClose, onToolsChanged),
   ) {}
 
   async reconcile(configs: readonly McpServerConfig[]): Promise<void> {
@@ -126,9 +127,27 @@ export class McpServerManager {
 
     let connection: McpConnection | undefined
     try {
-      connection = this.createConnection(config, () => {
-        if (connection) void this.handleConnectionClosed(config.id, connection)
-      })
+      connection = this.createConnection(
+        config,
+        (error) => {
+          if (connection) void this.handleConnectionClosed(config.id, connection, error)
+        },
+        (tools) => {
+          if (!connection || !this.isCurrentConnection(config.id, generation, connection)) return
+          if (this.states.get(config.id)?.status !== 'connected') return
+          const entry = this.connections.get(config.id)!
+          for (const dispose of entry.disposeTools) dispose()
+          entry.disposeTools = tools.map((tool) =>
+            registerPiMcpTool(this.registry, config, tool, connection!),
+          )
+          this.setState({
+            serverId: config.id,
+            status: 'connected',
+            toolCount: tools.length,
+          })
+          this.onToolsChanged()
+        },
+      )
     } catch (error) {
       return this.setConnectionError(config.id, generation, error)
     }
@@ -187,7 +206,11 @@ export class McpServerManager {
     await entry.connection.close().catch(() => undefined)
   }
 
-  private async handleConnectionClosed(serverId: string, connection: McpConnection): Promise<void> {
+  private async handleConnectionClosed(
+    serverId: string,
+    connection: McpConnection,
+    error?: Error,
+  ): Promise<void> {
     if (this.closed || this.connections.get(serverId)?.connection !== connection) return
     const generation = this.nextGeneration(serverId)
     await this.releaseConnection(serverId, connection)
@@ -196,7 +219,7 @@ export class McpServerManager {
       serverId,
       status: 'error',
       toolCount: 0,
-      error: 'MCP server process exited.',
+      error: error?.message ?? 'MCP server process exited.',
     })
   }
 
@@ -252,7 +275,10 @@ export class McpServerManager {
     generation: number,
     connection: McpConnection,
   ): boolean {
-    return this.isCurrent(serverId, generation) && this.connections.get(serverId)?.connection === connection
+    return (
+      this.isCurrent(serverId, generation) &&
+      this.connections.get(serverId)?.connection === connection
+    )
   }
 
   private track(task: Promise<McpServerState>): Promise<McpServerState> {

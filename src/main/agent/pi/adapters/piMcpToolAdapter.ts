@@ -13,7 +13,7 @@ import type {
 } from '@/shared/mcp/mcpServer'
 
 interface McpToolCaller {
-  callTool(name: string, args: unknown): Promise<McpCallToolResult>
+  callTool(name: string, args: unknown, signal?: AbortSignal): Promise<McpCallToolResult>
 }
 
 type AnyPiToolDefinition = PiToolDefinition<any, any, any>
@@ -59,8 +59,8 @@ function createPiTool(
     description: remoteTool.description ?? remoteTool.name,
     promptSnippet: `Call the ${remoteTool.name} tool from MCP server ${server.name}`,
     parameters,
-    async execute(_toolCallId, args) {
-      const result = await connection.callTool(remoteTool.name, args)
+    async execute(_toolCallId, args, signal) {
+      const result = await connection.callTool(remoteTool.name, args, signal)
       const content = result.content.map((block) => {
         if (block.type === 'text' && typeof block.text === 'string') {
           return { type: 'text' as const, text: block.text }

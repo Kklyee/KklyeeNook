@@ -5,6 +5,8 @@ export interface McpServerConfig {
   transport: 'stdio'
   command: string
   args: string[]
+  env?: Record<string, string>
+  cwd?: string
 }
 
 export interface McpServerState {

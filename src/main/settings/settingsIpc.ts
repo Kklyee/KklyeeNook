@@ -380,7 +380,15 @@ function validateMcpServer(server: McpServerConfig): McpServerConfig {
     typeof server.command !== 'string' ||
     !server.command.trim() ||
     !Array.isArray(server.args) ||
-    !server.args.every((arg) => typeof arg === 'string')
+    !server.args.every((arg) => typeof arg === 'string') ||
+    (server.cwd !== undefined && typeof server.cwd !== 'string') ||
+    (server.env !== undefined &&
+      (!server.env ||
+        typeof server.env !== 'object' ||
+        Array.isArray(server.env) ||
+        !Object.entries(server.env).every(
+          ([key, value]) => key.trim() && typeof value === 'string',
+        )))
   ) {
     throw new Error('MCP Server 配置无效')
   }
@@ -391,6 +399,8 @@ function validateMcpServer(server: McpServerConfig): McpServerConfig {
     transport: 'stdio',
     command: server.command.trim(),
     args: [...server.args],
+    ...(server.env ? { env: { ...server.env } } : {}),
+    ...(server.cwd?.trim() ? { cwd: server.cwd.trim() } : {}),
   }
 }
 

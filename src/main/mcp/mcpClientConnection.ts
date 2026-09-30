@@ -1,5 +1,5 @@
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+import { Client } from '@modelcontextprotocol/client'
+import { StdioClientTransport } from '@modelcontextprotocol/client/stdio'
 
 import type {
   McpCallToolResult,
@@ -16,15 +16,30 @@ export class McpClientConnection {
 
   constructor(
     private readonly config: McpServerConfig,
-    private readonly onClose: () => void = () => undefined,
+    private readonly onClose: (error?: Error) => void = () => undefined,
+    private readonly onToolsChanged: (tools: McpTool[]) => void = () => undefined,
   ) {}
 
   async connect(): Promise<void> {
-    const client = new Client({ name: 'kklyeenook-agent', version: '1.0.0' })
+    const client = new Client(
+      { name: 'kklyeenook-agent', version: '1.0.0' },
+      {
+        listChanged: {
+          tools: {
+            onChanged: (error, tools) => {
+              if (error) this.onClose(error)
+              else if (tools && !this.closing) this.onToolsChanged(tools)
+            },
+          },
+        },
+      },
+    )
     const transport = new StdioClientTransport({
       command: this.config.command,
       args: this.config.args,
-      stderr: 'ignore',
+      env: this.config.env,
+      cwd: this.config.cwd,
+      stderr: 'inherit',
     })
     this.client = client
     this.transport = transport
@@ -61,12 +76,15 @@ export class McpClientConnection {
     }))
   }
 
-  async callTool(name: string, args: unknown): Promise<McpCallToolResult> {
+  async callTool(name: string, args: unknown, signal?: AbortSignal): Promise<McpCallToolResult> {
     if (!this.client) throw new Error('MCP client is not connected.')
-    const result = await this.client.callTool({
-      name,
-      arguments: isRecord(args) ? args : {},
-    })
+    const result = await this.client.callTool(
+      {
+        name,
+        arguments: isRecord(args) ? args : {},
+      },
+      { signal },
+    )
     return result as McpCallToolResult
   }
 

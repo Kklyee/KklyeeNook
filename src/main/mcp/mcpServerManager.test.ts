@@ -129,3 +129,27 @@ test('does not reconnect a failed server during an unrelated reconcile', async (
   expect(connect).toHaveBeenCalledTimes(1)
   await manager.close()
 })
+
+test('replaces tools on list changes and ignores notifications from a disconnected server', async () => {
+  const registry = new ToolRegistry()
+  let updateTools!: (tools: McpTool[]) => void
+  const manager = new McpServerManager(registry, () => undefined, (_config, _onClose, onToolsChanged) => {
+    updateTools = onToolsChanged
+    return {
+      async connect() {},
+      async listTools() { return [tool] },
+      async callTool() { return { content: [] } },
+      async close() {},
+    }
+  })
+  await manager.reconcile([config('github')])
+  await vi.waitFor(() => expect(manager.listStates()[0]?.status).toBe('connected'))
+  updateTools([{ ...tool, name: 'read' }])
+  expect(registry.get('mcp__github__search')).toBeUndefined()
+  expect(registry.get('mcp__github__read')).toBeDefined()
+  expect(manager.listStates()[0]?.toolCount).toBe(1)
+  await manager.disconnect('github')
+  updateTools([tool])
+  expect(registry.get('mcp__github__search')).toBeUndefined()
+  await manager.close()
+})
