@@ -25,4 +25,6 @@ export const assistantToolkit = {
   create_artifact: { type: 'backend', render: ToolCallRenderer },
   update_plan: { type: 'backend', display: 'standalone', render: UpdatePlanToolCall },
   delegate_task: { type: 'backend', render: ToolCallRenderer },
+  search_knowledge: { type: 'backend', render: ToolCallRenderer },
+  read_knowledge: { type: 'backend', render: ToolCallRenderer },
 } satisfies Toolkit

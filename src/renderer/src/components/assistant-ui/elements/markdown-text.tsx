@@ -17,6 +17,7 @@ import { TooltipIconButton } from '@/renderer/src/components/assistant-ui/elemen
 import { MermaidDiagram } from '@/renderer/src/components/assistant-ui/elements/mermaid-diagram.aui'
 import { useCopyToClipboard } from '@/renderer/src/hooks/use-copy-to-clipboard'
 import { cn } from '@/renderer/src/lib/utils'
+import { KnowledgeCitationLink } from '@/renderer/src/features/knowledge/KnowledgeCitationLink'
 
 type MarkdownTextProps = Partial<TextMessagePartProps> & {
   components?: Parameters<typeof memoizeMarkdownComponents>[0]
@@ -132,15 +133,16 @@ const defaultComponents = memoizeMarkdownComponents({
   p: ({ className, ...props }) => (
     <p className={cn('aui-md-p my-3 leading-relaxed first:mt-0 last:mb-0', className)} {...props} />
   ),
-  a: ({ className, ...props }) => (
-    <a
-      className={cn(
+  a: ({ className, href, ...props }) => {
+    const chunkId = href?.match(/^https:\/\/knowledge\.local\/chunks\/([^/?#]+)$/)?.[1]
+    const linkClassName = cn(
         'aui-md-a text-primary hover:text-primary/80 underline underline-offset-2',
         className,
-      )}
-      {...props}
-    />
-  ),
+    )
+    return chunkId
+      ? <KnowledgeCitationLink chunkId={decodeURIComponent(chunkId)} href={href} className={linkClassName} {...props} />
+      : <a href={href} className={linkClassName} {...props} />
+  },
   blockquote: ({ className, ...props }) => (
     <blockquote
       className={cn(

@@ -1,6 +1,7 @@
 import { useEffect, useState, type ComponentType, type ReactNode } from 'react'
 import {
   ArrowLeftIcon,
+  BookOpenIcon,
   BrainIcon,
   BotIcon,
   SearchIcon,
@@ -29,6 +30,7 @@ import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { cn } from '../../lib/utils'
 import { McpSettings } from './McpSettings'
+import { KnowledgeSettings } from './KnowledgeSettings'
 
 const toolDescriptions: Record<string, string> = {
   read: '读取文件',
@@ -38,9 +40,11 @@ const toolDescriptions: Record<string, string> = {
   update_plan: '更新计划',
   save_memory: '保存 Memory',
   delegate_task: '委派子任务',
+  search_knowledge: '检索 Knowledge',
+  read_knowledge: '读取 Knowledge',
 }
 
-type SettingsTab = 'model' | 'tools' | 'permissions' | 'skills' | 'memory' | 'mcp'
+type SettingsTab = 'model' | 'tools' | 'permissions' | 'skills' | 'memory' | 'mcp' | 'knowledge'
 
 const settingsTabs: Array<{
   id: SettingsTab
@@ -58,6 +62,7 @@ const settingsTabs: Array<{
   { id: 'permissions', label: '权限管理', description: '查看和撤销授权', icon: ShieldCheckIcon },
   { id: 'skills', label: 'Skills', description: '查看可用的本地 Skills', icon: SparklesIcon },
   { id: 'memory', label: 'Memory', description: '查看和删除长期记忆', icon: BrainIcon },
+  { id: 'knowledge', label: 'Knowledge', description: '导入文档和代码，管理知识索引与来源', icon: BookOpenIcon },
   { id: 'mcp', label: 'MCP Servers', description: '配置和连接 MCP 工具', icon: ServerIcon },
 ]
 
@@ -181,6 +186,8 @@ export function SettingsPage({
             <SkillSettings />
           ) : tab === 'memory' ? (
             <MemorySettings workspacePath={settings.cwd} />
+          ) : tab === 'knowledge' ? (
+            <KnowledgeSettings settings={settings} onChanged={onChanged} />
           ) : tab === 'mcp' ? (
             <McpSettings settings={settings} onChanged={onChanged} />
           ) : (
