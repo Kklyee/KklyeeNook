@@ -1,8 +1,8 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, test, vi } from 'vitest'
-import { CodeParser, DoclingParser, TextParser, supportsKnowledgeFile } from './documentParser'
+import { afterEach, expect, test } from 'vitest'
+import { CodeParser, TextParser, supportsKnowledgeFile, parsedDocument } from './documentParser'
 import { chunkDocument, estimateTokens } from './chunkDocument'
 
 const directories: string[] = []
@@ -40,15 +40,12 @@ test('preserves code symbols, source lines and full content across bounded paren
   expect(children.every((chunk) => chunks.some((parent) => parent.id === chunk.parentId))).toBe(true)
 })
 
-test('retains Docling reading order, layout provenance, table content and page citations', async () => {
-  const request = vi.fn(async () => ({ title: 'Report', pages: [1, 2], metadata: { parser: 'docling' }, blocks: [
+test('retains reading order, layout provenance, table content and page citations', () => {
+  const document = parsedDocument('report.pdf', [
     { kind: 'heading', level: 1, content: 'Process isolation', page: 1, metadata: {} },
     { kind: 'paragraph', content: 'OCR text from scanned PDF', page: 1, metadata: { provenance: [{ bbox: { l: 10, t: 100 } }] } },
     { kind: 'table', content: '| Agent | Process |\n| --- | --- |\n| Main | Separate |', page: 2, metadata: {} },
-  ] }))
-  const parser = new DoclingParser({ request } as never)
-  for (const name of ['a.pdf', 'a.docx', 'a.pptx', 'a.xlsx', 'a.html']) expect(parser.supports({ path: name, name })).toBe(true)
-  const document = await parser.parse({ path: 'report.pdf', name: 'report.pdf' })
+  ], { parser: 'officeparser' }, [1, 2])
   expect(document.pages).toEqual([1, 2])
   expect(document.tables[0].content).toContain('Separate')
   const chunks = chunkDocument(document, { documentId: 'doc', sourceId: 'source', sourceName: 'Docs', filePath: 'report.pdf', title: 'report.pdf' })

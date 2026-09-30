@@ -1,7 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { extname } from 'node:path'
 import type { DocumentBlock, KnowledgeFile, ParsedDocument } from '@/shared/knowledge/knowledge'
-import type { KnowledgeWorker } from './knowledgeWorker'
 
 export interface DocumentParser {
   supports(file: KnowledgeFile): boolean
@@ -22,7 +21,7 @@ export function parsedDocument(title: string, blocks: DocumentBlock[], metadata:
     title,
     blocks,
     sections: blocks.flatMap((block, blockIndex) => block.kind === 'heading' ? [{ title: block.content, level: block.level ?? 1, blockIndex }] : []),
-    paragraphs: blocks.filter((block) => block.kind === 'paragraph' || block.kind === 'code'),
+    paragraphs: blocks.filter((block) => ['paragraph', 'code', 'list', 'image'].includes(block.kind)),
     tables: blocks.filter((block) => block.kind === 'table'),
     pages: pages ?? [...new Set(blocks.flatMap((block) => block.page ? [block.page] : []))],
     metadata,
@@ -48,19 +47,6 @@ export class CodeParser implements DocumentParser {
 
   async parse(file: KnowledgeFile): Promise<ParsedDocument> {
     return parseText(file, await readFile(file.path, 'utf8'), true)
-  }
-}
-
-export class DoclingParser implements DocumentParser {
-  constructor(private readonly worker: Pick<KnowledgeWorker, 'request'>) {}
-
-  supports(file: KnowledgeFile): boolean {
-    return complexExtensions.has(extname(file.path).toLowerCase())
-  }
-
-  async parse(file: KnowledgeFile): Promise<ParsedDocument> {
-    const result = await this.worker.request<{ title: string; blocks: DocumentBlock[]; pages: number[]; metadata: Record<string, unknown> }>({ action: 'parse', path: file.path })
-    return parsedDocument(file.name, result.blocks, result.metadata, result.pages)
   }
 }
 

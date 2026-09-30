@@ -4,7 +4,7 @@ export interface KnowledgeFile {
 }
 
 export interface DocumentBlock {
-  kind: 'heading' | 'paragraph' | 'table' | 'code'
+  kind: 'heading' | 'paragraph' | 'table' | 'list' | 'code' | 'image'
   content: string
   level?: number
   page?: number
@@ -94,15 +94,13 @@ export interface KnowledgeReadResult {
 }
 
 export interface KnowledgeSettings {
-  pythonPath: string
   embeddingModel: string
   rerankModel: string
 }
 
 export const DEFAULT_KNOWLEDGE_SETTINGS: KnowledgeSettings = {
-  pythonPath: 'python',
-  embeddingModel: 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2',
-  rerankModel: 'cross-encoder/mmarco-mMiniLMv2-L12-H384-v1',
+  embeddingModel: 'Xenova/paraphrase-multilingual-MiniLM-L12-v2',
+  rerankModel: 'Xenova/bge-reranker-base',
 }
 
 export function knowledgeCitationUrl(chunkId: string): string {
