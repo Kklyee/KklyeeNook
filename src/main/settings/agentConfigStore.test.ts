@@ -25,6 +25,7 @@ test('persists agent settings without exposing mutable store state', () => {
         args: ['-y', '@modelcontextprotocol/server-filesystem', directory],
         cwd: directory,
         env: { MCP_TEST: 'value with spaces' },
+        disabledTools: ['delete_file'],
       },
     ],
   }

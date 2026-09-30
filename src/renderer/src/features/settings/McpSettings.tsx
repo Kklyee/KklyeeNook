@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import {
   ArrowLeftIcon,
+  ChevronDownIcon,
   ExternalLinkIcon,
   PlusIcon,
   RefreshCwIcon,
@@ -24,6 +25,8 @@ export function McpSettings({
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [busyServerId, setBusyServerId] = useState<string | null>(null)
+  const [busyToolKey, setBusyToolKey] = useState<string | null>(null)
+  const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -94,6 +97,7 @@ export function McpSettings({
       setError('环境变量名称不能为空、重复或包含等号。')
       return
     }
+    const existing = (settings.mcpServers ?? []).find((item) => item.id === editingId)
     const server: McpServerConfig = {
       id: editingId ?? crypto.randomUUID(),
       name: name.trim(),
@@ -107,6 +111,7 @@ export function McpSettings({
           }
         : {}),
       ...(cwd.trim() ? { cwd: cwd.trim() } : {}),
+      ...(existing?.disabledTools ? { disabledTools: existing.disabledTools } : {}),
     }
     const current = settings.mcpServers ?? []
     const next = editingId
@@ -138,6 +143,26 @@ export function McpSettings({
       setError(toggleError instanceof Error ? toggleError.message : 'MCP Server 状态更新失败。')
     } finally {
       setBusyServerId(null)
+    }
+  }
+
+  const toggleTool = async (server: McpServerConfig, toolName: string, enabled: boolean) => {
+    const key = `${server.id}:${toolName}`
+    setBusyToolKey(key)
+    setError(null)
+    try {
+      const disabledTools = new Set(server.disabledTools ?? [])
+      if (enabled) disabledTools.delete(toolName)
+      else disabledTools.add(toolName)
+      await saveServers(
+        (settings.mcpServers ?? []).map((item) =>
+          item.id === server.id ? { ...item, disabledTools: [...disabledTools] } : item,
+        ),
+      )
+    } catch (toggleError) {
+      setError(toggleError instanceof Error ? toggleError.message : 'MCP 工具状态更新失败。')
+    } finally {
+      setBusyToolKey(null)
     }
   }
 
@@ -400,72 +425,138 @@ export function McpSettings({
           </p>
         </div>
       ) : (
-        <div className="glass-surface divide-y divide-glass-border overflow-hidden rounded-xl">
+        <div className="space-y-2">
           {(settings.mcpServers ?? []).map((server) => {
             const state = stateByServerId.get(server.id)
             const status = state?.status ?? (loading && server.enabled ? 'connecting' : 'disconnected')
             const statusLabel = stateLabel(status, state?.error)
             const busy = busyServerId === server.id
+            const expanded = expandedServers.has(server.id)
+            const tools = state?.tools ?? []
+            const enabledToolCount = tools.filter((tool) => tool.enabled).length
+            const configBusy = busy || busyToolKey !== null
             return (
-              <div
-                key={server.id}
-                className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{server.name}</p>
-                  <div className="text-muted-foreground mt-1 flex items-center gap-2 text-xs">
-                    <span className={`${statusColor(status)} max-w-[min(52vw,320px)] break-all`}>
-                      {statusLabel}
-                    </span>
-                    {status === 'connected' && <span>· {state?.toolCount ?? 0} 个工具</span>}
+              <div key={server.id} className="glass-surface overflow-hidden rounded-xl">
+                <div className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{server.name}</p>
+                    <div className="text-muted-foreground mt-1 flex items-center gap-2 text-xs">
+                      <span className={`${statusColor(status)} max-w-[min(52vw,320px)] break-all`}>
+                        {statusLabel}
+                      </span>
+                      {status === 'connected' && (
+                        <span>
+                          · {enabledToolCount}/{state?.toolCount ?? 0} 个工具已启用
+                        </span>
+                      )}
+                    </div>
+                    {status === 'connected' && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground mt-1 -ml-3 h-7"
+                        aria-expanded={expanded}
+                        onClick={() =>
+                          setExpandedServers((current) => {
+                            const next = new Set(current)
+                            if (next.has(server.id)) next.delete(server.id)
+                            else next.add(server.id)
+                            return next
+                          })
+                        }
+                      >
+                        <ChevronDownIcon
+                          className={
+                            expanded ? 'rotate-180 transition-transform' : 'transition-transform'
+                          }
+                        />
+                        {expanded ? '收起工具' : '查看工具'}
+                      </Button>
+                    )}
                   </div>
-                </div>
-                <div className="flex shrink-0 flex-wrap items-center gap-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => openEditServer(server)}
-                  >
-                    编辑
-                  </Button>
-                  {server.enabled && status !== 'connected' && (
+                  <div className="flex shrink-0 flex-wrap items-center gap-1">
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      disabled={busy || status === 'connecting'}
-                      onClick={() => void retryServer(server.id)}
+                      disabled={configBusy}
+                      onClick={() => openEditServer(server)}
                     >
-                      {status === 'connecting' ? (
-                        <RefreshCwIcon className="animate-spin" />
-                      ) : (
-                        '重试'
-                      )}
+                      编辑
                     </Button>
-                  )}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => void toggleServer(server)}
-                  >
-                    {server.enabled ? '停用' : '启用'}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`删除 ${server.name}`}
-                    title="删除"
-                    disabled={busy}
-                    onClick={() => void removeServer(server.id)}
-                  >
-                    <Trash2Icon />
-                  </Button>
+                    {server.enabled && status !== 'connected' && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={configBusy || status === 'connecting'}
+                        onClick={() => void retryServer(server.id)}
+                      >
+                        {status === 'connecting' ? (
+                          <RefreshCwIcon className="animate-spin" />
+                        ) : (
+                          '重试'
+                        )}
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={configBusy}
+                      onClick={() => void toggleServer(server)}
+                    >
+                      {server.enabled ? '停用' : '启用'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`删除 ${server.name}`}
+                      title="删除"
+                      disabled={configBusy}
+                      onClick={() => void removeServer(server.id)}
+                    >
+                      <Trash2Icon />
+                    </Button>
+                  </div>
                 </div>
+                {expanded && status === 'connected' && (
+                  <div className="divide-y divide-glass-border-subtle border-t border-glass-border-subtle px-4">
+                    {tools.map((tool) => (
+                      <div key={tool.name} className="flex items-start justify-between gap-4 py-3">
+                        <div className="min-w-0">
+                          <p className="break-all text-sm font-medium">{tool.name}</p>
+                          <p className="text-muted-foreground mt-1 whitespace-pre-wrap break-words text-xs">
+                            {tool.description || '此工具没有提供描述。'}
+                          </p>
+                        </div>
+                        <label className="flex shrink-0 items-center gap-2 pt-0.5 text-xs">
+                          <input
+                            type="checkbox"
+                            role="switch"
+                            aria-label={`启用 ${tool.name}`}
+                            checked={tool.enabled}
+                            disabled={configBusy}
+                            onChange={(event) =>
+                              void toggleTool(server, tool.name, event.target.checked)
+                            }
+                            className="peer sr-only"
+                          />
+                          <span
+                            className={`relative h-5 w-9 rounded-full transition-colors ${tool.enabled ? 'bg-brand' : 'bg-muted'} peer-focus-visible:ring-2 peer-focus-visible:ring-ring`}
+                          >
+                            <span
+                              className={`absolute left-0.5 top-0.5 size-4 rounded-full bg-white transition-transform ${tool.enabled ? 'translate-x-4' : ''}`}
+                            />
+                          </span>
+                          {tool.enabled ? '启用' : '停用'}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )
           })}

@@ -7,12 +7,20 @@ export interface McpServerConfig {
   args: string[]
   env?: Record<string, string>
   cwd?: string
+  disabledTools?: string[]
+}
+
+export interface McpToolState {
+  name: string
+  description?: string
+  enabled: boolean
 }
 
 export interface McpServerState {
   serverId: string
   status: 'disconnected' | 'connecting' | 'connected' | 'error'
   toolCount: number
+  tools?: McpToolState[]
   error?: string
 }
 

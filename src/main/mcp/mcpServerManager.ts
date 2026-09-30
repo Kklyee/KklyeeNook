@@ -24,7 +24,8 @@ type McpConnectionFactory = (
 interface McpConnectionEntry {
   signature: string
   connection: McpConnection
-  disposeTools: Array<() => void>
+  tools: McpTool[]
+  disposeTools: Map<string, () => void>
 }
 
 export class McpServerManager {
@@ -66,6 +67,8 @@ export class McpServerManager {
         this.setState({ serverId: config.id, status: 'disconnected', toolCount: 0 })
       } else if (previousSignature !== signature || !this.states.has(config.id)) {
         this.track(this.startConnection(config, signature))
+      } else {
+        this.syncTools(config.id)
       }
     }
   }
@@ -136,23 +139,18 @@ export class McpServerManager {
           if (!connection || !this.isCurrentConnection(config.id, generation, connection)) return
           if (this.states.get(config.id)?.status !== 'connected') return
           const entry = this.connections.get(config.id)!
-          for (const dispose of entry.disposeTools) dispose()
-          entry.disposeTools = tools.map((tool) =>
-            registerPiMcpTool(this.registry, config, tool, connection!),
-          )
-          this.setState({
-            serverId: config.id,
-            status: 'connected',
-            toolCount: tools.length,
-          })
-          this.onToolsChanged()
+          for (const dispose of entry.disposeTools.values()) dispose()
+          entry.disposeTools.clear()
+          entry.tools = tools
+          this.setState({ serverId: config.id, status: 'connected', toolCount: tools.length })
+          this.syncTools(config.id)
         },
       )
     } catch (error) {
       return this.setConnectionError(config.id, generation, error)
     }
 
-    const entry: McpConnectionEntry = { signature, connection, disposeTools: [] }
+    const entry: McpConnectionEntry = { signature, connection, tools: [], disposeTools: new Map() }
     this.connections.set(config.id, entry)
     try {
       await connection.connect()
@@ -165,17 +163,15 @@ export class McpServerManager {
         await connection.close()
         return this.getState(config.id)
       }
-      for (const tool of tools) {
-        entry.disposeTools.push(registerPiMcpTool(this.registry, config, tool, connection))
-      }
-      const state: McpServerState = {
+      entry.tools = tools
+      this.setState({
         serverId: config.id,
         status: 'connected',
         toolCount: tools.length,
-      }
-      this.setState(state)
-      if (tools.length) this.onToolsChanged()
-      return state
+        tools: this.getToolStates(config.id, entry.tools),
+      })
+      this.syncTools(config.id)
+      return this.getState(config.id)
     } catch (error) {
       if (!this.isCurrentConnection(config.id, generation, connection)) {
         await connection.close().catch(() => undefined)
@@ -190,7 +186,7 @@ export class McpServerManager {
     this.nextGeneration(serverId)
     await this.disconnectConnection(serverId)
     if (!this.configs.has(serverId)) return
-    this.setState({ serverId, status: 'disconnected', toolCount: 0 })
+    this.setState({ serverId, status: 'disconnected', toolCount: 0, tools: [] })
   }
 
   private async disconnectConnection(serverId: string): Promise<void> {
@@ -201,8 +197,10 @@ export class McpServerManager {
     const entry = this.connections.get(serverId)
     if (!entry || (expected && entry.connection !== expected)) return
     this.connections.delete(serverId)
-    for (const dispose of entry.disposeTools) dispose()
-    if (entry.disposeTools.length) this.onToolsChanged()
+    const hadTools = entry.disposeTools.size > 0
+    for (const dispose of entry.disposeTools.values()) dispose()
+    entry.disposeTools.clear()
+    if (hadTools) this.onToolsChanged()
     await entry.connection.close().catch(() => undefined)
   }
 
@@ -260,6 +258,46 @@ export class McpServerManager {
     this.states.set(state.serverId, state)
   }
 
+  private syncTools(serverId: string): void {
+    const entry = this.connections.get(serverId)
+    const config = this.configs.get(serverId)
+    if (!entry || !config || this.states.get(serverId)?.status !== 'connected') return
+    const disabledTools = new Set(config.disabledTools ?? [])
+    const enabledTools = entry.tools.filter((tool) => !disabledTools.has(tool.name))
+    const enabledNames = new Set(enabledTools.map((tool) => tool.name))
+    let changed = false
+    for (const [name, dispose] of entry.disposeTools) {
+      if (enabledNames.has(name)) continue
+      dispose()
+      entry.disposeTools.delete(name)
+      changed = true
+    }
+    for (const tool of enabledTools) {
+      if (entry.disposeTools.has(tool.name)) continue
+      entry.disposeTools.set(
+        tool.name,
+        registerPiMcpTool(this.registry, config, tool, entry.connection),
+      )
+      changed = true
+    }
+    this.setState({
+      serverId,
+      status: 'connected',
+      toolCount: entry.tools.length,
+      tools: this.getToolStates(serverId, entry.tools),
+    })
+    if (changed) this.onToolsChanged()
+  }
+
+  private getToolStates(serverId: string, tools: McpTool[]): NonNullable<McpServerState['tools']> {
+    const disabledTools = new Set(this.configs.get(serverId)?.disabledTools ?? [])
+    return tools.map((tool) => ({
+      name: tool.name,
+      ...(tool.description ? { description: tool.description } : {}),
+      enabled: !disabledTools.has(tool.name),
+    }))
+  }
+
   private nextGeneration(serverId: string): number {
     const next = (this.generations.get(serverId) ?? 0) + 1
     this.generations.set(serverId, next)
@@ -292,5 +330,7 @@ export class McpServerManager {
 }
 
 function configSignature(config: McpServerConfig): string {
-  return JSON.stringify(config)
+  const connectionConfig = { ...config }
+  delete connectionConfig.disabledTools
+  return JSON.stringify(connectionConfig)
 }

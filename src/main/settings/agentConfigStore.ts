@@ -131,6 +131,7 @@ function isMcpServerConfig(value: unknown): boolean {
     args?: unknown
     env?: unknown
     cwd?: unknown
+    disabledTools?: unknown
   }
   return Boolean(
     typeof server.id === 'string' &&
@@ -141,6 +142,9 @@ function isMcpServerConfig(value: unknown): boolean {
     Array.isArray(server.args) &&
     server.args.every((arg) => typeof arg === 'string') &&
     (server.cwd === undefined || typeof server.cwd === 'string') &&
+    (server.disabledTools === undefined ||
+      (Array.isArray(server.disabledTools) &&
+        server.disabledTools.every((toolName) => typeof toolName === 'string'))) &&
     (server.env === undefined ||
       (server.env !== null &&
         typeof server.env === 'object' &&

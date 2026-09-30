@@ -382,6 +382,9 @@ function validateMcpServer(server: McpServerConfig): McpServerConfig {
     !Array.isArray(server.args) ||
     !server.args.every((arg) => typeof arg === 'string') ||
     (server.cwd !== undefined && typeof server.cwd !== 'string') ||
+    (server.disabledTools !== undefined &&
+      (!Array.isArray(server.disabledTools) ||
+        !server.disabledTools.every((toolName) => typeof toolName === 'string'))) ||
     (server.env !== undefined &&
       (!server.env ||
         typeof server.env !== 'object' ||
@@ -401,6 +404,7 @@ function validateMcpServer(server: McpServerConfig): McpServerConfig {
     args: [...server.args],
     ...(server.env ? { env: { ...server.env } } : {}),
     ...(server.cwd?.trim() ? { cwd: server.cwd.trim() } : {}),
+    ...(server.disabledTools ? { disabledTools: [...new Set(server.disabledTools)] } : {}),
   }
 }
 

@@ -76,12 +76,10 @@ test('registers same-named tools with server identity and disposes them on disco
   expect(registry.get('mcp__github__search')).toBeUndefined()
 })
 
-test('records a failed server without affecting other connections', async () => {
+test('exposes tool names and descriptions and persists enabled choices without reconnecting', async () => {
   const registry = new ToolRegistry()
-  const manager = new McpServerManager(registry, () => undefined, (server) => ({
-    async connect() {
-      if (server.id === 'github') throw new Error('Process exited')
-    },
+  const connections = vi.fn(() => ({
+    async connect() {},
     async listTools() {
       return [tool]
     },
@@ -90,6 +88,48 @@ test('records a failed server without affecting other connections', async () => 
     },
     async close() {},
   }))
+  const manager = new McpServerManager(registry, () => undefined, connections)
+  const server = { ...config('github'), disabledTools: ['search'] }
+  await manager.reconcile([server])
+  await vi.waitFor(() => expect(manager.listStates()[0]?.status).toBe('connected'))
+
+  expect(manager.listStates()[0]).toMatchObject({
+    toolCount: 1,
+    tools: [{ name: 'search', description: 'Search remotely', enabled: false }],
+  })
+  expect(registry.get('mcp__github__search')).toBeUndefined()
+
+  await manager.reconcile([{ ...server, disabledTools: [] }])
+  expect(connections).toHaveBeenCalledTimes(1)
+  expect(registry.get('mcp__github__search')).toBeDefined()
+  expect(manager.listStates()[0]?.tools?.[0]?.enabled).toBe(true)
+
+  await manager.reconcile([server])
+  expect(registry.get('mcp__github__search')).toBeUndefined()
+  expect(manager.listStates()[0]?.tools?.[0]?.enabled).toBe(false)
+  expect(connections).toHaveBeenCalledTimes(1)
+
+  await manager.close()
+})
+
+test('records a failed server without affecting other connections', async () => {
+  const registry = new ToolRegistry()
+  const manager = new McpServerManager(
+    registry,
+    () => undefined,
+    (server) => ({
+      async connect() {
+        if (server.id === 'github') throw new Error('Process exited')
+      },
+      async listTools() {
+        return [tool]
+      },
+      async callTool() {
+        return { content: [] }
+      },
+      async close() {},
+    }),
+  )
 
   await manager.reconcile([config('filesystem'), config('github')])
   await vi.waitFor(() =>
