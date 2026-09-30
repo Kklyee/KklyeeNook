@@ -109,7 +109,7 @@ export class PiClientService implements PiClient {
 
     const context = await this.contextBuilder.build(
       uniqueContextAttachmentIds,
-      this.configStore.get().cwd,
+      session.workspaceId ?? undefined,
     )
 
     if (session.title === 'New Task') {
@@ -362,7 +362,7 @@ export class PiClientService implements PiClient {
       title: session.title,
       status: session.activeRunId ? 'running' : 'idle',
       archived: session.archived,
-      workspacePath: this.configStore.get().cwd,
+
       createdAt: new Date(session.createdAt).toISOString(),
       updatedAt: new Date(session.updatedAt).toISOString(),
       runningRunId: session.activeRunId,

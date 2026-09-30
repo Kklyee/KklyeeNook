@@ -1,3 +1,4 @@
+import type { PermissionMode } from '../approval/permission'
 import type { McpServerConfig } from '../mcp/mcpServer'
 import type { KnowledgeSettings } from '../knowledge/knowledge'
 
@@ -67,6 +68,7 @@ export type AgentConfig = {
   tools: ToolConfig
   compaction?: AgentCompactionSettings
   cwd?: string
+  defaultPermissionMode?: PermissionMode
   mcpServers?: McpServerConfig[]
   knowledge?: KnowledgeSettings
 }

@@ -1,6 +1,5 @@
-import { existsSync, statSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { dialog, ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import { PERMISSION_MODES } from '@/shared/approval/permission'
+import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import type {
   AgentSettingsSnapshot,
   DiscoverModelsRequest,
@@ -63,7 +62,6 @@ export function registerSettingsIpc(
 
   const snapshot = async (): Promise<AgentSettingsSnapshot> => {
     const config = configStore.get()
-    if (!config.cwd) throw new Error('Agent workspace is not configured')
     const { providers: configuredProviders, catalog, models: savedModels } =
       getAgentModelChoices(config)
     const activeModel =
@@ -87,7 +85,7 @@ export function registerSettingsIpc(
       contextWindow: activeModel.contextWindow,
       maxTokens: activeModel.maxTokens,
       thinkingLevel: activeModel.thinkingLevel ?? 'medium',
-      cwd: config.cwd,
+      defaultPermissionMode: config.defaultPermissionMode ?? 'workspace-write',
       hasApiKey: credentials.hasApiKey(activeModel.provider),
       activeModelId: activeModel.id,
       models: savedModels.map((model) => ({
@@ -131,18 +129,14 @@ export function registerSettingsIpc(
           !Array.isArray(request.models) &&
           request.compaction === undefined &&
           request.mcpServers === undefined &&
-          request.knowledge === undefined) ||
-        (request.mcpServers !== undefined && !Array.isArray(request.mcpServers)) ||
-        typeof request.cwd !== 'string'
+          request.knowledge === undefined && request.defaultPermissionMode === undefined) ||
+        (request.mcpServers !== undefined && !Array.isArray(request.mcpServers))
       ) {
         throw new Error('Agent 设置格式无效')
       }
       const current = configStore.get()
+      if (request.defaultPermissionMode && !PERMISSION_MODES.includes(request.defaultPermissionMode)) throw new Error('权限模式无效')
       if (request.knowledge && (!request.knowledge.embeddingModel?.trim() || !request.knowledge.rerankModel?.trim())) throw new Error('Knowledge 模型名称不能为空')
-      const cwd = resolve(request.cwd.trim())
-      if (!request.cwd.trim() || !existsSync(cwd) || !statSync(cwd).isDirectory()) {
-        throw new Error('Workspace 必须是一个存在的目录')
-      }
       const providerUpdate = Array.isArray(request.providers)
       const providers = providerUpdate
         ? (request.providers as ProviderConfig[]).map(validateProvider)
@@ -196,7 +190,7 @@ export function registerSettingsIpc(
 
       const nextConfig: AgentConfig = {
         ...current,
-        cwd,
+        ...(request.defaultPermissionMode ? { defaultPermissionMode: request.defaultPermissionMode } : {}),
         models,
         activeModelId: activeModel.id,
         model: activeModel,
@@ -283,15 +277,6 @@ export function registerSettingsIpc(
       })
     },
   )
-  ipcMain.handle(IPC_CHANNELS.SETTINGS_SELECT_WORKSPACE, async (event): Promise<string | null> => {
-    assertTrustedSender(event)
-    const result = await dialog.showOpenDialog(window, {
-      title: '选择 Agent 工作目录',
-      defaultPath: configStore.get().cwd,
-      properties: ['openDirectory', 'createDirectory'],
-    })
-    return result.canceled ? null : (result.filePaths[0] ?? null)
-  })
   ipcMain.handle(
     IPC_CHANNELS.PERMISSION_GRANT_DELETE,
     async (event, request: DeletePermissionGrantRequest): Promise<void> => {
@@ -304,7 +289,6 @@ export function registerSettingsIpc(
     ipcMain.removeHandler(IPC_CHANNELS.SETTINGS_UPDATE)
     ipcMain.removeHandler(IPC_CHANNELS.SETTINGS_UPDATE_MODEL_SELECTION)
     ipcMain.removeHandler(IPC_CHANNELS.SETTINGS_DISCOVER_MODELS)
-    ipcMain.removeHandler(IPC_CHANNELS.SETTINGS_SELECT_WORKSPACE)
     ipcMain.removeHandler(IPC_CHANNELS.PERMISSION_GRANT_DELETE)
   })
 }

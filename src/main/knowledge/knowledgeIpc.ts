@@ -11,7 +11,7 @@ import type {
 export function registerKnowledgeIpc(
   window: BrowserWindow,
   backend: AgentBackendProcess,
-  workspace: () => string,
+  workspace: (id: string) => string | undefined | Promise<string | undefined>,
 ): () => void {
   const assertSender = (event: IpcMainInvokeEvent) => {
     if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame)
@@ -29,13 +29,14 @@ export function registerKnowledgeIpc(
   handle(IPC_CHANNELS.KNOWLEDGE_LIST, () =>
     backend.request<KnowledgeSource[]>({ action: 'knowledge:list' }),
   )
-  handle(IPC_CHANNELS.KNOWLEDGE_ADD, (input: { path: string; kind: KnowledgeSource['kind'] }) =>
+  handle(IPC_CHANNELS.KNOWLEDGE_ADD, (input: { path: string; kind: KnowledgeSource['kind']; workspaceId?: string }) =>
     backend.request<KnowledgeSource>({ action: 'knowledge:add', ...input }),
   )
-  handle(IPC_CHANNELS.KNOWLEDGE_PICK, async (kind: KnowledgeSource['kind']) => {
+  handle(IPC_CHANNELS.KNOWLEDGE_PICK, async (input: KnowledgeSource['kind'] | { kind: KnowledgeSource['kind']; workspaceId?: string }) => {
+    const { kind, workspaceId } = typeof input === 'string' ? { kind: input, workspaceId: undefined } : input
     const paths =
       kind === 'workspace'
-        ? [workspace()]
+        ? [await workspace(workspaceId ?? '')]
         : (
             await dialog.showOpenDialog(window, {
               properties: kind === 'folder' ? ['openDirectory'] : ['openFile', 'multiSelections'],
@@ -65,8 +66,10 @@ export function registerKnowledgeIpc(
             })
           ).filePaths
     const sources: KnowledgeSource[] = []
-    for (const path of paths)
-      sources.push(await backend.request({ action: 'knowledge:add', path, kind }))
+    for (const path of paths) {
+      if (!path) throw new Error('请选择关联的项目')
+      sources.push(await backend.request({ action: 'knowledge:add', path, kind, workspaceId }))
+    }
     return sources
   })
   handle(IPC_CHANNELS.KNOWLEDGE_REINDEX, (sourceId: string) =>

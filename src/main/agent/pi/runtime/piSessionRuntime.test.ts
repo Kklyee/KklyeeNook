@@ -8,7 +8,6 @@ import {
   type AgentSessionEvent,
 } from '@earendil-works/pi-coding-agent'
 import { AgentConfigStore } from '@/main/settings/agentConfigStore'
-import type { ApprovalPolicy } from '@/main/approval/approvalPolicy'
 import type { AgentRuntimeStateRepo } from '@/main/db/repositories/agentRuntimeStateRepo'
 import type { CredentialStore } from '@/main/settings/credentialStore'
 import { ToolRegistry } from '@/main/tools/toolRegistry'
@@ -141,7 +140,6 @@ test('uses configured custom-provider limits and keeps client subscriptions acro
     'session-1',
     configStore,
     { getApiKey: () => 'secret' } as unknown as CredentialStore,
-    {} as ApprovalPolicy,
     { findBySessionId: vi.fn(), save: vi.fn() } as unknown as AgentRuntimeStateRepo,
     toolRegistry,
     'sessions',
@@ -152,6 +150,7 @@ test('uses configured custom-provider limits and keeps client subscriptions acro
   sessionRuntime.subscribeProductEvents((event) => productEvents.push(event))
 
   await sessionRuntime.initialize()
+  expect(vi.mocked(createAgentSession).mock.calls.at(-1)?.[0]?.cwd).not.toBe('C:\\workspace')
   expect(vi.mocked(createAgentSession).mock.calls.at(-1)?.[0]?.tools).toEqual([
     'mcp__filesystem__search',
   ])
@@ -256,7 +255,6 @@ test('enables image input for the current DeepSeek Flash alias', async () => {
       cwd: 'C:\\workspace',
     }),
     { getApiKey: () => 'secret' } as unknown as CredentialStore,
-    {} as ApprovalPolicy,
     { findBySessionId: vi.fn(), save: vi.fn() } as unknown as AgentRuntimeStateRepo,
     new ToolRegistry(),
     'sessions',
@@ -304,7 +302,6 @@ test('uses the configured model and thinking level instead of the Pi session tra
       cwd: 'C:\\workspace',
     }),
     { getApiKey: () => 'secret' } as unknown as CredentialStore,
-    {} as ApprovalPolicy,
     { findBySessionId: vi.fn(), save: vi.fn() } as unknown as AgentRuntimeStateRepo,
     new ToolRegistry(),
     'sessions',

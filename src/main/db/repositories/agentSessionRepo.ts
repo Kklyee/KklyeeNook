@@ -1,3 +1,4 @@
+import type { PermissionMode } from '@/shared/approval/permission'
 import { desc, eq } from 'drizzle-orm'
 
 import type { Database } from '../client'
@@ -11,6 +12,7 @@ export interface AgentSessionRecord {
   updatedAt: number
   archived: boolean
   workspaceId?: string | null
+  permissionMode?: PermissionMode | null
 }
 
 export interface AgentSessionRepo {
@@ -39,7 +41,7 @@ export class DrizzleAgentSessionRepo implements AgentSessionRepo {
       .values(session)
       .onConflictDoUpdate({
         target: conversations.id,
-        set: { title: session.title, updatedAt: session.updatedAt, archived: session.archived, workspaceId: session.workspaceId ?? null },
+        set: { title: session.title, updatedAt: session.updatedAt, archived: session.archived, workspaceId: session.workspaceId ?? null, permissionMode: session.permissionMode ?? null },
       })
   }
 

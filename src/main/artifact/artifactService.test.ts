@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, expect, test } from 'vitest'
@@ -73,4 +73,22 @@ test('rejects targets outside the workspace', async () => {
   })
   const service = new ArtifactService(new MemoryArtifactRepo([outside]), workspace)
   await expect(service.apply(outside.id)).rejects.toThrow('inside the workspace')
+})
+
+test('protects artifact application from junction escapes and read-only permissions', async () => {
+  const outside = await mkdtemp(join(tmpdir(), 'nook-artifact-outside-'))
+  try {
+    await symlink(outside, join(workspace, 'link'), process.platform === 'win32' ? 'junction' : 'dir')
+    const code = artifact({ kind: 'code', title: 'Code', content: 'new', targetPath: 'link/a.txt' })
+    const repo = new MemoryArtifactRepo([code])
+    const service = new ArtifactService(repo, workspace)
+    await expect(service.apply(code.id)).rejects.toThrow('工作区内')
+    await service.apply(code.id, async () => true)
+    expect(await readFile(join(outside, 'a.txt'), 'utf8')).toBe('new')
+    await expect(service.apply(code.id)).rejects.toThrow('工作区内')
+    const readonly = new ArtifactService(repo, async sessionId => ({ conversationId: sessionId, mode: 'read-only', workspace: { id: 'ws', rootPath: workspace } }))
+    await expect(readonly.apply(code.id, async () => true)).rejects.toThrow('禁止修改')
+    const full = new ArtifactService(repo, async sessionId => ({ conversationId: sessionId, mode: 'full-access', workspace: { id: 'ws', rootPath: workspace } }))
+    await expect(full.apply(code.id)).resolves.toBe(join(outside, 'a.txt'))
+  } finally { await rm(outside, { recursive: true, force: true }) }
 })

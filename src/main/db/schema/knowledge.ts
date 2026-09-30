@@ -1,4 +1,5 @@
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { workspaces } from './workspaces'
 import type { KnowledgeSource } from '@/shared/knowledge/knowledge'
 
 export const knowledgeSources = sqliteTable(
@@ -6,6 +7,8 @@ export const knowledgeSources = sqliteTable(
   {
     id: text('id').primaryKey(),
     name: text('name').notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id),
+    workspaceRelativePath: text('workspace_relative_path'),
     path: text('path').notNull(),
     kind: text('kind').$type<KnowledgeSource['kind']>().notNull(),
     status: text('status').$type<KnowledgeSource['status']>().notNull(),
@@ -15,7 +18,7 @@ export const knowledgeSources = sqliteTable(
     embeddingModel: text('embedding_model'),
     error: text('error'),
   },
-  (table) => [uniqueIndex('knowledge_source_path_idx').on(table.path)],
+  (table) => [uniqueIndex('knowledge_source_workspace_path_idx').on(table.workspaceId, table.path)],
 )
 
 export const knowledgeDocuments = sqliteTable(

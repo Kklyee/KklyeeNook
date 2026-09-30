@@ -23,12 +23,12 @@ export class ContextBuilder {
 
   async build(
     attachmentIds: readonly string[],
-    workspacePath?: string,
+    workspaceId?: string,
   ): Promise<AgentRunContext | undefined> {
     const attachments: ResolvedContextAttachment[] = attachmentIds.length
       ? this.attachmentService.resolve(attachmentIds)
       : []
-    const memories = (await this.memoryRepo?.list(workspacePath)) ?? []
+    const memories = (await this.memoryRepo?.list(workspaceId)) ?? []
 
     if (!attachments.length && !memories.length) return undefined
 

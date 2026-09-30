@@ -1,3 +1,4 @@
+import { workspaces } from './workspaces'
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 import type { AgentPlan } from '@/shared/agent/agentPlan'
@@ -10,6 +11,7 @@ export const agentRuns = sqliteTable(
   'agent_runs',
   {
     id: text('id').primaryKey(),
+    workspaceId: text('workspace_id').references(() => workspaces.id),
     sessionId: text('session_id')
       .notNull()
       .references(() => conversations.id, { onDelete: 'cascade' }),

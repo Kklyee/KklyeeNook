@@ -1,0 +1,1 @@
+ALTER TABLE `conversations` ADD `permission_mode` text;

@@ -9,14 +9,15 @@ test('persists memories and filters workspace scope', async () => {
   const { database, close } = await connectDatabase('file::memory:', migrationsFolder)
 
   try {
+    await database.$client.execute("INSERT INTO workspaces (id, display_name, status, created_at, updated_at) VALUES ('C:/workspace-a', 'A', 'detached', 1, 1), ('C:/workspace-b', 'B', 'detached', 1, 1)")
     const repo = new DrizzleAgentMemoryRepo(database)
     const globalMemory = await repo.create({ scope: 'global', content: 'Use pnpm' })
     const workspaceMemory = await repo.create({
       scope: 'workspace',
       content: 'Use strict TypeScript',
-      workspacePath: 'C:/workspace-a',
+      workspaceId: 'C:/workspace-a',
     })
-    await repo.create({ scope: 'workspace', content: 'Use npm', workspacePath: 'C:/workspace-b' })
+    await repo.create({ scope: 'workspace', content: 'Use npm', workspaceId: 'C:/workspace-b' })
 
     await expect(repo.list('C:/workspace-a')).resolves.toEqual([workspaceMemory, globalMemory])
     await expect(repo.list('C:/workspace-b')).resolves.toEqual([
@@ -46,7 +47,7 @@ test('rejects empty content and workspace memories without a workspace', async (
       'Memory content is required',
     )
     await expect(repo.create({ scope: 'workspace', content: 'fact' })).rejects.toThrow(
-      'Workspace memory requires a workspace path',
+      'Workspace memory requires a workspace ID',
     )
   } finally {
     close()

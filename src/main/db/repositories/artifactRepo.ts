@@ -20,6 +20,7 @@ function toArtifact(row: ArtifactRow): Artifact {
     ...payload,
     id: row.id,
     sessionId: row.sessionId,
+    workspaceId: row.workspaceId,
     runId: row.runId,
     toolCallId: row.toolCallId ?? undefined,
     kind: row.kind,
@@ -60,6 +61,7 @@ export class DrizzleArtifactRepo implements ArtifactRepo {
     const {
       id,
       sessionId,
+      workspaceId,
       runId,
       toolCallId,
       kind,
@@ -74,6 +76,7 @@ export class DrizzleArtifactRepo implements ArtifactRepo {
       .values({
         id,
         sessionId,
+        workspaceId: workspaceId ?? null,
         runId,
         toolCallId,
         kind,

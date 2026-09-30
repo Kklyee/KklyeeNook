@@ -15,6 +15,7 @@ function toAgentRun(row: AgentRunRow): AgentRun {
   return {
     id: row.id,
     sessionId: row.sessionId,
+    workspaceId: row.workspaceId,
     ...(row.displayName ? { displayName: row.displayName } : {}),
     ...(row.avatar ? { avatar: row.avatar } : {}),
     ...(row.parentRunId ? { parentRunId: row.parentRunId } : {}),
@@ -59,6 +60,7 @@ export class DrizzleAgentRunRepo implements AgentRunRepo {
       .values({
         id: run.id,
         sessionId: run.sessionId,
+        workspaceId: run.workspaceId ?? null,
         displayName: run.displayName ?? null,
         avatar: run.avatar ?? null,
         parentRunId: run.parentRunId ?? null,

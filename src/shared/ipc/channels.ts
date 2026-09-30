@@ -1,4 +1,5 @@
 export const IPC_CHANNELS = {
+  CONVERSATION_PERMISSION: 'conversation:permission',
   CONVERSATION_LIST: 'conversation:list',
   CONVERSATION_CREATE: 'conversation:create',
   CONVERSATION_MOVE: 'conversation:move',
@@ -18,7 +19,6 @@ export const IPC_CHANNELS = {
   SETTINGS_UPDATE: 'settings:update',
   SETTINGS_UPDATE_MODEL_SELECTION: 'settings:update-model-selection',
   SETTINGS_DISCOVER_MODELS: 'settings:discover-models',
-  SETTINGS_SELECT_WORKSPACE: 'settings:select-workspace',
   MCP_LIST: 'mcp:list',
   MCP_CONNECT: 'mcp:connect',
   MCP_DISCONNECT: 'mcp:disconnect',

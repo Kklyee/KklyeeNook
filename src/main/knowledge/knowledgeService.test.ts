@@ -1,5 +1,7 @@
+import { WorkspaceService } from '../workspace/workspaceService'
+import { DrizzleWorkspaceRepo } from '../db/repositories/workspaceRepo'
 import { fileURLToPath } from 'node:url'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, test, vi } from 'vitest'
@@ -34,12 +36,14 @@ async function setup(model = 'test-model') {
       texts.map((text) => (text.includes('crash') ? 10 : text.includes('isolation') ? 5 : 1)),
     ),
   }
+  const workspaces = new WorkspaceService(new DrizzleWorkspaceRepo(database))
   const service = new KnowledgeService(
     repo,
     index,
     [new TextParser(), new CodeParser()],
     models,
     model,
+    workspaces,
   )
   cleanups.push(async () => {
     await service.stop()
@@ -47,7 +51,7 @@ async function setup(model = 'test-model') {
     close()
     await rm(directory, { recursive: true, force: true })
   })
-  return { directory, service, repo, index, models }
+  return { directory, service, repo, index, models, workspaces }
 }
 
 test('indexes incrementally, updates changed files, removes deleted files and excludes generated folders', async () => {
@@ -60,7 +64,7 @@ test('indexes incrementally, updates changed files, removes deleted files and ex
   await writeFile(join(directory, 'node_modules', 'ignored.ts'), 'export class Ignored {}')
   await mkdir(join(directory, '.tmp-models'))
   await writeFile(join(directory, '.tmp-models', 'tokenizer.json'), '{"unused":true}')
-  const source = await service.addSource(directory, 'workspace')
+  const source = await service.addSource(directory, 'folder')
   await service.waitForIdle()
   expect(await repo.getSource(source.id)).toMatchObject({
     status: 'ready',
@@ -200,4 +204,40 @@ test('RRF favors candidates present in both rankings', () => {
       [c, b],
     ]).map((chunk) => chunk.id),
   ).toEqual(['b', 'a', 'c'])
+})
+
+test('scopes knowledge to project IDs, blocks cross-project reads and preserves indexes across detach and rename', async () => {
+  const { directory, service, repo, workspaces } = await setup()
+  const aPath = join(directory, 'a')
+  const bPath = join(directory, 'b')
+  await mkdir(aPath)
+  await mkdir(bPath)
+  await writeFile(join(aPath, 'a.md'), '# A\n\nProcess isolation for project A.')
+  await writeFile(join(bPath, 'b.md'), '# B\n\nProcess isolation for project B.')
+  const globalPath = join(directory, 'global.md')
+  await writeFile(globalPath, '# Global\n\nProcess isolation shared everywhere.')
+  const a = (await workspaces.attach(aPath)).workspace!
+  const b = (await workspaces.attach(bPath)).workspace!
+  const aSource = await service.addSource(aPath, 'workspace', a.id)
+  const bSource = await service.addSource(bPath, 'workspace', b.id)
+  const globalSource = await service.addSource(globalPath, 'file')
+  await service.waitForIdle()
+  expect((await service.search({ query: 'isolation' })).map(item => item.chunk.sourceId)).toEqual([globalSource.id])
+  const aResults = await service.search({ query: 'isolation', workspaceId: a.id })
+  expect(new Set(aResults.map(item => item.chunk.sourceId))).toEqual(new Set([globalSource.id, aSource.id]))
+  const bResults = await service.search({ query: 'isolation', workspaceId: b.id, sourceIds: [bSource.id] })
+  await expect(service.read(bResults[0].chunk.id, a.id)).rejects.toThrow('当前项目')
+  await expect(service.read(bResults[0].chunk.id, null)).rejects.toThrow('当前项目')
+  await expect(service.addSource(globalPath, 'file', a.id)).rejects.toThrow('关联项目内')
+  await workspaces.detach(a.id)
+  await service.reindex(aSource.id)
+  await service.waitForIdle()
+  expect((await repo.getSource(aSource.id)).documentCount).toBe(1)
+  const moved = join(directory, 'renamed')
+  await rename(aPath, moved)
+  await workspaces.attach(moved)
+  await service.reindex(aSource.id)
+  await service.waitForIdle()
+  expect(await repo.getSource(aSource.id)).toMatchObject({ workspaceId: a.id, path: moved, status: 'ready' })
+  expect((await service.search({ query: 'isolation', workspaceId: a.id, sourceIds: [aSource.id] }))[0].chunk.citation.filePath).toBe(join(moved, 'a.md'))
 })

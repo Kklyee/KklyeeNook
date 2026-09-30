@@ -1,3 +1,4 @@
+import type { PermissionMode } from '@/shared/approval/permission'
 import { randomUUID } from 'node:crypto'
 
 import type {
@@ -47,7 +48,7 @@ export interface AgentRunStartOptions {
 }
 
 export interface AgentServiceOptions {
-  buildChildContext?: () => Promise<AgentRunContext | undefined>
+  buildChildContext?: (sessionId: string) => Promise<AgentRunContext | undefined>
 }
 
 const MAX_CHILD_DEPTH = 1
@@ -120,8 +121,8 @@ export class AgentService {
     const records = await this.sessionRepo.findAll()
 
     for (const record of records) {
-      const { id, title, createdAt, updatedAt, archived, workspaceId } = record
-      const session = new AgentSession(id, title, { createdAt, updatedAt, archived, workspaceId })
+      const { id, title, createdAt, updatedAt, archived, workspaceId, permissionMode } = record
+      const session = new AgentSession(id, title, { createdAt, updatedAt, archived, workspaceId, permissionMode })
       this.sessions.set(id, session)
     }
     onStage?.('sessions_restored', records.length)
@@ -145,6 +146,18 @@ export class AgentService {
     if (!session) throw new Error('会话不存在')
     if (session.toSummary().activeRunId) throw new Error('请等待当前 Agent 运行结束后再移动会话')
     session.workspaceId = workspaceId
+    session.touch()
+    await this.sessionRepo.save(session.toRecord())
+    this.runtimes.get(sessionId)?.dispose()
+    this.runtimes.delete(sessionId)
+    return session.toSummary()
+  }
+
+  async setPermissionMode(sessionId: string, mode: PermissionMode): Promise<AgentSessionSummary> {
+    const session = this.sessions.get(sessionId)
+    if (!session) throw new Error('会话不存在')
+    if (session.toSummary().activeRunId) throw new Error('请等待当前 Agent 运行结束后再修改权限')
+    session.permissionMode = mode
     session.touch()
     await this.sessionRepo.save(session.toRecord())
     this.runtimes.get(sessionId)?.dispose()
@@ -333,6 +346,7 @@ export class AgentService {
       ...draft,
       id: randomUUID(),
       sessionId: session.id,
+      workspaceId: session.getRun(runId)?.workspaceId ?? null,
       runId,
       toolCallId,
       createdAt: Date.now(),
@@ -384,7 +398,7 @@ export class AgentService {
     this.childReservations.set(parentRunId, reservations + 1)
     let reservationHeld = true
     try {
-      const context = await this.options.buildChildContext?.()
+      const context = await this.options.buildChildContext?.(parent.sessionId)
       const task = input.task.trim()
       if (!task) throw new Error('Task is required')
       const explicitContext = input.context?.trim()
@@ -526,6 +540,7 @@ export class AgentService {
     const run: AgentRun = {
       id,
       sessionId,
+      workspaceId: session.workspaceId,
       ...(options.displayName ? { displayName: options.displayName } : {}),
       ...(options.avatar ? { avatar: options.avatar } : {}),
       ...(options.parentRunId ? { parentRunId: options.parentRunId } : {}),

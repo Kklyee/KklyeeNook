@@ -1,3 +1,4 @@
+import type { PermissionMode } from '@/shared/approval/permission'
 import type { AgentSessionSummary } from '@/shared/agent/agentSession'
 import type { Workspace, WorkspaceAttachResult } from '@/shared/workspace/workspace'
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
@@ -51,6 +52,7 @@ const context = {
 
 const api = {
   conversations: {
+    setPermission(id: string, mode: PermissionMode): Promise<AgentSessionSummary> { return ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_PERMISSION, { id, mode }) },
     list(): Promise<AgentSessionSummary[]> { return ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_LIST) },
     create(input: { title?: string; workspaceId: string | null }): Promise<AgentSessionSummary> { return ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_CREATE, input) },
     move(input: { id: string; workspaceId: string | null }): Promise<AgentSessionSummary> { return ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_MOVE, input) },
@@ -63,8 +65,8 @@ const api = {
   },
   knowledge: {
     list(): Promise<KnowledgeSource[]> { return ipcRenderer.invoke(IPC_CHANNELS.KNOWLEDGE_LIST) },
-    add(path: string, kind: KnowledgeSource['kind']): Promise<KnowledgeSource> { return ipcRenderer.invoke(IPC_CHANNELS.KNOWLEDGE_ADD, { path, kind }) },
-    pick(kind: KnowledgeSource['kind']): Promise<KnowledgeSource[]> { return ipcRenderer.invoke(IPC_CHANNELS.KNOWLEDGE_PICK, kind) },
+    add(path: string, kind: KnowledgeSource['kind'], workspaceId?: string): Promise<KnowledgeSource> { return ipcRenderer.invoke(IPC_CHANNELS.KNOWLEDGE_ADD, { path, kind, workspaceId }) },
+    pick(kind: KnowledgeSource['kind'], workspaceId?: string): Promise<KnowledgeSource[]> { return ipcRenderer.invoke(IPC_CHANNELS.KNOWLEDGE_PICK, { kind, workspaceId }) },
     reindex(sourceId: string): Promise<void> { return ipcRenderer.invoke(IPC_CHANNELS.KNOWLEDGE_REINDEX, sourceId) },
     remove(sourceId: string): Promise<void> { return ipcRenderer.invoke(IPC_CHANNELS.KNOWLEDGE_REMOVE, sourceId) },
     search(input: KnowledgeSearchRequest): Promise<KnowledgeSearchResult[]> { return ipcRenderer.invoke(IPC_CHANNELS.KNOWLEDGE_SEARCH, input) },
@@ -151,10 +153,6 @@ const api = {
     return ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_DISCOVER_MODELS, request)
   },
 
-  selectAgentWorkspace(): Promise<string | null> {
-    return ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_SELECT_WORKSPACE)
-  },
-
   listMcpServers(): Promise<McpServerState[]> {
     return ipcRenderer.invoke(IPC_CHANNELS.MCP_LIST)
   },
@@ -171,8 +169,8 @@ const api = {
     return ipcRenderer.invoke(IPC_CHANNELS.MCP_RETRY, serverId)
   },
 
-  listMemories(): Promise<AgentMemory[]> {
-    return ipcRenderer.invoke(IPC_CHANNELS.MEMORY_LIST)
+  listMemories(workspaceId?: string): Promise<AgentMemory[]> {
+    return ipcRenderer.invoke(IPC_CHANNELS.MEMORY_LIST, workspaceId)
   },
 
   deleteMemory(request: DeleteAgentMemoryRequest): Promise<void> {

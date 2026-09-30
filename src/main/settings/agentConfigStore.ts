@@ -73,6 +73,7 @@ function mergeConfig(config?: Partial<AgentConfig>): AgentConfig {
     tools: { ...DEFAULT_CONFIG.tools, ...config?.tools },
     compaction: { ...DEFAULT_AGENT_COMPACTION_SETTINGS, ...config?.compaction },
   }
+  delete merged.cwd
   merged.models = getSavedModels(merged)
   const savedActive = merged.models.find((model) => model.id === merged.activeModelId)
   if (

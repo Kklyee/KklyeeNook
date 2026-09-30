@@ -1,3 +1,4 @@
+import type { WorkspaceService } from '../workspace/workspaceService'
 import { join } from 'node:path'
 import type { Database } from '@/main/db/client'
 import { KnowledgeRepo } from '@/main/db/repositories/knowledgeRepo'
@@ -13,6 +14,7 @@ export async function createKnowledgeRuntime(
   databaseUrl: string,
   cacheDirectory: string,
   settings: KnowledgeSettings,
+  workspaces?: WorkspaceService,
 ) {
   const index = new KnowledgeIndex(new URL('knowledge.db', databaseUrl).href)
   const parser = new OfficeParserAdapter(join(cacheDirectory, 'ocr'))
@@ -25,6 +27,7 @@ export async function createKnowledgeRuntime(
       [parser, new TextParser(), new CodeParser()],
       models,
       settings.embeddingModel,
+      workspaces,
     )
     await service.start()
     return {

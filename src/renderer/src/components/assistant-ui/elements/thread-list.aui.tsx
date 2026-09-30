@@ -1,8 +1,9 @@
 'use client'
 
+import { WorkspaceThreadList, WorkspaceMove } from '@/renderer/src/features/workspaces/WorkspaceThreadList'
+
 import { Button } from '@/renderer/src/components/ui/button'
 import { Input } from '@/renderer/src/components/ui/input'
-import { Skeleton } from '@/renderer/src/components/ui/skeleton'
 import { useSidebar } from '@/renderer/src/components/ui/sidebar'
 import { cn } from '@/renderer/src/lib/utils'
 import {
@@ -10,7 +11,6 @@ import {
   useAgentRunOverview,
 } from '@/renderer/src/features/runs/AgentRunOverviewProvider'
 import {
-  AuiIf,
   ThreadListItemMorePrimitive,
   ThreadListItemPrimitive,
   ThreadListPrimitive,
@@ -23,89 +23,18 @@ import {
   MoreHorizontalIcon,
   PencilIcon,
   PlusIcon,
-  SearchIcon,
   TrashIcon,
 } from 'lucide-react'
 import {
   forwardRef,
-  Fragment,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type ComponentPropsWithoutRef,
   type FC,
 } from 'react'
 
-export const ThreadList: FC = () => {
-  const [search] = useState('')
-  const hasThreads = useAuiState((s) => s.threads.threadIds.length > 0)
-  const { isMobile, state } = useSidebar()
-  const collapsed = state === 'collapsed' && !isMobile
-
-  return (
-    <ThreadListRoot>
-      <ThreadListNew />
-      {/*{hasThreads && <ThreadListSearch value={search} onValueChange={setSearch} />}*/}
-      {hasThreads && !collapsed && (
-        <div className="px-2 pt-3 pb-0.5 text-[11px] font-medium text-text-faint">会话</div>
-      )}
-      <ThreadListItems searchQuery={hasThreads ? search : ''} />
-    </ThreadListRoot>
-  )
-}
-
-export const ThreadListSearch = forwardRef<
-  HTMLInputElement,
-  Omit<ComponentPropsWithoutRef<typeof Input>, 'value' | 'onChange'> & {
-    value: string
-    onValueChange: (value: string) => void
-  }
->(({ className, value, onValueChange, ...props }, ref) => {
-  const { isMobile, setOpen, state } = useSidebar()
-  const collapsed = state === 'collapsed' && !isMobile
-
-  if (collapsed) {
-    return (
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        data-slot="aui_thread-list-search-collapsed"
-        className="mx-auto size-8 rounded-lg text-text-faint hover:bg-interactive-hover hover:text-text-default active:bg-interactive-pressed focus-visible:border-brand-border focus-visible:ring-0"
-        aria-label="展开并搜索对话"
-        title="搜索对话"
-        onClick={() => setOpen(true)}
-      >
-        <SearchIcon className="size-4" />
-      </Button>
-    )
-  }
-
-  return (
-    <div data-slot="aui_thread-list-search" className="relative py-1">
-      <SearchIcon
-        data-slot="aui_thread-list-search-icon"
-        className="pointer-events-none absolute start-2.5 top-1/2 size-3.5 -translate-y-1/2 text-text-faint"
-      />
-      <Input
-        ref={ref}
-        type="search"
-        value={value}
-        onChange={(event) => onValueChange(event.target.value)}
-        aria-label="搜索对话"
-        placeholder="搜索对话"
-        className={cn(
-          'h-8 rounded-lg border-transparent bg-transparent ps-8 text-xs text-text-default shadow-none placeholder:text-text-faint hover:bg-interactive-hover focus-visible:border-brand-border focus-visible:bg-interactive-hover focus-visible:ring-0 active:bg-interactive-pressed',
-          className,
-        )}
-        {...props}
-      />
-    </div>
-  )
-})
-
-ThreadListSearch.displayName = 'ThreadListSearch'
+export const ThreadList: FC = () => <WorkspaceThreadList />
 
 export const ThreadListRoot: FC<ComponentPropsWithoutRef<typeof ThreadListPrimitive.Root>> = ({
   className,
@@ -118,126 +47,6 @@ export const ThreadListRoot: FC<ComponentPropsWithoutRef<typeof ThreadListPrimit
       {...props}
     />
   )
-}
-
-export const ThreadListItems: FC<ComponentPropsWithoutRef<'div'> & { searchQuery?: string }> = ({
-  className,
-  searchQuery = '',
-  ...props
-}) => {
-  const { isMobile, state } = useSidebar()
-
-  if (state === 'collapsed' && !isMobile) return null
-
-  return (
-    <div
-      data-slot="aui_thread-list-items"
-      className={cn('flex flex-col gap-0.5', className)}
-      {...props}
-    >
-      <AuiIf condition={(s) => s.threads.isLoading}>
-        <ThreadListSkeleton />
-      </AuiIf>
-      <AuiIf condition={(s) => !s.threads.isLoading}>
-        <ThreadListItemGroups searchQuery={searchQuery} />
-      </AuiIf>
-    </div>
-  )
-}
-
-const DAY_IN_MS = 86_400_000
-
-const dateGroupLabel = (date: Date | undefined, startOfToday: number): string => {
-  if (!date || date.getTime() >= startOfToday) return '今天'
-  if (date.getTime() >= startOfToday - DAY_IN_MS) return '昨天'
-  return '更早'
-}
-
-export type ThreadListGroup = { label: string; indices: number[] }
-
-/**
- * Filters the thread list by title and buckets the matches by last activity
- * (Today, Yesterday, Earlier). `groups` is null when no thread carries a
- * date, in which case `filteredIndices` keeps the runtime order.
- */
-export const useThreadListGroups = (searchQuery = '') => {
-  const threadIds = useAuiState((s) => s.threads.threadIds)
-  const threadItems = useAuiState((s) => s.threads.threadItems)
-
-  const query = searchQuery.trim().toLowerCase()
-
-  return useMemo(() => {
-    const itemsById = new Map(threadItems.map((item) => [item.id, item]))
-    const dates = threadIds.map((id) => itemsById.get(id)?.lastMessageAt)
-    const filteredIndices = threadIds
-      .map((id, index) => ({ id, index }))
-      .filter(
-        ({ id }) =>
-          !query || (itemsById.get(id)?.title || 'New Chat').toLowerCase().includes(query),
-      )
-      .map(({ index }) => index)
-    if (!filteredIndices.some((index) => dates[index])) {
-      return { threadIds, filteredIndices, groups: null }
-    }
-
-    const now = new Date()
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-    const time = (index: number) => dates[index]?.getTime() ?? Number.MAX_SAFE_INTEGER
-    const sorted = [...filteredIndices].sort((a, b) => time(b) - time(a))
-
-    const result: ThreadListGroup[] = []
-    for (const index of sorted) {
-      const label = dateGroupLabel(dates[index], startOfToday)
-      const lastGroup = result[result.length - 1]
-      if (lastGroup?.label === label) {
-        lastGroup.indices.push(index)
-      } else {
-        result.push({ label, indices: [index] })
-      }
-    }
-    return { threadIds, filteredIndices, groups: result }
-  }, [threadIds, threadItems, query])
-}
-
-const ThreadListItemGroups: FC<{ searchQuery?: string }> = ({ searchQuery = '' }) => {
-  const { threadIds, filteredIndices, groups } = useThreadListGroups(searchQuery)
-  const query = searchQuery.trim()
-
-  if (query && filteredIndices.length === 0) {
-    return (
-      <div data-slot="aui_thread-list-empty" className="text-text-faint px-2.5 py-4 text-sm">
-        没有找到对话
-      </div>
-    )
-  }
-
-  if (!groups) {
-    return filteredIndices.map((index) => (
-      <ThreadListPrimitive.ItemByIndex
-        key={threadIds[index]}
-        index={index}
-        components={{ ThreadListItem }}
-      />
-    ))
-  }
-
-  return groups.map((group) => (
-    <Fragment key={group.label}>
-      <div
-        data-slot="aui_thread-list-group-label"
-        className="px-2 pt-4 pb-1.5 text-[11px] font-medium text-text-faint"
-      >
-        {group.label}
-      </div>
-      {group.indices.map((index) => (
-        <ThreadListPrimitive.ItemByIndex
-          key={threadIds[index]}
-          index={index}
-          components={{ ThreadListItem }}
-        />
-      ))}
-    </Fragment>
-  ))
 }
 
 export const ThreadListNew = forwardRef<
@@ -287,24 +96,6 @@ export const ThreadListNew = forwardRef<
 })
 
 ThreadListNew.displayName = 'ThreadListNew'
-
-const ThreadListSkeleton: FC = () => {
-  return (
-    <div className="flex flex-col gap-0.5">
-      {Array.from({ length: 5 }, (_, i) => (
-        <div
-          key={i}
-          role="status"
-          aria-label="Loading threads"
-          data-slot="aui_thread-list-skeleton-wrapper"
-          className="flex h-8 items-center px-2.5"
-        >
-          <Skeleton data-slot="aui_thread-list-skeleton" className="h-3.5 w-full" />
-        </div>
-      ))}
-    </div>
-  )
-}
 
 export const ThreadListItem: FC = () => {
   const runtimeIsRunning = useAuiState((s) => s.threadListItem.isRunning)
@@ -452,6 +243,7 @@ const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
         data-slot="aui_thread-list-item-more-content"
         className="bg-surface-raised text-text-default data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:animate-out data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-32 overflow-hidden rounded-xl border border-glass-border p-1.5 shadow-[var(--shadow-raised)]"
       >
+        <WorkspaceMove />
         <ThreadListItemMorePrimitive.Item
           data-slot="aui_thread-list-item-more-item"
           className="text-text-muted hover:bg-interactive-hover hover:text-text-strong focus:bg-interactive-hover focus:text-text-strong active:bg-interactive-pressed flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none select-none"

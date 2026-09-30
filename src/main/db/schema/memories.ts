@@ -1,5 +1,6 @@
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
+import { workspaces } from './workspaces'
 import type { AgentMemoryScope } from '@/shared/memory/agentMemory'
 
 export const memories = sqliteTable(
@@ -10,12 +11,13 @@ export const memories = sqliteTable(
       .$type<AgentMemoryScope>()
       .notNull(),
     workspacePath: text('workspace_path'),
+    workspaceId: text('workspace_id').references(() => workspaces.id),
     content: text('content').notNull(),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
   },
   (table) => [
-    index('memories_scope_workspace_idx').on(table.scope, table.workspacePath),
+    index('memories_scope_workspace_idx').on(table.scope, table.workspaceId),
     index('memories_updated_at_idx').on(table.updatedAt),
   ],
 )

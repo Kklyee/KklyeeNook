@@ -43,5 +43,6 @@ test('persists agent settings without exposing mutable store state', () => {
     keepRecentTokens: 4_096,
   })
   expect(restored.get().mcpServers).toEqual(initial.mcpServers)
-  expect(JSON.parse(readFileSync(path, 'utf8'))).toMatchObject({ cwd: directory })
+  expect(JSON.parse(readFileSync(path, 'utf8')).cwd).toBeUndefined()
+  expect(restored.get().cwd).toBeUndefined()
 })

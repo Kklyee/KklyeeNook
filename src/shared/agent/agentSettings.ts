@@ -1,3 +1,4 @@
+import type { PermissionMode } from '../approval/permission'
 import type { PermissionGrant } from '../approval/approvalTypes'
 import type {
   AgentCompactionSettings,
@@ -51,7 +52,7 @@ export interface AgentSettingsSnapshot {
   contextWindow?: number
   maxTokens?: number
   thinkingLevel: string
-  cwd: string
+  defaultPermissionMode?: PermissionMode
   hasApiKey: boolean
   models: SavedModelSettings[]
   providers?: SavedProviderSettings[]
@@ -66,11 +67,11 @@ export interface AgentSettingsSnapshot {
 }
 
 export interface UpdateAgentSettingsRequest {
+  defaultPermissionMode?: PermissionMode
   providers?: ProviderConfig[]
   /** Legacy model-profile update shape. */
   models?: SavedModelConfig[]
   activeModelId?: string
-  cwd: string
   credential?: { provider: string; apiKey?: string; deleteApiKey?: boolean }
   compaction?: AgentCompactionSettings
   mcpServers?: McpServerConfig[]

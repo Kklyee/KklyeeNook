@@ -1,3 +1,6 @@
+import { useWorkspaces, notifyWorkspaceChanged } from '../workspaces/WorkspaceProvider'
+import { PERMISSION_LABELS, PERMISSION_MODES, type PermissionMode } from '@/shared/approval/permission'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../../components/ui/select'
 import { useEffect, useState, type ComponentType, type ReactNode } from 'react'
 import {
   ArrowLeftIcon,
@@ -11,7 +14,6 @@ import {
   PlusIcon,
   RefreshCwIcon,
   SparklesIcon,
-  WrenchIcon,
 } from 'lucide-react'
 import type { AgentSkill } from '@/shared/agent/agentSkill'
 import type { AgentMemory } from '@/shared/memory/agentMemory'
@@ -44,7 +46,7 @@ const toolDescriptions: Record<string, string> = {
   read_knowledge: '读取 Knowledge',
 }
 
-type SettingsTab = 'model' | 'tools' | 'permissions' | 'skills' | 'memory' | 'mcp' | 'knowledge'
+type SettingsTab = 'model' | 'permissions' | 'skills' | 'memory' | 'mcp' | 'knowledge'
 
 const settingsTabs: Array<{
   id: SettingsTab
@@ -58,11 +60,16 @@ const settingsTabs: Array<{
     description: '填入各提供方的 API 密钥即可使用其模型。',
     icon: BotIcon,
   },
-  { id: 'tools', label: '工具', description: '可用工具与审批方式', icon: WrenchIcon },
+
   { id: 'permissions', label: '权限管理', description: '查看和撤销授权', icon: ShieldCheckIcon },
   { id: 'skills', label: 'Skills', description: '查看可用的本地 Skills', icon: SparklesIcon },
   { id: 'memory', label: 'Memory', description: '查看和删除长期记忆', icon: BrainIcon },
-  { id: 'knowledge', label: 'Knowledge', description: '导入文档和代码，管理知识索引与来源', icon: BookOpenIcon },
+  {
+    id: 'knowledge',
+    label: 'Knowledge',
+    description: '导入文档和代码，管理知识索引与来源',
+    icon: BookOpenIcon,
+  },
   { id: 'mcp', label: 'MCP Servers', description: '配置和连接 MCP 工具', icon: ServerIcon },
 ]
 
@@ -180,12 +187,10 @@ export function SettingsPage({
             </p>
           ) : tab === 'model' ? (
             <ModelSettings settings={settings} onChanged={onChanged} />
-          ) : tab === 'tools' ? (
-            <ToolSettings settings={settings} />
           ) : tab === 'skills' ? (
             <SkillSettings />
           ) : tab === 'memory' ? (
-            <MemorySettings workspacePath={settings.cwd} />
+            <MemorySettings />
           ) : tab === 'knowledge' ? (
             <KnowledgeSettings settings={settings} onChanged={onChanged} />
           ) : tab === 'mcp' ? (
@@ -197,6 +202,7 @@ export function SettingsPage({
               revoking={revoking}
               revokeError={revokeError}
               onRevoke={revoke}
+              onChanged={onChanged}
             />
           )}
         </div>
@@ -209,30 +215,9 @@ function SettingsCard({ children }: { children: ReactNode }) {
   return <div className="bg-card divide-y overflow-hidden rounded-xl border">{children}</div>
 }
 
-function SettingRow({
-  label,
-  description,
-  value,
-}: {
-  label: string
-  description: string
-  value: string
-}) {
-  return (
-    <div className="flex flex-col gap-2 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-      <div className="min-w-0">
-        <p className="text-sm font-medium">{label}</p>
-        <p className="text-muted-foreground mt-0.5 text-xs">{description}</p>
-      </div>
-      <span className="text-muted-foreground max-w-full shrink-0 break-all text-xs sm:max-w-[55%] sm:text-right">
-        {value}
-      </span>
-    </div>
-  )
-}
 
-type SavedProvider = NonNullable<AgentSettingsSnapshot['providers']>[number]
 type EditorMode = 'builtin' | 'custom'
+type SavedProvider = NonNullable<AgentSettingsSnapshot['providers']>[number]
 
 function getProviderEntries(settings: AgentSettingsSnapshot): SavedProvider[] {
   if (settings.providers) return settings.providers
@@ -317,7 +302,6 @@ function ModelSettings({
   const initialBuiltinProvider = findAvailableBuiltinProvider(settings.catalog, initialProviders)
 
   const [providerEntries, setProviderEntries] = useState<SavedProvider[]>(initialProviders)
-  const [cwd, setCwd] = useState(settings.cwd)
   const [compaction, setCompaction] = useState<AgentCompactionSettings>(
     settings.compaction ?? DEFAULT_AGENT_COMPACTION_SETTINGS,
   )
@@ -343,7 +327,6 @@ function ModelSettings({
   useEffect(() => {
     const nextProviderEntries = getProviderEntries(settings)
     setProviderEntries(nextProviderEntries)
-    setCwd(settings.cwd)
     setCompaction(settings.compaction ?? DEFAULT_AGENT_COMPACTION_SETTINGS)
     setEditingId(null)
     setEditorMode('builtin')
@@ -416,7 +399,6 @@ function ModelSettings({
     try {
       await window.api.updateAgentSettings({
         providers: nextProviders,
-        cwd,
         credential,
         compaction: nextCompaction,
       })
@@ -542,13 +524,6 @@ function ModelSettings({
     await persistProviders(nextProviders, { provider: entry.id, deleteApiKey: true })
   }
 
-  const chooseWorkspace = async () => {
-    const selected = await window.api.selectAgentWorkspace()
-    if (selected) {
-      setCwd(selected)
-      setSaved(false)
-    }
-  }
 
   return (
     <section aria-labelledby="model-section-title">
@@ -808,34 +783,7 @@ function ModelSettings({
         </div>
       </SettingsCard>
 
-      <h2 className="mt-8 mb-3 text-xs font-medium">工作区</h2>
-      <SettingsCard>
-        <SettingsField label="工作目录" description="工具和 Artifact 的安全根目录">
-          <div className="flex gap-2">
-            <Input
-              aria-label="工作目录"
-              value={cwd}
-              onChange={(event) => {
-                setCwd(event.target.value)
-                setSaved(false)
-              }}
-            />
-            <Button type="button" variant="outline" onClick={() => void chooseWorkspace()}>
-              选择
-            </Button>
-          </div>
-        </SettingsField>
-        <div className="flex justify-end px-4 py-3.5">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={saving}
-            onClick={() => void persistProviders(providerEntries.map(toProviderConfig))}
-          >
-            保存工作目录
-          </Button>
-        </div>
-      </SettingsCard>
+
 
       <h2 className="mt-8 mb-3 text-xs font-medium">上下文</h2>
       <SettingsCard>
@@ -860,10 +808,7 @@ function ModelSettings({
         <details className="border-border/70 border-t px-4 py-3.5">
           <summary className="cursor-pointer text-sm font-medium">高级参数</summary>
           <div className="mt-3 grid gap-3">
-            <SettingsField
-              label="Reserve tokens"
-              description="为压缩后的继续执行保留的 token 数量"
-            >
+            <SettingsField label="Reserve tokens" description="为压缩后的继续执行保留的 token 数量">
               <Input
                 type="number"
                 min={0}
@@ -878,10 +823,7 @@ function ModelSettings({
                 }}
               />
             </SettingsField>
-            <SettingsField
-              label="Keep recent tokens"
-              description="压缩时保留最近消息的 token 数量"
-            >
+            <SettingsField label="Keep recent tokens" description="压缩时保留最近消息的 token 数量">
               <Input
                 type="number"
                 min={0}
@@ -951,28 +893,6 @@ function SettingsField({
   )
 }
 
-function ToolSettings({ settings }: { settings: AgentSettingsSnapshot }) {
-  return (
-    <section aria-labelledby="tools-section-title">
-      <h2 id="tools-section-title" className="mb-3 text-xs font-medium">
-        已启用的工具
-      </h2>
-      <SettingsCard>
-        {settings.tools.map((tool) => (
-          <SettingRow
-            key={tool.name}
-            label={toolDescriptions[tool.name] ?? tool.name}
-            description={tool.name}
-            value={tool.requiresApproval ? '按权限策略' : '无需审批'}
-          />
-        ))}
-      </SettingsCard>
-      <p className="text-muted-foreground mt-4 text-xs">
-        受保护的工具在没有匹配 Permission Grant 时会请求审批。
-      </p>
-    </section>
-  )
-}
 
 function SkillSettings() {
   const [skills, setSkills] = useState<AgentSkill[]>([])
@@ -1045,9 +965,7 @@ function SkillSettings() {
           {skills.map((skill) => (
             <div key={skill.id} className="px-4 py-3.5">
               <p className="text-sm font-medium">{skill.name}</p>
-              <p className="text-muted-foreground mt-1 break-all font-mono text-xs">
-                /{skill.id}
-              </p>
+              <p className="text-muted-foreground mt-1 break-all font-mono text-xs">/{skill.id}</p>
               {skill.description && (
                 <p className="text-muted-foreground mt-1 text-xs">{skill.description}</p>
               )}
@@ -1059,7 +977,9 @@ function SkillSettings() {
   )
 }
 
-function MemorySettings({ workspacePath }: { workspacePath: string }) {
+function MemorySettings() {
+  const { workspaces } = useWorkspaces()
+  const [workspaceId, setWorkspaceId] = useState<string>('global')
   const [memories, setMemories] = useState<AgentMemory[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -1069,7 +989,7 @@ function MemorySettings({ workspacePath }: { workspacePath: string }) {
     setLoading(true)
     setError(null)
     try {
-      setMemories(await window.api.listMemories())
+      setMemories(await window.api.listMemories(workspaceId === 'global' ? undefined : workspaceId))
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Memory 读取失败，请重试。')
     } finally {
@@ -1092,10 +1012,14 @@ function MemorySettings({ workspacePath }: { workspacePath: string }) {
 
   useEffect(() => {
     void loadMemories()
-  }, [workspacePath])
+  }, [workspaceId])
 
   return (
     <section aria-labelledby="memory-section-title">
+      <Select value={workspaceId} onValueChange={value => { if (value) setWorkspaceId(value) }}>
+        <SelectTrigger className="mb-4">{workspaceId === 'global' ? '全局 Memory' : workspaces.find(item => item.id === workspaceId)?.displayName}</SelectTrigger>
+        <SelectContent><SelectItem value="global">全局 Memory</SelectItem>{workspaces.map(item => <SelectItem key={item.id} value={item.id}>{item.displayName}</SelectItem>)}</SelectContent>
+      </Select>
       <div className="mb-3 flex items-end justify-between gap-4">
         <div>
           <h2 id="memory-section-title" className="text-xs font-medium">
@@ -1120,9 +1044,7 @@ function MemorySettings({ workspacePath }: { workspacePath: string }) {
         <div className="rounded-xl border border-dashed px-5 py-9 text-center">
           <BrainIcon className="text-muted-foreground/60 mx-auto size-5" />
           <p className="mt-3 text-sm font-medium">暂无已保存的 Memory</p>
-          <p className="text-muted-foreground mt-1 text-xs">
-            Agent 保存长期信息后，会在这里显示。
-          </p>
+          <p className="text-muted-foreground mt-1 text-xs">Agent 保存长期信息后，会在这里显示。</p>
         </div>
       ) : (
         <SettingsCard>
@@ -1169,49 +1091,38 @@ function PermissionSettings({
   revoking,
   revokeError,
   onRevoke,
+  onChanged,
 }: {
   settings: AgentSettingsSnapshot
   permissionGrants: AgentSettingsSnapshot['permissionGrants']
   revoking: string | null
   revokeError: string | null
   onRevoke: (id: string) => Promise<void>
+  onChanged: () => Promise<void>
 }) {
+  const [error, setError] = useState<string | null>(null)
+  const change = async (mode: PermissionMode | null) => {
+    if (!mode) return
+    try { await window.api.updateAgentSettings({ defaultPermissionMode: mode }); await onChanged(); notifyWorkspaceChanged() }
+    catch (error) { setError(error instanceof Error ? error.message : '保存失败') }
+  }
   return (
     <>
       <section aria-labelledby="default-permission-policy">
-        <div className="mb-3 flex items-end justify-between gap-4">
-          <h2 id="default-permission-policy" className="text-xs font-medium">
-            默认策略
-          </h2>
-          <span className="text-muted-foreground text-xs">
-            {settings.tools.filter((tool) => tool.requiresApproval).length} 个受保护工具
-          </span>
-        </div>
-        <SettingsCard>
-          {settings.tools.map((tool) => (
-            <SettingRow
-              key={tool.name}
-              label={toolDescriptions[tool.name] ?? tool.name}
-              description={tool.name}
-              value={tool.requiresApproval ? '未授权时询问，授权后自动执行' : '直接允许'}
-            />
-          ))}
-        </SettingsCard>
+        <h2 id="default-permission-policy" className="mb-3 text-xs font-medium">默认权限</h2>
+        <Select value={settings.defaultPermissionMode ?? 'workspace-write'} onValueChange={value => void change(value)}>
+          <SelectTrigger>{PERMISSION_LABELS[settings.defaultPermissionMode ?? 'workspace-write']}</SelectTrigger>
+          <SelectContent>{PERMISSION_MODES.map(mode => <SelectItem key={mode} value={mode}>{PERMISSION_LABELS[mode]}</SelectItem>)}</SelectContent>
+        </Select>
+        {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+        <p className="mt-3 text-xs text-text-muted">默认权限适用于新会话。未分组会话无法使用工作区内修改；工作区外操作和受限模式下的命令需单次审批。</p>
       </section>
-
-      <div className="bg-foreground/[0.025] mt-5 flex items-start gap-3 rounded-xl border p-4">
-        <ShieldCheckIcon className="text-muted-foreground mt-0.5 size-4 shrink-0" />
-        <p className="text-muted-foreground text-xs leading-relaxed">
-          授权按工具生效，不匹配单次调用的参数。Session 权限只在对应 Agent Session 生效；Always
-          权限跨 Session 生效。撤销后，该工具的下一次调用会重新询问。
-        </p>
-      </div>
 
       <div className="mt-8 mb-3 flex items-end justify-between gap-4">
         <div>
-          <h2 className="text-xs font-medium">已保存的工具授权</h2>
+          <h2 className="text-xs font-medium">高级 · 历史授权</h2>
           <p className="text-muted-foreground mt-1 text-xs">
-            在审批卡中选择 This session 或 Always 后，该内置工具会自动执行。
+            旧版工具授权仅保留供查看和撤销，不参与当前权限判断。
           </p>
         </div>
         <span className="text-muted-foreground text-xs">{permissionGrants.length} 条</span>
@@ -1226,8 +1137,7 @@ function PermissionSettings({
           <ShieldCheckIcon className="text-muted-foreground/60 mx-auto size-5" />
           <p className="mt-3 text-sm font-medium">尚无已保存的权限</p>
           <p className="text-muted-foreground mx-auto mt-1 max-w-sm text-xs leading-relaxed">
-            返回对话并触发读取、写入或命令工具；审批出现时选择 This session 或
-            Always，即可创建第一条 Grant。
+            新的审批仅对当前调用生效。
           </p>
         </div>
       ) : (

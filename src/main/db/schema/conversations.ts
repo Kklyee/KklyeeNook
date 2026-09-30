@@ -1,3 +1,4 @@
+import type { PermissionMode } from '@/shared/approval/permission'
 import { workspaces } from './workspaces'
 import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
@@ -7,6 +8,7 @@ export const conversations = sqliteTable(
     id: text('id').primaryKey(),
     title: text('title').notNull(),
     workspaceId: text('workspace_id').references(() => workspaces.id),
+    permissionMode: text('permission_mode').$type<PermissionMode>(),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
     archived: integer('archived', { mode: 'boolean' }).notNull().default(false),

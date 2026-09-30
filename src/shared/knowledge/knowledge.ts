@@ -50,6 +50,8 @@ export interface KnowledgeChunk {
 }
 
 export interface KnowledgeSource {
+  workspaceId?: string | null
+  workspaceRelativePath?: string | null
   id: string
   name: string
   path: string
@@ -75,6 +77,7 @@ export interface KnowledgeDocument {
 }
 
 export interface KnowledgeSearchRequest {
+  workspaceId?: string
   query: string
   sourceIds?: string[]
   limit?: number

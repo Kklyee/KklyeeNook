@@ -1,3 +1,4 @@
+import type { PermissionMode } from '@/shared/approval/permission'
 import type { AgentSessionSummary } from '@/shared/agent/agentSession'
 import type { Workspace, WorkspaceAttachResult } from '@/shared/workspace/workspace'
 import type { ElectronAPI } from '@electron-toolkit/preload'
@@ -39,6 +40,7 @@ import type {
 
 interface API {
   conversations: {
+    setPermission(id: string, mode: PermissionMode): Promise<AgentSessionSummary>
     list(): Promise<AgentSessionSummary[]>
     create(input: { title?: string; workspaceId: string | null }): Promise<AgentSessionSummary>
     move(input: { id: string; workspaceId: string | null }): Promise<AgentSessionSummary>
@@ -51,8 +53,8 @@ interface API {
   }
   knowledge: {
     list(): Promise<KnowledgeSource[]>
-    add(path: string, kind: KnowledgeSource['kind']): Promise<KnowledgeSource>
-    pick(kind: KnowledgeSource['kind']): Promise<KnowledgeSource[]>
+    add(path: string, kind: KnowledgeSource['kind'], workspaceId?: string): Promise<KnowledgeSource>
+    pick(kind: KnowledgeSource['kind'], workspaceId?: string): Promise<KnowledgeSource[]>
     reindex(sourceId: string): Promise<void>
     remove(sourceId: string): Promise<void>
     search(input: KnowledgeSearchRequest): Promise<KnowledgeSearchResult[]>
@@ -90,12 +92,11 @@ interface API {
     request: UpdateAgentModelSelectionRequest,
   ): Promise<AgentSettingsSnapshot>
   discoverModels(request: DiscoverModelsRequest): Promise<ModelCatalogModel[]>
-  selectAgentWorkspace(): Promise<string | null>
   listMcpServers(): Promise<McpServerState[]>
   connectMcpServer(serverId: string): Promise<McpServerState>
   disconnectMcpServer(serverId: string): Promise<void>
   retryMcpServer(serverId: string): Promise<McpServerState>
-  listMemories(): Promise<AgentMemory[]>
+  listMemories(workspaceId?: string): Promise<AgentMemory[]>
   deleteMemory(request: DeleteAgentMemoryRequest): Promise<void>
   deletePermissionGrant(request: DeletePermissionGrantRequest): Promise<void>
   listAgentRuns(request: LoadAgentRunsRequest): Promise<AgentRun[]>

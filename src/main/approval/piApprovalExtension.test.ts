@@ -1,39 +1,36 @@
 import { expect, test, vi } from 'vitest'
-
-import type { ApprovalPolicy } from './approvalPolicy'
+import { SandboxService } from '../sandbox/sandboxService'
 import { createPiApprovalExtension } from './piApprovalExtension'
 
-const permission = {
-  toolName: 'read',
-  action: 'filesystem.read',
-  resourceKind: 'path' as const,
-  resource: 'D:/project',
-  recursive: true,
-  description: 'Read project files',
-}
-
-function setup(selection: string | undefined) {
+function setup(selection?: string) {
   let handler: ((event: any, context: any) => Promise<unknown>) | undefined
-  const policy = {
-    evaluate: vi.fn(() => Promise.resolve({ outcome: 'prompt', permission })),
-    grant: vi.fn(() => Promise.resolve({})),
-  } as unknown as ApprovalPolicy
+  const sandbox = new SandboxService()
   const emit = vi.fn()
-  const extension = createPiApprovalExtension('session-1', policy, emit)
-  extension({ on: (_name: string, callback: typeof handler) => (handler = callback) } as never)
+  const select = vi.fn(async (_title: string, _options: string[]) => selection)
+  const extension = createPiApprovalExtension(
+    {
+      conversationId: 'session-1',
+      workspace: { id: 'ws', rootPath: process.cwd() },
+      mode: 'workspace-write',
+    },
+    sandbox,
+    emit,
+  )
+  extension({
+    on: (name: string, callback: typeof handler) => {
+      if (name === 'tool_call') handler = callback
+    },
+  } as never)
+  const input = { command: 'npm install' }
   const execute = () =>
-    handler!(
-      { toolCallId: 'tool-1', toolName: 'read', input: { path: 'README.md' } },
-      { ui: { select: vi.fn(() => Promise.resolve(selection)) } },
-    )
-  return { execute, policy, emit }
+    handler!({ toolCallId: 'tool-1', toolName: 'bash', input }, { ui: { select } })
+  return { execute, sandbox, emit, select }
 }
 
-test('persists a tool-level session approval selected through Pi host UI', async () => {
-  const { execute, policy, emit } = setup('Allow this tool for this session')
-
+test('offers only one-shot elevation and denial when the shell sandbox is unavailable', async () => {
+  const { execute, emit, select } = setup('允许本次使用完全权限')
   await expect(execute()).resolves.toBeUndefined()
-  expect(policy.grant).toHaveBeenCalledWith('session', 'session-1', permission)
+  expect(select.mock.calls[0][1]).toEqual(['允许本次使用完全权限', '拒绝'])
   expect(emit).toHaveBeenLastCalledWith({
     type: 'approval_resolved',
     approvalId: 'tool-1',
@@ -42,15 +39,6 @@ test('persists a tool-level session approval selected through Pi host UI', async
   })
 })
 
-test('blocks a tool when Pi host UI denies or dismisses the approval', async () => {
-  const { execute, policy, emit } = setup(undefined)
-
-  await expect(execute()).resolves.toEqual({ block: true, reason: 'User denied tool execution' })
-  expect(policy.grant).not.toHaveBeenCalled()
-  expect(emit).toHaveBeenLastCalledWith({
-    type: 'approval_resolved',
-    approvalId: 'tool-1',
-    toolCallId: 'tool-1',
-    decision: 'deny',
-  })
+test('blocks a denied or dismissed approval', async () => {
+  await expect(setup().execute()).resolves.toMatchObject({ block: true })
 })

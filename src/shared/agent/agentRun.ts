@@ -25,6 +25,7 @@ export interface AgentRunOverview {
 }
 
 export interface AgentRun {
+  workspaceId?: string | null
   id: string
   sessionId: string
   displayName?: string

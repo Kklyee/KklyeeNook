@@ -1,3 +1,7 @@
+import { ExecutionContextService } from '../workspace/executionContextService'
+import { WorkspaceService } from '../workspace/workspaceService'
+import { DrizzleWorkspaceRepo } from '../db/repositories/workspaceRepo'
+import { DrizzleAgentSessionRepo } from '../db/repositories/agentSessionRepo'
 import type { AgentConfig } from '@/shared/agent/agentConfig'
 import type { UpdateAgentModelSelectionRequest } from '@/shared/agent/agentSettings'
 import { app, Notification, safeStorage } from 'electron'
@@ -37,7 +41,6 @@ export interface AppContext {
 
 export async function bootstrap(): Promise<AppContext> {
   const userDataPath = app.getPath('userData')
-  const defaultWorkspace = app.isPackaged ? app.getPath('documents') : app.getAppPath()
   const defaultConfig: AgentConfig = {
     model: {
       provider: 'deepseek',
@@ -61,7 +64,6 @@ export async function bootstrap(): Promise<AppContext> {
         'read_knowledge',
       ],
     },
-    cwd: defaultWorkspace,
   }
 
   const configStore = new AgentConfigStore(defaultConfig, join(userDataPath, 'agent-settings.json'))
@@ -92,12 +94,9 @@ export async function bootstrap(): Promise<AppContext> {
   const memoryRepo = new DrizzleAgentMemoryRepo(db)
   const artifactRepo = new DrizzleArtifactRepo(db)
   const approvalPolicy = new ApprovalPolicy(permissionGrantRepo)
-  const workspace = () => {
-    const cwd = configStore.get().cwd
-    if (!cwd) throw new Error('Agent workspace is not configured')
-    return cwd
-  }
-  const artifactService = new ArtifactService(artifactRepo, workspace)
+  const workspaceService = new WorkspaceService(new DrizzleWorkspaceRepo(db))
+  const executionContexts = new ExecutionContextService(new DrizzleAgentSessionRepo(db), workspaceService, () => configStore.get().defaultPermissionMode ?? 'workspace-write')
+  const artifactService = new ArtifactService(artifactRepo, sessionId => executionContexts.resolve(sessionId), undefined, id => workspaceService.resolve(id))
   const contextAttachments = new ContextAttachmentService()
   const backendProcess = createAgentBackendProcess()
   const disposeBackendNotifications = backendProcess.onNotification((notification) => {
@@ -127,9 +126,9 @@ export async function bootstrap(): Promise<AppContext> {
       await backendProcess.request({ action: 'context:remove', id })
     },
   })
-  const disposeMemoryIpc = registerMemoryIpc(chatWindow, memoryRepo, workspace)
+  const disposeMemoryIpc = registerMemoryIpc(chatWindow, memoryRepo)
   const disposeMcpIpc = registerMcpIpc(chatWindow, backendProcess)
-  const disposeKnowledgeIpc = registerKnowledgeIpc(chatWindow, backendProcess, workspace)
+  const disposeKnowledgeIpc = registerKnowledgeIpc(chatWindow, backendProcess, async id => (await workspaceService.resolve(id)).rootPath)
 
   registerSettingsIpc(chatWindow, configStore, credentialStore, approvalPolicy, {
     prepare: async () => {

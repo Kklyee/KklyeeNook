@@ -13,7 +13,7 @@ import { getNextScheduledTaskRunAt, validateScheduledTaskSchedule } from './sche
 import type { ScheduledTaskRepo } from '@/main/db/repositories/scheduledTaskRepo'
 
 export interface ScheduledTaskSchedulerOptions {
-  buildContext: () => Promise<AgentRunContext | undefined>
+  buildContext: (sessionId: string) => Promise<AgentRunContext | undefined>
   projectSession?: (sessionId: string) => Promise<void>
   notify?: (notification: AgentBackendNotification) => void
   now?: () => number
@@ -23,7 +23,7 @@ export interface ScheduledTaskSchedulerOptions {
 export class ScheduledTaskScheduler {
   private readonly now: () => number
   private readonly intervalMs: number
-  private readonly buildContext: () => Promise<AgentRunContext | undefined>
+  private readonly buildContext: (sessionId: string) => Promise<AgentRunContext | undefined>
   private readonly projectSession: ((sessionId: string) => Promise<void>) | undefined
   private readonly notify: (notification: AgentBackendNotification) => void
   private readonly running = new Set<string>()
@@ -182,7 +182,7 @@ export class ScheduledTaskScheduler {
       await this.repo.save({ ...current, lastRunAt: startedAt, updatedAt: startedAt })
 
       const sessionId = await this.ensureSession(current)
-      const context = await this.buildContext()
+      const context = await this.buildContext(sessionId)
       const input: AgentRuntimeInput = {
         prompt: current.prompt,
         ...(context ? { context } : {}),

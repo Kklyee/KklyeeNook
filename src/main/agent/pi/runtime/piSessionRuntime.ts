@@ -1,3 +1,7 @@
+import { SandboxService } from '@/main/sandbox/sandboxService'
+import { effectivePermissionMode, type PermissionMode } from '@/shared/approval/permission'
+import { mkdir } from 'node:fs/promises'
+import type { AgentExecutionContext } from '@/shared/workspace/workspace'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
@@ -43,7 +47,6 @@ import {
   mergeConfiguredProvidersIntoCatalog,
 } from '@/main/settings/modelCatalog'
 
-import type { ApprovalPolicy } from '@/main/approval/approvalPolicy'
 import { createPiApprovalExtension } from '@/main/approval/piApprovalExtension'
 import type { AgentRuntimeStateRepo } from '@/main/db/repositories/agentRuntimeStateRepo'
 import type { AgentConfigStore } from '@/main/settings/agentConfigStore'
@@ -121,6 +124,8 @@ export interface PiSessionRuntimePort {
 }
 
 export interface PiSessionRuntimeOptions {
+  sandbox?: SandboxService
+  getExecutionContext?: () => Promise<AgentExecutionContext & { mode?: PermissionMode }>
   persistState?: boolean
   permissionSessionId?: string
   hostUiEventSink?: (event: PiClientEventBody) => void
@@ -131,6 +136,9 @@ export interface PiSessionRuntimeOptions {
  * SDK session and its model, tools, extensions, queues, and event streams.
  */
 export class PiSessionRuntime implements PiSessionRuntimePort {
+  private readonly sandbox: SandboxService
+  private readonly getExecutionContext: () => Promise<AgentExecutionContext & { mode?: PermissionMode }>
+  private executionContextKey: string | undefined
   private piSession: PiAgentSession | null = null
   private modelRuntime: ModelRuntime | null = null
   private initializePromise: Promise<void> | null = null
@@ -149,7 +157,6 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     private readonly sessionId: string,
     private readonly configStore: AgentConfigStore,
     private readonly credentialStore: CredentialStore,
-    private readonly approvalPolicy: ApprovalPolicy,
     private readonly runtimeStateRepo: AgentRuntimeStateRepo,
     private readonly toolRegistry: ToolRegistry,
     private readonly sessionDir: string,
@@ -160,6 +167,8 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     this.persistState = options.persistState ?? true
     this.permissionSessionId = options.permissionSessionId ?? sessionId
     this.hostUiEventSink = options.hostUiEventSink
+    this.sandbox = options.sandbox ?? new SandboxService()
+    this.getExecutionContext = options.getExecutionContext ?? (async () => ({ conversationId: this.permissionSessionId }))
   }
 
   private readonly persistState: boolean
@@ -167,6 +176,10 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
   private readonly hostUiEventSink?: (event: PiClientEventBody) => void
 
   async initialize(): Promise<void> {
+    if (this.piSession && !this.isRunning()) {
+      const key = JSON.stringify(await this.getExecutionContext())
+      if (key !== this.executionContextKey) this.resetPiSession()
+    }
     if (
       this.piSession &&
       !this.isRunning() &&
@@ -185,7 +198,8 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
   }
 
   getSystemPrompt(): string {
-    return this.getPiSession().systemPrompt
+    const prompt = this.getPiSession().systemPrompt
+    return this.executionContextKey && !JSON.parse(this.executionContextKey).workspace ? prompt.replace(/\nCurrent working directory: [^\n]*\n?/g, '\n') : prompt
   }
 
   getContextUsage(): AgentContextUsage | undefined {
@@ -482,8 +496,11 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
 
   private async createPiSession(): Promise<void> {
     const config = this.configStore.get()
-    const cwd = config.cwd
-    if (!cwd) throw new Error('Agent workspace is not configured')
+    const resolved = await this.getExecutionContext()
+    this.executionContextKey = JSON.stringify(resolved)
+    const executionContext = { ...resolved, mode: effectivePermissionMode(resolved.mode, Boolean(resolved.workspace), config.defaultPermissionMode) }
+    const cwd = executionContext.workspace?.rootPath ?? join(this.sessionDir, 'runtime', this.sessionId)
+    await mkdir(cwd, { recursive: true })
 
     const sessionManager = await this.createSessionManager(cwd)
     const configuredModels = getRuntimeModelConfigs(config)
@@ -517,18 +534,23 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
       const tools = this.toolRegistry.resolve<PiToolDefinition<any, any, any>>(
         'pi',
         enabledTools,
-        { cwd, getRunId: () => this.activeRunId },
+        { cwd: executionContext.workspace?.rootPath, executionContext, getRunId: () => this.activeRunId },
       )
-      const settingsManager = SettingsManager.create(cwd, cwd)
+      const settingsManager = SettingsManager.create(cwd, this.sessionDir)
       settingsManager.applyOverrides({ compaction: getAgentCompactionSettings(config) })
       const resourceLoader = new DefaultResourceLoader({
         cwd,
-        agentDir: cwd,
+        agentDir: this.sessionDir,
+        noExtensions: true,
+        noPromptTemplates: true,
+        noThemes: true,
+        noContextFiles: !executionContext.workspace,
+        systemPromptOverride: base => executionContext.workspace ? base : 'You are a helpful assistant. This conversation has no local workspace. Use global memory, knowledge, MCP, attachments and artifacts. Local tools require explicit absolute paths and full access.',
         additionalSkillPaths: [this.skillDirectory],
         skillsOverride: (result) => mergeLoadedSkills(result, this.getLoadedSkills()),
         settingsManager,
         extensionFactories: [
-          createPiApprovalExtension(this.permissionSessionId, this.approvalPolicy, (event) =>
+          createPiApprovalExtension(executionContext, this.sandbox, (event) =>
             this.publishProductEvent(event),
           ),
         ],

@@ -1,3 +1,5 @@
+import { useWorkspaces } from '../workspaces/WorkspaceProvider'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../../components/ui/select'
 import { useEffect, useState, type DragEvent } from 'react'
 import {
   BookOpenIcon,
@@ -27,6 +29,9 @@ export function KnowledgeSettings({
   settings: AgentSettingsSnapshot
   onChanged: () => Promise<void>
 }) {
+  const { workspaces } = useWorkspaces()
+  const [scopeId, setScopeId] = useState('global')
+  const workspaceId = scopeId === 'global' ? undefined : scopeId
   const [sources, setSources] = useState<KnowledgeSource[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -78,14 +83,14 @@ export function KnowledgeSettings({
     const files = [...event.dataTransfer.files]
     void act(async () => {
       for (const file of files)
-        await window.api.knowledge.add(window.api.knowledge.droppedFilePath(file), 'file')
+        await window.api.knowledge.add(window.api.knowledge.droppedFilePath(file), 'file', workspaceId)
     })
   }
   const search = async () => {
     setSearching(true)
     setError(null)
     try {
-      setResults(await window.api.knowledge.search({ query }))
+      setResults(await window.api.knowledge.search({ query, workspaceId }))
     } catch (error) {
       setError(error instanceof Error ? error.message : '检索失败')
     } finally {
@@ -98,23 +103,27 @@ export function KnowledgeSettings({
 
   return (
     <section aria-label="Knowledge 设置" className="space-y-6">
+      <Select value={scopeId} onValueChange={value => { if (value) { setScopeId(value); setResults(null) } }}>
+        <SelectTrigger>{scopeId === 'global' ? 'Global Knowledge' : workspaces.find(item => item.id === scopeId)?.displayName}</SelectTrigger>
+        <SelectContent><SelectItem value="global">Global Knowledge</SelectItem>{workspaces.filter(item => item.status === 'attached').map(item => <SelectItem key={item.id} value={item.id}>{item.displayName}</SelectItem>)}</SelectContent>
+      </Select>
       <div className="flex flex-wrap gap-2">
-        <Button disabled={busy} onClick={() => void act(() => window.api.knowledge.pick('file'))}>
+        <Button disabled={busy} onClick={() => void act(() => window.api.knowledge.pick('file', workspaceId))}>
           <FilePlusIcon />
           添加文档
         </Button>
         <Button
           variant="outline"
           disabled={busy}
-          onClick={() => void act(() => window.api.knowledge.pick('folder'))}
+          onClick={() => void act(() => window.api.knowledge.pick('folder', workspaceId))}
         >
           <FolderPlusIcon />
           添加文件夹
         </Button>
         <Button
           variant="outline"
-          disabled={busy}
-          onClick={() => void act(() => window.api.knowledge.pick('workspace'))}
+          disabled={busy || !workspaceId}
+          onClick={() => void act(() => window.api.knowledge.pick('workspace', workspaceId))}
         >
           添加当前 Workspace
         </Button>
@@ -158,7 +167,7 @@ export function KnowledgeSettings({
           </div>
         ) : (
           <div className="bg-card divide-y rounded-xl border">
-            {sources.map((source) => (
+            {sources.filter(source => (source.workspaceId ?? null) === (workspaceId ?? null)).map((source) => (
               <div key={source.id} className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -302,7 +311,7 @@ export function KnowledgeSettings({
             }
             onClick={() =>
               void act(async () => {
-                await window.api.updateAgentSettings({ cwd: settings.cwd, knowledge: models })
+                await window.api.updateAgentSettings({ knowledge: models })
                 await onChanged()
               })
             }

@@ -1,3 +1,4 @@
+import { WorkspaceProvider, useWorkspaces } from '../../workspaces/WorkspaceProvider'
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { AssistantRuntimeProvider, AuiConfig, Suggestions, Tools } from '@assistant-ui/react'
@@ -56,7 +57,11 @@ export function AssistantRuntime({ children }: { children: ReactNode }) {
     )
   }
 
-  return <ReadyAssistantRuntime info={status.info}>{children}</ReadyAssistantRuntime>
+  return (
+    <WorkspaceProvider>
+      <ReadyAssistantRuntime info={status.info}>{children}</ReadyAssistantRuntime>
+    </WorkspaceProvider>
+  )
 }
 
 function ReadyAssistantRuntime({
@@ -66,14 +71,12 @@ function ReadyAssistantRuntime({
   info: AgentBackendInfo
   children: ReactNode
 }) {
+  const { getDraftWorkspaceId, getDraftMode } = useWorkspaces()
   const client = useMemo(
-    () => createElectronPiClient(info.baseUrl),
-    [info.baseUrl],
+    () => createElectronPiClient(info.baseUrl, getDraftWorkspaceId, getDraftMode),
+    [info.baseUrl, getDraftWorkspaceId, getDraftMode],
   )
-  const runtime = usePiRuntime({
-    client,
-    adapters: { attachments: contextAttachmentAdapter },
-  })
+  const runtime = usePiRuntime({ client, adapters: { attachments: contextAttachmentAdapter } })
 
   const config = AuiConfig({
     tools: Tools({ toolkit: assistantToolkit }),

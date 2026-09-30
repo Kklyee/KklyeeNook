@@ -14,7 +14,7 @@ const searchSchema = Type.Object({
 })
 const readSchema = Type.Object({ chunkId: Type.String({ minLength: 1 }) })
 
-export function createKnowledgeTools(service: () => Pick<KnowledgeService, 'search' | 'read'>) {
+export function createKnowledgeTools(service: () => Pick<KnowledgeService, 'search' | 'read'>, workspaceId?: string) {
   const search = defineTool({
     name: 'search_knowledge',
     label: 'Search knowledge',
@@ -28,7 +28,7 @@ export function createKnowledgeTools(service: () => Pick<KnowledgeService, 'sear
     ],
     parameters: searchSchema,
     async execute(_id, params, signal) {
-      const results = await service().search(params, signal)
+      const results = await service().search({ ...params, workspaceId }, signal)
       return {
         content: [
           {
@@ -59,7 +59,7 @@ export function createKnowledgeTools(service: () => Pick<KnowledgeService, 'sear
     parameters: readSchema,
     async execute(_id, params, signal) {
       signal?.throwIfAborted()
-      const result = await service().read(params.chunkId)
+      const result = await service().read(params.chunkId, workspaceId ?? null)
       return {
         content: [
           {
@@ -96,8 +96,8 @@ export function registerPiKnowledgeTools(
       },
       adapter: {
         runtime: 'pi',
-        create: () =>
-          createKnowledgeTools(service).find((definition) => definition.name === tool.name)!,
+        create: ({ executionContext }) =>
+          createKnowledgeTools(service, executionContext?.workspaceId).find((definition) => definition.name === tool.name)!,
       },
     })
 }

@@ -1,7 +1,10 @@
+import type { PermissionMode } from '@/shared/approval/permission'
+import type { AgentExecutionContext } from '@/shared/workspace/workspace'
 import type { ToolDefinition } from '@/shared/tool/tool'
 
 export interface ToolAdapterContext {
-  cwd: string
+  cwd?: string
+  executionContext?: AgentExecutionContext & { mode?: PermissionMode }
   getRunId?: () => string | undefined
 }
 

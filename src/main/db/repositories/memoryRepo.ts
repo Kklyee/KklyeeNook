@@ -1,6 +1,5 @@
 import { and, desc, eq, or } from 'drizzle-orm'
 import { randomUUID } from 'node:crypto'
-import { resolve } from 'node:path'
 
 import type { AgentMemory, AgentMemoryScope } from '@/shared/memory/agentMemory'
 import type { Database } from '../client'
@@ -9,11 +8,11 @@ import { memories, type MemoryRow } from '../schema/memories'
 export interface AgentMemoryCreateInput {
   scope: AgentMemoryScope
   content: string
-  workspacePath?: string
+  workspaceId?: string
 }
 
 export interface AgentMemoryRepo {
-  list(workspacePath?: string): Promise<AgentMemory[]>
+  list(workspaceId?: string): Promise<AgentMemory[]>
   create(input: AgentMemoryCreateInput): Promise<AgentMemory>
   update(id: string, content: string): Promise<AgentMemory | undefined>
   delete(id: string): Promise<void>
@@ -22,12 +21,12 @@ export interface AgentMemoryRepo {
 export class DrizzleAgentMemoryRepo implements AgentMemoryRepo {
   constructor(private readonly db: Database) {}
 
-  async list(workspacePath?: string): Promise<AgentMemory[]> {
-    const canonicalWorkspacePath = workspacePath ? resolve(workspacePath) : undefined
-    const condition = canonicalWorkspacePath
+  async list(workspaceId?: string): Promise<AgentMemory[]> {
+    const canonicalWorkspaceId = workspaceId
+    const condition = canonicalWorkspaceId
       ? or(
           eq(memories.scope, 'global'),
-          and(eq(memories.scope, 'workspace'), eq(memories.workspacePath, canonicalWorkspacePath)),
+          and(eq(memories.scope, 'workspace'), eq(memories.workspaceId, canonicalWorkspaceId)),
         )
       : eq(memories.scope, 'global')
     const rows = await this.db
@@ -41,12 +40,13 @@ export class DrizzleAgentMemoryRepo implements AgentMemoryRepo {
 
   async create(input: AgentMemoryCreateInput): Promise<AgentMemory> {
     const content = normalizeContent(input.content)
-    const workspacePath = resolveWorkspacePath(input.scope, input.workspacePath)
+    const workspaceId = resolveWorkspaceId(input.scope, input.workspaceId)
     const now = Date.now()
     const row: MemoryRow = {
       id: randomUUID(),
       scope: input.scope,
-      workspacePath,
+      workspaceId,
+      workspacePath: null,
       content,
       createdAt: now,
       updatedAt: now,
@@ -78,6 +78,7 @@ function toAgentMemory(row: MemoryRow): AgentMemory {
   return {
     id: row.id,
     scope: row.scope,
+    ...(row.workspaceId ? { workspaceId: row.workspaceId } : {}),
     content: row.content,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -90,8 +91,8 @@ function normalizeContent(content: string): string {
   return normalized
 }
 
-function resolveWorkspacePath(scope: AgentMemoryScope, workspacePath?: string): string | null {
+function resolveWorkspaceId(scope: AgentMemoryScope, workspaceId?: string): string | null {
   if (scope === 'global') return null
-  if (!workspacePath?.trim()) throw new Error('Workspace memory requires a workspace path')
-  return resolve(workspacePath)
+  if (!workspaceId?.trim()) throw new Error('Workspace memory requires a workspace ID')
+  return workspaceId
 }

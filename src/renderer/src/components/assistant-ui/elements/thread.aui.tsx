@@ -1,5 +1,7 @@
 'use client'
 
+import { PermissionSelector } from './permission-selector.aui'
+
 import {
   ComposerAddAttachment,
   ComposerAttachments,
@@ -420,6 +422,7 @@ const ComposerAction: FC<{
     <div className="aui-composer-action-wrapper relative flex items-center justify-between">
       <div className="flex items-center gap-1">
         <ComposerAddAttachment />
+        <PermissionSelector />
         {modelSelector && modelSelector.models.length > 0 && (
           <ModelSelectorRoot
             models={modelSelector.models}

@@ -1,3 +1,4 @@
+import { workspaces } from './workspaces'
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 import type { ArtifactKind, ArtifactMetadata } from '@/shared/artifact/artifact'
@@ -8,6 +9,7 @@ export const artifacts = sqliteTable(
   'artifacts',
   {
     id: text('id').primaryKey(),
+    workspaceId: text('workspace_id').references(() => workspaces.id),
     sessionId: text('session_id')
       .notNull()
       .references(() => conversations.id, { onDelete: 'cascade' }),

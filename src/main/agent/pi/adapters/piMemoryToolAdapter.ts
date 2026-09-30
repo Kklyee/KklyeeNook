@@ -18,7 +18,7 @@ const memorySchema = Type.Object({
 
 export function createSaveMemoryToolDefinition(
   repo: AgentMemoryRepo,
-  workspacePath: string,
+  workspaceId?: string,
 ): PiToolDefinition<typeof memorySchema> {
   return defineTool({
     name: 'save_memory',
@@ -36,7 +36,7 @@ export function createSaveMemoryToolDefinition(
       const memory = await repo.create({
         scope: params.scope,
         content: params.content,
-        ...(params.scope === 'workspace' ? { workspacePath } : {}),
+        ...(params.scope === 'workspace' ? { workspaceId } : {}),
       })
       return {
         content: [{ type: 'text', text: `Saved ${memory.scope} memory.` }],
@@ -49,7 +49,7 @@ export function createSaveMemoryToolDefinition(
 export function registerPiMemoryTool(
   registry: ToolRegistry,
   repo: AgentMemoryRepo,
-  metadataCwd: string,
+  metadataCwd?: string,
 ): void {
   const tool = createSaveMemoryToolDefinition(repo, metadataCwd)
   const registration: ToolRegistration<typeof tool> = {
@@ -59,7 +59,7 @@ export function registerPiMemoryTool(
       description: tool.description,
       parameters: tool.parameters,
     },
-    adapter: { runtime: 'pi', create: ({ cwd }) => createSaveMemoryToolDefinition(repo, cwd) },
+    adapter: { runtime: 'pi', create: ({ executionContext }) => createSaveMemoryToolDefinition(repo, executionContext?.workspaceId) },
   }
   registry.register(registration)
 }

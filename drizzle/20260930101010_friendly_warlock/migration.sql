@@ -1,0 +1,1 @@
+ALTER TABLE `knowledge_sources` ADD `workspace_relative_path` text;

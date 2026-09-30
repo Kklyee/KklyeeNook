@@ -1,3 +1,4 @@
+import type { PermissionMode } from '@/shared/approval/permission'
 import type { AgentConfig } from '@/shared/agent/agentConfig'
 import type { LoadAgentExecutionRecordsRequest } from '@/shared/agent/agentExecutionRecord'
 import type { LoadAgentRunsRequest } from '@/shared/agent/agentRun'
@@ -30,6 +31,7 @@ export type AgentBackendStartupStage =
   | 'ready'
 
 export type AgentBackendRequest =
+  | { action: 'conversation:permission'; id: string; mode: PermissionMode }
   | { action: 'conversation:list' }
   | { action: 'conversation:create'; title?: string; workspaceId: string | null }
   | { action: 'conversation:move'; id: string; workspaceId: string | null }
@@ -37,7 +39,7 @@ export type AgentBackendRequest =
   | { action: 'workspace:attach'; path: string; relinkId?: string; createNew?: boolean }
   | { action: 'workspace:detach'; id: string }
   | { action: 'knowledge:list' }
-  | { action: 'knowledge:add'; path: string; kind: KnowledgeSource['kind'] }
+  | { action: 'knowledge:add'; path: string; kind: KnowledgeSource['kind']; workspaceId?: string }
   | { action: 'knowledge:reindex'; sourceId: string }
   | { action: 'knowledge:remove'; sourceId: string }
   | { action: 'knowledge:search'; input: KnowledgeSearchRequest }

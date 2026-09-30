@@ -1,3 +1,4 @@
+import { PERMISSION_MODES, type PermissionMode } from '@/shared/approval/permission'
 import { dialog, ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
 import type { AgentBackendProcess } from '../agent-backend/process'
@@ -36,7 +37,12 @@ export function registerWorkspaceIpc(window: BrowserWindow, backend: AgentBacken
     trusted(event)
     return backend.request({ action: 'conversation:move', ...input })
   })
+  ipcMain.handle(IPC_CHANNELS.CONVERSATION_PERMISSION, (event, input: { id: string; mode: PermissionMode }) => {
+    trusted(event)
+    if (!PERMISSION_MODES.includes(input.mode)) throw new Error('权限模式无效')
+    return backend.request({ action: 'conversation:permission', ...input })
+  })
   return () => {
-    for (const channel of [IPC_CHANNELS.CONVERSATION_LIST, IPC_CHANNELS.CONVERSATION_CREATE, IPC_CHANNELS.CONVERSATION_MOVE, IPC_CHANNELS.WORKSPACE_LIST, IPC_CHANNELS.WORKSPACE_PICK, IPC_CHANNELS.WORKSPACE_ATTACH, IPC_CHANNELS.WORKSPACE_DETACH]) ipcMain.removeHandler(channel)
+    for (const channel of [IPC_CHANNELS.CONVERSATION_PERMISSION, IPC_CHANNELS.CONVERSATION_LIST, IPC_CHANNELS.CONVERSATION_CREATE, IPC_CHANNELS.CONVERSATION_MOVE, IPC_CHANNELS.WORKSPACE_LIST, IPC_CHANNELS.WORKSPACE_PICK, IPC_CHANNELS.WORKSPACE_ATTACH, IPC_CHANNELS.WORKSPACE_DETACH]) ipcMain.removeHandler(channel)
   }
 }

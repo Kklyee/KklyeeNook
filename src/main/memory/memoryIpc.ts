@@ -7,7 +7,7 @@ import type { AgentMemoryRepo } from '../db/repositories/memoryRepo'
 export function registerMemoryIpc(
   window: BrowserWindow,
   repo: AgentMemoryRepo,
-  workspace: () => string,
+
 ): () => void {
   const assertTrustedSender = (event: IpcMainInvokeEvent) => {
     if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) {
@@ -15,9 +15,9 @@ export function registerMemoryIpc(
     }
   }
 
-  const list = async (event: IpcMainInvokeEvent) => {
+  const list = async (event: IpcMainInvokeEvent, workspaceId?: string) => {
     assertTrustedSender(event)
-    return repo.list(workspace())
+    return repo.list(workspaceId)
   }
 
   const remove = async (

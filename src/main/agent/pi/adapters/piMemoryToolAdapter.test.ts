@@ -31,7 +31,7 @@ test('saves explicit memory content with the current workspace scope', async () 
   expect(repo.create).toHaveBeenCalledWith({
     scope: 'workspace',
     content: 'Use pnpm',
-    workspacePath: 'C:/workspace',
+    workspaceId: 'C:/workspace',
   })
   expect(result.details).toEqual({ memory })
 })

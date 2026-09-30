@@ -1,6 +1,8 @@
+import { WorkspacePathPolicy } from '../sandbox/workspacePathPolicy'
+import type { WorkspaceService } from '../workspace/workspaceService'
 import { createHash, randomUUID } from 'node:crypto'
 import { readFile, readdir, realpath, stat } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { basename, join, relative, resolve } from 'node:path'
 import type { KnowledgeRepo } from '@/main/db/repositories/knowledgeRepo'
 import {
   knowledgeCitationUrl,
@@ -44,6 +46,7 @@ export class KnowledgeService {
     private readonly parsers: DocumentParser[],
     private readonly models: KnowledgeModels,
     private readonly embeddingModel: string,
+    private readonly workspaces?: WorkspaceService,
   ) {}
 
   listSources(): Promise<KnowledgeSource[]> {
@@ -57,8 +60,13 @@ export class KnowledgeService {
       )
   }
 
-  async addSource(path: string, kind: KnowledgeSource['kind']): Promise<KnowledgeSource> {
-    const canonicalPath = await realpath(path)
+  async addSource(path: string, kind: KnowledgeSource['kind'], workspaceId?: string): Promise<KnowledgeSource> {
+    const root = workspaceId ? (await this.workspaces!.resolve(workspaceId)).rootPath : undefined
+    if (workspaceId && !root) throw new Error('项目不可用')
+    const target = await new WorkspacePathPolicy().resolve(path, root)
+    if (workspaceId && !target.inside) throw new Error('Knowledge 来源必须位于关联项目内')
+    if (kind === 'workspace' && !workspaceId) throw new Error('Workspace Knowledge requires a workspace ID')
+    const canonicalPath = await realpath(target.path)
     const info = await stat(canonicalPath)
     if (
       kind === 'file'
@@ -67,10 +75,12 @@ export class KnowledgeService {
     )
       throw new Error('Unsupported Knowledge source')
     const sources = await this.repo.listSources()
-    const existing = sources.find((source) => samePath(source.path, canonicalPath))
+    const existing = sources.find((source) => samePath(source.path, canonicalPath) && (source.workspaceId ?? null) === (workspaceId ?? null))
     if (existing) return existing
     const source: KnowledgeSource = {
       id: randomUUID(),
+      workspaceId: workspaceId ?? null,
+      workspaceRelativePath: root ? relative(root, canonicalPath) : null,
       name:
         kind === 'workspace' ? `Workspace · ${basename(canonicalPath)}` : basename(canonicalPath),
       path: canonicalPath,
@@ -136,7 +146,7 @@ export class KnowledgeService {
       throw new Error('Knowledge limit must be between 1 and 20')
     if (request.sourceIds?.length === 0) return []
     const sources = (await this.repo.listSources()).filter(
-      (source) => !request.sourceIds || request.sourceIds.includes(source.id),
+      (source) => (!source.workspaceId || source.workspaceId === request.workspaceId) && (!request.sourceIds || request.sourceIds.includes(source.id)),
     )
     if (
       sources.some(
@@ -180,9 +190,13 @@ export class KnowledgeService {
       .slice(0, limit)
   }
 
-  async read(chunkId: string): Promise<KnowledgeReadResult> {
+  async read(chunkId: string, workspaceId?: string | null): Promise<KnowledgeReadResult> {
     const chunk = await this.index.get(chunkId)
     if (!chunk) throw new Error('Knowledge chunk no longer exists. Search again after reindexing.')
+    if (workspaceId !== undefined) {
+      const source = await this.repo.getSource(chunk.sourceId)
+      if (source.workspaceId && source.workspaceId !== workspaceId) throw new Error('Knowledge 不属于当前项目')
+    }
     const context = chunk.parentId ? await this.index.get(chunk.parentId) : chunk
     if (!context) throw new Error('Knowledge parent chunk not found')
     return {
@@ -218,10 +232,24 @@ export class KnowledgeService {
 
   private async syncSource(sourceId: string, force: boolean): Promise<void> {
     const source = await this.repo.getSource(sourceId)
+    let root: string | undefined
+    if (source.workspaceId) {
+      const workspace = await this.workspaces!.resolve(source.workspaceId)
+      if (workspace.status !== 'attached' || !workspace.rootPath) return
+      root = workspace.rootPath
+      const newPath = source.kind === 'workspace' ? root : source.workspaceRelativePath != null ? resolve(root, source.workspaceRelativePath) : source.path
+      if (!samePath(source.path, newPath)) {
+        source.path = newPath
+        source.name = source.kind === 'workspace' ? 'Workspace · ' + workspace.displayName : source.name
+        await this.repo.updateSource(source.id, { path: newPath, name: source.name })
+      }
+    }
+    const target = await new WorkspacePathPolicy().resolve(source.path, root)
+    if (root && !target.inside) throw new Error('Knowledge 来源在工作区外')
     const documents = await this.repo.listDocuments(sourceId)
     let paths: string[]
     try {
-      paths = await collectFiles(source.path, source.kind === 'file')
+      paths = await collectFiles(target.path, source.kind === 'file')
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
       paths = []
@@ -239,6 +267,9 @@ export class KnowledgeService {
       if (this.stopped) break
       const existing = documents.find((document) => document.filePath === filePath)
       try {
+        const resolved = await new WorkspacePathPolicy().resolve(filePath, root ?? target.path)
+        if (source.kind !== 'file' && !resolved.inside) throw new Error('Knowledge 文件在来源目录外')
+        if (root && !resolved.inside) throw new Error('Knowledge 文件在工作区外')
         const hash = createHash('sha256')
           .update(await readFile(filePath))
           .digest('hex')

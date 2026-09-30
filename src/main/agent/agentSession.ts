@@ -1,3 +1,4 @@
+import type { PermissionMode } from '@/shared/approval/permission'
 import { AgentSessionSummary } from '@/shared/agent/agentSession'
 import type { AgentRun } from '../../shared/agent/agentRun'
 import { AgentSessionRecord } from '../db/repositories/agentSessionRepo'
@@ -7,6 +8,7 @@ interface AgentSessionTimestamps {
   updatedAt: number
   archived?: boolean
   workspaceId?: string | null
+  permissionMode?: PermissionMode | null
 }
 
 export class AgentSession {
@@ -16,6 +18,7 @@ export class AgentSession {
   updatedAt: number
   archived: boolean
   workspaceId: string | null
+  permissionMode: PermissionMode | null
 
   private runs = new Map<string, AgentRun>()
 
@@ -27,6 +30,7 @@ export class AgentSession {
     this.updatedAt = timestamp?.updatedAt ?? now
     this.archived = timestamp?.archived ?? false
     this.workspaceId = timestamp?.workspaceId ?? null
+    this.permissionMode = timestamp?.permissionMode ?? null
   }
 
   addRun(run: AgentRun): void {
@@ -100,6 +104,7 @@ export class AgentSession {
       updatedAt: this.updatedAt,
       archived: this.archived,
       workspaceId: this.workspaceId,
+      permissionMode: this.permissionMode,
       activeRunId: activeRun?.id,
     }
   }
@@ -112,6 +117,7 @@ export class AgentSession {
       updatedAt: this.updatedAt,
       archived: this.archived,
       workspaceId: this.workspaceId,
+      permissionMode: this.permissionMode,
     }
   }
 }

@@ -1,3 +1,6 @@
+import { SandboxService } from '@/main/sandbox/sandboxService'
+import { PERMISSION_MODES } from '@/shared/approval/permission'
+import { ExecutionContextService } from '@/main/workspace/executionContextService'
 import { AgentService } from '@/main/agent/agentService'
 import { WorkspaceService } from '@/main/workspace/workspaceService'
 import { DrizzleWorkspaceRepo } from '@/main/db/repositories/workspaceRepo'
@@ -11,7 +14,6 @@ import { registerPiBuiltinTools } from '@/main/agent/pi/adapters/piBuiltinToolAd
 import { registerPiMemoryTool } from '@/main/agent/pi/adapters/piMemoryToolAdapter'
 import { registerPiPlanTool } from '@/main/agent/pi/adapters/piPlanToolAdapter'
 import { registerPiDelegateTaskTool } from '@/main/agent/pi/adapters/piDelegateTaskToolAdapter'
-import { ApprovalPolicy } from '@/main/approval/approvalPolicy'
 import { ArtifactService } from '@/main/artifact/artifactService'
 import { ContextAttachmentService } from '@/main/context/contextAttachmentService'
 import { ContextBuilder } from '@/main/context/contextBuilder'
@@ -24,7 +26,6 @@ import { DrizzleAgentRuntimeStateRepo } from '@/main/db/repositories/agentRuntim
 import { DrizzleAgentSessionRepo } from '@/main/db/repositories/agentSessionRepo'
 import { DrizzleArtifactRepo } from '@/main/db/repositories/artifactRepo'
 import { DrizzleScheduledTaskRepo } from '@/main/db/repositories/scheduledTaskRepo'
-import { DrizzlePermissionGrantRepo } from '@/main/db/repositories/permissionGrantRepo'
 import { AgentConfigStore } from '@/main/settings/agentConfigStore'
 import { MemoryCredentialStore } from '@/main/settings/credentialStore'
 import { ToolRegistry } from '@/main/tools/toolRegistry'
@@ -81,24 +82,20 @@ export async function createAgentBackend(
   let settingsChangePending = false
   try {
     const workspaceService = new WorkspaceService(new DrizzleWorkspaceRepo(db))
-    const permissionGrantRepo = new DrizzlePermissionGrantRepo(db)
     const memoryRepo = new DrizzleAgentMemoryRepo(db)
-    const approvalPolicy = new ApprovalPolicy(permissionGrantRepo)
     const runtimeStateRepo = new DrizzleAgentRuntimeStateRepo(db)
     const sessionDir = options.sessionDir
+    const sessionRepo = new DrizzleAgentSessionRepo(db)
+    const executionContexts = new ExecutionContextService(sessionRepo, workspaceService, () => configStore.get().defaultPermissionMode ?? 'workspace-write')
     const skillLoader = new SkillLoader()
     await skillLoader.reload()
     const toolRegistry = new ToolRegistry()
-    const workspace = () => {
-      const cwd = configStore.get().cwd
-      if (!cwd) throw new Error('Agent workspace is not configured')
-      return cwd
-    }
-    registerPiBuiltinTools(toolRegistry, workspace())
+    const sandbox = new SandboxService()
+    registerPiBuiltinTools(toolRegistry, '', sandbox)
     registerPiArtifactTool(toolRegistry)
-    registerPiMemoryTool(toolRegistry, memoryRepo, workspace())
+    registerPiMemoryTool(toolRegistry, memoryRepo)
     registerPiPlanTool(toolRegistry)
-    knowledge = await createKnowledgeRuntime(db, options.databaseUrl, join(options.sessionDir, '..', 'knowledge-cache'), configStore.get().knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS)
+    knowledge = await createKnowledgeRuntime(db, options.databaseUrl, join(options.sessionDir, '..', 'knowledge-cache'), configStore.get().knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS, workspaceService)
     registerPiKnowledgeTools(toolRegistry, () => knowledge!.service)
 
     const sessionRuntimeManager = new PiSessionRuntimeManager(
@@ -107,13 +104,12 @@ export async function createAgentBackend(
           sessionId,
           configStore,
           credentialStore,
-          approvalPolicy,
           runtimeStateRepo,
           toolRegistry,
           sessionDir,
           skillLoader.directory,
           () => skillLoader.listSkills(),
-          runtimeOptions,
+          { ...runtimeOptions, sandbox, getExecutionContext: () => executionContexts.resolve(runtimeOptions?.permissionSessionId ?? sessionId) },
       ),
     )
     mcpServerManager = new McpServerManager(toolRegistry, () => {
@@ -125,7 +121,6 @@ export async function createAgentBackend(
     })
     await mcpServerManager.reconcile(configStore.get().mcpServers ?? [])
     const runtimeFactory = createPiAgentRuntimeFactory(sessionRuntimeManager)
-    const sessionRepo = new DrizzleAgentSessionRepo(db)
     const runRepo = new DrizzleAgentRunRepo(db)
     const executionRecordRepo = new DrizzleAgentExecutionRecordRepo(db)
     const artifactRepo = new DrizzleArtifactRepo(db)
@@ -137,12 +132,12 @@ export async function createAgentBackend(
       runRepo,
       executionRecordRepo,
       artifactRepo,
-      { buildChildContext: () => contextBuilder.build([], workspace()) },
+      { buildChildContext: async sessionId => contextBuilder.build([], (await executionContexts.resolve(sessionId)).workspaceId) },
     )
     registerPiDelegateTaskTool(toolRegistry, (parentRunId, input, onProgress) =>
       agentService.delegateTask(parentRunId, input, onProgress),
     )
-    const artifactService = new ArtifactService(artifactRepo, workspace)
+    const artifactService = new ArtifactService(artifactRepo, sessionId => executionContexts.resolve(sessionId), sandbox, id => workspaceService.resolve(id))
 
     await agentService.initialize((stage, count) => reportStartupStage(stage, String(count)))
     const messageProjection = new MessageProjectionService(new DrizzleAgentMessageRepo(db))
@@ -159,7 +154,7 @@ export async function createAgentBackend(
       new DrizzleScheduledTaskRepo(db),
       agentService,
       {
-        buildContext: () => contextBuilder.build([], workspace()),
+        buildContext: async sessionId => contextBuilder.build([], (await executionContexts.resolve(sessionId)).workspaceId),
         projectSession: async (sessionId) => {
           await piClientService.getThread(sessionId)
         },
@@ -168,7 +163,7 @@ export async function createAgentBackend(
     )
     await scheduledTaskScheduler.start()
     const piClient = createPiNodeClientAdapter(piClientService, {
-      workspacePath: workspace(),
+
       agentDir: sessionDir,
     })
     server = await startAgentHttpServer(piClient, {
@@ -181,6 +176,14 @@ export async function createAgentBackend(
       baseUrl: server.baseUrl,
       async handleRequest(request) {
         switch (request.action) {
+          case 'conversation:permission': {
+            if (!PERMISSION_MODES.includes(request.mode)) throw new Error('权限模式无效')
+            const context = await executionContexts.resolve(request.id)
+            if (request.mode === 'workspace-write' && !context.workspace) throw new Error('需要关联一个可用项目')
+            const updated = await agentService.setPermissionMode(request.id, request.mode)
+            sessionRuntimeManager.get(request.id)?.reloadConfiguration()
+            return updated
+          }
           case 'conversation:list':
             return agentService.listSessions()
           case 'conversation:create':
@@ -194,16 +197,21 @@ export async function createAgentBackend(
           }
           case 'workspace:list':
             return workspaceService.list()
-          case 'workspace:attach':
+          case 'workspace:attach': {
             sessionRuntimeManager.assertCanReloadConfiguration()
-            return workspaceService.attach(request.path, request)
+            const result = await workspaceService.attach(request.path, request)
+            sessionRuntimeManager.reloadConfiguration()
+            return result
+          }
           case 'workspace:detach':
             sessionRuntimeManager.assertCanReloadConfiguration()
-            return workspaceService.detach(request.id)
+            await workspaceService.detach(request.id)
+            sessionRuntimeManager.reloadConfiguration()
+            return undefined
           case 'knowledge:list':
             return knowledge!.service.listSources()
           case 'knowledge:add':
-            return knowledge!.service.addSource(request.path, request.kind)
+            return knowledge!.service.addSource(request.path, request.kind, request.workspaceId)
           case 'knowledge:reindex':
             return knowledge!.service.reindex(request.sourceId)
           case 'knowledge:remove':
@@ -222,7 +230,7 @@ export async function createAgentBackend(
             if (!settingsChangePending) throw new Error('No settings change is in progress')
             if (JSON.stringify(request.config.knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS) !== JSON.stringify(knowledge!.settings)) {
               await knowledge!.close()
-              knowledge = await createKnowledgeRuntime(db, options.databaseUrl, join(options.sessionDir, '..', 'knowledge-cache'), request.config.knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS)
+              knowledge = await createKnowledgeRuntime(db, options.databaseUrl, join(options.sessionDir, '..', 'knowledge-cache'), request.config.knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS, workspaceService)
             }
             sessionRuntimeManager.reloadConfiguration()
             configStore.set(request.config)

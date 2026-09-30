@@ -50,6 +50,7 @@ export type ArtifactDraft =
   | FileArtifactDraft
 
 export type Artifact = ArtifactDraft & {
+  workspaceId?: string | null
   id: string
   sessionId: string
   runId: string

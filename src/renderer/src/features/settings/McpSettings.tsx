@@ -81,7 +81,7 @@ export function McpSettings({
   }
 
   const saveServers = async (servers: McpServerConfig[]) => {
-    await window.api.updateAgentSettings({ cwd: settings.cwd, mcpServers: servers })
+    await window.api.updateAgentSettings({ mcpServers: servers })
     await onChanged()
     await refresh()
   }

@@ -1,0 +1,1 @@
+ALTER TABLE `memories` ADD `workspace_id` text REFERENCES workspaces(id);
