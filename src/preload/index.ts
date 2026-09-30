@@ -1,4 +1,5 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
+import type { KnowledgeReadResult, KnowledgeSearchRequest, KnowledgeSearchResult, KnowledgeSource } from '@/shared/knowledge/knowledge'
 import { electronAPI } from '@electron-toolkit/preload'
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
 import type { AgentBackendStatus } from '@/shared/agentBackend'
@@ -47,6 +48,17 @@ const context = {
 }
 
 const api = {
+  knowledge: {
+    list(): Promise<KnowledgeSource[]> { return ipcRenderer.invoke(IPC_CHANNELS.KNOWLEDGE_LIST) },
+    add(path: string, kind: KnowledgeSource['kind']): Promise<KnowledgeSource> { return ipcRenderer.invoke(IPC_CHANNELS.KNOWLEDGE_ADD, { path, kind }) },
+    pick(kind: KnowledgeSource['kind']): Promise<KnowledgeSource[]> { return ipcRenderer.invoke(IPC_CHANNELS.KNOWLEDGE_PICK, kind) },
+    reindex(sourceId: string): Promise<void> { return ipcRenderer.invoke(IPC_CHANNELS.KNOWLEDGE_REINDEX, sourceId) },
+    remove(sourceId: string): Promise<void> { return ipcRenderer.invoke(IPC_CHANNELS.KNOWLEDGE_REMOVE, sourceId) },
+    search(input: KnowledgeSearchRequest): Promise<KnowledgeSearchResult[]> { return ipcRenderer.invoke(IPC_CHANNELS.KNOWLEDGE_SEARCH, input) },
+    read(chunkId: string): Promise<KnowledgeReadResult> { return ipcRenderer.invoke(IPC_CHANNELS.KNOWLEDGE_READ, chunkId) },
+    open(chunkId: string): Promise<void> { return ipcRenderer.invoke(IPC_CHANNELS.KNOWLEDGE_OPEN, chunkId) },
+    droppedFilePath(file: File): string { return webUtils.getPathForFile(file) },
+  },
   window: {
     minimize(): void {
       ipcRenderer.send(IPC_CHANNELS.WINDOW_MINIMIZE)

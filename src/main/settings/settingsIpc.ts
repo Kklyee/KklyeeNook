@@ -39,6 +39,7 @@ import {
   updateAgentModelSelectionFromCatalog,
 } from './modelCatalog'
 import { discoverRemoteModels } from './modelDiscovery'
+import { DEFAULT_KNOWLEDGE_SETTINGS } from '@/shared/knowledge/knowledge'
 
 export interface AgentSettingsChangeHooks {
   prepare(): void | Promise<void>
@@ -112,6 +113,7 @@ export function registerSettingsIpc(
       permissionGrants: await policy.listGrants(),
       compaction: getAgentCompactionSettings(config),
       mcpServers: config.mcpServers ?? [],
+      knowledge: config.knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS,
     }
   }
 
@@ -128,13 +130,15 @@ export function registerSettingsIpc(
         (!Array.isArray(request.providers) &&
           !Array.isArray(request.models) &&
           request.compaction === undefined &&
-          request.mcpServers === undefined) ||
+          request.mcpServers === undefined &&
+          request.knowledge === undefined) ||
         (request.mcpServers !== undefined && !Array.isArray(request.mcpServers)) ||
         typeof request.cwd !== 'string'
       ) {
         throw new Error('Agent 设置格式无效')
       }
       const current = configStore.get()
+      if (request.knowledge && (!request.knowledge.embeddingModel?.trim() || !request.knowledge.rerankModel?.trim())) throw new Error('Knowledge 模型名称不能为空')
       const cwd = resolve(request.cwd.trim())
       if (!request.cwd.trim() || !existsSync(cwd) || !statSync(cwd).isDirectory()) {
         throw new Error('Workspace 必须是一个存在的目录')
@@ -198,6 +202,7 @@ export function registerSettingsIpc(
         model: activeModel,
         ...(mcpServers ? { mcpServers } : {}),
         ...(providerUpdate ? { providers } : {}),
+        ...(request.knowledge ? { knowledge: request.knowledge } : {}),
         compaction:
           request.compaction === undefined
             ? getAgentCompactionSettings(current)

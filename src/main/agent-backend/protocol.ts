@@ -8,6 +8,7 @@ import type {
   UpdateScheduledTaskInput,
 } from '@/shared/scheduler/scheduledTask'
 import type { UpdateAgentModelSelectionRequest } from '@/shared/agent/agentSettings'
+import type { KnowledgeSearchRequest, KnowledgeSource } from '@/shared/knowledge/knowledge'
 
 export type { AgentBackendInfo, AgentBackendNotification, AgentBackendStatus } from '@/shared/agentBackend'
 
@@ -29,6 +30,12 @@ export type AgentBackendStartupStage =
   | 'ready'
 
 export type AgentBackendRequest =
+  | { action: 'knowledge:list' }
+  | { action: 'knowledge:add'; path: string; kind: KnowledgeSource['kind'] }
+  | { action: 'knowledge:reindex'; sourceId: string }
+  | { action: 'knowledge:remove'; sourceId: string }
+  | { action: 'knowledge:search'; input: KnowledgeSearchRequest }
+  | { action: 'knowledge:read'; chunkId: string }
   | { action: 'settings:prepare' }
   | { action: 'settings:commit'; config: AgentConfig; apiKeys: Record<string, string> }
   | { action: 'settings:cancel' }

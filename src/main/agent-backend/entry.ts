@@ -59,7 +59,10 @@ async function handleMessage(message: MainToAgentBackendMessage): Promise<void> 
         type: 'response',
         id: message.id,
         ok: false,
-        message: 'Agent backend request failed.',
+        message:
+          message.action.startsWith('knowledge:') && error instanceof Error
+            ? error.message
+            : 'Agent backend request failed.',
       })
     }
   }

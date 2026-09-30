@@ -28,6 +28,7 @@ import { PersistentCredentialStore, type CredentialStore } from '../settings/cre
 import { registerSettingsIpc } from '../settings/settingsIpc'
 import { registerMemoryIpc } from '../memory/memoryIpc'
 import { loadRenderer } from './loadRenderer'
+import { registerKnowledgeIpc } from '../knowledge/knowledgeIpc'
 
 export interface AppContext {
   dispose(): Promise<void>
@@ -55,6 +56,8 @@ export async function bootstrap(): Promise<AppContext> {
         'update_plan',
         'save_memory',
         'delegate_task',
+        'search_knowledge',
+        'read_knowledge',
       ],
     },
     cwd: defaultWorkspace,
@@ -62,7 +65,7 @@ export async function bootstrap(): Promise<AppContext> {
 
   const configStore = new AgentConfigStore(defaultConfig, join(userDataPath, 'agent-settings.json'))
   const savedConfig = configStore.get()
-  const requiredTools = ['save_memory', 'delegate_task'].filter(
+  const requiredTools = ['save_memory', 'delegate_task', 'search_knowledge', 'read_knowledge'].filter(
     (toolName) => !savedConfig.tools.enabled.includes(toolName),
   )
   if (requiredTools.length) {
@@ -124,6 +127,7 @@ export async function bootstrap(): Promise<AppContext> {
   })
   const disposeMemoryIpc = registerMemoryIpc(chatWindow, memoryRepo, workspace)
   const disposeMcpIpc = registerMcpIpc(chatWindow, backendProcess)
+  const disposeKnowledgeIpc = registerKnowledgeIpc(chatWindow, backendProcess, workspace)
 
   registerSettingsIpc(chatWindow, configStore, credentialStore, approvalPolicy, {
     prepare: async () => {
@@ -170,6 +174,7 @@ export async function bootstrap(): Promise<AppContext> {
       disposeContextIpc()
       disposeMemoryIpc()
       disposeMcpIpc()
+      disposeKnowledgeIpc()
       contextAttachments.clear()
       await backendProcess.close()
       closeMainDatabase()

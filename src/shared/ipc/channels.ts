@@ -1,4 +1,12 @@
 export const IPC_CHANNELS = {
+  KNOWLEDGE_LIST: 'knowledge:list',
+  KNOWLEDGE_ADD: 'knowledge:add',
+  KNOWLEDGE_PICK: 'knowledge:pick',
+  KNOWLEDGE_REINDEX: 'knowledge:reindex',
+  KNOWLEDGE_REMOVE: 'knowledge:remove',
+  KNOWLEDGE_SEARCH: 'knowledge:search',
+  KNOWLEDGE_READ: 'knowledge:read',
+  KNOWLEDGE_OPEN: 'knowledge:open',
   SETTINGS_GET: 'settings:get',
   SETTINGS_UPDATE: 'settings:update',
   SETTINGS_UPDATE_MODEL_SELECTION: 'settings:update-model-selection',

@@ -8,6 +8,7 @@ import type {
 } from './agentConfig'
 import type { ModelInput } from './agentConfig'
 import type { McpServerConfig } from '../mcp/mcpServer'
+import type { KnowledgeSettings } from '../knowledge/knowledge'
 
 export interface ModelCatalogProvider {
   id: string
@@ -61,6 +62,7 @@ export interface AgentSettingsSnapshot {
   permissionGrants: PermissionGrant[]
   compaction: AgentCompactionSettings
   mcpServers: McpServerConfig[]
+  knowledge?: KnowledgeSettings
 }
 
 export interface UpdateAgentSettingsRequest {
@@ -72,6 +74,7 @@ export interface UpdateAgentSettingsRequest {
   credential?: { provider: string; apiKey?: string; deleteApiKey?: boolean }
   compaction?: AgentCompactionSettings
   mcpServers?: McpServerConfig[]
+  knowledge?: KnowledgeSettings
 }
 
 export interface DiscoverModelsRequest {

@@ -1,4 +1,5 @@
 import type { McpServerConfig } from '../mcp/mcpServer'
+import type { KnowledgeSettings } from '../knowledge/knowledge'
 
 export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
@@ -67,6 +68,7 @@ export type AgentConfig = {
   compaction?: AgentCompactionSettings
   cwd?: string
   mcpServers?: McpServerConfig[]
+  knowledge?: KnowledgeSettings
 }
 
 export function getAgentCompactionSettings(config: AgentConfig): AgentCompactionSettings {

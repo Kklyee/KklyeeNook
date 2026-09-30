@@ -13,7 +13,7 @@ const DEFAULT_CONFIG: AgentConfig = {
   model: { provider: 'anthropic', modelID: '...', thinkingLevel: 'medium' },
 
   tools: {
-    enabled: ['read', 'bash', 'edit', 'write', 'update_plan', 'save_memory', 'delegate_task'],
+    enabled: ['read', 'bash', 'edit', 'write', 'update_plan', 'save_memory', 'delegate_task', 'search_knowledge', 'read_knowledge'],
   },
   compaction: DEFAULT_AGENT_COMPACTION_SETTINGS,
 }

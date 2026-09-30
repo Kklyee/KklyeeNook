@@ -40,6 +40,10 @@ import type { PiSubscribeRequest } from '@/shared/pi/piClient'
 import type { PiClientEvent } from '@assistant-ui/react-pi'
 import type { AgentBackendNotification } from '@/shared/agentBackend'
 import { ScheduledTaskScheduler } from '@/main/scheduler/scheduledTaskScheduler'
+import { join } from 'node:path'
+import { createKnowledgeRuntime, type KnowledgeRuntime } from '@/main/knowledge/knowledgeRuntime'
+import { DEFAULT_KNOWLEDGE_SETTINGS } from '@/shared/knowledge/knowledge'
+import { registerPiKnowledgeTools } from '@/main/agent/pi/adapters/piKnowledgeToolAdapter'
 
 export interface AgentBackendRuntime {
   baseUrl: string
@@ -71,6 +75,7 @@ export async function createAgentBackend(
   let server: RunningAgentHttpServer | undefined
   let scheduledTaskScheduler: ScheduledTaskScheduler | undefined
   let mcpServerManager: McpServerManager | undefined
+  let knowledge: KnowledgeRuntime | undefined
   let settingsChangePending = false
   try {
     const permissionGrantRepo = new DrizzlePermissionGrantRepo(db)
@@ -90,6 +95,8 @@ export async function createAgentBackend(
     registerPiArtifactTool(toolRegistry)
     registerPiMemoryTool(toolRegistry, memoryRepo, workspace())
     registerPiPlanTool(toolRegistry)
+    knowledge = await createKnowledgeRuntime(db, options.databaseUrl, join(options.sessionDir, '..', 'knowledge-cache'), configStore.get().knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS)
+    registerPiKnowledgeTools(toolRegistry, () => knowledge!.service)
 
     const sessionRuntimeManager = new PiSessionRuntimeManager(
       (sessionId, runtimeOptions) =>
@@ -171,13 +178,30 @@ export async function createAgentBackend(
       baseUrl: server.baseUrl,
       async handleRequest(request) {
         switch (request.action) {
+          case 'knowledge:list':
+            return knowledge!.service.listSources()
+          case 'knowledge:add':
+            return knowledge!.service.addSource(request.path, request.kind)
+          case 'knowledge:reindex':
+            return knowledge!.service.reindex(request.sourceId)
+          case 'knowledge:remove':
+            return knowledge!.service.removeSource(request.sourceId)
+          case 'knowledge:search':
+            return knowledge!.service.search(request.input)
+          case 'knowledge:read':
+            return knowledge!.service.read(request.chunkId)
           case 'settings:prepare':
             if (settingsChangePending) throw new Error('A settings change is already in progress')
             sessionRuntimeManager.assertCanReloadConfiguration()
+            knowledge!.service.assertCanReload()
             settingsChangePending = true
             return undefined
           case 'settings:commit':
             if (!settingsChangePending) throw new Error('No settings change is in progress')
+            if (JSON.stringify(request.config.knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS) !== JSON.stringify(knowledge!.settings)) {
+              await knowledge!.close()
+              knowledge = await createKnowledgeRuntime(db, options.databaseUrl, join(options.sessionDir, '..', 'knowledge-cache'), request.config.knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS)
+            }
             sessionRuntimeManager.reloadConfiguration()
             configStore.set(request.config)
             credentialStore = createCredentialStore(request.apiKeys)
@@ -249,6 +273,7 @@ export async function createAgentBackend(
       },
       async close() {
         scheduledTaskScheduler?.stop()
+        await knowledge?.close()
         await mcpServerManager?.close()
         await server?.close()
         contextAttachments.clear()
@@ -259,6 +284,7 @@ export async function createAgentBackend(
     }
   } catch (error) {
     scheduledTaskScheduler?.stop()
+    await knowledge?.close()
     await mcpServerManager?.close()
     await server?.close()
     closeDb()

@@ -1,4 +1,5 @@
 import type { ElectronAPI } from '@electron-toolkit/preload'
+import type { KnowledgeReadResult, KnowledgeSearchRequest, KnowledgeSearchResult, KnowledgeSource } from '@/shared/knowledge/knowledge'
 import type {
   AgentSettingsSnapshot,
   DiscoverModelsRequest,
@@ -35,6 +36,17 @@ import type {
 } from '../shared/scheduler/scheduledTask'
 
 interface API {
+  knowledge: {
+    list(): Promise<KnowledgeSource[]>
+    add(path: string, kind: KnowledgeSource['kind']): Promise<KnowledgeSource>
+    pick(kind: KnowledgeSource['kind']): Promise<KnowledgeSource[]>
+    reindex(sourceId: string): Promise<void>
+    remove(sourceId: string): Promise<void>
+    search(input: KnowledgeSearchRequest): Promise<KnowledgeSearchResult[]>
+    read(chunkId: string): Promise<KnowledgeReadResult>
+    open(chunkId: string): Promise<void>
+    droppedFilePath(file: File): string
+  }
   window: {
     minimize(): void
     toggleMaximize(): void
