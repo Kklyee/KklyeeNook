@@ -141,18 +141,6 @@ export class AgentService {
     return session.toSummary()
   }
 
-  async moveSession(sessionId: string, workspaceId: string | null): Promise<AgentSessionSummary> {
-    const session = this.sessions.get(sessionId)
-    if (!session) throw new Error('会话不存在')
-    if (session.toSummary().activeRunId) throw new Error('请等待当前 Agent 运行结束后再移动会话')
-    session.workspaceId = workspaceId
-    session.touch()
-    await this.sessionRepo.save(session.toRecord())
-    this.runtimes.get(sessionId)?.dispose()
-    this.runtimes.delete(sessionId)
-    return session.toSummary()
-  }
-
   async setPermissionMode(sessionId: string, mode: PermissionMode): Promise<AgentSessionSummary> {
     const session = this.sessions.get(sessionId)
     if (!session) throw new Error('会话不存在')

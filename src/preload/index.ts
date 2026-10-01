@@ -56,11 +56,10 @@ const api = {
     setPermission(id: string, mode: PermissionMode): Promise<AgentSessionSummary> { return ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_PERMISSION, { id, mode }) },
     list(): Promise<AgentSessionSummary[]> { return ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_LIST) },
     create(input: { title?: string; workspaceId: string | null }): Promise<AgentSessionSummary> { return ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_CREATE, input) },
-    move(input: { id: string; workspaceId: string | null }): Promise<AgentSessionSummary> { return ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_MOVE, input) },
   },
   workspaces: {
     list(): Promise<Workspace[]> { return ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_LIST) },
-    pick(relinkId?: string): Promise<WorkspaceAttachResult | null> { return ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_PICK, relinkId) },
+    pick(): Promise<WorkspaceAttachResult | null> { return ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_PICK) },
     attach(input: { path: string; relinkId?: string; createNew?: boolean }): Promise<WorkspaceAttachResult> { return ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_ATTACH, input) },
     detach(id: string): Promise<void> { return ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_DETACH, id) },
   },

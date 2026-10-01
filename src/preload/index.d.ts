@@ -44,11 +44,10 @@ interface API {
     setPermission(id: string, mode: PermissionMode): Promise<AgentSessionSummary>
     list(): Promise<AgentSessionSummary[]>
     create(input: { title?: string; workspaceId: string | null }): Promise<AgentSessionSummary>
-    move(input: { id: string; workspaceId: string | null }): Promise<AgentSessionSummary>
   }
   workspaces: {
     list(): Promise<Workspace[]>
-    pick(relinkId?: string): Promise<WorkspaceAttachResult | null>
+    pick(): Promise<WorkspaceAttachResult | null>
     attach(input: { path: string; relinkId?: string; createNew?: boolean }): Promise<WorkspaceAttachResult>
     detach(id: string): Promise<void>
   }

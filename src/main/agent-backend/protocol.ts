@@ -34,7 +34,6 @@ export type AgentBackendRequest =
   | { action: 'conversation:permission'; id: string; mode: PermissionMode }
   | { action: 'conversation:list' }
   | { action: 'conversation:create'; title?: string; workspaceId: string | null }
-  | { action: 'conversation:move'; id: string; workspaceId: string | null }
   | { action: 'workspace:list' }
   | { action: 'workspace:attach'; path: string; relinkId?: string; createNew?: boolean }
   | { action: 'workspace:detach'; id: string }

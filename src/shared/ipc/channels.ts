@@ -5,7 +5,6 @@ export const IPC_CHANNELS = {
   CONVERSATION_PERMISSION: 'conversation:permission',
   CONVERSATION_LIST: 'conversation:list',
   CONVERSATION_CREATE: 'conversation:create',
-  CONVERSATION_MOVE: 'conversation:move',
   WORKSPACE_LIST: 'workspace:list',
   WORKSPACE_PICK: 'workspace:pick',
   WORKSPACE_ATTACH: 'workspace:attach',

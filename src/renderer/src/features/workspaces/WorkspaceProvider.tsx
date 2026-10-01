@@ -58,7 +58,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       window.api.getAgentSettings(),
     ])
     setDefaultMode(settings.defaultPermissionMode ?? 'workspace-write')
-    setWorkspaces(projects)
+    setWorkspaces(projects.filter((workspace) => workspace.status === 'attached'))
     setConversations(sessions)
   }, [])
   useEffect(() => {

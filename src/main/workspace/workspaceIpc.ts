@@ -11,11 +11,11 @@ export function registerWorkspaceIpc(window: BrowserWindow, backend: AgentBacken
     trusted(event)
     return backend.request({ action: 'workspace:list' })
   })
-  ipcMain.handle(IPC_CHANNELS.WORKSPACE_PICK, async (event, relinkId?: string) => {
+  ipcMain.handle(IPC_CHANNELS.WORKSPACE_PICK, async (event) => {
     trusted(event)
-    const choice = await dialog.showOpenDialog(window, { title: relinkId ? '重新关联项目' : '添加项目', properties: ['openDirectory'] })
+    const choice = await dialog.showOpenDialog(window, { title: '添加项目', properties: ['openDirectory'] })
     if (choice.canceled || !choice.filePaths[0]) return null
-    return backend.request({ action: 'workspace:attach', path: choice.filePaths[0], relinkId })
+    return backend.request({ action: 'workspace:attach', path: choice.filePaths[0] })
   })
   ipcMain.handle(IPC_CHANNELS.WORKSPACE_ATTACH, (event, input: { path: string; relinkId?: string; createNew?: boolean }) => {
     trusted(event)
@@ -33,16 +33,12 @@ export function registerWorkspaceIpc(window: BrowserWindow, backend: AgentBacken
     trusted(event)
     return backend.request({ action: 'conversation:create', ...input })
   })
-  ipcMain.handle(IPC_CHANNELS.CONVERSATION_MOVE, (event, input: { id: string; workspaceId: string | null }) => {
-    trusted(event)
-    return backend.request({ action: 'conversation:move', ...input })
-  })
   ipcMain.handle(IPC_CHANNELS.CONVERSATION_PERMISSION, (event, input: { id: string; mode: PermissionMode }) => {
     trusted(event)
     if (!PERMISSION_MODES.includes(input.mode)) throw new Error('权限模式无效')
     return backend.request({ action: 'conversation:permission', ...input })
   })
   return () => {
-    for (const channel of [IPC_CHANNELS.CONVERSATION_PERMISSION, IPC_CHANNELS.CONVERSATION_LIST, IPC_CHANNELS.CONVERSATION_CREATE, IPC_CHANNELS.CONVERSATION_MOVE, IPC_CHANNELS.WORKSPACE_LIST, IPC_CHANNELS.WORKSPACE_PICK, IPC_CHANNELS.WORKSPACE_ATTACH, IPC_CHANNELS.WORKSPACE_DETACH]) ipcMain.removeHandler(channel)
+    for (const channel of [IPC_CHANNELS.CONVERSATION_PERMISSION, IPC_CHANNELS.CONVERSATION_LIST, IPC_CHANNELS.CONVERSATION_CREATE, IPC_CHANNELS.WORKSPACE_LIST, IPC_CHANNELS.WORKSPACE_PICK, IPC_CHANNELS.WORKSPACE_ATTACH, IPC_CHANNELS.WORKSPACE_DETACH]) ipcMain.removeHandler(channel)
   }
 }

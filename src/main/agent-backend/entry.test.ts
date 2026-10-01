@@ -54,19 +54,15 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-test('permission and move requests keep the conversation id and return through the utility entry', async () => {
+test('permission requests keep the conversation id and return through the utility entry', async () => {
   handleRequest.mockImplementation(async (request: AgentBackendRequest) => request.action)
   const permission = {
     action: 'conversation:permission' as const,
     id: 'conversation-1',
     mode: 'full-access' as const,
   }
-  const move = { action: 'conversation:move' as const, id: 'conversation-1', workspaceId: null }
-  await expect(
-    Promise.all([backend.request(permission, 100), backend.request(move, 100)]),
-  ).resolves.toEqual(['conversation:permission', 'conversation:move'])
+  await expect(backend.request(permission, 100)).resolves.toBe('conversation:permission')
   expect(handleRequest).toHaveBeenCalledWith(expect.objectContaining(permission))
-  expect(handleRequest).toHaveBeenCalledWith(expect.objectContaining(move))
 })
 
 test('a failed permission request returns an error instead of timing out', async () => {

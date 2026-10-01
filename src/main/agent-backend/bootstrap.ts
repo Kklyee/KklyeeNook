@@ -189,12 +189,6 @@ export async function createAgentBackend(
           case 'conversation:create':
             if (request.workspaceId) await workspaceService.resolve(request.workspaceId)
             return agentService.createSession(request.title, request.workspaceId)
-          case 'conversation:move': {
-            if (request.workspaceId) await workspaceService.resolve(request.workspaceId)
-            const moved = await agentService.moveSession(request.id, request.workspaceId)
-            sessionRuntimeManager.get(request.id)?.reloadConfiguration()
-            return moved
-          }
           case 'workspace:list':
             return workspaceService.list()
           case 'workspace:attach': {

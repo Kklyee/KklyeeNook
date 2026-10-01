@@ -17,7 +17,6 @@ export function WorkspaceComposerLabel() {
     >
       <FolderIcon className="size-3 shrink-0" />
       <span className="truncate">{workspace.displayName}</span>
-      {workspace.status !== 'attached' && <span className="shrink-0">· 不可用</span>}
     </div>
   )
 }
