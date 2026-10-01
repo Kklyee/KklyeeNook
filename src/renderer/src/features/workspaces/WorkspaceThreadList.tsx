@@ -1,22 +1,42 @@
 import { useState } from 'react'
 import { ThreadListPrimitive, useAui, useAuiState } from '@assistant-ui/react'
-import { PlusIcon, ArchiveIcon } from 'lucide-react'
+import {
+  ArchiveIcon,
+  ChevronDownIcon,
+  FolderIcon,
+  FolderPlusIcon,
+  MessageCirclePlusIcon,
+  MoreHorizontalIcon,
+  SearchIcon,
+  LinkIcon,
+} from 'lucide-react'
 import type { WorkspaceAttachResult } from '@/shared/workspace/workspace'
 import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '../../components/ui/collapsible'
+import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
 import { useSidebar } from '../../components/ui/sidebar'
+import { TooltipIconButton } from '../../components/assistant-ui/elements/tooltip-icon-button'
 import {
   ThreadListRoot,
   ThreadListNew,
   ThreadListItem,
 } from '../../components/assistant-ui/elements/thread-list.aui'
+import { cn } from '../../lib/utils'
 import { useWorkspaces } from './WorkspaceProvider'
 
 export function WorkspaceThreadList() {
   const { workspaces, reload, setDraftWorkspaceId } = useWorkspaces()
   const [pending, setPending] = useState<WorkspaceAttachResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [query, setQuery] = useState('')
   const { isMobile, state } = useSidebar()
   const collapsed = state === 'collapsed' && !isMobile
   const pick = async (id?: string) => {
@@ -40,32 +60,75 @@ export function WorkspaceThreadList() {
     }
   }
   return (
-    <ThreadListRoot>
-      <ThreadListNew onClick={() => setDraftWorkspaceId(null)} />
-      {!collapsed && <div className="px-2 pt-3 text-[11px] text-text-faint">Projects</div>}
-      {!collapsed &&
-        [
-          ...workspaces.filter((item) => item.status === 'attached'),
-          ...workspaces.filter((item) => item.status !== 'attached'),
-        ].map((workspace) => (
-          <WorkspaceThreadGroup
-            key={workspace.id}
-            workspaceId={workspace.id}
-            label={workspace.displayName + (workspace.status === 'attached' ? '' : ' · 不可用')}
-            onRelink={() => void pick(workspace.id)}
-          />
-        ))}
-      <Button
-        variant="ghost"
-        size={collapsed ? 'icon' : 'sm'}
-        className="justify-start text-text-muted"
-        title="添加项目"
-        onClick={() => void pick()}
+    <ThreadListRoot className="gap-1.5">
+      <ThreadListNew
+        onClick={() => setDraftWorkspaceId(null)}
+        className={
+          collapsed
+            ? ''
+            : 'mb-3 h-10 justify-center border border-glass-border bg-interactive-selected text-text-strong'
+        }
       >
-        <PlusIcon className="size-3.5" />
-        {!collapsed && '添加项目'}
-      </Button>
-      {!collapsed && <WorkspaceThreadGroup workspaceId={null} label="未分组" />}
+        <MessageCirclePlusIcon className="size-4" />
+        <span>新会话</span>
+      </ThreadListNew>
+      {collapsed ? (
+        <TooltipIconButton
+          tooltip="添加项目"
+          className="mx-auto size-8"
+          onClick={() => void pick()}
+        >
+          <FolderPlusIcon className="size-4" />
+        </TooltipIconButton>
+      ) : (
+        <>
+          <div className="flex h-8 items-center gap-1 px-2 text-xs text-text-muted">
+            <span className="flex-1">工作区</span>
+            <TooltipIconButton
+              tooltip="搜索会话"
+              aria-pressed={searchOpen}
+              onClick={() => {
+                setSearchOpen(!searchOpen)
+                setQuery('')
+              }}
+            >
+              <SearchIcon className="size-3.5" />
+            </TooltipIconButton>
+            <TooltipIconButton tooltip="添加项目" onClick={() => void pick()}>
+              <FolderPlusIcon className="size-3.5" />
+            </TooltipIconButton>
+          </div>
+          {searchOpen && (
+            <Input
+              autoFocus
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="搜索项目或会话…"
+              aria-label="搜索项目或会话"
+              className="mb-1 h-8 text-xs"
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  setSearchOpen(false)
+                  setQuery('')
+                }
+              }}
+            />
+          )}
+          {[
+            ...workspaces.filter((item) => item.status === 'attached'),
+            ...workspaces.filter((item) => item.status !== 'attached'),
+          ].map((workspace) => (
+            <WorkspaceThreadGroup
+              key={workspace.id}
+              workspaceId={workspace.id}
+              label={workspace.displayName}
+              query={query}
+              onRelink={() => void pick(workspace.id)}
+            />
+          ))}
+          <WorkspaceThreadGroup workspaceId={null} label="未分组" query={query} />
+        </>
+      )}
       {error && (
         <p role="alert" className="px-2 text-xs text-destructive">
           {error}
@@ -97,19 +160,33 @@ export function WorkspaceThreadList() {
 function WorkspaceThreadGroup({
   workspaceId,
   label,
+  query,
   onRelink,
 }: {
   workspaceId: string | null
   label: string
+  query: string
   onRelink?: () => void
 }) {
-  const { conversations, workspaces, setDraftWorkspaceId, reload } = useWorkspaces()
+  const { conversations, workspaces, draftWorkspaceId, setDraftWorkspaceId, reload } =
+    useWorkspaces()
   const aui = useAui()
   const ids = useAuiState((s) => s.threads.threadIds)
   const items = useAuiState((s) => s.threads.threadItems)
+  const mainId = useAuiState((s) => s.threads.mainThreadId)
+  const [open, setOpen] = useState(true)
+  const [expanded, setExpanded] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const workspace = workspaces.find((item) => item.id === workspaceId)
+  const remoteId = items.find((item) => item.id === mainId)?.remoteId
+  const activeWorkspaceId = remoteId
+    ? (conversations.find((item) => item.id === remoteId)?.workspaceId ?? null)
+    : draftWorkspaceId
+  const selected = workspaceId === activeWorkspaceId
+  const unavailable = workspace && workspace.status !== 'attached'
   const detach = async () => {
+    setMenuOpen(false)
     try {
       await window.api.workspaces.detach(workspaceId!)
       await reload()
@@ -117,66 +194,137 @@ function WorkspaceThreadGroup({
       setError(error instanceof Error ? error.message : '移除失败')
     }
   }
+  const search = query.trim().toLocaleLowerCase()
+  const matchesGroup = label.toLocaleLowerCase().includes(search)
   const indices = ids
     .map((id, index) => ({ index, item: items.find((item) => item.id === id) }))
     .filter(({ item }) => {
       const conversation = conversations.find((conversation) => conversation.id === item?.remoteId)
-      return conversation && (conversation.workspaceId ?? null) === workspaceId
+      return (
+        conversation &&
+        (conversation.workspaceId ?? null) === workspaceId &&
+        (matchesGroup || (item?.title ?? conversation.title ?? '新对话').toLocaleLowerCase().includes(search))
+      )
     })
+  if (search && !matchesGroup && !indices.length) return null
+  const visible = expanded || search ? indices : indices.slice(0, 5)
   return (
-    <div className="flex flex-col gap-0.5">
-      <div className="flex items-center gap-1 px-2 pt-3 pb-1 text-[11px] text-text-faint">
-        <span
-          className="min-w-0 flex-1 truncate"
+    <Collapsible
+      open={open || Boolean(search)}
+      onOpenChange={setOpen}
+      className="flex flex-col gap-0.5"
+    >
+      <div className="group/workspace flex h-9 items-center gap-0.5 rounded-lg pr-1 text-text-muted hover:bg-interactive-hover has-focus-visible:bg-interactive-hover has-data-popup-open:bg-interactive-hover">
+        <CollapsibleTrigger
+          render={
+            <Button
+              variant="ghost"
+              className="h-full min-w-0 flex-1 justify-start gap-2 rounded-lg px-2 text-sm font-normal hover:bg-transparent aria-expanded:bg-transparent"
+            />
+          }
           title={workspace?.rootPath ?? workspace?.lastKnownPath}
         >
-          {label}
-        </span>
-        {(!workspace || workspace.status === 'attached') && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-5"
-            title={workspace ? '新建项目会话' : '新建未分组会话'}
-            onClick={() => {
-              setDraftWorkspaceId(workspaceId)
-              void aui.threads.switchToNewThread()
-            }}
-          >
-            <PlusIcon className="size-3" />
-          </Button>
-        )}
-        {workspace?.status === 'attached' ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-5"
-            title="移除项目"
-            onClick={() => void detach()}
-          >
-            <ArchiveIcon className="size-3" />
-          </Button>
-        ) : (
-          workspace && (
-            <Button variant="ghost" size="sm" className="h-5 px-1 text-[10px]" onClick={onRelink}>
-              重新关联
-            </Button>
-          )
-        )}
+          <span className="relative size-4 shrink-0">
+            <FolderIcon
+              className={cn(
+                'absolute size-4 group-hover/workspace:opacity-0 group-focus-within/workspace:opacity-0',
+                selected && workspace && !unavailable && 'text-blue-400',
+              )}
+            />
+            <ChevronDownIcon
+              className={cn(
+                'absolute size-4 opacity-0 group-hover/workspace:opacity-100 group-focus-within/workspace:opacity-100',
+                !open && !search && '-rotate-90',
+              )}
+            />
+          </span>
+          <span className={cn('truncate', selected && 'text-text-strong')}>{label}</span>
+          {unavailable && <span className="text-[10px] text-text-faint">不可用</span>}
+        </CollapsibleTrigger>
+        <div className="flex shrink-0 items-center opacity-0 group-hover/workspace:opacity-100 group-focus-within/workspace:opacity-100 has-data-popup-open:opacity-100 [@media(hover:none)]:opacity-100">
+          {workspace && (
+            <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+              <PopoverTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-6 text-text-faint"
+                    aria-label={label + '项目选项'}
+                  />
+                }
+              >
+                <MoreHorizontalIcon className="size-3.5" />
+              </PopoverTrigger>
+              <PopoverContent
+                side="right"
+                align="start"
+                className="glass-raised w-40 gap-0.5 p-1.5"
+              >
+                <Button
+                  variant="ghost"
+                  className="justify-start text-xs font-normal"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    onRelink?.()
+                  }}
+                >
+                  <LinkIcon className="size-3.5" />
+                  重新关联
+                </Button>
+                {!unavailable && (
+                  <Button
+                    variant="ghost"
+                    className="justify-start text-xs font-normal"
+                    onClick={() => void detach()}
+                  >
+                    <ArchiveIcon className="size-3.5" />
+                    移除项目
+                  </Button>
+                )}
+              </PopoverContent>
+            </Popover>
+          )}
+          {!unavailable && (
+            <TooltipIconButton
+              tooltip="新会话"
+              className="size-6"
+              onClick={() => {
+                setDraftWorkspaceId(workspaceId)
+                setOpen(true)
+                void aui.threads.switchToNewThread()
+              }}
+            >
+              <MessageCirclePlusIcon className="size-3.5" />
+            </TooltipIconButton>
+          )}
+        </div>
       </div>
-      {indices.map(({ index }) => (
-        <ThreadListPrimitive.ItemByIndex
-          key={ids[index]}
-          index={index}
-          components={{ ThreadListItem }}
-        />
-      ))}
+      <CollapsibleContent className="flex flex-col gap-0.5">
+        {visible.map(({ index }) => (
+          <ThreadListPrimitive.ItemByIndex
+            key={ids[index]}
+            index={index}
+            components={{ ThreadListItem }}
+          />
+        ))}
+        {!search && indices.length > 5 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="justify-start pl-8 text-xs font-normal text-text-faint"
+            onClick={() => setExpanded(!expanded)}
+          >
+            {expanded ? '收起会话' : '展开其余 ' + (indices.length - 5) + ' 个会话'}
+          </Button>
+        )}
+      </CollapsibleContent>
       {error && (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="px-2 text-xs text-destructive">
           {error}
         </p>
       )}
-    </div>
+    </Collapsible>
   )
 }
 

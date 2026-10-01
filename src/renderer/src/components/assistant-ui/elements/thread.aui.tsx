@@ -1,6 +1,7 @@
 'use client'
 
 import { PermissionSelector } from './permission-selector.aui'
+import { WorkspaceComposerLabel } from '@/renderer/src/features/workspaces/WorkspaceComposerLabel'
 
 import {
   ComposerAddAttachment,
@@ -314,69 +315,72 @@ const Composer: FC<{
   const slash = unstable_useSlashCommandAdapter({ commands })
 
   return (
-    <ComposerPrimitive.Unstable_TriggerPopoverRoot>
-      <ComposerPrimitive.Root className="aui-composer-root  relative  flex w-full flex-col ">
-        <ComposerPrimitive.AttachmentDropzone
-          render={
-            <ComposerBar data-slot="aui_composer-shell" className="max-w-none glass-raised" />
-          }
-        >
-          <ComposerAttachments />
-          <ComposerPrimitive.Input
-            placeholder="描述一个任务，或提出一个问题…"
-            className="aui-composer-input placeholder:text-foreground/35 max-h-48 min-h-11 w-full resize-none bg-transparent px-3 py-1 text-[15px] leading-6 caret-blue-500 outline-none dark:caret-blue-400"
-            rows={1}
-            autoFocus={autoFocus}
-            enterKeyHint="send"
-            aria-label="Message input"
-          />
-          <ComposerAction
-            modelSelector={modelSelector}
-            contextUsage={contextUsage}
-            isCompacting={isCompacting}
-          />
-        </ComposerPrimitive.AttachmentDropzone>
-        {skills.length > 0 && (
-          <ComposerPrimitive.Unstable_TriggerPopover
-            char="/"
-            adapter={slash.adapter}
-            className={cn(
-              floating,
-              'absolute inset-x-0 bottom-full z-20 mb-2 max-h-72 overflow-y-auto rounded-2xl p-1.5',
-            )}
-            aria-label="Skills"
+    <div className="flex w-full flex-col gap-1.5">
+      <ComposerPrimitive.Unstable_TriggerPopoverRoot>
+        <ComposerPrimitive.Root className="aui-composer-root  relative  flex w-full flex-col ">
+          <ComposerPrimitive.AttachmentDropzone
+            render={
+              <ComposerBar data-slot="aui_composer-shell" className="max-w-none glass-raised" />
+            }
           >
-            {/*<div className="text-foreground/40 px-2.5 py-1.5 text-[11px] font-medium">Skills</div>*/}
-            <ComposerPrimitive.Unstable_TriggerPopover.Action
-              {...slash.action}
-              formatter={SKILL_COMMAND_FORMATTER}
+            <ComposerAttachments />
+            <ComposerPrimitive.Input
+              placeholder="描述一个任务，或提出一个问题…"
+              className="aui-composer-input placeholder:text-foreground/35 max-h-48 min-h-11 w-full resize-none bg-transparent px-3 py-1 text-[15px] leading-6 caret-blue-500 outline-none dark:caret-blue-400"
+              rows={1}
+              autoFocus={autoFocus}
+              enterKeyHint="send"
+              aria-label="Message input"
             />
-            <ComposerPrimitive.Unstable_TriggerPopoverItems>
-              {(items) =>
-                items.length > 0 ? (
-                  items.map((item, index) => (
-                    <ComposerPrimitive.Unstable_TriggerPopoverItem
-                      key={item.id}
-                      item={item}
-                      index={index}
-                      className="data-[highlighted]:bg-foreground/[0.06] flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-start text-[13.5px] transition-colors"
-                    >
-                      <SparklesIcon className="text-foreground/35 size-3.5 shrink-0" />
-                      <span className="font-medium">{item.label}</span>
-                      <span className="text-foreground/45 flex-1 truncate text-xs">
-                        {item.description}
-                      </span>
-                    </ComposerPrimitive.Unstable_TriggerPopoverItem>
-                  ))
-                ) : (
-                  <p className="text-foreground/40 px-2.5 py-2 text-xs">没有匹配的 Skill</p>
-                )
-              }
-            </ComposerPrimitive.Unstable_TriggerPopoverItems>
-          </ComposerPrimitive.Unstable_TriggerPopover>
-        )}
-      </ComposerPrimitive.Root>
-    </ComposerPrimitive.Unstable_TriggerPopoverRoot>
+            <ComposerAction
+              modelSelector={modelSelector}
+              contextUsage={contextUsage}
+              isCompacting={isCompacting}
+            />
+          </ComposerPrimitive.AttachmentDropzone>
+          {skills.length > 0 && (
+            <ComposerPrimitive.Unstable_TriggerPopover
+              char="/"
+              adapter={slash.adapter}
+              className={cn(
+                floating,
+                'absolute inset-x-0 bottom-full z-20 mb-2 max-h-72 overflow-y-auto rounded-2xl p-1.5',
+              )}
+              aria-label="Skills"
+            >
+              {/*<div className="text-foreground/40 px-2.5 py-1.5 text-[11px] font-medium">Skills</div>*/}
+              <ComposerPrimitive.Unstable_TriggerPopover.Action
+                {...slash.action}
+                formatter={SKILL_COMMAND_FORMATTER}
+              />
+              <ComposerPrimitive.Unstable_TriggerPopoverItems>
+                {(items) =>
+                  items.length > 0 ? (
+                    items.map((item, index) => (
+                      <ComposerPrimitive.Unstable_TriggerPopoverItem
+                        key={item.id}
+                        item={item}
+                        index={index}
+                        className="data-[highlighted]:bg-foreground/[0.06] flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-start text-[13.5px] transition-colors"
+                      >
+                        <SparklesIcon className="text-foreground/35 size-3.5 shrink-0" />
+                        <span className="font-medium">{item.label}</span>
+                        <span className="text-foreground/45 flex-1 truncate text-xs">
+                          {item.description}
+                        </span>
+                      </ComposerPrimitive.Unstable_TriggerPopoverItem>
+                    ))
+                  ) : (
+                    <p className="text-foreground/40 px-2.5 py-2 text-xs">没有匹配的 Skill</p>
+                  )
+                }
+              </ComposerPrimitive.Unstable_TriggerPopoverItems>
+            </ComposerPrimitive.Unstable_TriggerPopover>
+          )}
+        </ComposerPrimitive.Root>
+      </ComposerPrimitive.Unstable_TriggerPopoverRoot>
+      <WorkspaceComposerLabel />
+    </div>
   )
 }
 

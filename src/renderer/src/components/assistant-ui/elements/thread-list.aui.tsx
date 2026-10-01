@@ -2,6 +2,8 @@
 
 import { WorkspaceThreadList, WorkspaceMove } from '@/renderer/src/features/workspaces/WorkspaceThreadList'
 
+import { useWorkspaces } from '@/renderer/src/features/workspaces/WorkspaceProvider'
+
 import { Button } from '@/renderer/src/components/ui/button'
 import { Input } from '@/renderer/src/components/ui/input'
 import { useSidebar } from '@/renderer/src/components/ui/sidebar'
@@ -100,6 +102,8 @@ ThreadListNew.displayName = 'ThreadListNew'
 export const ThreadListItem: FC = () => {
   const runtimeIsRunning = useAuiState((s) => s.threadListItem.isRunning)
   const sessionId = useAuiState((s) => s.threadListItem.remoteId)
+  const { conversations } = useWorkspaces()
+  const updatedAt = conversations.find(item => item.id === sessionId)?.updatedAt
   const overview = useAgentRunOverview(sessionId)
   const isWaiting = overview?.status === 'waiting'
   const isRunning = overview ? isActiveRunStatus(overview.status) && !isWaiting : runtimeIsRunning
@@ -116,7 +120,7 @@ export const ThreadListItem: FC = () => {
   return (
     <ThreadListItemPrimitive.Root
       data-slot="aui_thread-list-item"
-      className="group relative flex h-8 items-center rounded-lg text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-default focus-visible:bg-interactive-hover active:bg-interactive-pressed active:text-text-strong data-active:bg-interactive-selected data-active:hover:bg-interactive-selected-hover data-active:text-text-strong has-focus-visible:bg-interactive-hover has-data-[state=open]:bg-interactive-selected has-data-[state=open]:text-text-strong focus-visible:outline-none"
+      className="group relative flex h-9 items-center rounded-lg text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-default focus-visible:bg-interactive-hover active:bg-interactive-pressed active:text-text-strong data-active:bg-interactive-selected data-active:hover:bg-interactive-selected-hover data-active:text-text-strong has-focus-visible:bg-interactive-hover has-data-[state=open]:bg-interactive-selected has-data-[state=open]:text-text-strong focus-visible:outline-none"
     >
       {isRenaming ? (
         <ThreadListItemRename
@@ -129,7 +133,7 @@ export const ThreadListItem: FC = () => {
         <ThreadListItemPrimitive.Trigger
           ref={triggerRef}
           data-slot="aui_thread-list-item-trigger"
-          className="flex h-full min-w-0 flex-1 items-center rounded-lg px-2 text-start text-xs outline-none group-hover:pe-8 group-has-focus-visible:pe-8 group-has-data-[state=open]:pe-8 group-data-active:pe-8 focus-visible:border-brand-border focus-visible:ring-0"
+          className="flex h-full min-w-0 flex-1 items-center rounded-lg pr-2 pl-8 text-start text-[13px] outline-none group-hover:pe-8 group-has-focus-visible:pe-8 group-has-data-[state=open]:pe-8 focus-visible:border-brand-border focus-visible:ring-0"
         >
           {isWaiting ? (
             <span
@@ -149,6 +153,7 @@ export const ThreadListItem: FC = () => {
           <span data-slot="aui_thread-list-item-title" className="min-w-0 flex-1 truncate">
             <ThreadListItemPrimitive.Title fallback="新对话" />
           </span>
+          {updatedAt && <time dateTime={new Date(updatedAt).toISOString()} title={new Date(updatedAt).toLocaleString()} className="ml-2 shrink-0 text-[10px] tabular-nums text-text-faint group-hover:hidden group-focus-within:hidden group-has-data-[state=open]:hidden">{formatThreadAge(updatedAt)}</time>}
           {isRunning && <span className="sr-only">Running</span>}
           {isWaiting && <span className="sr-only">Waiting for approval</span>}
         </ThreadListItemPrimitive.Trigger>
@@ -229,7 +234,7 @@ const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
             variant="ghost"
             size="icon"
             data-slot="aui_thread-list-item-more"
-            className="absolute end-1 top-1/2 size-6 -translate-y-1/2 rounded-md p-0 text-text-faint opacity-0 hover:bg-interactive-hover hover:text-text-default active:bg-interactive-pressed focus-visible:border-brand-border focus-visible:ring-0 group-hover:opacity-100 group-has-focus-visible:opacity-100 group-data-active:opacity-100 data-[state=open]:bg-interactive-selected data-[state=open]:text-text-strong data-[state=open]:opacity-100 data-[state=open]:hover:bg-interactive-selected-hover"
+            className="absolute end-1 top-1/2 size-6 -translate-y-1/2 rounded-md p-0 text-text-faint opacity-0 hover:bg-interactive-hover hover:text-text-default active:bg-interactive-pressed focus-visible:border-brand-border focus-visible:ring-0 group-hover:opacity-100 group-has-focus-visible:opacity-100 data-[state=open]:bg-interactive-selected data-[state=open]:text-text-strong data-[state=open]:opacity-100 data-[state=open]:hover:bg-interactive-selected-hover"
           />
         }
       >
@@ -277,4 +282,14 @@ const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
       </ThreadListItemMorePrimitive.Content>
     </ThreadListItemMorePrimitive.Root>
   )
+}
+
+function formatThreadAge(updatedAt: number): string {
+  const minutes = Math.max(0, Math.floor((Date.now() - updatedAt) / 60_000))
+  if (minutes < 1) return '刚刚'
+  if (minutes < 60) return minutes + '分钟'
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return hours + '小时'
+  const days = Math.floor(hours / 24)
+  return days < 30 ? days + '天' : Math.floor(days / 30) + '个月'
 }
