@@ -6,7 +6,7 @@
 @custom-variant data-closed (&:where([data-state='closed'], [data-closed]:not([data-closed='false'])));
 
 :root {
-  --window-titlebar-height: 2.5rem;
+  --window-titlebar-height: 1.75rem;
 
   --radius: 0.625rem;
 

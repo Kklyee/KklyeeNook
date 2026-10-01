@@ -1,9 +1,25 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Maximize2Icon, Minimize2Icon, MinusIcon, XIcon } from 'lucide-react'
+import { ArrowLeftIcon, CopyIcon, MinusIcon, PanelLeftIcon, SquareIcon, XIcon } from 'lucide-react'
 import { Button } from './ui/button'
+import { useSidebar } from './ui/sidebar'
 
-export function Titlebar() {
+export type AppView = 'chat' | 'settings' | 'scheduled-tasks'
+
+const navigation: Array<{ id: AppView; label: string }> = [
+  { id: 'chat', label: '对话' },
+  { id: 'scheduled-tasks', label: '定时任务' },
+  { id: 'settings', label: '设置' },
+]
+
+export function Titlebar({
+  view,
+  onNavigate,
+}: {
+  view: AppView
+  onNavigate: (view: AppView) => void
+}) {
   const [maximized, setMaximized] = useState(false)
+  const { toggleSidebar } = useSidebar()
 
   useEffect(() => {
     let active = true
@@ -19,9 +35,36 @@ export function Titlebar() {
   }, [])
 
   return (
-    <header className="titlebar-drag-region bg-sidebar text-sidebar-foreground flex h-10 shrink-0 items-center border-b border-sidebar-border">
-      <div className="flex min-w-0 flex-1 items-center gap-2 px-3">
-        <span className="truncate text-xs font-semibold tracking-wide">KklyeeNook</span>
+    <header className="titlebar-drag-region flex h-7 shrink-0 items-center border-b border-white/[0.06] bg-[#1b1b1b] text-white/75">
+      <div className="titlebar-no-drag-region flex h-full min-w-0 flex-1 items-center">
+        <Button
+          type="button"
+          variant="ghost"
+          aria-label={view === 'chat' ? '折叠或展开侧边栏' : '返回对话'}
+          title={view === 'chat' ? '折叠或展开侧边栏' : '返回对话'}
+          className="h-full w-9 rounded-none px-0 text-white/60 hover:bg-white/[0.08] hover:text-white"
+          onClick={() => (view === 'chat' ? toggleSidebar() : onNavigate('chat'))}
+        >
+          {view === 'chat' ? (
+            <PanelLeftIcon className="size-3.5" />
+          ) : (
+            <ArrowLeftIcon className="size-3.5" />
+          )}
+        </Button>
+        <nav aria-label="应用导航" className="flex h-full items-center">
+          {navigation.map(({ id, label }) => (
+            <Button
+              key={id}
+              type="button"
+              variant="ghost"
+              aria-current={view === id ? 'page' : undefined}
+              className="h-full rounded-none px-2.5 text-[11px] font-normal text-white/60 hover:bg-white/[0.07] hover:text-white/90 aria-[current=page]:text-white/95"
+              onClick={() => onNavigate(id)}
+            >
+              {label}
+            </Button>
+          ))}
+        </nav>
       </div>
       <div className="titlebar-no-drag-region flex h-full shrink-0 items-stretch">
         <WindowButton label="最小化" onClick={() => window.api.window.minimize()}>
@@ -31,11 +74,11 @@ export function Titlebar() {
           label={maximized ? '还原' : '最大化'}
           onClick={() => window.api.window.toggleMaximize()}
         >
-          {maximized ? <Minimize2Icon /> : <Maximize2Icon />}
+          {maximized ? <CopyIcon /> : <SquareIcon />}
         </WindowButton>
         <WindowButton
           label="关闭"
-          className="hover:bg-destructive hover:text-destructive-foreground"
+          className="hover:bg-[#c42b1c] hover:text-white"
           onClick={() => window.api.window.close()}
         >
           <XIcon />
@@ -62,10 +105,10 @@ function WindowButton({
       variant="ghost"
       aria-label={label}
       title={label}
-      className={`h-full w-11 rounded-none px-0 text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground ${className ?? ''}`}
+      className={`h-full w-11 rounded-none px-0 text-white/65 hover:bg-white/[0.09] hover:text-white ${className ?? ''}`}
       onClick={onClick}
     >
-      {children}
+      <span className="[&_svg]:size-3.5">{children}</span>
     </Button>
   )
 }
