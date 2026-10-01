@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 import { agentRuns } from './agentRuns'
 import { conversations } from './conversations'
@@ -13,12 +13,17 @@ export const agentExecutionRecords = sqliteTable(
     runId: text('run_id')
       .notNull()
       .references(() => agentRuns.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    turnId: text('turn_id'),
+    stepId: text('step_id'),
     timestamp: integer('timestamp').notNull(),
     eventType: text('event_type').notNull(),
     eventJson: text('event_json').notNull(),
   },
   (table) => [
-    index('agent_execution_records_run_timestamp_idx').on(table.runId, table.timestamp, table.id),
+    uniqueIndex('agent_execution_records_run_seq_idx').on(table.runId, table.seq),
+    index('agent_execution_records_run_turn_seq_idx').on(table.runId, table.turnId, table.seq),
+    index('agent_execution_records_run_step_seq_idx').on(table.runId, table.stepId, table.seq),
     index('agent_execution_records_session_idx').on(table.sessionId),
   ],
 )

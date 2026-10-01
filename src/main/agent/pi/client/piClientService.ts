@@ -38,7 +38,6 @@ type Relay = {
 
 export class PiClientService implements PiClient {
   private readonly relays = new Map<string, Relay>()
-  private readonly pendingRuns = new Set<string>()
   private readonly unsubscribeAgentEvents: () => void
 
   constructor(
@@ -102,7 +101,7 @@ export class PiClientService implements PiClient {
 
     if (
       uniqueContextAttachmentIds.length &&
-      (this.pendingRuns.has(threadId) || sessionRuntime.isRunning())
+      (this.agentService.getSession(threadId)?.toSummary().activeRunId || sessionRuntime.isRunning())
     ) {
       throw new Error('File context cannot be added while the agent is running')
     }
@@ -117,32 +116,28 @@ export class PiClientService implements PiClient {
       const title = !text ? 'New Task' : text.length > 50 ? `${text.slice(0, 47)}...` : text
       await this.renameThread(threadId, title)
     }
-    if (this.pendingRuns.has(threadId) || sessionRuntime.isRunning()) {
-      this.agentService.steerRun(threadId, input.content)
-      await sessionRuntime.sendMessage({
-        ...input,
-        streamingBehavior: input.streamingBehavior ?? 'steer',
-      })
+    if (this.agentService.getSession(threadId)?.toSummary().activeRunId || sessionRuntime.isRunning()) {
+      const inputId = this.agentService.steerRun(threadId, input.content, input.streamingBehavior === 'followUp' ? 'follow-up' : 'steer')
+      try {
+        await sessionRuntime.sendMessage({
+          ...input,
+          streamingBehavior: input.streamingBehavior ?? 'steer',
+        })
+      } catch (error) {
+        this.agentService.discardPendingInputs(threadId, inputId)
+        throw error
+      }
       return
     }
 
-    this.pendingRuns.add(threadId)
-    try {
-      const runInput = {
-        prompt: input.content,
-        ...(context ? { context } : {}),
-        ...(input.attachments?.length ? { attachments: input.attachments } : {}),
-      }
-      const handle = this.agentService.startRun(threadId, runInput)
-      this.contextAttachments.release(uniqueContextAttachmentIds)
-      void handle.completion.then(
-        () => this.pendingRuns.delete(threadId),
-        () => this.pendingRuns.delete(threadId),
-      )
-    } catch (error) {
-      this.pendingRuns.delete(threadId)
-      throw error
+    const runInput = {
+      prompt: input.content,
+      ...(context ? { context } : {}),
+      ...(input.attachments?.length ? { attachments: input.attachments } : {}),
     }
+    const handle = this.agentService.startRun(threadId, runInput)
+    this.contextAttachments.release(uniqueContextAttachmentIds)
+    void handle.completion.catch((error) => console.error('[PiClientService] run failed:', error))
   }
 
   async cancelRun(threadId: string): Promise<void> {
@@ -151,7 +146,9 @@ export class PiClientService implements PiClient {
   }
 
   async clearQueue(threadId: string): Promise<{ steering: string[]; followUp: string[] }> {
-    return this.sessionRuntimeManager.get(threadId)?.clearQueue() ?? { steering: [], followUp: [] }
+    const queue = this.sessionRuntimeManager.get(threadId)?.clearQueue() ?? { steering: [], followUp: [] }
+    this.agentService.discardPendingInputs(threadId)
+    return queue
   }
 
   async getAvailableModels(input?: { workspacePath?: string }): Promise<PiModelInfo[]> {

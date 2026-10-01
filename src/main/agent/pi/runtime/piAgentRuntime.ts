@@ -1,9 +1,9 @@
 import type { AgentEvent } from '@/shared/agent/agentEvent'
-import type { AgentRuntime, AgentRuntimeInput } from '../../agentRuntime'
+import type { AgentRuntime, AgentRuntimeInput, AgentRuntimeEvent } from '../../agentRuntime'
 import { convertPiEvent } from '../adapters/piEventAdapter'
 import type { PiSessionRuntimePort } from './piSessionRuntime'
 
-type Emit = (event: AgentEvent) => void
+type Emit = (event: AgentRuntimeEvent) => void
 
 export class PiAgentRuntime implements AgentRuntime {
   constructor(
@@ -14,7 +14,9 @@ export class PiAgentRuntime implements AgentRuntime {
   async run(input: AgentRuntimeInput, emit: Emit, signal?: AbortSignal): Promise<void> {
     let unsubscribe: (() => void) | undefined
     let unsubscribeProductEvents: (() => void) | undefined
-    let terminalEventReceived = false
+    let unsubscribeExecutionEvents: (() => void) | undefined
+    let terminalEvent: AgentEvent | undefined
+    let settled = false
 
     const handleAbort = () => {
       void this.sessionRuntime.cancel()
@@ -23,16 +25,22 @@ export class PiAgentRuntime implements AgentRuntime {
     try {
       await this.sessionRuntime.initialize()
       emit({ type: 'system_prompt', text: this.sessionRuntime.getSystemPrompt() })
+      emit({ type: 'agent_started' })
       unsubscribe = this.sessionRuntime.subscribe((piEvent) => {
         const agentEvent = convertPiEvent(piEvent)
+        if (piEvent.type === 'agent_end') terminalEvent = agentEvent
         if (!agentEvent) return
-
-        if (agentEvent.type === 'agent_failed' || agentEvent.type === 'agent_aborted') {
-          terminalEventReceived = true
-        }
+        if (['agent_started', 'agent_failed', 'agent_aborted'].includes(agentEvent.type)) return
         emit(agentEvent)
       })
       unsubscribeProductEvents = this.sessionRuntime.subscribeProductEvents(emit)
+      unsubscribeExecutionEvents = this.sessionRuntime.subscribeExecutionEvents((event) => {
+        emit(event)
+        if (event.type === 'pi_agent_settled') {
+          settled = true
+          emit(signal?.aborted ? { type: 'agent_aborted' } : terminalEvent ?? { type: 'agent_completed' })
+        }
+      })
 
       if (signal?.aborted) {
         emit({ type: 'agent_aborted' })
@@ -53,13 +61,14 @@ export class PiAgentRuntime implements AgentRuntime {
         await this.sessionRuntime.runMessage(runInput, input.context)
       }
 
-      if (terminalEventReceived) return
+      if (settled) return
       if (signal?.aborted) {
         emit({ type: 'agent_aborted' })
         return
       }
-      emit({ type: 'agent_completed' })
+      emit(terminalEvent ?? { type: 'agent_completed' })
     } catch (error) {
+      if (settled) return
       if (signal?.aborted) {
         emit({ type: 'agent_aborted' })
         return
@@ -67,6 +76,7 @@ export class PiAgentRuntime implements AgentRuntime {
       emit({ type: 'agent_failed', error: error instanceof Error ? error.message : String(error) })
     } finally {
       unsubscribeProductEvents?.()
+      unsubscribeExecutionEvents?.()
       unsubscribe?.()
       signal?.removeEventListener('abort', handleAbort)
     }

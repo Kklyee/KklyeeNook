@@ -22,12 +22,12 @@ function record(
   timestamp: number,
   event: AgentExecutionRecord['event'],
 ): AgentExecutionRecord {
-  return { id, sessionId: run.sessionId, runId: run.id, timestamp, event }
+  return { id, seq: id, sessionId: run.sessionId, runId: run.id, timestamp, event }
 }
 
 test('groups streamed text and pairs tool and approval events', () => {
   const model = buildExecutionTimeline(run, [
-    record(1, 100, { type: 'user_message', text: '请更新 README' }),
+    record(1, 100, { type: 'user_message', inputId: 'input-1', delivery: 'initial', text: '请更新 README' }),
     record(2, 100, { type: 'system_prompt', text: 'You are a coding agent.' }),
     record(3, 100, { type: 'agent_started' }),
     record(4, 120, { type: 'text_delta', text: '你' }),
@@ -83,7 +83,7 @@ test('groups streamed text and pairs tool and approval events', () => {
 
 test('places the system prompt before the user message', () => {
   const model = buildExecutionTimeline(run, [
-    record(1, 100, { type: 'user_message', text: '请更新 README' }),
+    record(1, 100, { type: 'user_message', inputId: 'input-1', delivery: 'initial', text: '请更新 README' }),
     record(2, 100, { type: 'system_prompt', text: 'You are a coding agent.' }),
   ])
 

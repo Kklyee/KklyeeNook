@@ -24,6 +24,7 @@ function createFakeRuntime(): PiSessionRuntimePort {
     subscribe: vi.fn(() => () => undefined),
     subscribeClientEvents: vi.fn(() => () => undefined),
     subscribeProductEvents: vi.fn(() => () => undefined),
+    subscribeExecutionEvents: vi.fn(() => () => undefined),
     dispose: vi.fn(),
   }
 }

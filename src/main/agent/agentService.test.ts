@@ -2,7 +2,7 @@ import { expect, test, vi } from 'vitest'
 
 import type { AgentEvent } from '@/shared/agent/agentEvent'
 import type { AgentRun } from '@/shared/agent/agentRun'
-import type { AgentRuntime, AgentRuntimeFactory, AgentRuntimeInput } from './agentRuntime'
+import type { AgentRuntime, AgentRuntimeFactory, AgentRuntimeInput, AgentRuntimeEvent } from './agentRuntime'
 import { AgentService } from './agentService'
 import type { AgentRunRepo } from '../db/repositories/agentRunRepo'
 import type { AgentSessionRecord, AgentSessionRepo } from '../db/repositories/agentSessionRepo'
@@ -77,6 +77,10 @@ class MemoryExecutionRecordRepo implements AgentExecutionRecordRepo {
 
   async append(envelope: AgentEventEnvelope) {
     this.records.push(envelope)
+  }
+
+  async getMaxSeq(runId: string) {
+    return Math.max(0, ...this.records.filter((record) => record.runId === runId).map((record) => record.seq))
   }
 
   async findByRunId(runId: string) {
@@ -227,6 +231,8 @@ test('records steering against the run during its startup window', async () => {
           await new Promise<void>((resolve) => {
             finishRun = resolve
           })
+          emit({ type: 'pi_turn_start', piTurnIndex: 0, deliveries: ['initial', 'steer'] })
+          emit({ type: 'pi_turn_end', result: 'committed' })
           emit({ type: 'agent_completed' })
         },
         dispose() {},
@@ -256,9 +262,10 @@ test('persists a run before execution and serializes status changes', async () =
   const runRepo = new MemoryRunRepo()
   const executionRecordRepo = new MemoryExecutionRecordRepo()
   const runtime: AgentRuntime = {
-    async run(_input, emit: (event: AgentEvent) => void) {
+    async run(_input, emit: (event: AgentRuntimeEvent) => void) {
       expect(Array.from(runRepo.runs.values())[0]?.status).toBe('running')
       emit({ type: 'agent_started' })
+      emit({ type: 'pi_turn_start', piTurnIndex: 0, deliveries: ['initial'] })
       emit({
         type: 'approval_required',
         approvalId: 'approval-1',
@@ -269,6 +276,7 @@ test('persists a run before execution and serializes status changes', async () =
         type: 'tool_finished',
         result: { toolCallId: 'tool-1', toolName: 'write', output: 'ok', success: true },
       })
+      emit({ type: 'pi_turn_end', result: 'committed' })
       emit({ type: 'agent_completed' })
     },
     dispose() {},
@@ -282,7 +290,13 @@ test('persists a run before execution and serializes status changes', async () =
   )
   await service.initialize()
 
+  const published: AgentEventEnvelope[] = []
+  service.subscribe((envelope) => published.push(envelope))
   const finalRun = await service.startRun(sessionRecord.id, { prompt: 'hello' }).completion
+
+  expect(published).toEqual(executionRecordRepo.records)
+  expect(published.map((envelope) => envelope.seq)).toEqual(published.map((_, index) => index + 1))
+  expect(published.find((envelope) => envelope.event.type === 'tool_started')).toMatchObject({ turnId: expect.any(String), stepId: expect.any(String) })
 
   expect(finalRun.status).toBe('completed')
   expect(finalRun.completedAt).toBeDefined()
@@ -297,9 +311,13 @@ test('persists a run before execution and serializes status changes', async () =
   ).toEqual([
     'user_message',
     'agent_started',
+    'turn_started',
+    'step_started',
     'approval_required',
     'tool_started',
     'tool_finished',
+    'step_ended',
+    'turn_ended',
     'agent_completed',
   ])
 })
@@ -309,6 +327,7 @@ test('turns a successful create_artifact tool call into a durable run artifact',
   const artifactRepo = new MemoryArtifactRepo()
   const runtime: AgentRuntime = {
     async run(_prompt, emit) {
+      emit({ type: 'pi_turn_start', piTurnIndex: 0, deliveries: ['initial'] })
       emit({
         type: 'tool_started',
         call: {
@@ -326,6 +345,7 @@ test('turns a successful create_artifact tool call into a durable run artifact',
           success: true,
         },
       })
+      emit({ type: 'pi_turn_end', result: 'committed' })
       emit({ type: 'agent_completed' })
     },
     dispose() {},
@@ -365,6 +385,7 @@ test('turns a successful update_plan tool call into a persisted run plan and eve
   }
   const runtime: AgentRuntime = {
     async run(_input, emit) {
+      emit({ type: 'pi_turn_start', piTurnIndex: 0, deliveries: ['initial'] })
       emit({
         type: 'tool_started',
         call: { id: 'tool-plan', toolName: 'update_plan', args: plan },
@@ -378,6 +399,7 @@ test('turns a successful update_plan tool call into a persisted run plan and eve
           success: true,
         },
       })
+      emit({ type: 'pi_turn_end', result: 'committed' })
       emit({ type: 'agent_completed' })
     },
     dispose() {},
@@ -404,9 +426,13 @@ test('turns a successful update_plan tool call into a persisted run plan and eve
     (await service.listExecutionRecords(finalRun.id)).map((record) => record.event.type),
   ).toEqual([
     'user_message',
+    'turn_started',
+    'step_started',
     'tool_started',
     'tool_finished',
     'plan_updated',
+    'step_ended',
+    'turn_ended',
     'plan_updated',
     'agent_completed',
   ])
@@ -422,6 +448,7 @@ test('completes the active plan step when the agent run completes', async () => 
   }
   const runtime: AgentRuntime = {
     async run(_input, emit) {
+      emit({ type: 'pi_turn_start', piTurnIndex: 0, deliveries: ['initial'] })
       emit({
         type: 'tool_started',
         call: { id: 'tool-plan', toolName: 'update_plan', args: plan },
@@ -435,6 +462,7 @@ test('completes the active plan step when the agent run completes', async () => 
           success: true,
         },
       })
+      emit({ type: 'pi_turn_end', result: 'committed' })
       emit({ type: 'agent_completed' })
     },
     dispose() {},
@@ -466,18 +494,22 @@ test('delegates an isolated child run and returns its result', async () => {
   let releaseParent: () => void = () => undefined
   const parentRuntime: AgentRuntime = {
     async run(_input, emit) {
+      emit({ type: 'pi_turn_start', piTurnIndex: 0, deliveries: ['initial'] })
       parentStarted = true
       await new Promise<void>((resolve) => {
         releaseParent = resolve
       })
+      emit({ type: 'pi_turn_end', result: 'committed' })
       emit({ type: 'agent_completed' })
     },
     dispose() {},
   }
   const childRuntime: AgentRuntime = {
     async run(input, emit) {
+      emit({ type: 'pi_turn_start', piTurnIndex: 0, deliveries: ['initial'] })
       childInputs.push(input)
       emit({ type: 'text_delta', text: 'child result' })
+      emit({ type: 'pi_turn_end', result: 'committed' })
       emit({ type: 'agent_completed' })
     },
     dispose() {},
@@ -565,6 +597,14 @@ test('delegates an isolated child run and returns its result', async () => {
 
   releaseParent()
   await expect(parent.completion).resolves.toMatchObject({ status: 'completed' })
+  const parentRecords = await service.listExecutionRecords(parent.run.id)
+  const childRecords = await service.listExecutionRecords(child!.id)
+  expect(parentRecords[0]?.seq).toBe(1)
+  expect(childRecords[0]?.seq).toBe(1)
+  const parentStep = parentRecords.find((record) => record.event.type === 'step_started')
+  const childStep = childRecords.find((record) => record.event.type === 'step_started')
+  expect(childStep?.turnId).not.toBe(parentStep?.turnId)
+  expect(childStep?.stepId).not.toBe(parentStep?.stepId)
 })
 
 test('limits child depth and concurrency and aborts children with the parent', async () => {
@@ -634,4 +674,51 @@ test('limits child depth and concurrency and aborts children with the parent', a
       .filter((run) => run.parentRunId === parent.run.id)
       .every((run) => run.status === 'aborted'),
   ).toBe(true)
+})
+
+test.each(['aborted', 'failed'] as const)('persists active Step and Turn closure before agent_%s', async (status) => {
+  const repo = new MemoryExecutionRecordRepo()
+  const service = new AgentService(
+    { create: () => ({
+      async run(_input, emit) {
+        emit({ type: 'pi_turn_start', piTurnIndex: 0, deliveries: ['initial'] })
+        emit({ type: 'thinking_delta', text: 'working' })
+        if (status === 'failed') throw new Error('model failed')
+        emit({ type: 'agent_aborted' })
+      },
+      dispose() {},
+    }) },
+    new MemorySessionRepo([sessionRecord]), new MemoryRunRepo(), repo, new MemoryArtifactRepo(),
+  )
+  await service.initialize()
+  const finalRun = await service.startRun(sessionRecord.id, { prompt: 'start' }).completion
+  expect(finalRun.status).toBe(status)
+  expect(repo.records.slice(-3).map((record) => record.event)).toEqual([
+    { type: 'step_ended', stepId: expect.any(String), turnId: expect.any(String), result: 'aborted' },
+    { type: 'turn_ended', turnId: expect.any(String), reason: status },
+    status === 'failed' ? { type: 'agent_failed', error: 'model failed' } : { type: 'agent_aborted' },
+  ])
+  expect(repo.records.at(-1)?.turnId).toBeUndefined()
+  expect(repo.records.at(-1)?.stepId).toBeUndefined()
+})
+
+test('creates a new Run after the previous runtime settles', async () => {
+  const service = new AgentService(
+    { create: () => ({
+      async run(_input, emit) {
+        emit({ type: 'pi_turn_start', piTurnIndex: 0, deliveries: ['initial'] })
+        emit({ type: 'pi_turn_end', result: 'committed' })
+        emit({ type: 'agent_completed' })
+      },
+      dispose() {},
+    }) },
+    new MemorySessionRepo([sessionRecord]), new MemoryRunRepo(), new MemoryExecutionRecordRepo(), new MemoryArtifactRepo(),
+  )
+  await service.initialize()
+  const first = await service.startRun(sessionRecord.id, { prompt: 'first' }).completion
+  expect(service.getSession(sessionRecord.id)?.toSummary().activeRunId).toBeUndefined()
+  const second = await service.startRun(sessionRecord.id, { prompt: 'second' }).completion
+  expect(second.id).not.toBe(first.id)
+  expect((await service.listExecutionRecords(first.id))[0]?.seq).toBe(1)
+  expect((await service.listExecutionRecords(second.id))[0]?.seq).toBe(1)
 })

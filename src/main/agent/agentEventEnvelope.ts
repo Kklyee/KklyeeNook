@@ -1,8 +1,1 @@
-import type { AgentEvent } from '@/shared/agent/agentEvent'
-
-export interface AgentEventEnvelope {
-  sessionId: string
-  runId: string
-  timestamp: number
-  event: AgentEvent
-}
+export type { AgentEventEnvelope } from '@/shared/agent/agentExecutionRecord'

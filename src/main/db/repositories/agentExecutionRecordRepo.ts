@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm'
+import { asc, eq, max } from 'drizzle-orm'
 
 import type { AgentEvent } from '@/shared/agent/agentEvent'
 import type { AgentExecutionRecord } from '@/shared/agent/agentExecutionRecord'
@@ -12,6 +12,7 @@ import {
 export interface AgentExecutionRecordRepo {
   append(envelope: AgentEventEnvelope): Promise<void>
   findByRunId(runId: string): Promise<AgentExecutionRecord[]>
+  getMaxSeq(runId: string): Promise<number>
 }
 
 function toExecutionRecord(row: AgentExecutionRecordRow): AgentExecutionRecord {
@@ -19,6 +20,9 @@ function toExecutionRecord(row: AgentExecutionRecordRow): AgentExecutionRecord {
     id: row.id,
     sessionId: row.sessionId,
     runId: row.runId,
+    seq: row.seq,
+    turnId: row.turnId ?? undefined,
+    stepId: row.stepId ?? undefined,
     timestamp: row.timestamp,
     event: parseAgentEvent(row.eventJson),
   }
@@ -66,6 +70,9 @@ export class DrizzleAgentExecutionRecordRepo implements AgentExecutionRecordRepo
       .values({
         sessionId: envelope.sessionId,
         runId: envelope.runId,
+        seq: envelope.seq,
+        turnId: envelope.turnId,
+        stepId: envelope.stepId,
         timestamp: envelope.timestamp,
         eventType: envelope.event.type,
         eventJson: JSON.stringify(envelope.event),
@@ -77,8 +84,16 @@ export class DrizzleAgentExecutionRecordRepo implements AgentExecutionRecordRepo
       .select()
       .from(agentExecutionRecords)
       .where(eq(agentExecutionRecords.runId, runId))
-      .orderBy(asc(agentExecutionRecords.timestamp), asc(agentExecutionRecords.id))
+      .orderBy(asc(agentExecutionRecords.seq))
 
     return rows.map(toExecutionRecord)
+  }
+
+  async getMaxSeq(runId: string): Promise<number> {
+    const [row] = await this.db
+      .select({ seq: max(agentExecutionRecords.seq) })
+      .from(agentExecutionRecords)
+      .where(eq(agentExecutionRecords.runId, runId))
+    return row?.seq ?? 0
   }
 }

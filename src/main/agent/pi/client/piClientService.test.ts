@@ -47,6 +47,7 @@ function setup(running = false) {
       return () => clientListeners.delete(listener)
     },
     subscribeProductEvents: vi.fn(() => () => undefined),
+    subscribeExecutionEvents: vi.fn(() => () => undefined),
     dispose: vi.fn(),
   }
   const completion = Promise.resolve({
@@ -67,6 +68,7 @@ function setup(running = false) {
     setSessionArchived: vi.fn(),
     deleteSession: vi.fn(),
     steerRun: vi.fn(),
+    discardPendingInputs: vi.fn(),
     startRun: vi.fn(() => ({ run: {}, completion })),
     subscribe: vi.fn(() => () => undefined),
   } as unknown as AgentService
@@ -123,7 +125,16 @@ test('starts a product run for an idle thread and uses Pi queue while running', 
     content: 'follow up',
     streamingBehavior: 'steer',
   })
-  expect(running.agentService.steerRun).toHaveBeenCalledWith('session-1', 'follow up')
+  expect(running.agentService.steerRun).toHaveBeenCalledWith('session-1', 'follow up', 'steer')
+})
+
+test('preserves follow-up delivery and releases pending inputs when the Pi queue is cleared', async () => {
+  const running = setup(true)
+  await running.client.sendMessage('session-1', { content: 'later', streamingBehavior: 'followUp' })
+  expect(running.agentService.steerRun).toHaveBeenCalledWith('session-1', 'later', 'follow-up')
+  expect(running.sessionRuntime.sendMessage).toHaveBeenCalledWith({ content: 'later', streamingBehavior: 'followUp' })
+  await running.client.clearQueue('session-1')
+  expect(running.agentService.discardPendingInputs).toHaveBeenCalledWith('session-1')
 })
 
 test('resolves staged file context before starting an idle product run', async () => {

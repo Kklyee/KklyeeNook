@@ -6,6 +6,7 @@ import type {
   AgentRuntimeFactory,
   AgentRuntimeFactoryOptions,
   AgentRuntimeInput,
+  AgentRuntimeEvent,
 } from './agentRuntime'
 import { AgentSession } from './agentSession'
 import { completePlanSteps, parseAgentPlan } from '@/shared/agent/agentPlan'
@@ -19,6 +20,9 @@ import type {
 import { SUBAGENT_AVATARS } from '@/shared/agent/delegateTask'
 import type { AgentRunContext } from '@/main/context/contextBuilder'
 import { getAgentRunPatch } from './agentRunState'
+import { ExecutionSequencer } from './executionSequencer'
+import { ExecutionBoundaryTracker } from './executionBoundaryTracker'
+import type { InputDelivery } from '@/shared/agent/agentEvent'
 
 import { AgentEventEnvelope } from './agentEventEnvelope'
 import { AgentEvent } from '@/shared/agent/agentEvent'
@@ -104,6 +108,8 @@ export class AgentService {
   private readonly runPersistence = new Map<string, Promise<void>>()
   private readonly runControllers = new Map<string, AbortController>()
   private readonly childReservations = new Map<string, number>()
+  private readonly sequencer = new ExecutionSequencer()
+  private readonly boundaries = new Map<string, ExecutionBoundaryTracker>()
 
   constructor(
     private readonly runtimeFactory: AgentRuntimeFactory,
@@ -130,6 +136,7 @@ export class AgentService {
     const runs = await this.runRepo.findAll()
     for (const run of runs) {
       this.sessions.get(run.sessionId)?.restoreRun(run)
+      this.sequencer.restore(run.id, await this.executionRecordRepo.getMaxSeq(run.id))
     }
     onStage?.('runs_restored', runs.length)
   }
@@ -191,14 +198,22 @@ export class AgentService {
     return session.toSummary()
   }
 
-  steerRun(sessionId: string, text: string): void {
+  steerRun(sessionId: string, text: string, delivery: Exclude<InputDelivery, 'initial'> = 'steer'): string {
     const session = this.sessions.get(sessionId)
     const runId = session?.toSummary().activeRunId
     if (!session) throw new Error(`AgentSession not found: ${sessionId}`)
     if (!runId) {
       throw new Error(`Pi runtime is active without an AgentRun for session: ${sessionId}`)
     }
-    this.handleAgentEvent(session, runId, { type: 'user_message', text })
+    const inputId = randomUUID()
+    this.boundaries.get(runId)!.enqueue({ inputId, delivery })
+    this.handleAgentEvent(session, runId, { type: 'user_message', inputId, delivery, text })
+    return inputId
+  }
+
+  discardPendingInputs(sessionId: string, inputId?: string): void {
+    const runId = this.sessions.get(sessionId)?.toSummary().activeRunId
+    if (runId) this.boundaries.get(runId)?.discard(inputId)
   }
 
   abortSession(sessionId: string): void {
@@ -271,12 +286,27 @@ export class AgentService {
     if (!run) {
       return
     }
+    const boundary = this.boundaries.get(runId)
+    if (event.type === 'agent_completed' && boundary && !boundary.onSettled()) return
+    if (event.type === 'agent_failed') boundary?.terminate('failed')
+    if (event.type === 'agent_aborted') boundary?.terminate('aborted')
     if (event.type === 'agent_completed' && run.plan) {
       const plan = completePlanSteps(run.plan)
       if (plan !== run.plan) this.handleAgentEvent(session, runId, { type: 'plan_updated', plan })
     }
     const timestamp = Date.now()
-    const envelope = { sessionId: session.id, runId, timestamp, event }
+    const envelope: AgentEventEnvelope = {
+      sessionId: session.id,
+      runId,
+      seq: this.sequencer.next(runId),
+      ...boundary?.correlation,
+      timestamp,
+      event,
+    }
+    if (event.type === 'user_message') {
+      delete envelope.turnId
+      delete envelope.stepId
+    }
     const patch = getAgentRunPatch(run, event, timestamp)
     let updatedRun: AgentRun | undefined
     if (patch) {
@@ -544,8 +574,13 @@ export class AgentService {
       artifactIds: [],
     }
     session.addRun(run)
+    this.sequencer.restore(run.id, 0)
+    const boundary = new ExecutionBoundaryTracker((event) => this.handleAgentEvent(session, run.id, event))
+    this.boundaries.set(run.id, boundary)
     const initialSave = this.queueRunSave(run)
-    this.handleAgentEvent(session, run.id, { type: 'user_message', text: input.prompt })
+    const inputId = randomUUID()
+    boundary.enqueue({ inputId, delivery: 'initial' })
+    this.handleAgentEvent(session, run.id, { type: 'user_message', inputId, delivery: 'initial', text: input.prompt })
     const completion = initialSave.then(() =>
       this.executeRun(
         session,
@@ -562,11 +597,13 @@ export class AgentService {
       () => {
         this.runPersistence.delete(run.id)
         this.runControllers.delete(run.id)
+        this.boundaries.delete(run.id)
         for (const remove of removeSignalListeners) remove()
       },
       () => {
         this.runPersistence.delete(run.id)
         this.runControllers.delete(run.id)
+        this.boundaries.delete(run.id)
         for (const remove of removeSignalListeners) remove()
       },
     )
@@ -604,7 +641,7 @@ export class AgentService {
       await runtime.run(
         input,
         (event) => {
-          this.handleAgentEvent(session, runId, event)
+          this.handleRuntimeEvent(session, runId, event)
         },
         signal,
       )
@@ -656,6 +693,22 @@ export class AgentService {
     const runtime = this.runtimeFactory.create(sessionId, options)
     this.runtimes.set(sessionId, runtime)
     return runtime
+  }
+
+  private handleRuntimeEvent(session: AgentSession, runId: string, event: AgentRuntimeEvent): void {
+    const boundary = this.boundaries.get(runId)!
+    switch (event.type) {
+      case 'pi_turn_start':
+        boundary.onPiTurnStart(event.piTurnIndex, event.deliveries)
+        return
+      case 'pi_turn_end':
+        boundary.onPiTurnEnd(event.result)
+        return
+      case 'pi_agent_settled':
+        return
+      default:
+        this.handleAgentEvent(session, runId, event)
+    }
   }
 
   private findRun(runId: string): { session: AgentSession; run: AgentRun } | undefined {

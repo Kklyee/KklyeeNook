@@ -1,4 +1,8 @@
 import { expect, test, vi } from 'vitest'
+import { Agent } from '@earendil-works/pi-agent-core'
+import { createAssistantMessageEventStream, Type, type AssistantMessage, type Model } from '@earendil-works/pi-ai'
+import type { ExecutionBoundaryEvent } from '@/main/agent/agentRuntime'
+import { PiAgentRuntime } from './piAgentRuntime'
 
 import {
   createAgentSession,
@@ -56,6 +60,16 @@ function fakeSession() {
     setModel: vi.fn(),
     setThinkingLevel: vi.fn(),
     setSessionName: vi.fn(),
+    setSteeringMode: vi.fn(),
+    setFollowUpMode: vi.fn(),
+    steer: vi.fn(),
+    followUp: vi.fn(),
+    agent: {
+      transformContext: undefined as Agent['transformContext'],
+      subscribe: vi.fn(() => () => undefined),
+      steer: vi.fn(),
+      followUp: vi.fn(),
+    },
     dispose: vi.fn(),
   }
 }
@@ -317,4 +331,99 @@ test('uses the configured model and thinking level instead of the Pi session tra
       sessionManager,
     }),
   )
+})
+
+test('maps real Pi turns, batched duplicate steering and follow-up to execution boundaries', async () => {
+  const model: Model<'openai-completions'> = {
+    id: 'model-1', name: 'Test model', api: 'openai-completions', provider: 'custom', baseUrl: 'https://example.test',
+    reasoning: false, input: ['text'], contextWindow: 32000, maxTokens: 4000,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  }
+  let requests = 0
+  let releaseFirstRequest: () => void = () => undefined
+  const agent = new Agent({
+    initialState: {
+      model,
+      tools: [{
+        name: 'read', label: 'read', description: 'Read', parameters: Type.Object({}),
+        execute: async () => ({ content: [{ type: 'text', text: 'ok' }], details: {} }),
+      }],
+    },
+    streamFn: () => {
+      const request = ++requests
+      const stream = createAssistantMessageEventStream()
+      const finish = () => {
+        const message: AssistantMessage = {
+          role: 'assistant', api: model.api, provider: model.provider, model: model.id, timestamp: Date.now(),
+          content: request === 1
+            ? [0, 1, 2].map((index) => ({ type: 'toolCall', id: `read-${index}`, name: 'read', arguments: {} }))
+            : [{ type: 'text', text: 'done' }],
+          stopReason: request === 1 ? 'toolUse' : 'stop',
+          usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+        }
+        stream.push({ type: 'start', partial: message })
+        stream.push({ type: 'done', reason: request === 1 ? 'toolUse' : 'stop', message })
+      }
+      if (request === 1) releaseFirstRequest = finish
+      else finish()
+      return stream
+    },
+  })
+  const session = { ...fakeSession(), agent, get isStreaming() { return agent.state.isStreaming } }
+  agent.subscribe((event) => session.emit(event.type === 'agent_end' ? { ...event, willRetry: false } : event))
+  session.setSteeringMode.mockImplementation((mode) => { agent.steeringMode = mode })
+  session.setFollowUpMode.mockImplementation((mode) => { agent.followUpMode = mode })
+  session.prompt.mockImplementation(async (text: string) => {
+    await agent.prompt(text)
+    session.emit({ type: 'agent_settled' })
+  })
+  session.steer.mockImplementation(async (text: string) => agent.steer({ role: 'user', content: [{ type: 'text', text }], timestamp: Date.now() }))
+  session.followUp.mockImplementation(async (text: string) => agent.followUp({ role: 'user', content: [{ type: 'text', text }], timestamp: Date.now() }))
+  vi.mocked(createAgentSession).mockResolvedValue({ session } as never)
+  vi.mocked(SessionManager.create).mockReturnValue(fakeSessionManager() as never)
+  vi.mocked(ModelRuntime.create).mockResolvedValue({
+    registerProvider: vi.fn(), unregisterProvider: vi.fn(), setRuntimeApiKey: vi.fn(),
+    getModel: () => model, getModels: () => [],
+  } as never)
+  const sessionRuntime = new PiSessionRuntime(
+    'session-1',
+    new AgentConfigStore({ model: { provider: 'custom', modelID: 'model-1', baseUrl: 'https://example.test', thinkingLevel: 'off' }, tools: { enabled: [] } }),
+    { getApiKey: () => 'secret' } as unknown as CredentialStore,
+    { findBySessionId: vi.fn(), save: vi.fn() } as unknown as AgentRuntimeStateRepo,
+    new ToolRegistry(), 'sessions',
+  )
+  const boundaries: ExecutionBoundaryEvent[] = []
+  const toolEvents: AgentEvent[] = []
+  const runtime = new PiAgentRuntime(sessionRuntime, () => sessionRuntime.dispose())
+  const completion = runtime.run({ prompt: 'same', runId: 'run-1' }, (event) => {
+    if (event.type === 'pi_turn_start' || event.type === 'pi_turn_end' || event.type === 'pi_agent_settled') boundaries.push(event)
+    else toolEvents.push(event)
+  })
+  await vi.waitFor(() => {
+    expect(toolEvents.filter((event) => event.type === 'agent_failed')).toEqual([])
+    expect(requests).toBe(1)
+  })
+  await Promise.all([0, 1, 2].map(() => sessionRuntime.sendMessage({ content: 'same', streamingBehavior: 'steer' })))
+  await sessionRuntime.sendMessage({ content: 'same', streamingBehavior: 'followUp' })
+  expect(boundaries).toEqual([{ type: 'pi_turn_start', piTurnIndex: 0, deliveries: ['initial'] }])
+  session.emit({ type: 'auto_retry_start', attempt: 1, maxAttempts: 3, delayMs: 0, errorMessage: 'retry' })
+  session.emit({ type: 'auto_retry_end', attempt: 1, success: true })
+  expect(boundaries).toHaveLength(1)
+  releaseFirstRequest()
+  await completion
+  expect(boundaries).toEqual([
+    { type: 'pi_turn_start', piTurnIndex: 0, deliveries: ['initial'] },
+    { type: 'pi_turn_end', result: 'committed' },
+    { type: 'pi_turn_start', piTurnIndex: 1, deliveries: ['steer', 'steer', 'steer'] },
+    { type: 'pi_turn_end', result: 'committed' },
+    { type: 'pi_turn_start', piTurnIndex: 2, deliveries: ['follow-up'] },
+    { type: 'pi_turn_end', result: 'committed' },
+    { type: 'pi_agent_settled' },
+  ])
+  expect(toolEvents.filter((event) => event.type === 'tool_started')).toHaveLength(3)
+  expect(toolEvents.filter((event) => event.type === 'tool_finished').every((event) => event.result.success)).toBe(true)
+  expect(toolEvents.at(-1)?.type).toBe('agent_completed')
+  expect(session.setSteeringMode).toHaveBeenCalledWith('all')
+  expect(session.setFollowUpMode).toHaveBeenCalledWith('all')
+  runtime.dispose()
 })

@@ -53,6 +53,8 @@ import type { AgentConfigStore } from '@/main/settings/agentConfigStore'
 import type { CredentialStore } from '@/main/settings/credentialStore'
 import type { ToolRegistry } from '@/main/tools/toolRegistry'
 import type { AgentEvent } from '@/shared/agent/agentEvent'
+import type { InputDelivery } from '@/shared/agent/agentEvent'
+import type { ExecutionBoundaryEvent } from '@/main/agent/agentRuntime'
 import type { AgentSkill } from '@/shared/agent/agentSkill'
 import {
   toAgentContextUsage,
@@ -69,6 +71,7 @@ import { toPiContextMessage } from '../adapters/piContextAdapter'
 export type PiSessionEventListener = (event: AgentSessionEvent) => void
 export type PiSessionClientEventListener = (event: PiClientEventBody) => void
 export type PiSessionProductEventListener = (event: AgentEvent) => void
+export type PiSessionExecutionEventListener = (event: ExecutionBoundaryEvent) => void
 
 const APP_THINKING_LEVELS: readonly ThinkingLevel[] = [
   'off',
@@ -120,6 +123,7 @@ export interface PiSessionRuntimePort {
   subscribe(listener: PiSessionEventListener): () => void
   subscribeClientEvents(listener: PiSessionClientEventListener): () => void
   subscribeProductEvents(listener: PiSessionProductEventListener): () => void
+  subscribeExecutionEvents(listener: PiSessionExecutionEventListener): () => void
   dispose(): void
 }
 
@@ -152,6 +156,12 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
   private readonly listeners = new Set<PiSessionEventListener>()
   private readonly clientEventListeners = new Set<PiSessionClientEventListener>()
   private readonly productEventListeners = new Set<PiSessionProductEventListener>()
+  private readonly executionEventListeners = new Set<PiSessionExecutionEventListener>()
+  private readonly pendingDeliveries = new Set<Promise<void>>()
+  private unsubscribeDeliveryBarrier?: () => void
+  private pendingPiTurn = false
+  private deliveredInputs: InputDelivery[] = []
+  private readonly inputDeliveries = new WeakMap<object, InputDelivery>()
 
   constructor(
     private readonly sessionId: string,
@@ -264,7 +274,21 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
   }
 
   async sendMessage(input: PiSendMessageInput): Promise<void> {
-    await this.prompt(input, 'accepted')
+    const delivery = (async () => {
+      await this.initialize()
+      const session = this.getPiSession()
+      const content = input.content.startsWith('/')
+        ? normalizePiSkillCommand(input.content, session.resourceLoader.getSkills().skills)
+        : input.content
+      if (input.streamingBehavior === 'followUp') await session.followUp(content, input.attachments)
+      else await session.steer(content, input.attachments)
+    })()
+    this.pendingDeliveries.add(delivery)
+    try {
+      await delivery
+    } finally {
+      this.pendingDeliveries.delete(delivery)
+    }
   }
 
   async runMessage(
@@ -279,12 +303,12 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     try {
       const message = context ? toPiContextMessage(context) : undefined
       if (!message) {
-        await this.prompt(input, 'settled', skillIds)
+        await this.prompt(input, skillIds)
         return
       }
       if (!context?.memories?.length) {
         await this.getPiSession().sendCustomMessage(message, { deliverAs: 'nextTurn' })
-        await this.prompt(input, 'settled', skillIds)
+        await this.prompt(input, skillIds)
         return
       }
 
@@ -299,7 +323,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
       }
       session.state.messages = [...session.state.messages, transientMessage]
       try {
-        await this.prompt(input, 'settled', skillIds)
+        await this.prompt(input, skillIds)
       } finally {
         session.state.messages = session.state.messages.filter(
           (candidate) => candidate !== transientMessage,
@@ -312,34 +336,12 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
 
   private async prompt(
     input: PiSendMessageInput,
-    waitFor: 'accepted' | 'settled',
     skillIds: readonly string[] = [],
   ): Promise<void> {
     await this.initialize()
     const options: NonNullable<Parameters<PiAgentSession['prompt']>[1]> = {}
     if (input.streamingBehavior) options.streamingBehavior = input.streamingBehavior
     if (input.attachments?.length) options.images = input.attachments
-
-    if (waitFor === 'accepted') {
-      let settle: (error?: unknown) => void = () => undefined
-      let settled = false
-      const accepted = new Promise<void>((resolve, reject) => {
-        settle = (error) => {
-          if (settled) return
-          settled = true
-          if (error) reject(error)
-          else resolve()
-        }
-      })
-      options.preflightResult = (success) => {
-        if (success) settle()
-      }
-      void this.executePrompt(input.content, options, skillIds).then(
-        () => settle(),
-        (error: unknown) => settle(error),
-      )
-      return accepted
-    }
 
     await this.executePrompt(input.content, options, skillIds)
   }
@@ -464,16 +466,24 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     return () => this.productEventListeners.delete(listener)
   }
 
+  subscribeExecutionEvents(listener: PiSessionExecutionEventListener): () => void {
+    this.executionEventListeners.add(listener)
+    return () => this.executionEventListeners.delete(listener)
+  }
+
   dispose(): void {
     this.resetPiSession()
     this.listeners.clear()
     this.clientEventListeners.clear()
     this.productEventListeners.clear()
+    this.executionEventListeners.clear()
   }
 
   private resetPiSession(): void {
     this.unsubscribePiSession?.()
     this.unsubscribePiSession = undefined
+    this.unsubscribeDeliveryBarrier?.()
+    this.unsubscribeDeliveryBarrier = undefined
     this.extensionUiBridge?.dispose()
     this.extensionUiBridge = null
     this.piSession?.dispose()
@@ -482,6 +492,8 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     this.registeredToolRegistryRevision = -1
     this.lastError = undefined
     this.turnIndex = -1
+    this.pendingPiTurn = false
+    this.deliveredInputs = []
   }
 
   private getPiSession(): PiAgentSession {
@@ -579,6 +591,26 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
       }
 
       this.piSession = session
+      session.setSteeringMode('all')
+      session.setFollowUpMode('all')
+      const steer = session.agent.steer.bind(session.agent)
+      session.agent.steer = (message) => {
+        this.inputDeliveries.set(message, 'steer')
+        steer(message)
+      }
+      const followUp = session.agent.followUp.bind(session.agent)
+      session.agent.followUp = (message) => {
+        this.inputDeliveries.set(message, 'follow-up')
+        followUp(message)
+      }
+      const transformContext = session.agent.transformContext
+      session.agent.transformContext = async (messages, signal) => {
+        this.startPendingPiTurn()
+        return transformContext ? transformContext(messages, signal) : messages
+      }
+      this.unsubscribeDeliveryBarrier = session.agent.subscribe(async (event) => {
+        if (event.type === 'agent_end') await Promise.allSettled(this.pendingDeliveries)
+      })
       this.modelRuntime = modelRuntime
       this.registeredToolRegistryRevision = registryRevision
       this.extensionUiBridge = createPiExtensionUiBridge({
@@ -741,7 +773,23 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
   }
 
   private onSessionEvent(event: AgentSessionEvent): void {
-    if (event.type === 'turn_start') this.turnIndex += 1
+    if (event.type === 'turn_start') {
+      this.turnIndex += 1
+      this.pendingPiTurn = true
+      this.deliveredInputs = []
+    }
+    if (event.type === 'message_start' && event.message.role === 'user') {
+      this.deliveredInputs.push(this.inputDeliveries.get(event.message) ?? 'initial')
+    }
+    if (event.type === 'turn_end') {
+      this.startPendingPiTurn()
+      this.publishExecutionEvent({
+        type: 'pi_turn_end',
+        result: event.message.role === 'assistant' && ['error', 'aborted'].includes(event.message.stopReason)
+          ? 'aborted' : 'committed',
+      })
+    }
+    if (event.type === 'agent_settled') this.publishExecutionEvent({ type: 'pi_agent_settled' })
     for (const listener of this.listeners) this.notify(listener, event)
     this.publishClientEvent(toPiClientEventBody(event, this.turnIndex))
     if (event.type === 'compaction_start') {
@@ -782,6 +830,16 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
 
   private publishClientEvent(event: PiClientEventBody): void {
     for (const listener of this.clientEventListeners) this.notify(listener, event)
+  }
+
+  private startPendingPiTurn(): void {
+    if (!this.pendingPiTurn) return
+    this.pendingPiTurn = false
+    this.publishExecutionEvent({ type: 'pi_turn_start', piTurnIndex: this.turnIndex, deliveries: this.deliveredInputs })
+  }
+
+  private publishExecutionEvent(event: ExecutionBoundaryEvent): void {
+    for (const listener of this.executionEventListeners) this.notify(listener, event)
   }
 
   private publishProductEvent(event: AgentEvent): void {

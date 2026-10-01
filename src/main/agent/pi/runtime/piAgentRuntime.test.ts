@@ -1,6 +1,6 @@
 import { expect, test, vi } from 'vitest'
 
-import type { AgentEvent } from '@/shared/agent/agentEvent'
+import type { AgentRuntimeEvent } from '../../agentRuntime'
 import { PiAgentRuntime } from './piAgentRuntime'
 import type {
   PiSessionEventListener,
@@ -49,11 +49,12 @@ test('keeps the AgentRuntime projection on top of the shared session runtime', a
       return unsubscribeProductEvents
     },
     subscribeClientEvents: vi.fn(() => () => undefined),
+    subscribeExecutionEvents: vi.fn(() => () => undefined),
     dispose: vi.fn(),
   }
   const disposeRuntime = vi.fn()
   const runtime = new PiAgentRuntime(sessionRuntime, disposeRuntime)
-  const events: AgentEvent[] = []
+  const events: AgentRuntimeEvent[] = []
 
   const context = {
     attachments: [
@@ -104,6 +105,7 @@ test('passes image attachments through to the Pi session runtime', async () => {
     subscribe: vi.fn(() => () => undefined),
     subscribeProductEvents: vi.fn(() => () => undefined),
     subscribeClientEvents: vi.fn(() => () => undefined),
+    subscribeExecutionEvents: vi.fn(() => () => undefined),
     dispose: vi.fn(),
   }
   const runtime = new PiAgentRuntime(sessionRuntime, vi.fn())
