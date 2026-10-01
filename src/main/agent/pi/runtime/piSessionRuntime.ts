@@ -368,6 +368,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
   }
 
   async cancel(): Promise<void> {
+    this.piSession?.clearQueue()
     await this.piSession?.abort()
   }
 

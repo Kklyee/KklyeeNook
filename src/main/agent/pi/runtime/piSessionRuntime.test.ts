@@ -379,6 +379,10 @@ test('maps real Pi turns, batched duplicate steering and follow-up to execution 
   })
   session.steer.mockImplementation(async (text: string) => agent.steer({ role: 'user', content: [{ type: 'text', text }], timestamp: Date.now() }))
   session.followUp.mockImplementation(async (text: string) => agent.followUp({ role: 'user', content: [{ type: 'text', text }], timestamp: Date.now() }))
+  session.clearQueue.mockImplementation(() => {
+    agent.clearAllQueues()
+    return { steering: [], followUp: [] }
+  })
   vi.mocked(createAgentSession).mockResolvedValue({ session } as never)
   vi.mocked(SessionManager.create).mockReturnValue(fakeSessionManager() as never)
   vi.mocked(ModelRuntime.create).mockResolvedValue({
@@ -425,5 +429,10 @@ test('maps real Pi turns, batched duplicate steering and follow-up to execution 
   expect(toolEvents.at(-1)?.type).toBe('agent_completed')
   expect(session.setSteeringMode).toHaveBeenCalledWith('all')
   expect(session.setFollowUpMode).toHaveBeenCalledWith('all')
+  await sessionRuntime.sendMessage({ content: 'queued before abort', streamingBehavior: 'steer' })
+  expect(agent.hasQueuedMessages()).toBe(true)
+  await sessionRuntime.cancel()
+  expect(agent.hasQueuedMessages()).toBe(false)
+  expect(session.clearQueue.mock.invocationCallOrder[0]).toBeLessThan(session.abort.mock.invocationCallOrder[0]!)
   runtime.dispose()
 })

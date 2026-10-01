@@ -21,6 +21,10 @@ export class PiAgentRuntime implements AgentRuntime {
     const handleAbort = () => {
       void this.sessionRuntime.cancel()
     }
+    const finish = (event: AgentEvent) => {
+      if (event.type === 'agent_failed' || event.type === 'agent_aborted') this.sessionRuntime.clearQueue()
+      emit(event)
+    }
 
     try {
       await this.sessionRuntime.initialize()
@@ -38,12 +42,12 @@ export class PiAgentRuntime implements AgentRuntime {
         emit(event)
         if (event.type === 'pi_agent_settled') {
           settled = true
-          emit(signal?.aborted ? { type: 'agent_aborted' } : terminalEvent ?? { type: 'agent_completed' })
+          finish(signal?.aborted ? { type: 'agent_aborted' } : terminalEvent ?? { type: 'agent_completed' })
         }
       })
 
       if (signal?.aborted) {
-        emit({ type: 'agent_aborted' })
+        finish({ type: 'agent_aborted' })
         return
       }
 
@@ -63,17 +67,17 @@ export class PiAgentRuntime implements AgentRuntime {
 
       if (settled) return
       if (signal?.aborted) {
-        emit({ type: 'agent_aborted' })
+        finish({ type: 'agent_aborted' })
         return
       }
-      emit(terminalEvent ?? { type: 'agent_completed' })
+      finish(terminalEvent ?? { type: 'agent_completed' })
     } catch (error) {
       if (settled) return
       if (signal?.aborted) {
-        emit({ type: 'agent_aborted' })
+        finish({ type: 'agent_aborted' })
         return
       }
-      emit({ type: 'agent_failed', error: error instanceof Error ? error.message : String(error) })
+      finish({ type: 'agent_failed', error: error instanceof Error ? error.message : String(error) })
     } finally {
       unsubscribeProductEvents?.()
       unsubscribeExecutionEvents?.()
