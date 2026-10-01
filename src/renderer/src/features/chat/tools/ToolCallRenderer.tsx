@@ -1,4 +1,5 @@
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react'
+import { resolveToolExecutionStatus } from '@/shared/tool/toolExecutionStatus'
 
 import { BashToolRenderer } from './bash/BashToolRenderer'
 import { EditToolRenderer } from './edit/EditToolRenderer'
@@ -21,5 +22,6 @@ const toolRenderers: Record<string, ToolCallMessagePartComponent> = {
 
 export const ToolCallRenderer: ToolCallMessagePartComponent = (props) => {
   const Renderer = toolRenderers[props.toolName] ?? GenericToolRenderer
-  return <Renderer {...props} />
+  const status = resolveToolExecutionStatus(props.status, props.isError, formatToolResult(props.result))
+  return <Renderer {...props} status={status} />
 }

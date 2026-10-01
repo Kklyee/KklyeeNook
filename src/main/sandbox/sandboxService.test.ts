@@ -1,3 +1,7 @@
+import { runAgentLoop, type AgentEvent } from '@earendil-works/pi-agent-core'
+import { createPiApprovalExtension } from '../approval/piApprovalExtension'
+import { toPiClientEventBody } from '../agent/pi/client/piClientEventAdapter'
+import { resolveToolExecutionStatus } from '@/shared/tool/toolExecutionStatus'
 import { mkdtemp, mkdir, readFile, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -123,4 +127,70 @@ test('shell fails closed and executes direct only with full access or one-shot a
   await expect(sandbox.execute(input, execution, 'call')).rejects.toThrow('无法保证')
   await sandbox.execute({ ...input, mode: 'full-access' }, execution)
   expect(executeDirect).toHaveBeenCalledTimes(2)
+})
+
+test('read-only write is blocked before execution and returns an error through the real agent loop', async () => {
+  const sandbox = new SandboxService()
+  const registry = new ToolRegistry()
+  registerPiBuiltinTools(registry, '', sandbox)
+  const context = request('blocked.txt', 'read-only')
+  const [write] = registry.resolve<any>('pi', ['write'], { executionContext: context })
+  const execute = vi.spyOn(write, 'execute')
+  let handler: ((event: any, context: any) => Promise<unknown>) | undefined
+  createPiApprovalExtension(
+    context,
+    sandbox,
+    vi.fn(),
+  )({
+    on: (name: string, callback: typeof handler) => {
+      if (name === 'tool_call') handler = callback
+    },
+  } as never)
+  const message = {
+    role: 'assistant',
+    content: [
+      {
+        type: 'toolCall',
+        id: 'denied',
+        name: 'write',
+        arguments: { path: 'blocked.txt', content: 'test' },
+      },
+    ],
+    api: 'openai-completions',
+    provider: 'test',
+    model: 'test',
+    stopReason: 'toolUse',
+    timestamp: 1,
+  }
+  const events: AgentEvent[] = []
+  await runAgentLoop(
+    [],
+    { systemPrompt: '', messages: [], tools: [write] },
+    {
+      model: { provider: 'test' } as never,
+      convertToLlm: (messages) => messages as never,
+      beforeToolCall: ({ toolCall, args }) =>
+        handler!({ toolName: toolCall.name, toolCallId: toolCall.id, input: args }, {}) as never,
+      shouldStopAfterTurn: () => true,
+    },
+    (event) => {
+      events.push(event)
+    },
+    undefined,
+    (() => ({
+      async *[Symbol.asyncIterator]() {
+        yield { type: 'done', reason: 'toolUse', message }
+      },
+      result: async () => message,
+    })) as never,
+  )
+  expect(execute).not.toHaveBeenCalled()
+  await expect(readFile(join(root, 'blocked.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
+  const end = events.find((event) => event.type === 'tool_execution_end')
+  expect(end).toMatchObject({ isError: true })
+  const projected = toPiClientEventBody(end as never, 0)
+  expect(projected).toMatchObject({ type: 'tool_execution_end', isError: true })
+  expect(
+    resolveToolExecutionStatus({ type: 'complete' }, true, '仅可查看模式禁止修改文件').type,
+  ).toBe('incomplete')
 })

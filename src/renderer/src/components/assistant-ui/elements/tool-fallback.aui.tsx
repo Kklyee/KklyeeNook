@@ -1,6 +1,8 @@
 'use client'
 
 import { memo, useState } from 'react'
+import { resolveToolExecutionStatus } from '@/shared/tool/toolExecutionStatus'
+import { formatToolResult } from '@/renderer/src/features/chat/tools/toolUtils'
 import {
   type ToolApprovalOption,
   type ToolCallMessagePart,
@@ -338,7 +340,9 @@ const ToolFallbackImpl: ToolCallMessagePartComponent = ({
   )
 }
 
-const ToolFallback = memo(ToolFallbackImpl) as unknown as ToolCallMessagePartComponent
+const ToolFallback = memo((props: ToolCallMessagePartProps) => (
+  <ToolFallbackImpl {...props} status={resolveToolExecutionStatus(props.status, props.isError, formatToolResult(props.result))} />
+)) as unknown as ToolCallMessagePartComponent
 
 ToolFallback.displayName = 'ToolFallback'
 
