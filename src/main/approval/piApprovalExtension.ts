@@ -37,9 +37,12 @@ export function createPiApprovalExtension(
         approvalId: event.toolCallId,
         call: { id: event.toolCallId, toolName: event.toolName, args: event.input },
       })
-      const selected = await context.ui.select(decision.reason, ['允许本次使用完全权限', '拒绝'])
-      const approved = selected === '允许本次使用完全权限'
-      if (approved && request.resource.kind !== 'tool') sandbox.elevate(event.toolCallId, request)
+      const approvalLabel = decision.requestedMode === 'full-access' ? '完全权限' : '工作区写入权限'
+      const approvalOption = '允许本次使用' + approvalLabel
+      const selected = await context.ui.select(decision.reason, [approvalOption, '拒绝'])
+      const approved = selected === approvalOption
+      if (approved && request.resource.kind !== 'tool')
+        sandbox.elevate(event.toolCallId, request, decision.requestedMode)
       emit({
         type: 'approval_resolved',
         approvalId: event.toolCallId,

@@ -14,7 +14,14 @@ export class SandboxPolicy {
       if (mode === 'full-access') return { outcome: 'allow' }
       if (!workspace) return { outcome: 'deny', reason: '需要关联一个可用项目，或显式选择完全权限' }
       if (resource.action !== 'read' && mode === 'read-only')
-        return { outcome: 'deny', reason: '仅可查看模式禁止修改文件' }
+        return {
+          outcome: 'ask',
+          requestedMode: target.inside ? 'workspace-write' : 'full-access',
+          reason: target.inside
+            ? '当前会话为只读模式，创建或修改此工作区文件需要本次提升为工作区写入权限：' +
+              target.path
+            : '此文件在工作区外，需要允许本次使用完全权限：' + target.path,
+        }
       if (target.inside) return { outcome: 'allow' }
       return mode === 'workspace-write'
         ? {

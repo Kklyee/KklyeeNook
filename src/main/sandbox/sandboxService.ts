@@ -13,17 +13,24 @@ import { WorkspacePathPolicy } from './workspacePathPolicy'
 export class SandboxService {
   readonly paths = new WorkspacePathPolicy()
   readonly policy: PermissionPolicy
-  private readonly elevations = new Map<string, string>()
+  private readonly elevations = new Map<
+    string,
+    { request: string; mode: PermissionRequest['mode'] }
+  >()
   constructor(private readonly backend: SandboxBackend = platformSandboxBackend()) {
     this.policy = new PermissionPolicy(new SandboxPolicy(this.paths, backend))
   }
-  elevate(toolCallId: string, request: PermissionRequest): void {
-    this.elevations.set(toolCallId, JSON.stringify(request))
+  elevate(toolCallId: string, request: PermissionRequest, mode: PermissionRequest['mode']): void {
+    this.elevations.set(toolCallId, { request: JSON.stringify(request), mode })
   }
   async authorize(request: PermissionRequest, toolCallId?: string): Promise<PermissionRequest> {
-    if (toolCallId && this.elevations.get(toolCallId) === JSON.stringify(request)) {
-      this.elevations.delete(toolCallId)
-      return { ...request, mode: 'full-access' }
+    const elevation = toolCallId ? this.elevations.get(toolCallId) : undefined
+    if (elevation?.request === JSON.stringify(request)) {
+      this.elevations.delete(toolCallId!)
+      const elevated = { ...request, mode: elevation.mode }
+      const decision = await this.policy.evaluate(elevated)
+      if (decision.outcome !== 'allow') throw new Error(decision.reason)
+      return elevated
     }
     const decision = await this.policy.evaluate(request)
     if (decision.outcome !== 'allow') throw new Error(decision.reason)

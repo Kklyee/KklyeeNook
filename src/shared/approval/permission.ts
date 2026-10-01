@@ -19,7 +19,7 @@ export interface PermissionRequest extends AgentExecutionContext {
 export type PermissionDecision =
   | { outcome: 'allow' }
   | { outcome: 'deny'; reason: string }
-  | { outcome: 'ask'; requestedMode: 'full-access'; reason: string }
+  | { outcome: 'ask'; requestedMode: 'workspace-write' | 'full-access'; reason: string }
 export function effectivePermissionMode(
   mode: PermissionMode | null | undefined,
   workspaceAvailable: boolean,

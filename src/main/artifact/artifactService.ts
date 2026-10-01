@@ -61,7 +61,7 @@ export class ArtifactService {
     if (decision.outcome === 'ask') {
       if (!approve || !(await approve(decision.reason)))
         throw new Error('用户拒绝本次执行，目标必须保持在工作区内 (inside the workspace)')
-      this.sandbox.elevate(toolCallId, request)
+      this.sandbox.elevate(toolCallId, request, decision.requestedMode)
     }
     const targetPath = await this.sandbox.resolveFile(request, toolCallId)
     if (artifact.kind === 'diff') {
