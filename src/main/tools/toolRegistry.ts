@@ -24,6 +24,7 @@ export class ToolRegistry {
 
   register<TTool>(registration: ToolRegistration<TTool>): () => void {
     const { name } = registration.definition
+    if (registration.definition.inputSchema === undefined) throw new Error(`Tool input schema is required: ${name}`)
     if (this.registrations.has(name)) {
       throw new Error(`Tool already registered: ${name}`)
     }

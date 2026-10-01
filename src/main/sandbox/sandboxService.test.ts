@@ -1,5 +1,8 @@
-import { runAgentLoop, type AgentEvent } from '@earendil-works/pi-agent-core'
-import { createPiApprovalExtension } from '../approval/piApprovalExtension'
+import { Agent, runAgentLoop, type AgentEvent } from '@earendil-works/pi-agent-core'
+import { ToolExecutionHarness } from '../agent/toolExecutionHarness'
+import { FileToolResultRetentionPolicy } from '../tools/toolResultRetentionPolicy'
+import { ToolResultStore } from '../tools/toolResultStore'
+import { installPiToolExecutionHarness } from '../agent/pi/adapters/piToolExecutionAdapter'
 import { toPiClientEventBody } from '../agent/pi/client/piClientEventAdapter'
 import { resolveToolExecutionStatus } from '@/shared/tool/toolExecutionStatus'
 import { mkdtemp, mkdir, readFile, rm, symlink } from 'node:fs/promises'
@@ -86,27 +89,24 @@ test('read-only writes require approval, unavailable projects deny local tools, 
   ).rejects.toThrow('绝对路径')
 })
 
-test('protected file adapters cannot write outside the workspace without elevation', async () => {
+test('the harness protects file adapters and consumes one-shot approvals', async () => {
   const sandbox = new SandboxService()
   const registry = new ToolRegistry()
-  registerPiBuiltinTools(registry, '', sandbox)
-  const [unscopedWrite] = registry.resolve<any>('pi', ['write'], { cwd: root })
+  registerPiBuiltinTools(registry, '')
+  const [rawWrite] = registry.resolve<any>('pi', ['write'], { cwd: root })
+  const harness = new ToolExecutionHarness(registry, sandbox, new FileToolResultRetentionPolicy(new ToolResultStore(join(directory, 'results'))), async call => call.id === 'once')
+  const invoke = (id: string, args: unknown, executionContext?: PermissionRequest) =>
+    harness.execute('run', { id, toolName: 'write', args }, { executionContext }, input => rawWrite.execute(id, input))
   await expect(
-    unscopedWrite.execute('implicit', { path: join(root, 'a.txt'), content: 'denied' }),
-  ).rejects.toThrow('关联')
-  const [write] = registry.resolve<any>('pi', ['write'], { executionContext: request('a.txt') })
-  await write.execute('inside', { path: './a.txt', content: 'inside' })
+    invoke('implicit', { path: join(root, 'a.txt'), content: 'denied' }),
+  ).resolves.toMatchObject({ error: { code: 'PERMISSION_DENIED' } })
+  await expect(invoke('inside', { path: './a.txt', content: 'inside' }, request('a.txt'))).resolves.toMatchObject({ status: 'success' })
   expect(await readFile(join(root, 'a.txt'), 'utf8')).toBe('inside')
   const target = join(outside, 'a.txt')
-  await expect(write.execute('outside', { path: target, content: 'denied' })).rejects.toThrow(
-    '工作区外',
-  )
-  sandbox.elevate('once', request(target), 'full-access')
-  await write.execute('once', { path: target, content: 'allowed' })
+  await expect(invoke('outside', { path: target, content: 'denied' }, request(target))).resolves.toMatchObject({ error: { code: 'PERMISSION_DENIED' } })
+  await expect(invoke('once', { path: target, content: 'allowed' }, request(target))).resolves.toMatchObject({ status: 'success' })
   expect(await readFile(target, 'utf8')).toBe('allowed')
-  await expect(write.execute('next', { path: target, content: 'denied' })).rejects.toThrow(
-    '工作区外',
-  )
+  await expect(invoke('next', { path: target, content: 'denied' }, request(target))).resolves.toMatchObject({ error: { code: 'PERMISSION_DENIED' } })
 })
 
 test('shell fails closed and executes direct only with full access or one-shot approval', async () => {
@@ -134,23 +134,16 @@ test('shell fails closed and executes direct only with full access or one-shot a
 test('read-only write pauses for approval, then retries once through the real agent loop', async () => {
   const sandbox = new SandboxService()
   const registry = new ToolRegistry()
-  registerPiBuiltinTools(registry, '', sandbox)
+  registerPiBuiltinTools(registry, '')
   const context = request('blocked.txt', 'read-only')
   const [write] = registry.resolve<any>('pi', ['write'], { executionContext: context })
   const execute = vi.spyOn(write, 'execute')
-  let handler: ((event: any, context: any) => Promise<unknown>) | undefined
-  const emitApproval = vi.fn()
   const selection = '允许一次'
-  const select = vi.fn(async () => selection)
-  createPiApprovalExtension(
-    context,
-    sandbox,
-    emitApproval,
-  )({
-    on: (name: string, callback: typeof handler) => {
-      if (name === 'tool_call') handler = callback
-    },
-  } as never)
+  const select = vi.fn(async (_title: string, _options: string[]) => selection)
+  const approve = vi.fn(async (_call, decision) => (await select(decision.reason, [selection, '拒绝'])) === selection)
+  const harness = new ToolExecutionHarness(registry, sandbox, new FileToolResultRetentionPolicy(new ToolResultStore(join(directory, 'results'))), approve)
+  const agent = new Agent({ initialState: { tools: [write] }, streamFn: vi.fn() })
+  installPiToolExecutionHarness(agent, registry, harness, { executionContext: context }, () => 'run')
   const message = {
     role: 'assistant',
     content: [
@@ -168,18 +161,13 @@ test('read-only write pauses for approval, then retries once through the real ag
     timestamp: 1,
   }
   const events: AgentEvent[] = []
-  const ui = { select }
   await runAgentLoop(
     [],
-    { systemPrompt: '', messages: [], tools: [write] },
+    { systemPrompt: '', messages: [], tools: agent.state.tools },
     {
       model: { provider: 'test' } as never,
       convertToLlm: (messages) => messages as never,
-      beforeToolCall: ({ toolCall, args }) =>
-        handler!(
-          { toolName: toolCall.name, toolCallId: toolCall.id, input: args },
-          { ui },
-        ) as never,
+      afterToolCall: agent.afterToolCall,
       shouldStopAfterTurn: () => true,
     },
     (event) => {
@@ -197,7 +185,7 @@ test('read-only write pauses for approval, then retries once through the real ag
     selection,
     '拒绝',
   ])
-  expect(emitApproval).toHaveBeenCalledWith(expect.objectContaining({ type: 'approval_required' }))
+  expect(approve).toHaveBeenCalledOnce()
   expect(execute).toHaveBeenCalledOnce()
   expect(await readFile(join(root, 'blocked.txt'), 'utf8')).toBe('test')
   const end = events.find((event) => event.type === 'tool_execution_end')
@@ -211,7 +199,6 @@ test('read-only write pauses for approval, then retries once through the real ag
       '仅可查看模式禁止修改文件',
     ).type,
   ).toBe('complete')
-  await expect(write.execute('denied', { path: 'blocked.txt', content: 'twice' })).rejects.toThrow(
-    '需要工作区写入权限',
-  )
+  approve.mockResolvedValueOnce(false)
+  await expect(agent.state.tools[0].execute('denied', { path: 'blocked.txt', content: 'twice' })).resolves.toMatchObject({ details: { status: 'error', error: { code: 'PERMISSION_DENIED' } } })
 })

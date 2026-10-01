@@ -92,7 +92,7 @@ export function registerPiKnowledgeTools(
         name: tool.name,
         label: tool.label,
         description: tool.description,
-        parameters: tool.parameters,
+        inputSchema: tool.parameters,
       },
       adapter: {
         runtime: 'pi',

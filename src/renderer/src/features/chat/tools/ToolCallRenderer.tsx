@@ -8,6 +8,8 @@ import { ReadToolRenderer } from './read/ReadToolRenderer'
 import { SubagentToolRenderer } from './subagent/SubagentToolRenderer'
 import { WriteToolRenderer } from './write/WriteToolRenderer'
 import { formatToolResult } from './toolUtils'
+import { normalizeToolResult } from '@/shared/tool/toolExecutionResult'
+import { ToolResultRetention } from '@/renderer/src/components/assistant-ui/elements/tool-result-retention'
 
 export { formatToolResult }
 
@@ -22,6 +24,7 @@ const toolRenderers: Record<string, ToolCallMessagePartComponent> = {
 
 export const ToolCallRenderer: ToolCallMessagePartComponent = (props) => {
   const Renderer = toolRenderers[props.toolName] ?? GenericToolRenderer
-  const status = resolveToolExecutionStatus(props.status, props.isError, formatToolResult(props.result))
-  return <Renderer {...props} status={status} />
+  const result = props.result === undefined ? undefined : normalizeToolResult(props.result, props.isError)
+  const status = resolveToolExecutionStatus(props.status, props.isError, formatToolResult(result))
+  return <><Renderer {...props} result={result} status={status} /><ToolResultRetention result={result} /></>
 }

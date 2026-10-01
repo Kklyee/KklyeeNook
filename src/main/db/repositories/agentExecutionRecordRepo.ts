@@ -1,6 +1,8 @@
 import { asc, eq, max } from 'drizzle-orm'
 
 import type { AgentEvent } from '@/shared/agent/agentEvent'
+import type { ToolResult } from '@/shared/tool/tool'
+import { migrateToolResult, normalizeToolResult } from '@/shared/tool/toolExecutionResult'
 import type { AgentExecutionRecord } from '@/shared/agent/agentExecutionRecord'
 import type { AgentEventEnvelope } from '@/main/agent/agentEventEnvelope'
 import type { Database } from '../client'
@@ -43,11 +45,13 @@ function parseAgentEvent(json: string): AgentEvent {
       result: {
         toolCallId: event.toolCallId,
         toolName: String(event.tool),
-        output: event.result,
-        success: event.success === true,
+        ...normalizeToolResult(event.result, event.success !== true),
       },
     }
   }
+
+  if (event.type === 'tool_finished')
+    return { type: 'tool_finished', result: migrateToolResult(event.result as ToolResult) }
 
   if (event.type === 'approval_required' && typeof event.toolCallId === 'string') {
     return {

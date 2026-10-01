@@ -49,7 +49,7 @@ test('groups streamed text and pairs tool and approval events', () => {
     }),
     record(9, 410, {
       type: 'tool_finished',
-      result: { toolCallId: 'tool-1', toolName: 'write', output: 'ok', success: true },
+      result: { toolCallId: 'tool-1', toolName: 'write', content: [{ type: 'text', text: 'ok' }], status: 'success' },
     }),
     record(10, 500, { type: 'agent_completed' }),
   ])
@@ -98,12 +98,12 @@ test('keeps successful and failed tool results distinct', () => {
     record(1, 110, { type: 'tool_started', call: { id: 'success', toolName: 'read', args: {} } }),
     record(2, 120, {
       type: 'tool_finished',
-      result: { toolCallId: 'success', toolName: 'read', output: 'ok', success: true },
+      result: { toolCallId: 'success', toolName: 'read', content: [{ type: 'text', text: 'ok' }], status: 'success' },
     }),
     record(3, 130, { type: 'tool_started', call: { id: 'failure', toolName: 'bash', args: {} } }),
     record(4, 140, {
       type: 'tool_finished',
-      result: { toolCallId: 'failure', toolName: 'bash', output: 'exit 1', success: false },
+      result: { toolCallId: 'failure', toolName: 'bash', content: [{ type: 'text', text: 'exit 1' }], status: 'error' },
     }),
   ])
 
@@ -124,8 +124,8 @@ test('uses text content from structured tool results in the row preview', () => 
       result: {
         toolCallId: 'bash-1',
         toolName: 'bash',
-        output: { content: [{ type: 'text', text: '12 tests passed' }] },
-        success: true,
+        content: [{ type: 'text', text: '12 tests passed' }],
+        status: 'success',
       },
     }),
   ])

@@ -75,7 +75,7 @@ export function registerPiDelegateTaskTool(
       name: metadataTool.name,
       label: metadataTool.label,
       description: metadataTool.description,
-      parameters: metadataTool.parameters,
+      inputSchema: metadataTool.parameters,
     },
     adapter: {
       runtime: 'pi',

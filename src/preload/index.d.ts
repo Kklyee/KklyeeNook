@@ -103,6 +103,7 @@ interface API {
   deletePermissionGrant(request: DeletePermissionGrantRequest): Promise<void>
   listAgentRuns(request: LoadAgentRunsRequest): Promise<AgentRun[]>
   listAgentRunOverviews(): Promise<AgentRunOverview[]>
+  readToolResult(resultRef: string): Promise<import('@/shared/tool/tool').ToolExecutionResult>
   listAgentExecutionRecords(
     request: LoadAgentExecutionRecordsRequest,
   ): Promise<AgentExecutionRecord[]>

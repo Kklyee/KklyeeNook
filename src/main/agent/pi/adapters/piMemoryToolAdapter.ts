@@ -57,7 +57,7 @@ export function registerPiMemoryTool(
       name: tool.name,
       label: tool.label,
       description: tool.description,
-      parameters: tool.parameters,
+      inputSchema: tool.parameters,
     },
     adapter: { runtime: 'pi', create: ({ executionContext }) => createSaveMemoryToolDefinition(repo, executionContext?.workspaceId) },
   }

@@ -197,6 +197,10 @@ const api = {
     return ipcRenderer.invoke(IPC_CHANNELS.AGENT_RUN_OVERVIEW_LIST)
   },
 
+  readToolResult(resultRef: string): Promise<import('@/shared/tool/tool').ToolExecutionResult> {
+    return ipcRenderer.invoke(IPC_CHANNELS.TOOL_RESULT_READ, resultRef)
+  },
+
   listAgentExecutionRecords(
     request: LoadAgentExecutionRecordsRequest,
   ): Promise<AgentExecutionRecord[]> {

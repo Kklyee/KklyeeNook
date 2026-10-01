@@ -28,6 +28,7 @@ export interface McpTool {
   name: string
   description?: string
   inputSchema: unknown
+  outputSchema?: unknown
 }
 
 export interface McpCallToolResult {

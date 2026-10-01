@@ -136,12 +136,12 @@ export function buildExecutionTimeline(
         const tool = tools.get(event.result.toolCallId)
         if (tool) {
           tool.durationMs = Math.max(0, record.timestamp - tool.timestamp)
-          tool.status = event.result.success ? 'completed' : 'failed'
-          const result = timelineText(event.result.output)
+          tool.status = event.result.status === 'success' ? 'completed' : 'failed'
+          const result = timelineText(event.result)
           tool.summary = [timelineText(asObject(tool.detail)?.args), result]
             .filter(Boolean)
             .join(' → ')
-          tool.detail = { ...asObject(tool.detail), result: event.result.output }
+          tool.detail = { ...asObject(tool.detail), result: event.result }
         }
         break
       }

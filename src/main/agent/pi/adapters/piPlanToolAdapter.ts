@@ -54,7 +54,7 @@ export function registerPiPlanTool(registry: ToolRegistry): void {
       name: tool.name,
       label: tool.label,
       description: tool.description,
-      parameters: tool.parameters,
+      inputSchema: tool.parameters,
     },
     adapter: { runtime: 'pi', create: () => createPlanToolDefinition() },
   }

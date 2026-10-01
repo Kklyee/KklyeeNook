@@ -73,6 +73,7 @@ export class McpClientConnection {
       name: tool.name,
       ...(tool.description ? { description: tool.description } : {}),
       inputSchema: tool.inputSchema,
+      ...(tool.outputSchema !== undefined ? { outputSchema: tool.outputSchema } : {}),
     }))
   }
 

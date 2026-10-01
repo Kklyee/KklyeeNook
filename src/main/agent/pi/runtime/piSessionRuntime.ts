@@ -1,4 +1,9 @@
 import { SandboxService } from '@/main/sandbox/sandboxService'
+import { ToolExecutionHarness } from '@/main/agent/toolExecutionHarness'
+import { FileToolResultRetentionPolicy } from '@/main/tools/toolResultRetentionPolicy'
+import { ToolResultStore } from '@/main/tools/toolResultStore'
+import { installPiToolExecutionHarness } from '../adapters/piToolExecutionAdapter'
+import { normalizePiToolExecutionEnd } from '../adapters/piEventAdapter'
 import { effectivePermissionMode, type PermissionMode } from '@/shared/approval/permission'
 import { mkdir } from 'node:fs/promises'
 import type { AgentExecutionContext } from '@/shared/workspace/workspace'
@@ -539,7 +544,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
           ...config.tools.enabled.filter((name) => !name.startsWith('mcp__')),
           ...this.toolRegistry
             .list()
-            .filter((definition) => definition.origin?.kind === 'mcp')
+            .filter((definition) => definition.origin?.kind === 'mcp' || definition.name === 'read_tool_result')
             .map((definition) => definition.name),
         ]),
       ]
@@ -563,9 +568,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
         skillsOverride: (result) => mergeLoadedSkills(result, this.getLoadedSkills()),
         settingsManager,
         extensionFactories: [
-          createPiApprovalExtension(executionContext, this.sandbox, (event) =>
-            this.publishProductEvent(event),
-          ),
+          createPiApprovalExtension(executionContext),
         ],
       })
       await resourceLoader.reload()
@@ -632,6 +635,20 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
         },
       })
       await session.bindExtensions({ uiContext: this.extensionUiBridge.ui })
+      const harness = new ToolExecutionHarness(
+        this.toolRegistry,
+        this.sandbox,
+        new FileToolResultRetentionPolicy(new ToolResultStore(join(this.sessionDir, '..', 'tool-results'))),
+        async (call, decision, signal) => {
+          this.publishProductEvent({ type: 'approval_required', approvalId: call.id, call })
+          const selected = await this.extensionUiBridge!.ui.select(decision.reason, ['允许一次', '拒绝'], { signal })
+          const approved = selected === '允许一次'
+          this.publishProductEvent({ type: 'approval_resolved', approvalId: call.id, toolCallId: call.id, decision: approved ? 'allow' : 'deny' })
+          return approved
+        },
+      )
+      installPiToolExecutionHarness(session.agent, this.toolRegistry, harness,
+        { cwd: executionContext.workspace?.rootPath, executionContext }, () => this.activeRunId ?? this.sessionId)
       if (this.persistState) {
         await this.runtimeStateRepo.save({
           sessionId: this.sessionId,
@@ -774,6 +791,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
   }
 
   private onSessionEvent(event: AgentSessionEvent): void {
+    if (event.type === 'tool_execution_end') normalizePiToolExecutionEnd(event)
     if (event.type === 'turn_start') {
       this.turnIndex += 1
       this.pendingPiTurn = true

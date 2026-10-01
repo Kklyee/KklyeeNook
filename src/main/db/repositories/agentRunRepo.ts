@@ -1,6 +1,7 @@
 import { asc, desc, eq, inArray } from 'drizzle-orm'
 
 import type { AgentRun } from '@/shared/agent/agentRun'
+import { migrateToolResult } from '@/shared/tool/toolExecutionResult'
 import type { Database } from '../client'
 import { agentRuns, type AgentRunRow } from '../schema/agentRuns'
 
@@ -31,7 +32,7 @@ function toAgentRun(row: AgentRunRow): AgentRun {
     result: row.result ?? undefined,
     plan: row.plan ?? undefined,
     toolCalls: row.toolCalls,
-    toolResults: row.toolResults,
+    toolResults: row.toolResults.map(migrateToolResult),
     artifactIds: row.artifactIds,
   }
 }

@@ -60,6 +60,7 @@ export type AgentBackendRequest =
   | { action: 'agent-run:list'; request: LoadAgentRunsRequest }
   | { action: 'agent-run:overview-list' }
   | { action: 'agent-execution-record:list'; request: LoadAgentExecutionRecordsRequest }
+  | { action: 'tool-result:read'; resultRef: string }
   | { action: 'scheduled-task:list' }
   | { action: 'scheduled-task:create'; input: CreateScheduledTaskInput }
   | { action: 'scheduled-task:update'; id: string; input: UpdateScheduledTaskInput }

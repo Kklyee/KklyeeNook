@@ -40,6 +40,7 @@ export const IPC_CHANNELS = {
   AGENT_RUN_LIST: 'agent-run:list',
   AGENT_RUN_OVERVIEW_LIST: 'agent-run:overview-list',
   AGENT_EXECUTION_RECORD_LIST: 'agent-execution-record:list',
+  TOOL_RESULT_READ: 'tool-result:read',
   AGENT_SKILLS_LIST: 'agent-skills:list',
   AGENT_SKILLS_GET: 'agent-skills:get',
   AGENT_SKILLS_RELOAD: 'agent-skills:reload',

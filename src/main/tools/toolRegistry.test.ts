@@ -6,7 +6,7 @@ const definition = {
   name: 'read',
   label: 'Read',
   description: 'Read a file',
-  parameters: { type: 'object' },
+  inputSchema: { type: 'object' },
 }
 
 test('registers product definitions and resolves runtime adapters', () => {
@@ -40,4 +40,9 @@ test('rejects duplicate, unknown, and unsupported tool registrations', () => {
   expect(() => registry.resolve('other', ['read'], { cwd: '/repo' })).toThrow(
     'Tool "read" does not support runtime "other"',
   )
+})
+
+test('requires an input schema for every registered tool', () => {
+  const registry = new ToolRegistry()
+  expect(() => registry.register({ definition: { ...definition, inputSchema: undefined }, adapter: { runtime: 'pi', create: () => ({}) } })).toThrow('Tool input schema is required: read')
 })

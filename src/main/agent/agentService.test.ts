@@ -274,7 +274,7 @@ test('persists a run before execution and serializes status changes', async () =
       emit({ type: 'tool_started', call: { id: 'tool-1', toolName: 'write', args: {} } })
       emit({
         type: 'tool_finished',
-        result: { toolCallId: 'tool-1', toolName: 'write', output: 'ok', success: true },
+        result: { toolCallId: 'tool-1', toolName: 'write', content: [{ type: 'text', text: 'ok' }], status: 'success' },
       })
       emit({ type: 'pi_turn_end', result: 'committed' })
       emit({ type: 'agent_completed' })
@@ -306,7 +306,7 @@ test('persists a run before execution and serializes status changes', async () =
   expect(runRepo.runs.get(finalRun.id)?.status).toBe('completed')
   expect(finalRun.toolCalls).toEqual([{ id: 'tool-1', toolName: 'write', args: {} }])
   expect(finalRun.toolResults).toEqual([
-    { toolCallId: 'tool-1', toolName: 'write', output: 'ok', success: true },
+    { toolCallId: 'tool-1', toolName: 'write', content: [{ type: 'text', text: 'ok' }], status: 'success' },
   ])
   expect(
     (await service.listExecutionRecords(finalRun.id)).map((record) => record.event.type),
@@ -341,8 +341,8 @@ test('turns a successful create_artifact tool call into a durable run artifact',
         result: {
           toolCallId: 'tool-artifact',
           toolName: 'create_artifact',
-          output: 'created',
-          success: true,
+          content: [{ type: 'text', text: 'created' }],
+          status: 'success',
         },
       })
       emit({ type: 'pi_turn_end', result: 'committed' })
@@ -395,8 +395,8 @@ test('turns a successful update_plan tool call into a persisted run plan and eve
         result: {
           toolCallId: 'tool-plan',
           toolName: 'update_plan',
-          output: { content: [{ type: 'text', text: 'updated' }], details: plan },
-          success: true,
+          content: [{ type: 'text', text: 'updated' }], details: plan,
+          status: 'success',
         },
       })
       emit({ type: 'pi_turn_end', result: 'committed' })
@@ -456,8 +456,8 @@ test('completes the active plan step when the agent run completes', async () => 
         result: {
           toolCallId: 'tool-plan',
           toolName: 'update_plan',
-          output: { content: [{ type: 'text', text: 'updated' }], details: plan },
-          success: true,
+          content: [{ type: 'text', text: 'updated' }], details: plan,
+          status: 'success',
         },
       })
       emit({ type: 'pi_turn_end', result: 'committed' })

@@ -47,6 +47,8 @@ import { join } from 'node:path'
 import { createKnowledgeRuntime, type KnowledgeRuntime } from '@/main/knowledge/knowledgeRuntime'
 import { DEFAULT_KNOWLEDGE_SETTINGS } from '@/shared/knowledge/knowledge'
 import { registerPiKnowledgeTools } from '@/main/agent/pi/adapters/piKnowledgeToolAdapter'
+import { registerPiToolResultTool } from '@/main/agent/pi/adapters/piToolResultAdapter'
+import { ToolResultStore } from '@/main/tools/toolResultStore'
 
 export interface AgentBackendRuntime {
   baseUrl: string
@@ -91,7 +93,9 @@ export async function createAgentBackend(
     await skillLoader.reload()
     const toolRegistry = new ToolRegistry()
     const sandbox = new SandboxService()
-    registerPiBuiltinTools(toolRegistry, '', sandbox)
+    const toolResultStore = new ToolResultStore(join(sessionDir, '..', 'tool-results'))
+    registerPiBuiltinTools(toolRegistry, '')
+    registerPiToolResultTool(toolRegistry, toolResultStore)
     registerPiArtifactTool(toolRegistry)
     registerPiMemoryTool(toolRegistry, memoryRepo)
     registerPiPlanTool(toolRegistry)
@@ -176,6 +180,8 @@ export async function createAgentBackend(
       baseUrl: server.baseUrl,
       async handleRequest(request) {
         switch (request.action) {
+          case 'tool-result:read':
+            return (await toolResultStore.load(request.resultRef)).result
           case 'conversation:permission': {
             if (!PERMISSION_MODES.includes(request.mode)) throw new Error('权限模式无效')
             const context = await executionContexts.resolve(request.id)

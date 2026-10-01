@@ -87,7 +87,7 @@ function getDelegateTaskEventSummary(event: AgentEvent): string | undefined {
     case 'tool_started':
       return `正在使用 ${event.call.toolName}`
     case 'tool_finished':
-      return event.result.success
+      return event.result.status === 'success'
         ? `已完成 ${event.result.toolName}`
         : `${event.result.toolName} 执行失败`
     case 'approval_required':
@@ -323,16 +323,17 @@ export class AgentService {
 
     if (
       event.type === 'tool_finished' &&
-      event.result.success &&
+      event.result.status === 'success' &&
       event.result.toolName === 'update_plan'
     ) {
-      const plan = parseAgentPlan(event.result.output)
+      const call = run.toolCalls.find(({ id }) => id === event.result.toolCallId)
+      const plan = parseAgentPlan(event.result.details ?? call?.args)
       if (plan) this.handleAgentEvent(session, runId, { type: 'plan_updated', plan })
     }
 
     if (
       event.type === 'tool_finished' &&
-      event.result.success &&
+      event.result.status === 'success' &&
       event.result.toolName === 'create_artifact'
     ) {
       const call = run.toolCalls.find(({ id }) => id === event.result.toolCallId)

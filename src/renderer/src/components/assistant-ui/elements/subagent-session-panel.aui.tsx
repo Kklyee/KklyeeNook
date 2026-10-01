@@ -173,8 +173,8 @@ function buildThreadMessages(
       case 'tool_finished': {
         const tool = toolParts.get(event.result.toolCallId)
         if (tool) {
-          tool.result = event.result.output
-          tool.isError = !event.result.success
+          tool.result = event.result
+          tool.isError = event.result.status === 'error'
         }
         break
       }

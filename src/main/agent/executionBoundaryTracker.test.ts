@@ -69,7 +69,7 @@ test.each([1, 3])('projects one Run with %i inference Steps', (count) => {
       h.emit({ type: 'tool_started', call: { id: `tool-${index}`, toolName: 'read', args: {} } })
       h.emit({
         type: 'tool_finished',
-        result: { toolCallId: `tool-${index}`, toolName: 'read', success: true, output: 'ok' },
+        result: { toolCallId: `tool-${index}`, toolName: 'read', status: 'success', content: [{ type: 'text', text: 'ok' }] },
       })
     } else h.emit({ type: 'text_delta', text: 'done' })
     h.boundary.onPiTurnEnd('committed')
@@ -92,7 +92,7 @@ test('three tools belong to one Step', () => {
     h.emit({ type: 'tool_started', call: { id: `tool-${index}`, toolName: 'read', args: {} } })
     h.emit({
       type: 'tool_finished',
-      result: { toolCallId: `tool-${index}`, toolName: 'read', success: true, output: 'ok' },
+      result: { toolCallId: `tool-${index}`, toolName: 'read', status: 'success', content: [{ type: 'text', text: 'ok' }] },
     })
   }
   h.boundary.onPiTurnEnd('committed')

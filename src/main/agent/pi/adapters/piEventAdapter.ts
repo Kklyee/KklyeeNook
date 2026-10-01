@@ -1,5 +1,18 @@
 import { type AgentSessionEvent as PIAgentEvent } from '@earendil-works/pi-coding-agent'
 import type { AgentEvent } from '@/shared/agent/agentEvent'
+import { normalizeToolResult, toolError } from '@/shared/tool/toolExecutionResult'
+import type { ToolExecutionResult } from '@/shared/tool/tool'
+
+export function normalizePiToolExecutionEnd(event: Extract<PIAgentEvent, { type: 'tool_execution_end' }>): void {
+  let result = normalizeToolResult(event.result, event.isError)
+  if (event.isError && event.result.content?.some(block => block.type === 'text' && block.text === `Tool ${event.toolName} not found`))
+    result = toolError('UNKNOWN_TOOL', `Unknown tool: ${event.toolName}`)
+  if (event.isError && event.result.content?.some(block => block.type === 'text' && block.text === 'Operation aborted'))
+    result = toolError('ABORTED', 'Tool execution aborted')
+  const { content, ...details } = result
+  Object.assign(event.result, { content, details })
+  event.isError = result.status === 'error'
+}
 
 export function convertPiEvent(event: PIAgentEvent): AgentEvent | undefined {
   switch (event.type) {
@@ -57,16 +70,18 @@ export function convertPiEvent(event: PIAgentEvent): AgentEvent | undefined {
         partialResult: event.partialResult,
       }
 
-    case 'tool_execution_end':
+    case 'tool_execution_end': {
+      normalizePiToolExecutionEnd(event)
       return {
         type: 'tool_finished',
         result: {
+          ...event.result.details as ToolExecutionResult,
+          content: event.result.content,
           toolCallId: event.toolCallId,
           toolName: event.toolName,
-          output: event.result,
-          success: event.isError !== true,
         },
       }
+    }
 
     default:
       return undefined

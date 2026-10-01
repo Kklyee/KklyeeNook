@@ -65,6 +65,8 @@ function fakeSession() {
     steer: vi.fn(),
     followUp: vi.fn(),
     agent: {
+      state: { tools: [] },
+      streamFunction: vi.fn(),
       transformContext: undefined as Agent['transformContext'],
       subscribe: vi.fn(() => () => undefined),
       steer: vi.fn(),
@@ -138,7 +140,7 @@ test('uses configured custom-provider limits and keeps client subscriptions acro
       name: 'mcp__filesystem__search',
       label: 'Filesystem: search',
       description: 'Search files',
-      parameters: { type: 'object' },
+      inputSchema: { type: 'object' },
       origin: {
         kind: 'mcp',
         serverId: 'filesystem',
@@ -217,7 +219,7 @@ test('uses configured custom-provider limits and keeps client subscriptions acro
       name: 'mcp__github__search',
       label: 'GitHub: search',
       description: 'Search repositories',
-      parameters: { type: 'object' },
+      inputSchema: { type: 'object' },
       origin: {
         kind: 'mcp',
         serverId: 'github',
@@ -345,7 +347,7 @@ test('maps real Pi turns, batched duplicate steering and follow-up to execution 
     initialState: {
       model,
       tools: [{
-        name: 'read', label: 'read', description: 'Read', parameters: Type.Object({}),
+        name: 'test_tool', label: 'test', description: 'Test', parameters: Type.Object({}),
         execute: async () => ({ content: [{ type: 'text', text: 'ok' }], details: {} }),
       }],
     },
@@ -356,7 +358,7 @@ test('maps real Pi turns, batched duplicate steering and follow-up to execution 
         const message: AssistantMessage = {
           role: 'assistant', api: model.api, provider: model.provider, model: model.id, timestamp: Date.now(),
           content: request === 1
-            ? [0, 1, 2].map((index) => ({ type: 'toolCall', id: `read-${index}`, name: 'read', arguments: {} }))
+            ? [0, 1, 2].map((index) => ({ type: 'toolCall', id: `read-${index}`, name: 'test_tool', arguments: {} }))
             : [{ type: 'text', text: 'done' }],
           stopReason: request === 1 ? 'toolUse' : 'stop',
           usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
@@ -389,12 +391,18 @@ test('maps real Pi turns, batched duplicate steering and follow-up to execution 
     registerProvider: vi.fn(), unregisterProvider: vi.fn(), setRuntimeApiKey: vi.fn(),
     getModel: () => model, getModels: () => [],
   } as never)
+  const toolRegistry = new ToolRegistry()
+  const tool = agent.state.tools[0]
+  toolRegistry.register({
+    definition: { name: tool.name, label: tool.label, description: tool.description, inputSchema: tool.parameters },
+    adapter: { runtime: 'pi', create: () => tool },
+  })
   const sessionRuntime = new PiSessionRuntime(
     'session-1',
     new AgentConfigStore({ model: { provider: 'custom', modelID: 'model-1', baseUrl: 'https://example.test', thinkingLevel: 'off' }, tools: { enabled: [] } }),
     { getApiKey: () => 'secret' } as unknown as CredentialStore,
     { findBySessionId: vi.fn(), save: vi.fn() } as unknown as AgentRuntimeStateRepo,
-    new ToolRegistry(), 'sessions',
+    toolRegistry, 'sessions',
   )
   const boundaries: ExecutionBoundaryEvent[] = []
   const toolEvents: AgentEvent[] = []
@@ -425,7 +433,7 @@ test('maps real Pi turns, batched duplicate steering and follow-up to execution 
     { type: 'pi_agent_settled' },
   ])
   expect(toolEvents.filter((event) => event.type === 'tool_started')).toHaveLength(3)
-  expect(toolEvents.filter((event) => event.type === 'tool_finished').every((event) => event.result.success)).toBe(true)
+  expect(toolEvents.filter((event) => event.type === 'tool_finished').every((event) => event.result.status === 'success')).toBe(true)
   expect(toolEvents.at(-1)?.type).toBe('agent_completed')
   expect(session.setSteeringMode).toHaveBeenCalledWith('all')
   expect(session.setFollowUpMode).toHaveBeenCalledWith('all')

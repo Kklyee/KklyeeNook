@@ -19,6 +19,8 @@ import type { AgentExecutionRecord, AgentRunTrace } from '@/shared/agent/agentEx
 import { ExecutionTraceProjector } from '@/shared/agent/executionTraceProjector'
 import { StepTrace } from '../chat/trace/StepTrace'
 import type { AgentRun, AgentRunStatus } from '@/shared/agent/agentRun'
+import type { ToolExecutionResult } from '@/shared/tool/tool'
+import { ToolResultRetention } from '@/renderer/src/components/assistant-ui/elements/tool-result-retention'
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
 import {
   TraceWaterfall,
@@ -567,6 +569,7 @@ function EventDetailPanel({ selected, onClose }: { selected: SelectedEvent; onCl
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
+        {event.kind === 'tool' && <ToolResultRetention key={event.id} result={(event.detail as { result?: ToolExecutionResult })?.result} />}
         {activeTab === 'overview' && (
           <div className="pb-4">
             <dl className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-y-0 py-2 text-xs">
