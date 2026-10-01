@@ -144,7 +144,6 @@ export function ChatPanel({
       }}
     >
       <div className="relative flex h-full w-full flex-col">
-        <PiExtensionUiPrompt />
         {modelError && (
           <p className="bg-destructive/10 text-destructive px-4 py-2 text-xs" role="alert">
             {modelError}
@@ -169,6 +168,7 @@ export function ChatPanel({
         {view === 'chat' ? (
           <div className="relative min-h-0 flex-1">
             <Thread
+              composerAccessory={<PiExtensionUiPrompt />}
               contextUsage={toAgentContextUsage(piRuntime.contextUsage)}
               isCompacting={piRuntime.compaction?.active === true}
               modelSelector={{

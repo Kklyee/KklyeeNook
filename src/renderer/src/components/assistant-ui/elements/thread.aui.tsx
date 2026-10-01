@@ -84,6 +84,7 @@ import {
   type ComponentType,
   type FC,
   type PropsWithChildren,
+  type ReactNode,
   useEffect,
   useMemo,
   useState,
@@ -121,6 +122,7 @@ export type ThreadProps = {
   }
   contextUsage?: AgentContextUsage
   isCompacting?: boolean
+  composerAccessory?: ReactNode
 }
 
 const EMPTY_COMPONENTS: ThreadComponents = {}
@@ -172,6 +174,7 @@ export const Thread: FC<ThreadProps> = ({
   modelSelector,
   contextUsage,
   isCompacting = false,
+  composerAccessory,
 }) => {
   const isEmpty = useAuiState((state) => !readOnly && isNewChatView(state))
 
@@ -184,6 +187,7 @@ export const Thread: FC<ThreadProps> = ({
         modelSelector={modelSelector}
         contextUsage={contextUsage}
         isCompacting={isCompacting}
+        composerAccessory={composerAccessory}
       />
     </ThreadComponentsContext.Provider>
   )
@@ -196,7 +200,16 @@ const ThreadRoot: FC<{
   modelSelector?: ThreadProps['modelSelector']
   contextUsage?: AgentContextUsage
   isCompacting: boolean
-}> = ({ isEmpty, autoFocus, readOnly, modelSelector, contextUsage, isCompacting }) => {
+  composerAccessory?: ReactNode
+}> = ({
+  isEmpty,
+  autoFocus,
+  readOnly,
+  modelSelector,
+  contextUsage,
+  isCompacting,
+  composerAccessory,
+}) => {
   const { Welcome = ThreadWelcome } = useContext(ThreadComponentsContext)
 
   return (
@@ -244,6 +257,7 @@ const ThreadRoot: FC<{
             >
               <ThreadScrollToBottom />
               <ThreadFollowupSuggestions />
+              {composerAccessory}
               <Composer
                 autoFocus={autoFocus}
                 modelSelector={modelSelector}

@@ -178,11 +178,13 @@ export function ToolCard({
     <Collapsible
       ref={cardRef}
       data-slot="tool-card"
+      data-running={statusType === 'running' ? 'true' : undefined}
+      aria-busy={statusType === 'running'}
       open={open}
       onOpenChange={handleOpenChange}
       style={{ '--animation-duration': `${ANIMATION_DURATION}ms` } as React.CSSProperties}
       className={cn(
-        'glass-surface w-full overflow-hidden rounded-lg transition-[border-color,box-shadow] hover:border-glass-border-strong hover:shadow-[var(--shadow-raised)]',
+        'glass-surface relative w-full overflow-hidden rounded-lg transition-[border-color,box-shadow] hover:border-glass-border-strong hover:shadow-[var(--shadow-raised)]',
         className,
       )}
     >
@@ -217,6 +219,12 @@ export function ToolCard({
           {children}
         </div>
       </CollapsibleContent>
+      {statusType === 'running' && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-10 shimmer shimmer-bg shimmer-speed-500 shimmer-spread-80 shimmer-repeat-delay-0 shimmer-color-white/10 motion-reduce:hidden"
+        />
+      )}
     </Collapsible>
   )
 }

@@ -118,13 +118,13 @@ function SelectRequestBar({
     <div
       role="alertdialog"
       aria-label={request.title}
-      className="popover-glass absolute inset-x-4 bottom-36 z-50 mx-auto flex max-w-2xl items-center gap-3 rounded-2xl p-3"
+      className="popover-glass animate-in slide-in-from-bottom-2 fade-in relative z-10 mx-auto grid w-full max-w-(--thread-max-width) grid-cols-1 items-center gap-3 rounded-2xl p-3 duration-200 motion-reduce:animate-none sm:grid-cols-[minmax(0,1fr)_auto]"
     >
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0">
         <p className="text-sm font-medium">{request.title}</p>
         <p className="text-muted-foreground text-xs">请选择一个操作后继续</p>
       </div>
-      <div className="flex shrink-0 flex-wrap justify-end gap-2">
+      <div className="flex flex-wrap justify-end gap-2">
         {request.options.map((option, index) => (
           <Button
             key={option}
