@@ -525,7 +525,7 @@ const ComposerAction: FC<{
                 type="button"
                 variant="default"
                 size="icon"
-                className="aui-composer-cancel size-7 rounded-full"
+                className="aui-composer-cancel size-7 rounded-full bg-foreground text-black hover:bg-foreground transition-colors dark:bg-foreground"
                 aria-label="Stop generating"
               />
             }

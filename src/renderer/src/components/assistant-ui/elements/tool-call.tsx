@@ -26,7 +26,7 @@ import {
   CollapsibleTrigger,
 } from '@/renderer/src/components/ui/collapsible'
 import { cn } from '@/renderer/src/lib/utils'
-import { collapsePanel } from '@/renderer/src/lib/surfaces'
+import { collapsePanel, ShimmerLabel } from '@/renderer/src/lib/surfaces'
 
 const ANIMATION_DURATION = 200
 
@@ -191,15 +191,20 @@ export function ToolCard({
     >
       <CollapsibleTrigger className="group/trigger flex h-8 w-full min-w-0 items-center gap-2 bg-transparent px-2.5 text-left outline-none hover:bg-interactive-hover data-[state=open]:bg-interactive-selected focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-glass-border-hover">
         <ToolIcon kind={getToolIconKind(toolName)} />
-        <span className="shrink-0 truncate text-[13px] font-medium text-text-default" title={label}>
+        <ShimmerLabel
+          active={isShimmerActive}
+          className="shimmer-speed-100 shimmer-repeat-delay-0 shrink-0 truncate text-[13px] font-medium text-text-default"
+          title={label}
+        >
           {label}
-        </span>
-        <span
-          className="min-w-0 flex-1 truncate font-mono text-[11px] text-text-muted"
+        </ShimmerLabel>
+        <ShimmerLabel
+          active={isShimmerActive}
+          className="shimmer-speed-100 shimmer-repeat-delay-0 min-w-0 flex-1 truncate font-mono text-[11px] text-text-muted"
           title={summary}
         >
           {summary}
-        </span>
+        </ShimmerLabel>
         <StatusIcon
           aria-hidden="true"
           className={cn(
@@ -220,12 +225,6 @@ export function ToolCard({
           {children}
         </div>
       </CollapsibleContent>
-      {isShimmerActive && (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-10 shimmer shimmer-bg shimmer-speed-500 shimmer-spread-80 shimmer-repeat-delay-0 shimmer-color-white/15 motion-reduce:hidden"
-        />
-      )}
     </Collapsible>
   )
 }
