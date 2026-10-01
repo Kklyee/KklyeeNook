@@ -1,11 +1,14 @@
 import type { ReactNode } from 'react'
-import { ChevronDownIcon } from 'lucide-react'
-import type { AgentTurnTrace } from '@/shared/agent/agentTurn'
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/renderer/src/components/ui/collapsible'
+import type { AgentTurnTrace, TurnEndReason } from '@/shared/agent/agentTurn'
+import { cn } from '@/renderer/src/lib/utils'
+
+const REASON_LABEL: Record<TurnEndReason, string> = {
+  completed: '已完成',
+  next_input: '接受新输入',
+  failed: '失败',
+  aborted: '已中止',
+  interrupted: '被中断',
+}
 
 export function TurnTrace({
   turn,
@@ -13,26 +16,26 @@ export function TurnTrace({
   children,
 }: {
   turn: AgentTurnTrace
-  inputs: readonly string[]
+  inputs: ReactNode
   children: ReactNode
 }) {
+  const status = turn.reason ? REASON_LABEL[turn.reason] : '进行中'
+
   return (
-    <Collapsible defaultOpen className="glass-subtle mx-3 my-2 overflow-hidden rounded-lg">
-      <CollapsibleTrigger className="group flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-foreground/[0.035]">
-        <ChevronDownIcon className="size-3 -rotate-90 transition-transform group-data-[panel-open]:rotate-0" />
-        <span className="font-medium">Turn {turn.ordinal}</span>
-        <span className="text-foreground/40">{turn.reason ?? 'Running'}</span>
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <div className="space-y-1 px-4 pb-2 text-xs text-foreground/65">
-          {inputs.map((text, index) => (
-            <p key={turn.inputIds[index]} className="whitespace-pre-wrap">
-              {text}
-            </p>
-          ))}
-        </div>
-        {children}
-      </CollapsibleContent>
-    </Collapsible>
+    <section data-slot="turn-trace" data-turn-id={turn.id} className="border-t border-foreground/[0.08]">
+      <div className="grid grid-cols-[36px_minmax(0,1fr)]">
+        <span
+          title={`Turn ${turn.ordinal} · ${status} · ${turn.steps.length} Steps`}
+          className={cn(
+            'overflow-hidden whitespace-nowrap bg-foreground/[0.035] pt-[6px] text-center text-[9px] leading-[12px] text-foreground/40',
+            (turn.reason === 'failed' || turn.reason === 'aborted' || turn.reason === 'interrupted') && 'text-destructive',
+          )}
+        >
+          第{turn.ordinal}轮
+        </span>
+        <div className="min-w-0">{inputs}</div>
+      </div>
+      {children}
+    </section>
   )
 }

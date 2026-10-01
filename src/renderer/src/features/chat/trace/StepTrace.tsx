@@ -1,22 +1,18 @@
 import type { ReactNode } from 'react'
-import { ChevronDownIcon } from 'lucide-react'
+import { LoaderCircleIcon } from 'lucide-react'
 import type { AgentStepTrace } from '@/shared/agent/agentStep'
 import type { AgentRun } from '@/shared/agent/agentRun'
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/renderer/src/components/ui/collapsible'
-import { mono } from '@/renderer/src/lib/surfaces'
 import { cn } from '@/renderer/src/lib/utils'
 
 export function StepTrace({
   step,
   run,
+  empty,
   children,
 }: {
   step: AgentStepTrace
   run: AgentRun
+  empty: boolean
   children: ReactNode
 }) {
   const start =
@@ -25,37 +21,28 @@ export function StepTrace({
     step.events.find((record) => record.seq === step.endedSeq)?.timestamp ??
     run.completedAt ??
     Date.now()
-  const status = step.interrupted ? 'Interrupted' : (step.result ?? 'Running')
-  const tools = step.events.filter((record) => record.event.type === 'tool_started')
-  const summary = tools.length
-    ? tools
-        .map((record) => (record.event.type === 'tool_started' ? record.event.call.toolName : ''))
-        .join(' · ')
-    : step.events.some((record) => record.event.type === 'text_delta')
-      ? 'Final response'
-      : step.events.some((record) => record.event.type === 'thinking_delta')
-        ? 'Thinking'
-        : 'Model request'
+  const failed = step.interrupted || step.result === 'aborted'
+  const running = !step.result && !step.interrupted
+  const status = step.interrupted ? '被中断' : step.result === 'aborted' ? '已中止' : running ? '进行中' : '已提交'
 
   return (
-    <Collapsible defaultOpen={false} className="border-border/35 border-t">
-      <CollapsibleTrigger className="group flex min-h-9 w-full items-center gap-2 px-4 py-2 text-left text-xs hover:bg-foreground/[0.035]">
-        <ChevronDownIcon className="size-3 shrink-0 -rotate-90 transition-transform group-data-[panel-open]:rotate-0" />
-        <span className="shrink-0 font-medium">Step {step.ordinal}</span>
-        <span
-          className={cn(
-            'shrink-0 text-foreground/45',
-            (step.interrupted || step.result === 'aborted') && 'text-destructive',
-          )}
-        >
-          {status}
-        </span>
-        <span className="min-w-0 flex-1 truncate text-foreground/35">{summary}</span>
-        <span className={cn(mono, 'text-foreground/35 tabular-nums')}>
-          {(Math.max(0, end - start) / 1000).toFixed(1)}s
-        </span>
-      </CollapsibleTrigger>
-      <CollapsibleContent>{children}</CollapsibleContent>
-    </Collapsible>
+    <div data-slot="step-trace" data-step-id={step.id} className="grid grid-cols-[36px_minmax(0,1fr)] border-t border-foreground/[0.045]">
+      <div
+        title={`Step ${step.ordinal} · ${status} · ${(Math.max(0, end - start) / 1000).toFixed(1)}s`}
+        aria-label={`Step ${step.ordinal}，${status}`}
+        className="flex items-start justify-center gap-[4px] whitespace-nowrap pt-[8px] text-[9px] leading-[9px] text-foreground/35"
+      >
+        <span className={cn('mt-0.5 size-1 shrink-0 rounded-full', failed ? 'bg-destructive' : running ? 'animate-pulse bg-blue-400' : 'bg-foreground/35')} />
+        <span>#{step.ordinal}</span>
+      </div>
+      <div className="min-w-0">
+        {empty ? (
+          <div className="flex h-[24px] items-center gap-[8px] px-[4px] text-[11px] text-foreground/45">
+            {running && <LoaderCircleIcon className="size-3 animate-spin" />}
+            {running ? '正在请求模型…' : `请求${status}`}
+          </div>
+        ) : children}
+      </div>
+    </div>
   )
 }

@@ -1,10 +1,11 @@
 'use client'
 
-import type { ComponentProps } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
+import { Clock3Icon, LayersIcon, WrenchIcon } from 'lucide-react'
 import { cn } from '@/renderer/src/lib/utils'
-import { mono, paper } from '@/renderer/src/lib/surfaces'
+import { mono } from '@/renderer/src/lib/surfaces'
 
-export type TraceTone = 'run' | 'system' | 'user' | 'assistant' | 'tool' | 'approval' | 'failed'
+export type TraceTone = 'system' | 'user' | 'assistant' | 'tool' | 'approval' | 'failed'
 
 export interface TraceSegment {
   id: string
@@ -21,20 +22,20 @@ export interface TraceLane {
 }
 
 const TONE: Record<TraceTone, string> = {
-  run: 'bg-foreground/28',
-  system: 'bg-foreground/45',
-  user: 'bg-blue-500/80',
-  assistant: 'bg-violet-500/80',
-  tool: 'bg-amber-500/80',
-  approval: 'bg-emerald-500/75',
-  failed: 'bg-red-500/85',
+  system: 'bg-foreground/60',
+  user: 'bg-blue-400/75',
+  assistant: 'bg-violet-400/65',
+  tool: 'bg-amber-400/75',
+  approval: 'bg-emerald-400/60',
+  failed: 'bg-red-400/80',
 }
 
 export function TraceWaterfall({
   lanes,
   totalMs,
-  runCount,
+  turnCount,
   toolCount,
+  toolbar,
   selectedSegmentId,
   onSegmentSelect,
   className,
@@ -42,8 +43,9 @@ export function TraceWaterfall({
 }: Omit<ComponentProps<'div'>, 'children'> & {
   lanes: readonly TraceLane[]
   totalMs: number
-  runCount: number
+  turnCount: number
   toolCount: number
+  toolbar?: ReactNode
   selectedSegmentId?: string
   onSegmentSelect?: (segmentId: string) => void
 }) {
@@ -52,20 +54,21 @@ export function TraceWaterfall({
   return (
     <div
       data-slot="trace-waterfall"
-      className={cn(paper, 'w-full overflow-hidden border-x-0', className)}
+      className={cn('w-full shrink-0 overflow-hidden border-b border-border/60 bg-foreground/[0.018]', className)}
       {...props}
     >
-      <div className="border-border/60 flex h-8 items-center gap-4 border-b px-3">
-        <Metric label="时长" value={formatDuration(totalMs)} />
-        <Metric label="Run" value={String(runCount)} />
-        <Metric label="调用" value={String(toolCount)} />
+      <div className="flex h-[28px] items-center gap-[12px] px-[8px]">
+        <Metric icon={Clock3Icon} label="时长" value={formatDuration(totalMs)} />
+        <Metric icon={LayersIcon} label="轮次" value={String(turnCount)} />
+        <Metric icon={WrenchIcon} label="调用" value={String(toolCount)} />
+        {toolbar && <div className="ml-auto min-w-0">{toolbar}</div>}
       </div>
 
-      <div className="relative py-1.5">
+      <div className="relative border-t border-border/35 bg-foreground/[0.025] py-[5px]">
         {lanes.map((lane) => (
-          <div key={lane.id} className="grid h-5 grid-cols-[3.25rem_minmax(0,1fr)] items-center">
-            <span className={cn(mono, 'text-foreground/35 px-3 text-[10px]')}>{lane.label}</span>
-            <span className="bg-foreground/[0.035] relative mr-3 h-1.5 overflow-hidden rounded-sm">
+          <div key={lane.id} className="grid h-[12px] grid-cols-[32px_minmax(0,1fr)] items-center">
+            <span className="whitespace-nowrap px-[6px] text-[9px] leading-[12px] text-foreground/40">{lane.label}</span>
+            <span className="relative mr-[8px] h-[6px] overflow-hidden bg-foreground/[0.035]">
               {lane.segments.map((segment) => {
                 const left = Math.min(99.4, Math.max(0, percent(segment.startMs, total)))
                 const width = Math.min(
@@ -80,7 +83,7 @@ export function TraceWaterfall({
                     title={`${segment.label} · ${formatDuration(segment.durationMs)}`}
                     onClick={() => onSegmentSelect?.(segment.id)}
                     className={cn(
-                      'absolute inset-y-0 cursor-pointer rounded-[2px] outline-none transition-[filter,box-shadow,transform] hover:z-10 hover:brightness-125 focus-visible:z-10 focus-visible:ring-1 focus-visible:ring-foreground/70 active:scale-y-150',
+                      'absolute inset-y-0 cursor-pointer outline-none transition-[filter,box-shadow] hover:z-10 hover:brightness-125 focus-visible:z-10 focus-visible:ring-1 focus-visible:ring-foreground/70',
                       TONE[segment.tone],
                       selectedSegmentId === segment.id &&
                         'z-10 ring-1 ring-foreground/85 brightness-125',
@@ -97,11 +100,12 @@ export function TraceWaterfall({
   )
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({ icon: Icon, label, value }: { icon: typeof Clock3Icon; label: string; value: string }) {
   return (
-    <span className="flex items-center gap-1.5 text-[11px]">
-      <span className="text-foreground/55">{label}</span>
-      <span className={cn(mono, 'text-foreground/30 tabular-nums')}>{value}</span>
+    <span className="flex shrink-0 items-center gap-1 text-[10px] text-foreground/50">
+      <Icon className="size-2.5" aria-hidden />
+      <span>{label}</span>
+      <span className={cn(mono, 'text-[10px] text-foreground/65 tabular-nums')}>{value}</span>
     </span>
   )
 }

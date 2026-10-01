@@ -9,6 +9,7 @@ import {
   KeyRoundIcon,
   LoaderCircleIcon,
   MessageSquareTextIcon,
+  SearchIcon,
   UserIcon,
   WrenchIcon,
   XIcon,
@@ -26,6 +27,7 @@ import {
   type TraceSegment,
   type TraceTone,
 } from '@/renderer/src/components/assistant-ui/elements/trace-waterfall'
+import { Input } from '@/renderer/src/components/ui/input'
 import { cn } from '@/renderer/src/lib/utils'
 import { field, mono } from '@/renderer/src/lib/surfaces'
 import {
@@ -60,8 +62,10 @@ export function RunHistoryPanel({
   sessionId?: string
   focusedRunId?: string
 }) {
-  const [expandedRunIds, setExpandedRunIds] = useState<readonly string[]>([])
+  const [collapsedRunIds, setCollapsedRunIds] = useState<readonly string[]>([])
   const [selectedEvent, setSelectedEvent] = useState<SelectedEvent>()
+  const [search, setSearch] = useState('')
+  const query = search.trim().toLocaleLowerCase()
   const runsQuery = useQuery({
     queryKey: ['agent-runs', sessionId],
     queryFn: () => window.api.listAgentRuns({ sessionId: sessionId! }),
@@ -83,18 +87,10 @@ export function RunHistoryPanel({
   })
 
   useEffect(() => {
-    setExpandedRunIds([])
+    setCollapsedRunIds([])
     setSelectedEvent(undefined)
+    setSearch('')
   }, [sessionId])
-
-  useEffect(() => {
-    const latest = runs[0]
-    if (!latest) return
-    setExpandedRunIds((current) => {
-      if (current.includes(latest.id)) return current
-      return isActive(latest.status) || current.length === 0 ? [latest.id, ...current] : current
-    })
-  }, [runs])
 
   useEffect(() => {
     if (!focusedRunId || !runs.length) return
@@ -106,7 +102,7 @@ export function RunHistoryPanel({
       current = current.parentRunId ? runById.get(current.parentRunId) : undefined
     }
     if (!ids.length) return
-    setExpandedRunIds((existing) => [...new Set([...existing, ...ids])])
+    setCollapsedRunIds((existing) => existing.filter((id) => !ids.includes(id)))
   }, [focusedRunId, runs])
 
   const timelines = useMemo<RunTimeline[]>(() => {
@@ -120,7 +116,7 @@ export function RunHistoryPanel({
         records: recordQuery.data?.get(run.id) ?? [],
       }))
   }, [recordQuery.data, runs])
-  const runTree = useMemo(() => buildRunTree(timelines), [timelines])
+  const runTree = useMemo(() => buildRunTree(timelines, query), [timelines, query])
   const overview = useMemo(() => buildOverview(timelines), [timelines])
   const selectedSegmentId = selectedEvent
     ? eventSegmentId(selectedEvent.run.id, selectedEvent.event.id)
@@ -145,33 +141,42 @@ export function RunHistoryPanel({
   }
 
   const toggleRun = (runId: string) => {
-    setExpandedRunIds((current) =>
+    setCollapsedRunIds((current) =>
       current.includes(runId) ? current.filter((id) => id !== runId) : [...current, runId],
     )
   }
 
   return (
-    <div className="flex min-h-0 flex-1 overflow-hidden">
+    <div className="relative flex min-h-0 flex-1 overflow-hidden bg-neutral-100 dark:bg-[#222222]">
       <section className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TraceWaterfall
           lanes={overview.lanes}
           totalMs={overview.totalMs}
-          runCount={runs.length}
+          turnCount={timelines.reduce((count, timeline) => count + timeline.trace.turns.length, 0)}
           toolCount={overview.toolCount}
+          toolbar={
+            <div className="relative w-[150px] max-w-[35vw]">
+              <SearchIcon className="pointer-events-none absolute left-1.5 top-1/2 size-2.5 -translate-y-1/2 text-foreground/35" />
+              <Input
+                type="search"
+                aria-label="搜索执行轨迹"
+                placeholder="搜索"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="h-[20px] rounded-md py-0 pl-5 pr-1.5 text-[10px] md:text-[10px]"
+              />
+            </div>
+          }
           selectedSegmentId={selectedSegmentId}
           onSegmentSelect={(segmentId) => {
             const eventSelection = overview.events.get(segmentId)
             if (eventSelection) {
               setSelectedEvent(eventSelection)
-              setExpandedRunIds((current) =>
-                current.includes(eventSelection.run.id)
-                  ? current
-                  : [...current, eventSelection.run.id],
+              setCollapsedRunIds((current) =>
+                current.filter((id) => id !== eventSelection.run.id),
               )
               return
             }
-            const runId = overview.runs.get(segmentId)
-            if (runId) toggleRun(runId)
           }}
         />
 
@@ -181,25 +186,23 @@ export function RunHistoryPanel({
           </div>
         )}
 
-        <div className="border-border/60 grid h-8 shrink-0 grid-cols-[4rem_minmax(0,1fr)_5rem] items-center border-b px-3 text-[10px] font-medium text-foreground/35">
-          <span>来源</span>
-          <span>事件</span>
-          <span className="text-right">时间</span>
-        </div>
-
         <div className="min-h-0 flex-1 overflow-y-auto">
           {runTree.map((node) => (
             <RunGroup
               key={node.timeline.run.id}
               node={node}
               depth={0}
-              open={expandedRunIds.includes(node.timeline.run.id)}
+              open={Boolean(query) || !collapsedRunIds.includes(node.timeline.run.id)}
+              query={query}
               selectedEvent={selectedEvent}
               onToggleRun={toggleRun}
               onSelect={(run, event) => setSelectedEvent({ run, event })}
-              expandedRunIds={expandedRunIds}
+              collapsedRunIds={collapsedRunIds}
             />
           ))}
+          {query && !runTree.length && (
+            <p className="px-3 py-6 text-center text-xs text-foreground/40">没有匹配的执行事件</p>
+          )}
         </div>
       </section>
 
@@ -219,7 +222,8 @@ function RunGroup({
   depth,
   open,
   selectedEvent,
-  expandedRunIds,
+  query,
+  collapsedRunIds,
   onToggleRun,
   onSelect,
 }: {
@@ -227,84 +231,97 @@ function RunGroup({
   depth: number
   open: boolean
   selectedEvent?: SelectedEvent
-  expandedRunIds: readonly string[]
+  query: string
+  collapsedRunIds: readonly string[]
   onToggleRun: (runId: string) => void
   onSelect: (run: AgentRun, event: TimelineItem) => void
 }) {
   const { timeline, children } = node
   const { run, ordinal, model } = timeline
   const childTask = depth ? model.items.find((event) => event.kind === 'user')?.summary : undefined
+  const unscopedItems = buildExecutionTimeline(run, timeline.trace.unscopedEvents).items
+    .filter((event) => matchesSearch(event, query))
+  const renderEvent = (event: TimelineItem) => (
+    <EventRow
+      key={event.id}
+      event={event}
+      run={run}
+      selected={selectedEvent?.run.id === run.id && selectedEvent.event.id === event.id}
+      onClick={() => onSelect(run, event)}
+    />
+  )
 
   return (
-    <div className="border-border/60 border-b">
+    <div className="border-b border-border/50">
       <button
         type="button"
         aria-expanded={open}
         onClick={() => onToggleRun(run.id)}
-        className="bg-foreground/[0.018] hover:bg-foreground/[0.04] grid h-8 w-full grid-cols-[4rem_minmax(0,1fr)_5rem] items-center px-3 text-left transition-colors"
-        style={{ paddingLeft: `${12 + depth * 20}px` }}
+        className="flex h-5 w-full items-center gap-1.5 border-b border-foreground/[0.055] bg-foreground/[0.025] px-2 text-left text-[10px] transition-colors hover:bg-foreground/[0.04]"
+        style={{ paddingLeft: `${8 + depth * 16}px` }}
+        title={run.id}
       >
         <span className="flex items-center gap-1 text-[10px] text-foreground/40">
-          <ChevronDownIcon className={cn('size-3 transition-transform', !open && '-rotate-90')} />
-          {depth ? 'Child Run' : `Run ${ordinal}`}
+          <ChevronDownIcon className={cn('size-2.5 transition-transform', !open && '-rotate-90')} />
+          {depth ? 'Subagent' : `Run ${ordinal}`}
         </span>
-        <span className="flex min-w-0 items-center gap-2 text-xs font-medium">
+        <span className="flex min-w-0 items-center gap-1.5 text-[10px] font-medium">
           <StatusDot status={run.status} />
-          <span className="truncate">
-            {depth
-              ? `${run.displayName ?? 'Child Run'}${childTask ? `: ${childTask}` : ''}`
-              : `Run ${ordinal}`}
-          </span>
+          {depth > 0 && <span className="truncate">{run.displayName ?? 'Subagent'}{childTask ? ` · ${childTask}` : ''}</span>}
           <StatusLabel status={run.status} />
-          <span className={cn(mono, 'text-foreground/25 hidden truncate lg:inline')}>{run.id}</span>
         </span>
-        <span className={cn(mono, 'text-foreground/35 text-right tabular-nums')}>
+        <span className={cn(mono, 'ml-auto text-[10px] text-foreground/35 tabular-nums')}>
           {formatDuration(model.totalMs)}
         </span>
       </button>
 
       {open && (
-        <div className="animate-in fade-in slide-in-from-top-1 duration-150">
-          {timeline.trace.turns.map((turnTrace) => (
-            <TurnTrace
-              key={turnTrace.id}
-              turn={turnTrace}
-              inputs={turnTrace.inputIds
-                .map((inputId) => timeline.records.find((record) =>
-                  record.event.type === 'user_message' && record.event.inputId === inputId,
-                ))
-                .map((record) => record?.event.type === 'user_message' ? record.event.text : '')}
-            >
-              {turnTrace.steps.map((step) => (
-                <StepTrace key={step.id} step={step} run={run}>
-                  {buildExecutionTimeline(run, step.events).items.map((event) => (
-                    <EventRow
-                      key={event.id}
-                      event={event}
-                      run={run}
-                      selected={selectedEvent?.run.id === run.id && selectedEvent.event.id === event.id}
-                      onClick={() => onSelect(run, event)}
-                    />
-                  ))}
-                </StepTrace>
-              ))}
-            </TurnTrace>
-          ))}
+        <div>
+          <div className="bg-foreground/[0.04] pl-[36px]">
+            {unscopedItems.filter((event) => event.title === 'System Prompt').map(renderEvent)}
+          </div>
+          {timeline.trace.turns.map((turnTrace) => {
+            const inputRecords = timeline.records.filter(
+              (record) => record.event.type === 'user_message' && turnTrace.inputIds.includes(record.event.inputId),
+            )
+            const inputItems = buildExecutionTimeline(run, inputRecords).items
+              .filter((event) => matchesSearch(event, query))
+            const steps = turnTrace.steps
+              .map((step) => ({
+                step,
+                items: buildExecutionTimeline(run, step.events).items
+                  .filter((event) => matchesSearch(event, query)),
+              }))
+              .filter(({ items }) => !query || items.length > 0)
+            if (query && !inputItems.length && !steps.length) return null
+            return (
+              <TurnTrace
+                key={turnTrace.id}
+                turn={turnTrace}
+                inputs={inputItems.map(renderEvent)}
+              >
+                {steps.map(({ step, items }) => (
+                  <StepTrace
+                    key={step.id}
+                    step={step}
+                    run={run}
+                    empty={!items.length}
+                  >
+                    {items.map(renderEvent)}
+                  </StepTrace>
+                ))}
+              </TurnTrace>
+            )
+          })}
           {!timeline.trace.turns.length && timeline.records.length > 0 && (
-            <p className="px-4 py-2 text-xs text-foreground/40">
+            <p className="border-t border-border/35 px-2 py-1 text-[10px] text-foreground/40">
               {timeline.records.some((record) => record.event.type === 'user_message' && record.event.inputId)
                 ? 'Pending Inputs' : 'Legacy Execution'}
             </p>
           )}
-          {buildExecutionTimeline(run, timeline.trace.unscopedEvents).items.map((event) => (
-            <EventRow
-              key={event.id}
-              event={event}
-              run={run}
-              selected={selectedEvent?.run.id === run.id && selectedEvent.event.id === event.id}
-              onClick={() => onSelect(run, event)}
-            />
-          ))}
+          <div className="pl-[36px]">
+            {unscopedItems.filter((event) => event.title !== 'System Prompt').map(renderEvent)}
+          </div>
           {!model.items.length && (
             <p className="text-foreground/30 px-16 py-3 text-xs">
               该历史 Run 没有可回溯的事件明细。
@@ -317,9 +334,10 @@ function RunGroup({
           key={child.timeline.run.id}
           node={child}
           depth={depth + 1}
-          open={expandedRunIds.includes(child.timeline.run.id)}
+          open={Boolean(query) || !collapsedRunIds.includes(child.timeline.run.id)}
+          query={query}
           selectedEvent={selectedEvent}
-          expandedRunIds={expandedRunIds}
+          collapsedRunIds={collapsedRunIds}
           onToggleRun={onToggleRun}
           onSelect={onSelect}
         />
@@ -328,7 +346,7 @@ function RunGroup({
   )
 }
 
-function buildRunTree(timelines: readonly RunTimeline[]): RunTreeNode[] {
+function buildRunTree(timelines: readonly RunTimeline[], query: string): RunTreeNode[] {
   const nodes = new Map<string, RunTreeNode>()
   for (const timeline of timelines) nodes.set(timeline.run.id, { timeline, children: [] })
   const roots: RunTreeNode[] = []
@@ -340,7 +358,19 @@ function buildRunTree(timelines: readonly RunTimeline[]): RunTreeNode[] {
     else roots.push(node)
   }
 
-  return roots
+  if (!query) return roots
+  const filterNode = (node: RunTreeNode): RunTreeNode[] => {
+    const children = node.children.flatMap(filterNode)
+    return children.length || node.timeline.model.items.some((event) => matchesSearch(event, query))
+      ? [{ ...node, children }]
+      : []
+  }
+  return roots.flatMap(filterNode)
+}
+
+function matchesSearch(event: TimelineItem, query: string) {
+  return `${EVENT_META[event.kind].label} ${event.title} ${event.summary ?? ''}`
+    .toLocaleLowerCase().includes(query)
 }
 
 function EventRow({
@@ -355,29 +385,35 @@ function EventRow({
   onClick: () => void
 }) {
   const meta = EVENT_META[event.kind]
+  const summary = eventPreview(event)
 
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        'border-border/35 grid min-h-9 w-full grid-cols-[4rem_minmax(0,1fr)_5rem] items-center border-t px-3 text-left transition-colors',
+        'group grid h-[24px] w-full grid-cols-[24px_minmax(0,1fr)_56px] items-center gap-x-[8px] border-b border-foreground/[0.035] px-[4px] text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-blue-400/60',
         selected ? 'bg-foreground/[0.08]' : 'hover:bg-foreground/[0.035]',
       )}
     >
       <span
         className={cn(
-          'flex w-fit items-center gap-1 rounded px-1.5 py-0.5 text-[10px]',
+          'inline-flex h-[16px] w-[24px] shrink-0 items-center justify-center whitespace-nowrap rounded-[2px] text-[10px] leading-[16px]',
           meta.className,
         )}
       >
-        {/*<Icon className="size-2.5" />*/}
         {meta.label}
       </span>
-      <span className="flex min-w-0 items-center gap-2 pr-3">
-        <span className="shrink-0 text-xs font-medium">{event.title}</span>
-        {event.summary && (
-          <span className="min-w-0 truncate text-xs text-foreground/42">{event.summary}</span>
+      <span className="flex min-w-0 items-center gap-[8px] pr-[4px] text-[11px] leading-[16px]">
+        {event.title === '用户消息' || event.title === 'AI 消息' ? (
+          <span className="min-w-0 truncate text-foreground/90">{summary}</span>
+        ) : (
+          <>
+            <span className="shrink-0 whitespace-nowrap text-foreground/85">{event.title === 'System Prompt' ? '初始系统提示词' : event.title}</span>
+            {summary && event.title !== 'System Prompt' && (
+              <span className="min-w-0 truncate text-foreground/60">{summary}</span>
+            )}
+          </>
         )}
         {event.status === 'running' && (
           <LoaderCircleIcon className="size-3 shrink-0 animate-spin text-blue-500" />
@@ -389,11 +425,21 @@ function EventRow({
           <CircleAlertIcon className="size-3 shrink-0 text-destructive" aria-label="执行失败" />
         )}
       </span>
-      <span className={cn(mono, 'text-foreground/30 text-right tabular-nums')}>
+      <span className={cn(mono, 'whitespace-nowrap text-right text-[10px] text-foreground/35 opacity-0 tabular-nums transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100', selected && 'opacity-100')}>
         +{formatDuration(Math.max(0, event.timestamp - (run.startedAt ?? run.createdAt)))}
       </span>
     </button>
   )
+}
+
+function eventPreview(event: TimelineItem): string | undefined {
+  if (event.kind !== 'tool' && event.kind !== 'approval') return event.summary
+  const detail = event.detail as Record<string, unknown> | undefined
+  const args = (event.kind === 'tool' ? detail?.args : detail) as Record<string, unknown> | undefined
+  const values = ['command', 'path', 'file_path', 'query', 'pattern', 'url']
+    .map((key) => args?.[key])
+    .filter((value): value is string => typeof value === 'string')
+  return values.length ? values.join(' · ') : event.summary
 }
 
 function EventDetailPanel({ selected, onClose }: { selected: SelectedEvent; onClose: () => void }) {
@@ -645,15 +691,15 @@ const EVENT_META: Record<
   TimelineItemKind,
   { label: string; icon: typeof UserIcon; className: string }
 > = {
-  system: { label: '系统', icon: BotIcon, className: 'bg-foreground/[0.06] text-foreground/55' },
-  user: { label: '用户', icon: UserIcon, className: 'bg-blue-500/12 text-blue-500' },
+  system: { label: '系统', icon: BotIcon, className: 'bg-foreground/10 text-foreground/70' },
+  user: { label: '用户', icon: UserIcon, className: 'bg-blue-500/20 text-blue-600 dark:text-blue-300' },
   assistant: {
-    label: '模型',
+    label: '助手',
     icon: MessageSquareTextIcon,
-    className: 'bg-violet-500/12 text-violet-500',
+    className: 'bg-violet-500/20 text-violet-600 dark:text-violet-300',
   },
-  compaction: { label: '上下文', icon: BotIcon, className: 'bg-cyan-500/12 text-cyan-500' },
-  tool: { label: '工具', icon: WrenchIcon, className: 'bg-amber-500/12 text-amber-500' },
+  compaction: { label: '压缩', icon: BotIcon, className: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300' },
+  tool: { label: '工具', icon: WrenchIcon, className: 'bg-amber-500/15 text-amber-600 dark:text-amber-300' },
   plan: { label: '计划', icon: BotIcon, className: 'bg-cyan-500/12 text-cyan-500' },
   approval: { label: '审批', icon: KeyRoundIcon, className: 'bg-emerald-500/12 text-emerald-500' },
   error: { label: '错误', icon: CircleAlertIcon, className: 'bg-destructive/10 text-destructive' },
@@ -666,14 +712,12 @@ function buildOverview(timelines: readonly RunTimeline[]) {
       totalMs: 0,
       toolCount: 0,
       events: new Map<string, SelectedEvent>(),
-      runs: new Map<string, string>(),
     }
   }
 
   const durationSum = timelines.reduce((sum, timeline) => sum + timeline.model.totalMs, 0)
   const runGap = Math.max(1, durationSum * 0.012)
   const lanes: Array<Omit<TraceLane, 'segments'> & { segments: TraceSegment[] }> = [
-    { id: 'runs', label: '轮次', segments: [] },
     { id: 'user', label: '输入', segments: [] },
     { id: 'assistant', label: '模型', segments: [] },
     { id: 'tool', label: '工具', segments: [] },
@@ -682,23 +726,9 @@ function buildOverview(timelines: readonly RunTimeline[]) {
   let toolCount = 0
   let runOffset = 0
   const events = new Map<string, SelectedEvent>()
-  const runSegments = new Map<string, string>()
 
-  for (const { run, ordinal, model } of timelines) {
+  for (const { run, model } of timelines) {
     const runStart = run.startedAt ?? run.createdAt
-    laneMap
-      .get('runs')!
-      .segments.push({
-        id: run.id,
-        label: `Run ${ordinal}`,
-        startMs: runOffset,
-        durationMs: model.totalMs,
-        tone:
-          run.status === 'failed' || run.status === 'aborted' || run.status === 'interrupted'
-            ? 'failed'
-            : 'run',
-      })
-    runSegments.set(run.id, run.id)
 
     for (const event of model.items) {
       const laneId =
@@ -736,7 +766,7 @@ function buildOverview(timelines: readonly RunTimeline[]) {
     runOffset += Math.max(1, model.totalMs) + runGap
   }
 
-  return { lanes, totalMs: Math.max(0, runOffset - runGap), toolCount, events, runs: runSegments }
+  return { lanes, totalMs: Math.max(0, runOffset - runGap), toolCount, events }
 }
 
 function eventSegmentId(runId: string, eventId: string) {
