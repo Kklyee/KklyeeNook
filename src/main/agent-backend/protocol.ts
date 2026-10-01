@@ -70,7 +70,7 @@ export type AgentBackendRequest =
 
 export type MainToAgentBackendMessage =
   | { type: 'initialize'; options: AgentBackendInitOptions }
-  | ({ type: 'request'; id: string } & AgentBackendRequest)
+  | ({ type: 'request'; requestId: string } & AgentBackendRequest)
   | { type: 'shutdown' }
 
 export type AgentBackendToMainMessage =

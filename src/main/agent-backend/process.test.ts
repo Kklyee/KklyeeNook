@@ -37,7 +37,7 @@ class FakeUtilityProcess extends EventEmitter implements UtilityProcessLike {
       )
     } else if (typedMessage.type === 'request') {
       queueMicrotask(() =>
-        this.emit('message', { type: 'response', id: typedMessage.id, ok: true, value: 'done' }),
+        this.emit('message', { type: 'response', id: typedMessage.requestId, ok: true, value: 'done' }),
       )
     }
   }
@@ -199,5 +199,22 @@ test('prints the last startup stage when initialization times out', async () => 
     backend.close()
     child.emit('exit', 0)
     vi.useRealTimers()
+  }
+})
+
+test('permission changes return without timing out when the conversation has an id', async () => {
+  const { backend, child } = makeProcess()
+  await backend.start(options)
+  try {
+    await expect(
+      backend.request(
+        { action: 'conversation:permission', id: 'conversation-1', mode: 'full-access' },
+        50,
+      ),
+    ).resolves.toBe('done')
+  } finally {
+    const closed = backend.close()
+    child.emit('exit', 0)
+    await closed
   }
 })

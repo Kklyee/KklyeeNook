@@ -52,12 +52,12 @@ async function handleMessage(message: MainToAgentBackendMessage): Promise<void> 
     try {
       if (!backend) throw new Error('Agent backend is unavailable')
       const value = await backend.handleRequest(message as AgentBackendRequest)
-      parentPort?.postMessage({ type: 'response', id: message.id, ok: true, value })
+      parentPort?.postMessage({ type: 'response', id: message.requestId, ok: true, value })
     } catch (error) {
       console.error('[agent-backend] request failed', formatError(error))
       parentPort?.postMessage({
         type: 'response',
-        id: message.id,
+        id: message.requestId,
         ok: false,
         message:
           message.action.startsWith('knowledge:') && error instanceof Error

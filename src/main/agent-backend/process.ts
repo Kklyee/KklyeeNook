@@ -132,7 +132,7 @@ export class AgentBackendProcess {
         timer,
       })
       try {
-        child.postMessage({ type: 'request', id, ...request } satisfies MainToAgentBackendMessage)
+        child.postMessage({ type: 'request', requestId: id, ...request } satisfies MainToAgentBackendMessage)
       } catch {
         clearTimeout(timer)
         this.pendingRequests.delete(id)
