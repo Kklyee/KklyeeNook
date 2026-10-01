@@ -57,7 +57,7 @@ export function TraceWaterfall({
     >
       <div className="border-border/60 flex h-8 items-center gap-4 border-b px-3">
         <Metric label="时长" value={formatDuration(totalMs)} />
-        <Metric label="轮次" value={String(runCount)} />
+        <Metric label="Run" value={String(runCount)} />
         <Metric label="调用" value={String(toolCount)} />
       </div>
 

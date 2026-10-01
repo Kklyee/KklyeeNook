@@ -40,8 +40,9 @@ export function buildExecutionTimeline(
   const tools = new Map<string, TimelineItem>()
   const approvals = new Map<string, TimelineItem>()
   let activeCompaction: TimelineItem | undefined
+  let streamStepId: string | undefined
 
-  for (const record of records) {
+  for (const record of [...records].sort((a, b) => a.seq - b.seq)) {
     const event = record.event
     switch (event.type) {
       case 'system_prompt':
@@ -60,9 +61,32 @@ export function buildExecutionTimeline(
         break
       case 'agent_started':
         break
+      case 'step_started':
+        streamStepId = undefined
+        break
+      case 'thinking_delta': {
+        const previous = items.at(-1)
+        if (previous?.title === 'Thinking' && streamStepId === record.stepId) {
+          previous.summary = `${previous.summary ?? ''}${event.text}`
+          previous.detail = previous.summary
+          previous.durationMs = Math.max(0, record.timestamp - previous.timestamp)
+        } else {
+          items.push({
+            ...item(record.id, 'assistant', 'Thinking', record.timestamp),
+            summary: event.text,
+            detail: event.text,
+          })
+        }
+        streamStepId = record.stepId
+        break
+      }
       case 'text_delta': {
         const previous = items.at(-1)
-        if (previous?.kind === 'assistant' && previous.status === 'completed') {
+        if (
+          previous?.title === 'AI 消息' &&
+          previous.status === 'completed' &&
+          streamStepId === record.stepId
+        ) {
           previous.summary = `${previous.summary ?? ''}${event.text}`
           previous.detail = previous.summary
           previous.durationMs = Math.max(0, record.timestamp - previous.timestamp)
@@ -73,8 +97,16 @@ export function buildExecutionTimeline(
             detail: event.text,
           })
         }
+        streamStepId = record.stepId
         break
       }
+      case 'artifact_created':
+        items.push({
+          ...item(record.id, 'system', 'Artifact', record.timestamp),
+          summary: event.artifact.title,
+          detail: event.artifact,
+        })
+        break
       case 'tool_started': {
         const tool = {
           ...item(record.id, 'tool', event.call.toolName, record.timestamp),

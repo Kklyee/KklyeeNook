@@ -14,7 +14,10 @@ import {
   XIcon,
 } from 'lucide-react'
 
-import type { AgentExecutionRecord } from '@/shared/agent/agentExecutionRecord'
+import type { AgentExecutionRecord, AgentRunTrace } from '@/shared/agent/agentExecutionRecord'
+import { ExecutionTraceProjector } from '@/shared/agent/executionTraceProjector'
+import { TurnTrace } from '../chat/trace/TurnTrace'
+import { StepTrace } from '../chat/trace/StepTrace'
 import type { AgentRun, AgentRunStatus } from '@/shared/agent/agentRun'
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
 import {
@@ -34,8 +37,10 @@ import {
 
 interface RunTimeline {
   run: AgentRun
-  turn: number
+  ordinal: number
   model: ExecutionTimelineModel
+  trace: AgentRunTrace
+  records: readonly AgentExecutionRecord[]
 }
 
 interface RunTreeNode {
@@ -109,8 +114,10 @@ export function RunHistoryPanel({
       .reverse()
       .map((run, index) => ({
         run,
-        turn: index + 1,
+        ordinal: index + 1,
         model: buildExecutionTimeline(run, recordQuery.data?.get(run.id) ?? []),
+        trace: new ExecutionTraceProjector().project(run, recordQuery.data?.get(run.id) ?? []),
+        records: recordQuery.data?.get(run.id) ?? [],
       }))
   }, [recordQuery.data, runs])
   const runTree = useMemo(() => buildRunTree(timelines), [timelines])
@@ -225,7 +232,7 @@ function RunGroup({
   onSelect: (run: AgentRun, event: TimelineItem) => void
 }) {
   const { timeline, children } = node
-  const { run, turn, model } = timeline
+  const { run, ordinal, model } = timeline
   const childTask = depth ? model.items.find((event) => event.kind === 'user')?.summary : undefined
 
   return (
@@ -239,14 +246,14 @@ function RunGroup({
       >
         <span className="flex items-center gap-1 text-[10px] text-foreground/40">
           <ChevronDownIcon className={cn('size-3 transition-transform', !open && '-rotate-90')} />
-          {depth ? 'Child Run' : `第 ${turn} 轮`}
+          {depth ? 'Child Run' : `Run ${ordinal}`}
         </span>
         <span className="flex min-w-0 items-center gap-2 text-xs font-medium">
           <StatusDot status={run.status} />
           <span className="truncate">
             {depth
               ? `${run.displayName ?? 'Child Run'}${childTask ? `: ${childTask}` : ''}`
-              : `Run ${turn}`}
+              : `Run ${ordinal}`}
           </span>
           <StatusLabel status={run.status} />
           <span className={cn(mono, 'text-foreground/25 hidden truncate lg:inline')}>{run.id}</span>
@@ -258,7 +265,38 @@ function RunGroup({
 
       {open && (
         <div className="animate-in fade-in slide-in-from-top-1 duration-150">
-          {model.items.map((event) => (
+          {timeline.trace.turns.map((turnTrace) => (
+            <TurnTrace
+              key={turnTrace.id}
+              turn={turnTrace}
+              inputs={turnTrace.inputIds
+                .map((inputId) => timeline.records.find((record) =>
+                  record.event.type === 'user_message' && record.event.inputId === inputId,
+                ))
+                .map((record) => record?.event.type === 'user_message' ? record.event.text : '')}
+            >
+              {turnTrace.steps.map((step) => (
+                <StepTrace key={step.id} step={step} run={run}>
+                  {buildExecutionTimeline(run, step.events).items.map((event) => (
+                    <EventRow
+                      key={event.id}
+                      event={event}
+                      run={run}
+                      selected={selectedEvent?.run.id === run.id && selectedEvent.event.id === event.id}
+                      onClick={() => onSelect(run, event)}
+                    />
+                  ))}
+                </StepTrace>
+              ))}
+            </TurnTrace>
+          ))}
+          {!timeline.trace.turns.length && timeline.records.length > 0 && (
+            <p className="px-4 py-2 text-xs text-foreground/40">
+              {timeline.records.some((record) => record.event.type === 'user_message' && record.event.inputId)
+                ? 'Pending Inputs' : 'Legacy Execution'}
+            </p>
+          )}
+          {buildExecutionTimeline(run, timeline.trace.unscopedEvents).items.map((event) => (
             <EventRow
               key={event.id}
               event={event}
@@ -646,13 +684,13 @@ function buildOverview(timelines: readonly RunTimeline[]) {
   const events = new Map<string, SelectedEvent>()
   const runSegments = new Map<string, string>()
 
-  for (const { run, turn, model } of timelines) {
+  for (const { run, ordinal, model } of timelines) {
     const runStart = run.startedAt ?? run.createdAt
     laneMap
       .get('runs')!
       .segments.push({
         id: run.id,
-        label: `Run ${turn}`,
+        label: `Run ${ordinal}`,
         startMs: runOffset,
         durationMs: model.totalMs,
         tone:
