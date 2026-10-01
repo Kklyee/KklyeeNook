@@ -120,10 +120,7 @@ function SelectRequestBar({
       aria-label={request.title}
       className="popover-glass animate-in slide-in-from-bottom-2 fade-in relative z-10 mx-auto grid w-full max-w-(--thread-max-width) grid-cols-1 items-center gap-3 rounded-2xl p-3 duration-200 motion-reduce:animate-none sm:grid-cols-[minmax(0,1fr)_auto]"
     >
-      <div className="min-w-0">
-        <p className="text-sm font-medium">{request.title}</p>
-        <p className="text-muted-foreground text-xs">请选择一个操作后继续</p>
-      </div>
+      <p className="min-w-0 break-words text-sm leading-relaxed font-medium">{request.title}</p>
       <div className="flex flex-wrap justify-end gap-2">
         {request.options.map((option, index) => (
           <Button

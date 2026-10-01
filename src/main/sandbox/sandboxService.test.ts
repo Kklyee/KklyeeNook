@@ -63,10 +63,10 @@ test('one-shot elevation is tied to the call and exact resource and is consumed 
   await expect(sandbox.resolveFile(input, 'call-1')).rejects.toThrow('工作区外')
 })
 
-test('read-only denies writes, unavailable projects deny local tools, full access requires explicit paths', async () => {
+test('read-only writes require approval, unavailable projects deny local tools, full access requires explicit paths', async () => {
   const sandbox = new SandboxService()
   await expect(sandbox.resolveFile(request('a.txt', 'read-only'))).rejects.toThrow(
-    '需要本次提升为工作区写入权限',
+    '需要工作区写入权限',
   )
   const ungrouped = {
     ...request(join(outside, 'a.txt'), 'read-only'),
@@ -121,12 +121,12 @@ test('shell fails closed and executes direct only with full access or one-shot a
     details: {},
   }))
   const execution = { command: 'npm install', cwd: root, executeDirect }
-  await expect(sandbox.execute(input, execution, 'call')).rejects.toThrow('无法保证')
+  await expect(sandbox.execute(input, execution, 'call')).rejects.toThrow('需要完全权限以运行此命令')
   expect(executeDirect).not.toHaveBeenCalled()
   sandbox.elevate('call', input, 'full-access')
   await sandbox.execute(input, execution, 'call')
   expect(executeDirect).toHaveBeenCalledTimes(1)
-  await expect(sandbox.execute(input, execution, 'call')).rejects.toThrow('无法保证')
+  await expect(sandbox.execute(input, execution, 'call')).rejects.toThrow('需要完全权限以运行此命令')
   await sandbox.execute({ ...input, mode: 'full-access' }, execution)
   expect(executeDirect).toHaveBeenCalledTimes(2)
 })
@@ -140,7 +140,7 @@ test('read-only write pauses for approval, then retries once through the real ag
   const execute = vi.spyOn(write, 'execute')
   let handler: ((event: any, context: any) => Promise<unknown>) | undefined
   const emitApproval = vi.fn()
-  const selection = '允许本次使用工作区写入权限'
+  const selection = '允许一次'
   const select = vi.fn(async () => selection)
   createPiApprovalExtension(
     context,
@@ -212,6 +212,6 @@ test('read-only write pauses for approval, then retries once through the real ag
     ).type,
   ).toBe('complete')
   await expect(write.execute('denied', { path: 'blocked.txt', content: 'twice' })).rejects.toThrow(
-    '需要本次提升为工作区写入权限',
+    '需要工作区写入权限',
   )
 })

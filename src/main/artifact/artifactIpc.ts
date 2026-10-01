@@ -33,7 +33,7 @@ export function registerArtifactIpc(
           type: 'question',
           title: '本次文件权限',
           message: reason,
-          buttons: ['允许本次使用完全权限', '拒绝'],
+          buttons: ['允许一次', '拒绝'],
           defaultId: 1,
           cancelId: 1,
         })

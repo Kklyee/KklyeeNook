@@ -28,9 +28,9 @@ function setup(selection?: string) {
 }
 
 test('offers only one-shot elevation and denial when the shell sandbox is unavailable', async () => {
-  const { execute, emit, select } = setup('允许本次使用完全权限')
+  const { execute, emit, select } = setup('允许一次')
   await expect(execute()).resolves.toBeUndefined()
-  expect(select.mock.calls[0][1]).toEqual(['允许本次使用完全权限', '拒绝'])
+  expect(select.mock.calls[0][1]).toEqual(['允许一次', '拒绝'])
   expect(emit).toHaveBeenLastCalledWith({
     type: 'approval_resolved',
     approvalId: 'tool-1',

@@ -18,16 +18,15 @@ export class SandboxPolicy {
           outcome: 'ask',
           requestedMode: target.inside ? 'workspace-write' : 'full-access',
           reason: target.inside
-            ? '当前会话为只读模式，创建或修改此工作区文件需要本次提升为工作区写入权限：' +
-              target.path
-            : '此文件在工作区外，需要允许本次使用完全权限：' + target.path,
+            ? '需要工作区写入权限：' + target.path
+            : '需要完全权限（工作区外）：' + target.path,
         }
       if (target.inside) return { outcome: 'allow' }
       return mode === 'workspace-write'
         ? {
             outcome: 'ask',
             requestedMode: 'full-access',
-            reason: '目标在工作区外，需要允许本次使用完全权限：' + target.path,
+            reason: '需要完全权限（工作区外）：' + target.path,
           }
         : { outcome: 'deny', reason: '目标在工作区外' }
     }
@@ -40,7 +39,7 @@ export class SandboxPolicy {
           return {
             outcome: 'ask',
             requestedMode: 'full-access',
-            reason: '命令目录在工作区外，需要允许本次使用完全权限',
+            reason: '命令目录超出工作区，需要完全权限',
           }
       }
       if (mode === 'full-access') return { outcome: 'allow' }
@@ -48,7 +47,7 @@ export class SandboxPolicy {
         return {
           outcome: 'ask',
           requestedMode: 'full-access',
-          reason: '当前平台无法保证该命令只修改工作区。允许本次使用完全权限？\n' + resource.command,
+          reason: '需要完全权限以运行此命令：\n' + resource.command,
         }
       return { outcome: 'allow' }
     }
