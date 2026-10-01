@@ -6,6 +6,7 @@ export interface AgentStepTrace {
   id: string
   ordinal: number
   piTurnIndex: number
+  acceptedInputIds: string[]
   startedSeq: number
   endedSeq?: number
   result?: StepResult

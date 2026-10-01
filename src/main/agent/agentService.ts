@@ -287,9 +287,8 @@ export class AgentService {
       return
     }
     const boundary = this.boundaries.get(runId)
-    if (event.type === 'agent_completed' && boundary && !boundary.onSettled()) return
-    if (event.type === 'agent_failed') boundary?.terminate('failed')
-    if (event.type === 'agent_aborted') boundary?.terminate('aborted')
+    if (event.type === 'agent_completed' && boundary && !boundary.canSettleRun()) return
+    if (event.type === 'agent_failed' || event.type === 'agent_aborted') boundary?.terminate()
     if (event.type === 'agent_completed' && run.plan) {
       const plan = completePlanSteps(run.plan)
       if (plan !== run.plan) this.handleAgentEvent(session, runId, { type: 'plan_updated', plan })
@@ -304,7 +303,6 @@ export class AgentService {
       event,
     }
     if (event.type === 'user_message') {
-      delete envelope.turnId
       delete envelope.stepId
     }
     const patch = getAgentRunPatch(run, event, timestamp)

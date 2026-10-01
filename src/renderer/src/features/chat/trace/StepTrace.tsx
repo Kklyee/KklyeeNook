@@ -8,11 +8,13 @@ export function StepTrace({
   step,
   run,
   empty,
+  inputs,
   children,
 }: {
   step: AgentStepTrace
   run: AgentRun
   empty: boolean
+  inputs: ReactNode
   children: ReactNode
 }) {
   const start =
@@ -36,6 +38,7 @@ export function StepTrace({
         <span>#{step.ordinal}</span>
       </div>
       <div className="min-w-0">
+        {inputs}
         {empty ? (
           <div className="flex h-[24px] items-center gap-[8px] px-[4px] text-[11px] text-foreground/45">
             {running && <LoaderCircleIcon className="size-3 animate-spin" />}

@@ -17,7 +17,6 @@ import {
 
 import type { AgentExecutionRecord, AgentRunTrace } from '@/shared/agent/agentExecutionRecord'
 import { ExecutionTraceProjector } from '@/shared/agent/executionTraceProjector'
-import { TurnTrace } from '../chat/trace/TurnTrace'
 import { StepTrace } from '../chat/trace/StepTrace'
 import type { AgentRun, AgentRunStatus } from '@/shared/agent/agentRun'
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
@@ -106,11 +105,12 @@ export function RunHistoryPanel({
   }, [focusedRunId, runs])
 
   const timelines = useMemo<RunTimeline[]>(() => {
+    let ordinal = 0
     return [...runs]
-      .reverse()
-      .map((run, index) => ({
+      .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))
+      .map((run) => ({
         run,
-        ordinal: index + 1,
+        ordinal: run.parentRunId ? 0 : ++ordinal,
         model: buildExecutionTimeline(run, recordQuery.data?.get(run.id) ?? []),
         trace: new ExecutionTraceProjector().project(run, recordQuery.data?.get(run.id) ?? []),
         records: recordQuery.data?.get(run.id) ?? [],
@@ -152,7 +152,7 @@ export function RunHistoryPanel({
         <TraceWaterfall
           lanes={overview.lanes}
           totalMs={overview.totalMs}
-          turnCount={timelines.reduce((count, timeline) => count + timeline.trace.turns.length, 0)}
+          turnCount={runs.filter((run) => !run.parentRunId).length}
           toolCount={overview.toolCount}
           toolbar={
             <div className="relative w-[150px] max-w-[35vw]">
@@ -238,18 +238,28 @@ function RunGroup({
 }) {
   const { timeline, children } = node
   const { run, ordinal, model } = timeline
-  const childTask = depth ? model.items.find((event) => event.kind === 'user')?.summary : undefined
+  const childTask = run.parentRunId ? model.items.find((event) => event.kind === 'user')?.summary : undefined
   const unscopedItems = buildExecutionTimeline(run, timeline.trace.unscopedEvents).items
     .filter((event) => matchesSearch(event, query))
-  const renderEvent = (event: TimelineItem) => (
-    <EventRow
-      key={event.id}
-      event={event}
-      run={run}
-      selected={selectedEvent?.run.id === run.id && selectedEvent.event.id === event.id}
-      onClick={() => onSelect(run, event)}
-    />
-  )
+  const claimedInputs = new Set(timeline.trace.steps.flatMap((step) => step.acceptedInputIds))
+  const renderEvent = (event: TimelineItem) => {
+    const input = event.kind === 'user'
+      ? timeline.records.find((record) => String(record.id) === event.id)?.event
+      : undefined
+    const inputLabel = input?.type === 'user_message' && input.inputId
+      ? !claimedInputs.has(input.inputId) ? '未处理' : input.delivery === 'initial' ? undefined : '追加'
+      : undefined
+    return (
+      <EventRow
+        key={event.id}
+        event={event}
+        run={run}
+        selected={selectedEvent?.run.id === run.id && selectedEvent.event.id === event.id}
+        onClick={() => onSelect(run, event)}
+        inputLabel={inputLabel}
+      />
+    )
+  }
 
   return (
     <div className="border-b border-border/50">
@@ -263,11 +273,11 @@ function RunGroup({
       >
         <span className="flex items-center gap-1 text-[10px] text-foreground/40">
           <ChevronDownIcon className={cn('size-2.5 transition-transform', !open && '-rotate-90')} />
-          {depth ? 'Subagent' : `Run ${ordinal}`}
+          {run.parentRunId ? 'Subagent' : `第 ${ordinal} 轮`}
         </span>
         <span className="flex min-w-0 items-center gap-1.5 text-[10px] font-medium">
           <StatusDot status={run.status} />
-          {depth > 0 && <span className="truncate">{run.displayName ?? 'Subagent'}{childTask ? ` · ${childTask}` : ''}</span>}
+          {run.parentRunId && <span className="truncate">{run.displayName ?? 'Subagent'}{childTask ? ` · ${childTask}` : ''}</span>}
           <StatusLabel status={run.status} />
         </span>
         <span className={cn(mono, 'ml-auto text-[10px] text-foreground/35 tabular-nums')}>
@@ -280,43 +290,31 @@ function RunGroup({
           <div className="bg-foreground/[0.04] pl-[36px]">
             {unscopedItems.filter((event) => event.title === 'System Prompt').map(renderEvent)}
           </div>
-          {timeline.trace.turns.map((turnTrace) => {
+          {timeline.trace.steps.map((step) => {
             const inputRecords = timeline.records.filter(
-              (record) => record.event.type === 'user_message' && turnTrace.inputIds.includes(record.event.inputId),
+              (record) => record.event.type === 'user_message' && step.acceptedInputIds.includes(record.event.inputId),
             )
             const inputItems = buildExecutionTimeline(run, inputRecords).items
               .filter((event) => matchesSearch(event, query))
-            const steps = turnTrace.steps
-              .map((step) => ({
-                step,
-                items: buildExecutionTimeline(run, step.events).items
-                  .filter((event) => matchesSearch(event, query)),
-              }))
-              .filter(({ items }) => !query || items.length > 0)
-            if (query && !inputItems.length && !steps.length) return null
+            const items = buildExecutionTimeline(run, step.events).items
+              .filter((event) => matchesSearch(event, query))
+            if (query && !inputItems.length && !items.length) return null
             return (
-              <TurnTrace
-                key={turnTrace.id}
-                turn={turnTrace}
+              <StepTrace
+                key={step.id}
+                step={step}
+                run={run}
+                empty={!items.length}
                 inputs={inputItems.map(renderEvent)}
               >
-                {steps.map(({ step, items }) => (
-                  <StepTrace
-                    key={step.id}
-                    step={step}
-                    run={run}
-                    empty={!items.length}
-                  >
-                    {items.map(renderEvent)}
-                  </StepTrace>
-                ))}
-              </TurnTrace>
+                {items.map(renderEvent)}
+              </StepTrace>
             )
           })}
-          {!timeline.trace.turns.length && timeline.records.length > 0 && (
+          {!timeline.trace.steps.length && timeline.records.length > 0 && (
             <p className="border-t border-border/35 px-2 py-1 text-[10px] text-foreground/40">
               {timeline.records.some((record) => record.event.type === 'user_message' && record.event.inputId)
-                ? 'Pending Inputs' : 'Legacy Execution'}
+                ? '未处理输入' : 'Legacy Execution'}
             </p>
           )}
           <div className="pl-[36px]">
@@ -378,11 +376,13 @@ function EventRow({
   run,
   selected,
   onClick,
+  inputLabel,
 }: {
   event: TimelineItem
   run: AgentRun
   selected: boolean
   onClick: () => void
+  inputLabel?: string
 }) {
   const meta = EVENT_META[event.kind]
   const summary = eventPreview(event)
@@ -406,7 +406,10 @@ function EventRow({
       </span>
       <span className="flex min-w-0 items-center gap-[8px] pr-[4px] text-[11px] leading-[16px]">
         {event.title === '用户消息' || event.title === 'AI 消息' ? (
-          <span className="min-w-0 truncate text-foreground/90">{summary}</span>
+          <>
+            {inputLabel && <span className="shrink-0 text-[10px] text-blue-500 dark:text-blue-300">{inputLabel}</span>}
+            <span className="min-w-0 truncate text-foreground/90">{summary}</span>
+          </>
         ) : (
           <>
             <span className="shrink-0 whitespace-nowrap text-foreground/85">{event.title === 'System Prompt' ? '初始系统提示词' : event.title}</span>

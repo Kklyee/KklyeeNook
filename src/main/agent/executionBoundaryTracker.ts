@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { AgentEvent, InputDelivery } from '@/shared/agent/agentEvent'
 import type { StepResult } from '@/shared/agent/agentStep'
-import type { TurnEndReason } from '@/shared/agent/agentTurn'
 
 interface PendingInput {
   inputId: string
@@ -9,16 +8,14 @@ interface PendingInput {
 }
 
 export class ExecutionBoundaryTracker {
-  private nextTurnOrdinal = 1
   private nextStepOrdinal = 1
-  private activeTurn?: { id: string; ordinal: number; inputIds: string[] }
-  private activeStep?: { id: string; ordinal: number; piTurnIndex: number }
+  private activeStep?: { id: string; ordinal: number; piTurnIndex: number; acceptedInputIds: string[] }
   private pendingInputs: PendingInput[] = []
 
   constructor(private readonly emit: (event: AgentEvent) => void) {}
 
-  get correlation(): { turnId?: string; stepId?: string } {
-    return { turnId: this.activeTurn?.id, stepId: this.activeStep?.id }
+  get correlation(): { stepId?: string } {
+    return { stepId: this.activeStep?.id }
   }
 
   get hasPendingInputs(): boolean {
@@ -44,35 +41,19 @@ export class ExecutionBoundaryTracker {
       return pending.splice(index, 1)[0]!
     })
     this.pendingInputs = pending
-    if (inputs.length && this.activeTurn) {
-      this.closeTurn(
-        inputs.some((input) => input.delivery === 'follow-up') ? 'completed' : 'next_input',
-      )
+    const step = {
+      id: randomUUID(),
+      ordinal: this.nextStepOrdinal++,
+      piTurnIndex,
+      acceptedInputIds: inputs.map((input) => input.inputId),
     }
-    if (!this.activeTurn) {
-      if (!inputs.length) throw new Error('A Turn requires an accepted user input')
-      const turn = {
-        id: randomUUID(),
-        ordinal: this.nextTurnOrdinal++,
-        inputIds: inputs.map((input) => input.inputId),
-      }
-      this.activeTurn = turn
-      this.nextStepOrdinal = 1
-      this.emit({
-        type: 'turn_started',
-        turnId: turn.id,
-        ordinal: turn.ordinal,
-        inputIds: turn.inputIds,
-      })
-    }
-    const step = { id: randomUUID(), ordinal: this.nextStepOrdinal++, piTurnIndex }
     this.activeStep = step
     this.emit({
       type: 'step_started',
       stepId: step.id,
-      turnId: this.activeTurn.id,
       ordinal: step.ordinal,
       piTurnIndex,
+      acceptedInputIds: step.acceptedInputIds,
     })
   }
 
@@ -81,27 +62,17 @@ export class ExecutionBoundaryTracker {
     this.emit({
       type: 'step_ended',
       stepId: this.activeStep.id,
-      turnId: this.activeTurn!.id,
       result,
     })
     this.activeStep = undefined
   }
 
-  onSettled(): boolean {
-    if (this.hasPendingInputs) return false
-    this.closeTurn('completed')
-    return true
+  canSettleRun(): boolean {
+    return !this.hasPendingInputs
   }
 
-  terminate(reason: 'failed' | 'aborted'): void {
+  terminate(): void {
     this.onPiTurnEnd('aborted')
-    this.closeTurn(reason)
     this.pendingInputs = []
-  }
-
-  private closeTurn(reason: TurnEndReason): void {
-    if (!this.activeTurn) return
-    this.emit({ type: 'turn_ended', turnId: this.activeTurn.id, reason })
-    this.activeTurn = undefined
   }
 }

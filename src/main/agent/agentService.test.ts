@@ -295,8 +295,10 @@ test('persists a run before execution and serializes status changes', async () =
   const finalRun = await service.startRun(sessionRecord.id, { prompt: 'hello' }).completion
 
   expect(published).toEqual(executionRecordRepo.records)
-  expect(published.map((envelope) => envelope.seq)).toEqual(published.map((_, index) => index + 1))
-  expect(published.find((envelope) => envelope.event.type === 'tool_started')).toMatchObject({ turnId: expect.any(String), stepId: expect.any(String) })
+  const sequences = published.map((envelope) => envelope.seq)
+  expect(new Set(sequences).size).toBe(sequences.length)
+  expect(sequences.every((seq, index) => index === 0 || seq > sequences[index - 1]!)).toBe(true)
+  expect(published.find((envelope) => envelope.event.type === 'tool_started')).toMatchObject({ stepId: expect.any(String) })
 
   expect(finalRun.status).toBe('completed')
   expect(finalRun.completedAt).toBeDefined()
@@ -311,13 +313,11 @@ test('persists a run before execution and serializes status changes', async () =
   ).toEqual([
     'user_message',
     'agent_started',
-    'turn_started',
     'step_started',
     'approval_required',
     'tool_started',
     'tool_finished',
     'step_ended',
-    'turn_ended',
     'agent_completed',
   ])
 })
@@ -426,13 +426,11 @@ test('turns a successful update_plan tool call into a persisted run plan and eve
     (await service.listExecutionRecords(finalRun.id)).map((record) => record.event.type),
   ).toEqual([
     'user_message',
-    'turn_started',
     'step_started',
     'tool_started',
     'tool_finished',
     'plan_updated',
     'step_ended',
-    'turn_ended',
     'plan_updated',
     'agent_completed',
   ])
@@ -603,7 +601,6 @@ test('delegates an isolated child run and returns its result', async () => {
   expect(childRecords[0]?.seq).toBe(1)
   const parentStep = parentRecords.find((record) => record.event.type === 'step_started')
   const childStep = childRecords.find((record) => record.event.type === 'step_started')
-  expect(childStep?.turnId).not.toBe(parentStep?.turnId)
   expect(childStep?.stepId).not.toBe(parentStep?.stepId)
 })
 
@@ -676,7 +673,7 @@ test('limits child depth and concurrency and aborts children with the parent', a
   ).toBe(true)
 })
 
-test.each(['aborted', 'failed'] as const)('persists active Step and Turn closure before agent_%s', async (status) => {
+test.each(['aborted', 'failed'] as const)('persists active Step closure before agent_%s', async (status) => {
   const repo = new MemoryExecutionRecordRepo()
   const service = new AgentService(
     { create: () => ({
@@ -693,12 +690,10 @@ test.each(['aborted', 'failed'] as const)('persists active Step and Turn closure
   await service.initialize()
   const finalRun = await service.startRun(sessionRecord.id, { prompt: 'start' }).completion
   expect(finalRun.status).toBe(status)
-  expect(repo.records.slice(-3).map((record) => record.event)).toEqual([
-    { type: 'step_ended', stepId: expect.any(String), turnId: expect.any(String), result: 'aborted' },
-    { type: 'turn_ended', turnId: expect.any(String), reason: status },
+  expect(repo.records.slice(-2).map((record) => record.event)).toEqual([
+    { type: 'step_ended', stepId: expect.any(String), result: 'aborted' },
     status === 'failed' ? { type: 'agent_failed', error: 'model failed' } : { type: 'agent_aborted' },
   ])
-  expect(repo.records.at(-1)?.turnId).toBeUndefined()
   expect(repo.records.at(-1)?.stepId).toBeUndefined()
 })
 
@@ -721,4 +716,52 @@ test('creates a new Run after the previous runtime settles', async () => {
   expect(second.id).not.toBe(first.id)
   expect((await service.listExecutionRecords(first.id))[0]?.seq).toBe(1)
   expect((await service.listExecutionRecords(second.id))[0]?.seq).toBe(1)
+})
+
+test('keeps one Run open until Pi delivers steering, late inputs and follow-up into Steps', async () => {
+  const repo = new MemoryExecutionRecordRepo()
+  let releaseFirst: () => void = () => undefined
+  let firstStarted = false
+  const service = new AgentService(
+    { create: () => ({
+      async run(input, emit) {
+        emit({ type: 'agent_started' })
+        emit({ type: 'pi_turn_start', piTurnIndex: 0, deliveries: ['initial'] })
+        firstStarted = true
+        await new Promise<void>((resolve) => { releaseFirst = resolve })
+        emit({ type: 'pi_turn_end', result: 'committed' })
+        emit({ type: 'agent_completed' })
+        expect(service.getSession(sessionRecord.id)?.toSummary().activeRunId).toBe(input.runId)
+        emit({ type: 'pi_turn_start', piTurnIndex: 1, deliveries: ['steer', 'steer', 'steer'] })
+        service.steerRun(sessionRecord.id, 'late')
+        emit({ type: 'pi_turn_end', result: 'committed' })
+        emit({ type: 'pi_turn_start', piTurnIndex: 2, deliveries: ['steer'] })
+        emit({ type: 'pi_turn_end', result: 'committed' })
+        emit({ type: 'agent_completed' })
+        expect(service.getSession(sessionRecord.id)?.toSummary().activeRunId).toBe(input.runId)
+        emit({ type: 'pi_turn_start', piTurnIndex: 3, deliveries: ['follow-up'] })
+        emit({ type: 'text_delta', text: 'done' })
+        emit({ type: 'pi_turn_end', result: 'committed' })
+        emit({ type: 'pi_agent_settled' })
+        emit({ type: 'agent_completed' })
+      },
+      dispose() {},
+    }) },
+    new MemorySessionRepo([sessionRecord]), new MemoryRunRepo(), repo, new MemoryArtifactRepo(),
+  )
+  await service.initialize()
+  const handle = service.startRun(sessionRecord.id, { prompt: 'initial' })
+  await vi.waitFor(() => expect(firstStarted).toBe(true))
+  for (const text of ['a', 'b', 'c']) service.steerRun(sessionRecord.id, text)
+  service.steerRun(sessionRecord.id, 'follow', 'follow-up')
+  releaseFirst()
+  await expect(handle.completion).resolves.toMatchObject({ status: 'completed' })
+  const inputTexts = new Map(repo.records.flatMap(({ event }) => event.type === 'user_message' ? [[event.inputId, event.text] as const] : []))
+  const steps = repo.records.flatMap(({ event }) => event.type === 'step_started' ? [event] : [])
+  expect(steps.map((step) => [step.ordinal, step.acceptedInputIds.map((id) => inputTexts.get(id))])).toEqual([
+    [1, ['initial']], [2, ['a', 'b', 'c']], [3, ['late']], [4, ['follow']],
+  ])
+  expect(new Set(repo.records.map((record) => record.runId))).toEqual(new Set([handle.run.id]))
+  expect(repo.records.filter((record) => record.event.type === 'agent_completed')).toHaveLength(1)
+  expect(repo.records.filter((record) => record.event.type === 'user_message').every((record) => record.stepId === undefined)).toBe(true)
 })

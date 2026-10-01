@@ -1,11 +1,10 @@
 import type { AgentEvent } from './agentEvent'
-import type { AgentTurnTrace } from './agentTurn'
+import type { AgentStepTrace } from './agentStep'
 
 export interface AgentEventEnvelope {
   sessionId: string
   runId: string
   seq: number
-  turnId?: string
   stepId?: string
   timestamp: number
   event: AgentEvent
@@ -17,7 +16,7 @@ export interface AgentExecutionRecord extends AgentEventEnvelope {
 
 export interface AgentRunTrace {
   runId: string
-  turns: AgentTurnTrace[]
+  steps: AgentStepTrace[]
   unscopedEvents: AgentExecutionRecord[]
 }
 
