@@ -1,15 +1,10 @@
-import { useEffect, useState, type ReactNode } from 'react'
-import { ArrowLeftIcon, CopyIcon, MinusIcon, PanelLeftIcon, SquareIcon, XIcon } from 'lucide-react'
+import { useEffect, useState, type MouseEvent, type ReactNode } from 'react'
+import { CopyIcon, MinusIcon, PanelLeftIcon, SquareIcon, XIcon } from 'lucide-react'
 import { Button } from './ui/button'
 import { useSidebar } from './ui/sidebar'
+import type { WindowMenu } from '@/shared/ipc/channels'
 
 export type AppView = 'chat' | 'settings' | 'scheduled-tasks'
-
-const navigation: Array<{ id: AppView; label: string }> = [
-  { id: 'chat', label: '对话' },
-  { id: 'scheduled-tasks', label: '定时任务' },
-  { id: 'settings', label: '设置' },
-]
 
 export function Titlebar({
   view,
@@ -34,6 +29,17 @@ export function Titlebar({
     }
   }, [])
 
+  useEffect(() => {
+    return window.api.window.onMenuAction((action) => {
+      if (action === 'settings') onNavigate('settings')
+    })
+  }, [onNavigate])
+
+  const openMenu = (menu: WindowMenu, event: MouseEvent<HTMLButtonElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect()
+    window.api.window.showMenu(menu, Math.round(bounds.left), Math.round(bounds.bottom))
+  }
+
   return (
     <header className="titlebar-drag-region flex h-7 shrink-0 items-center border-b border-white/[0.06] bg-[#1b1b1b] text-white/75">
       <div className="titlebar-no-drag-region flex h-full min-w-0 flex-1 items-center">
@@ -45,26 +51,26 @@ export function Titlebar({
           className="h-full w-9 rounded-none px-0 text-white/60 hover:bg-white/[0.08] hover:text-white"
           onClick={() => (view === 'chat' ? toggleSidebar() : onNavigate('chat'))}
         >
-          {view === 'chat' ? (
-            <PanelLeftIcon className="size-3.5" />
-          ) : (
-            <ArrowLeftIcon className="size-3.5" />
-          )}
+          <PanelLeftIcon className="size-3.5" />
         </Button>
-        <nav aria-label="应用导航" className="flex h-full items-center">
-          {navigation.map(({ id, label }) => (
-            <Button
-              key={id}
-              type="button"
-              variant="ghost"
-              aria-current={view === id ? 'page' : undefined}
-              className="h-full rounded-none px-2.5 text-[11px] font-normal text-white/60 hover:bg-white/[0.07] hover:text-white/90 aria-[current=page]:text-white/95"
-              onClick={() => onNavigate(id)}
-            >
-              {label}
-            </Button>
-          ))}
-        </nav>
+        <Button
+          type="button"
+          variant="ghost"
+          aria-haspopup="menu"
+          className="h-full rounded-none px-2.5 text-[11px] font-normal text-white/65 hover:bg-white/[0.08] hover:text-white"
+          onClick={(event) => openMenu('application', event)}
+        >
+          应用
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          aria-haspopup="menu"
+          className="h-full rounded-none px-2.5 text-[11px] font-normal text-white/65 hover:bg-white/[0.08] hover:text-white"
+          onClick={(event) => openMenu('edit', event)}
+        >
+          编辑
+        </Button>
       </div>
       <div className="titlebar-no-drag-region flex h-full shrink-0 items-stretch">
         <WindowButton label="最小化" onClick={() => window.api.window.minimize()}>

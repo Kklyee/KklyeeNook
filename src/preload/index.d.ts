@@ -1,6 +1,7 @@
 import type { PermissionMode } from '@/shared/approval/permission'
 import type { AgentSessionSummary } from '@/shared/agent/agentSession'
 import type { Workspace, WorkspaceAttachResult } from '@/shared/workspace/workspace'
+import type { WindowMenu, WindowMenuAction } from '@/shared/ipc/channels'
 import type { ElectronAPI } from '@electron-toolkit/preload'
 import type { KnowledgeReadResult, KnowledgeSearchRequest, KnowledgeSearchResult, KnowledgeSource } from '@/shared/knowledge/knowledge'
 import type {
@@ -68,6 +69,8 @@ interface API {
     isMaximized(): Promise<boolean>
     onMaximizedChanged(listener: (maximized: boolean) => void): () => void
     close(): void
+    showMenu(menu: WindowMenu, x: number, y: number): void
+    onMenuAction(listener: (action: WindowMenuAction) => void): () => void
   }
   agentBackend: {
     getStatus(): Promise<AgentBackendStatus>

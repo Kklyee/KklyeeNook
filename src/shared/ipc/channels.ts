@@ -1,3 +1,6 @@
+export type WindowMenu = 'application' | 'edit'
+export type WindowMenuAction = 'settings'
+
 export const IPC_CHANNELS = {
   CONVERSATION_PERMISSION: 'conversation:permission',
   CONVERSATION_LIST: 'conversation:list',
@@ -31,6 +34,8 @@ export const IPC_CHANNELS = {
   WINDOW_IS_MAXIMIZED: 'window:is-maximized',
   WINDOW_MAXIMIZED_CHANGED: 'window:maximized-changed',
   WINDOW_CLOSE: 'window:close',
+  WINDOW_MENU_SHOW: 'window:menu-show',
+  WINDOW_MENU_ACTION: 'window:menu-action',
   AGENT_BACKEND_GET_STATUS: 'agent-backend:get-status',
   AGENT_BACKEND_STATUS: 'agent-backend:status',
   AGENT_RUN_LIST: 'agent-run:list',

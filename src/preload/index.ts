@@ -5,6 +5,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { KnowledgeReadResult, KnowledgeSearchRequest, KnowledgeSearchResult, KnowledgeSource } from '@/shared/knowledge/knowledge'
 import { electronAPI } from '@electron-toolkit/preload'
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
+import type { WindowMenu, WindowMenuAction } from '@/shared/ipc/channels'
 import type { AgentBackendStatus } from '@/shared/agentBackend'
 import type { AgentSkill } from '@/shared/agent/agentSkill'
 import type { AgentMemory, DeleteAgentMemoryRequest } from '@/shared/memory/agentMemory'
@@ -91,6 +92,14 @@ const api = {
     },
     close(): void {
       ipcRenderer.send(IPC_CHANNELS.WINDOW_CLOSE)
+    },
+    showMenu(menu: WindowMenu, x: number, y: number): void {
+      ipcRenderer.send(IPC_CHANNELS.WINDOW_MENU_SHOW, menu, x, y)
+    },
+    onMenuAction(listener: (action: WindowMenuAction) => void): () => void {
+      const handler = (_event: Electron.IpcRendererEvent, action: WindowMenuAction) => listener(action)
+      ipcRenderer.on(IPC_CHANNELS.WINDOW_MENU_ACTION, handler)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.WINDOW_MENU_ACTION, handler)
     },
   },
   agentBackend: {
