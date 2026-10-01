@@ -146,6 +146,7 @@ export function ToolCard({
   const isControlled = controlledOpen !== undefined
   const open = isControlled ? controlledOpen : uncontrolledOpen
   const statusType = status?.type ?? 'complete'
+  const isShimmerActive = statusType === 'running' || statusType === 'requires-action'
   const StatusIcon =
     statusType === 'running'
       ? LoaderIcon
@@ -219,10 +220,10 @@ export function ToolCard({
           {children}
         </div>
       </CollapsibleContent>
-      {statusType === 'running' && (
+      {isShimmerActive && (
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-10 shimmer shimmer-bg shimmer-speed-500 shimmer-spread-80 shimmer-repeat-delay-0 shimmer-color-white/10 motion-reduce:hidden"
+          className="pointer-events-none absolute inset-0 z-10 shimmer shimmer-bg shimmer-speed-500 shimmer-spread-80 shimmer-repeat-delay-0 shimmer-color-white/15 motion-reduce:hidden"
         />
       )}
     </Collapsible>

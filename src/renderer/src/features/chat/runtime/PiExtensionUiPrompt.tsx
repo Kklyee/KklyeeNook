@@ -114,6 +114,8 @@ function SelectRequestBar({
   request: Extract<PiExtensionUiRequest, { kind: 'select' }>
   respond: ReturnType<typeof usePiRuntimeExtras>['respondToHostUiRequest']
 }) {
+  const isPermissionRequest = request.options.includes('允许一次') && request.options.includes('拒绝')
+
   return (
     <div
       role="alertdialog"
@@ -127,6 +129,11 @@ function SelectRequestBar({
             key={option}
             size="sm"
             variant={index === 0 ? 'default' : 'outline'}
+            className={
+              isPermissionRequest && index === 0
+                ? 'bg-foreground text-black hover:bg-foreground dark:bg-foreground'
+                : undefined
+            }
             onClick={() => void respond({ requestId: request.id, value: option })}
           >
             {option}
