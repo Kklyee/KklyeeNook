@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   BotIcon,
@@ -62,7 +62,9 @@ export function RunHistoryPanel({
   focusedRunId?: string
 }) {
   const [collapsedRunIds, setCollapsedRunIds] = useState<readonly string[]>([])
+  const [toolsExpanded, setToolsExpanded] = useState(true)
   const [selectedEvent, setSelectedEvent] = useState<SelectedEvent>()
+  const revealedRunId = useRef<string | undefined>(undefined)
   const [search, setSearch] = useState('')
   const query = search.trim().toLocaleLowerCase()
   const runsQuery = useQuery({
@@ -87,12 +89,14 @@ export function RunHistoryPanel({
 
   useEffect(() => {
     setCollapsedRunIds([])
+    setToolsExpanded(true)
     setSelectedEvent(undefined)
     setSearch('')
+    revealedRunId.current = undefined
   }, [sessionId])
 
   useEffect(() => {
-    if (!focusedRunId || !runs.length) return
+    if (!focusedRunId || !runs.length || revealedRunId.current === focusedRunId) return
     const runById = new Map(runs.map((run) => [run.id, run]))
     const ids: string[] = []
     let current = runById.get(focusedRunId)
@@ -101,6 +105,7 @@ export function RunHistoryPanel({
       current = current.parentRunId ? runById.get(current.parentRunId) : undefined
     }
     if (!ids.length) return
+    revealedRunId.current = focusedRunId
     setCollapsedRunIds((existing) => existing.filter((id) => !ids.includes(id)))
   }, [focusedRunId, runs])
 
@@ -121,6 +126,7 @@ export function RunHistoryPanel({
   const selectedSegmentId = selectedEvent
     ? eventSegmentId(selectedEvent.run.id, selectedEvent.event.id)
     : undefined
+  const turnsExpanded = runTree.some((node) => !collapsedRunIds.includes(node.timeline.run.id))
 
   if (!sessionId) {
     return <EmptyState title="选择一个对话" description="该对话的执行轨迹会显示在这里。" />
@@ -154,6 +160,10 @@ export function RunHistoryPanel({
           totalMs={overview.totalMs}
           turnCount={runs.filter((run) => !run.parentRunId).length}
           toolCount={overview.toolCount}
+          turnsExpanded={turnsExpanded}
+          toolsExpanded={toolsExpanded}
+          onToggleTurns={() => setCollapsedRunIds(turnsExpanded ? runs.map((run) => run.id) : [])}
+          onToggleTools={() => setToolsExpanded((expanded) => !expanded)}
           toolbar={
             <div className="relative w-[150px] max-w-[35vw]">
               <SearchIcon className="pointer-events-none absolute left-1.5 top-1/2 size-2.5 -translate-y-1/2 text-foreground/35" />
@@ -162,7 +172,13 @@ export function RunHistoryPanel({
                 aria-label="搜索执行轨迹"
                 placeholder="搜索"
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => {
+                  setSearch(event.target.value)
+                  if (event.target.value.trim()) {
+                    setCollapsedRunIds([])
+                    setToolsExpanded(true)
+                  }
+                }}
                 className="h-[20px] rounded-md py-0 pl-5 pr-1.5 text-[10px] md:text-[10px]"
               />
             </div>
@@ -172,9 +188,16 @@ export function RunHistoryPanel({
             const eventSelection = overview.events.get(segmentId)
             if (eventSelection) {
               setSelectedEvent(eventSelection)
-              setCollapsedRunIds((current) =>
-                current.filter((id) => id !== eventSelection.run.id),
-              )
+              const runIds = [eventSelection.run.id]
+              let parentId = eventSelection.run.parentRunId
+              while (parentId) {
+                runIds.push(parentId)
+                parentId = runs.find((run) => run.id === parentId)?.parentRunId
+              }
+              setCollapsedRunIds((current) => current.filter((id) => !runIds.includes(id)))
+              if (eventSelection.event.kind === 'tool' || eventSelection.event.kind === 'approval') {
+                setToolsExpanded(true)
+              }
               return
             }
           }}
@@ -186,18 +209,20 @@ export function RunHistoryPanel({
           </div>
         )}
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div id="execution-trace-runs" className="min-h-0 flex-1 overflow-y-auto">
           {runTree.map((node) => (
             <RunGroup
               key={node.timeline.run.id}
               node={node}
               depth={0}
-              open={Boolean(query) || !collapsedRunIds.includes(node.timeline.run.id)}
+              open={!collapsedRunIds.includes(node.timeline.run.id)}
               query={query}
               selectedEvent={selectedEvent}
               onToggleRun={toggleRun}
               onSelect={(run, event) => setSelectedEvent({ run, event })}
               collapsedRunIds={collapsedRunIds}
+              toolsExpanded={toolsExpanded}
+              onExpandTools={() => setToolsExpanded(true)}
             />
           ))}
           {query && !runTree.length && (
@@ -224,6 +249,8 @@ function RunGroup({
   selectedEvent,
   query,
   collapsedRunIds,
+  toolsExpanded,
+  onExpandTools,
   onToggleRun,
   onSelect,
 }: {
@@ -233,6 +260,8 @@ function RunGroup({
   selectedEvent?: SelectedEvent
   query: string
   collapsedRunIds: readonly string[]
+  toolsExpanded: boolean
+  onExpandTools: () => void
   onToggleRun: (runId: string) => void
   onSelect: (run: AgentRun, event: TimelineItem) => void
 }) {
@@ -242,6 +271,7 @@ function RunGroup({
   const unscopedItems = buildExecutionTimeline(run, timeline.trace.unscopedEvents).items
     .filter((event) => matchesSearch(event, query))
   const claimedInputs = new Set(timeline.trace.steps.flatMap((step) => step.acceptedInputIds))
+  const toolCount = model.items.filter((event) => event.kind === 'tool').length
   const renderEvent = (event: TimelineItem) => {
     const input = event.kind === 'user'
       ? timeline.records.find((record) => String(record.id) === event.id)?.event
@@ -259,6 +289,30 @@ function RunGroup({
         inputLabel={inputLabel}
       />
     )
+  }
+  const renderItems = (items: readonly TimelineItem[]) => {
+    const calls = items.filter((event) => event.kind === 'tool' || event.kind === 'approval')
+    const toolCalls = calls.filter((event) => event.kind === 'tool').length
+    const approvals = calls.length - toolCalls
+    return items.map((event) => {
+      if (toolsExpanded || (event.kind !== 'tool' && event.kind !== 'approval')) return renderEvent(event)
+      if (event !== calls[0]) return null
+      return (
+        <button
+          key={`calls-${event.id}`}
+          type="button"
+          aria-label="展开所有调用"
+          aria-expanded={false}
+          onClick={onExpandTools}
+          className="flex h-[24px] w-full items-center gap-[8px] border-b border-foreground/[0.035] pl-[36px] pr-[4px] text-left text-[11px] text-foreground/45 transition-colors hover:bg-foreground/[0.035] hover:text-foreground/75 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-blue-400/60"
+        >
+          <span aria-hidden>…</span>
+          <span>{[toolCalls ? `${toolCalls} 个工具调用` : '', approvals ? `${approvals} 项审批` : ''].filter(Boolean).join(' · ')}</span>
+          {calls.some((call) => call.status === 'failed') && <CircleAlertIcon className="size-3 text-destructive" aria-label="包含失败调用" />}
+          {calls.some((call) => call.status === 'running') && <LoaderCircleIcon className="size-3 animate-spin text-blue-500" aria-label="调用进行中" />}
+        </button>
+      )
+    })
   }
 
   return (
@@ -285,11 +339,11 @@ function RunGroup({
         </span>
       </button>
 
-      {open && (
+      <div className="bg-foreground/[0.04] pl-[36px]">
+        {unscopedItems.filter((event) => event.title === 'System Prompt').map(renderEvent)}
+      </div>
+      {open ? (
         <div>
-          <div className="bg-foreground/[0.04] pl-[36px]">
-            {unscopedItems.filter((event) => event.title === 'System Prompt').map(renderEvent)}
-          </div>
           {timeline.trace.steps.map((step) => {
             const inputRecords = timeline.records.filter(
               (record) => record.event.type === 'user_message' && step.acceptedInputIds.includes(record.event.inputId),
@@ -307,7 +361,7 @@ function RunGroup({
                 empty={!items.length}
                 inputs={inputItems.map(renderEvent)}
               >
-                {items.map(renderEvent)}
+                {renderItems(items)}
               </StepTrace>
             )
           })}
@@ -318,7 +372,7 @@ function RunGroup({
             </p>
           )}
           <div className="pl-[36px]">
-            {unscopedItems.filter((event) => event.title !== 'System Prompt').map(renderEvent)}
+            {renderItems(unscopedItems.filter((event) => event.title !== 'System Prompt'))}
           </div>
           {!model.items.length && (
             <p className="text-foreground/30 px-16 py-3 text-xs">
@@ -326,16 +380,33 @@ function RunGroup({
             </p>
           )}
         </div>
+      ) : (
+        <div className="pl-[36px]">
+          {model.items.filter((event) => event.kind === 'user' && matchesSearch(event, query)).map(renderEvent)}
+          <button
+            type="button"
+            aria-label={run.parentRunId ? `展开子 Agent ${run.displayName ?? ''} 的执行明细` : `展开第 ${ordinal} 轮的执行明细`}
+            aria-expanded={false}
+            onClick={() => onToggleRun(run.id)}
+            className="flex h-[24px] w-full items-center gap-[8px] pl-[36px] pr-[4px] text-left text-[11px] text-foreground/45 transition-colors hover:bg-foreground/[0.035] hover:text-foreground/75 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-blue-400/60"
+          >
+            <span aria-hidden>…</span>
+            <span>{timeline.trace.steps.length} 个步骤 · {toolCount} 个工具调用</span>
+          </button>
+          {unscopedItems.filter((event) => event.kind === 'error').map(renderEvent)}
+        </div>
       )}
-      {children.map((child) => (
+      {open && children.map((child) => (
         <RunGroup
           key={child.timeline.run.id}
           node={child}
           depth={depth + 1}
-          open={Boolean(query) || !collapsedRunIds.includes(child.timeline.run.id)}
+          open={!collapsedRunIds.includes(child.timeline.run.id)}
           query={query}
           selectedEvent={selectedEvent}
           collapsedRunIds={collapsedRunIds}
+          toolsExpanded={toolsExpanded}
+          onExpandTools={onExpandTools}
           onToggleRun={onToggleRun}
           onSelect={onSelect}
         />

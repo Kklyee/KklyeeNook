@@ -1,7 +1,7 @@
 'use client'
 
 import type { ComponentProps, ReactNode } from 'react'
-import { Clock3Icon, LayersIcon, WrenchIcon } from 'lucide-react'
+import { ChevronDownIcon, Clock3Icon, LayersIcon, WrenchIcon } from 'lucide-react'
 import { cn } from '@/renderer/src/lib/utils'
 import { mono } from '@/renderer/src/lib/surfaces'
 
@@ -35,6 +35,10 @@ export function TraceWaterfall({
   totalMs,
   turnCount,
   toolCount,
+  turnsExpanded,
+  toolsExpanded,
+  onToggleTurns,
+  onToggleTools,
   toolbar,
   selectedSegmentId,
   onSegmentSelect,
@@ -45,6 +49,10 @@ export function TraceWaterfall({
   totalMs: number
   turnCount: number
   toolCount: number
+  turnsExpanded?: boolean
+  toolsExpanded?: boolean
+  onToggleTurns?: () => void
+  onToggleTools?: () => void
   toolbar?: ReactNode
   selectedSegmentId?: string
   onSegmentSelect?: (segmentId: string) => void
@@ -59,8 +67,8 @@ export function TraceWaterfall({
     >
       <div className="flex h-[28px] items-center gap-[12px] px-[8px]">
         <Metric icon={Clock3Icon} label="时长" value={formatDuration(totalMs)} />
-        <Metric icon={LayersIcon} label="轮次" value={String(turnCount)} />
-        <Metric icon={WrenchIcon} label="调用" value={String(toolCount)} />
+        <Metric icon={LayersIcon} label="轮次" value={String(turnCount)} expanded={turnsExpanded} onToggle={onToggleTurns} />
+        <Metric icon={WrenchIcon} label="调用" value={String(toolCount)} expanded={toolsExpanded} onToggle={onToggleTools} />
         {toolbar && <div className="ml-auto min-w-0">{toolbar}</div>}
       </div>
 
@@ -100,13 +108,38 @@ export function TraceWaterfall({
   )
 }
 
-function Metric({ icon: Icon, label, value }: { icon: typeof Clock3Icon; label: string; value: string }) {
-  return (
-    <span className="flex shrink-0 items-center gap-1 text-[10px] text-foreground/50">
+function Metric({ icon: Icon, label, value, expanded, onToggle }: {
+  icon: typeof Clock3Icon
+  label: string
+  value: string
+  expanded?: boolean
+  onToggle?: () => void
+}) {
+  const className = 'flex shrink-0 items-center gap-1 text-[10px] text-foreground/50'
+  const content = (
+    <>
       <Icon className="size-2.5" aria-hidden />
       <span>{label}</span>
       <span className={cn(mono, 'text-[10px] text-foreground/65 tabular-nums')}>{value}</span>
-    </span>
+      {onToggle && <ChevronDownIcon className={cn('size-2.5 transition-transform', !expanded && '-rotate-90')} aria-hidden />}
+    </>
+  )
+
+  if (!onToggle) return <span className={className}>{content}</span>
+
+  const labelText = `${expanded ? '收起' : '展开'}所有${label}`
+  return (
+    <button
+      type="button"
+      aria-label={labelText}
+      aria-expanded={expanded}
+      aria-controls="execution-trace-runs"
+      title={labelText}
+      onClick={onToggle}
+      className={cn(className, 'rounded-sm py-1 transition-colors hover:text-foreground/85 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-400/60')}
+    >
+      {content}
+    </button>
   )
 }
 
