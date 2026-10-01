@@ -276,7 +276,7 @@ const ThreadScrollToBottom: FC = () => {
         <TooltipIconButton
           tooltip="Scroll to bottom"
           variant="outline"
-          className="aui-thread-scroll-to-bottom dark:border-border dark:bg-background dark:hover:bg-accent absolute -top-12 z-10 self-center rounded-full p-4 disabled:invisible"
+          className="aui-thread-scroll-to-bottom popover-glass hover:border-glass-border-strong absolute -top-12 z-10 self-center rounded-full p-4 disabled:invisible"
         />
       }
     >
@@ -320,7 +320,7 @@ const Composer: FC<{
         <ComposerPrimitive.Root className="aui-composer-root  relative  flex w-full flex-col ">
           <ComposerPrimitive.AttachmentDropzone
             render={
-              <ComposerBar data-slot="aui_composer-shell" className="max-w-none glass-raised" />
+              <ComposerBar data-slot="aui_composer-shell" className="max-w-none" />
             }
           >
             <ComposerAttachments />
@@ -361,7 +361,7 @@ const Composer: FC<{
                         key={item.id}
                         item={item}
                         index={index}
-                        className="data-[highlighted]:bg-foreground/[0.06] flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-start text-[13.5px] transition-colors"
+                        className="data-[highlighted]:bg-interactive-hover data-[highlighted]:text-text-strong active:bg-interactive-pressed outline-none focus-visible:ring-1 focus-visible:ring-brand-border text-text-default flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-start text-[13.5px] transition-colors"
                       >
                         <SparklesIcon className="text-foreground/35 size-3.5 shrink-0" />
                         <span className="font-medium">{item.label}</span>
@@ -684,7 +684,7 @@ const AssistantActionBar: FC = () => {
       </ActionBarPrimitive.Reload>
       <ActionBarMorePrimitive.Root>
         <ActionBarMorePrimitive.Trigger
-          render={<TooltipIconButton tooltip="More" className="data-[state=open]:bg-accent" />}
+          render={<TooltipIconButton tooltip="More" className="data-[state=open]:bg-interactive-selected" />}
         >
           <MoreHorizontalIcon />
         </ActionBarMorePrimitive.Trigger>
@@ -692,11 +692,11 @@ const AssistantActionBar: FC = () => {
           side="bottom"
           align="start"
           sideOffset={6}
-          className="aui-action-bar-more-content bg-popover text-popover-foreground data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:animate-out data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-[8rem] overflow-hidden rounded-xl border p-1.5"
+          className="aui-action-bar-more-content popover-glass data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:animate-out data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-[8rem] overflow-hidden rounded-xl p-1.5"
         >
           <ActionBarPrimitive.ExportMarkdown
             render={
-              <ActionBarMorePrimitive.Item className="aui-action-bar-more-item hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none select-none" />
+              <ActionBarMorePrimitive.Item className="aui-action-bar-more-item hover:bg-interactive-hover hover:text-text-strong focus:bg-interactive-hover focus:text-text-strong data-highlighted:bg-interactive-hover data-highlighted:text-text-strong active:bg-interactive-pressed transition-colors flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none select-none" />
             }
           >
             <DownloadIcon className="size-4" />

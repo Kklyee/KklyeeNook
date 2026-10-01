@@ -55,6 +55,15 @@
   --sidebar-border: oklch(0.88 0.004 270);
   --sidebar-ring: oklch(0.6 0.08 275);
 
+  --interactive-hover: oklch(0 0 0 / 0.035);
+  --interactive-hover-strong: oklch(0 0 0 / 0.055);
+  --interactive-selected: oklch(0 0 0 / 0.05);
+  --interactive-selected-hover: oklch(0 0 0 / 0.07);
+  --interactive-pressed: oklch(0 0 0 / 0.085);
+  --interactive-border-hover: oklch(0 0 0 / 0.11);
+  --interactive-focus: 0 0 0 1px oklch(0.6 0.1 275 / 0.32);
+  --interactive-focus-soft: 0 0 0 3px oklch(0.6 0.1 275 / 0.08);
+
   --text-strong: oklch(0.22 0.004 270);
   --text-default: oklch(0.31 0.005 270);
   --text-muted: oklch(0.49 0.007 270);
@@ -107,6 +116,17 @@
 
   --blur-surface: 16px;
   --blur-raised: 24px;
+
+  --floating-background: oklch(0.985 0.002 270 / 0.78);
+  --floating-gradient: linear-gradient(
+    180deg,
+    oklch(1 0 0 / 0.55) 0%,
+    oklch(1 0 0 / 0.22) 48%,
+    oklch(1 0 0 / 0.08) 100%
+  );
+  --floating-shadow: inset 0 1px 0 oklch(1 0 0 / 0.55), 0 1px 0 oklch(0 0 0 / 0.04),
+    0 12px 32px oklch(0 0 0 / 0.11);
+  --overlay: oklch(0.22 0.006 270 / 0.14);
 }
 
 .dark {
@@ -218,6 +238,17 @@
   --shadow-surface: inset 0 1px 0 oklch(1 0 0 / 0.025), 0 8px 24px oklch(0 0 0 / 0.14);
 
   --shadow-raised: inset 0 1px 0 oklch(1 0 0 / 0.04), 0 16px 48px oklch(0 0 0 / 0.22);
+
+  --floating-background: oklch(0.255 0.005 270 / 0.78);
+  --floating-gradient: linear-gradient(
+    180deg,
+    oklch(1 0 0 / 0.045) 0%,
+    oklch(1 0 0 / 0.018) 48%,
+    oklch(1 0 0 / 0.008) 100%
+  );
+  --floating-shadow: inset 0 1px 0 oklch(1 0 0 / 0.045), 0 1px 0 oklch(0 0 0 / 0.1),
+    0 12px 32px oklch(0 0 0 / 0.16);
+  --overlay: oklch(0 0 0 / 0.3);
 }
 
 @theme inline {
@@ -368,15 +399,7 @@ body,
 
 @layer components {
   .glass-surface {
-    background: var(--surface-default);
-
-    border: 1px solid var(--glass-border);
-
-    -webkit-backdrop-filter: blur(var(--blur-surface)) saturate(108%);
-
-    backdrop-filter: blur(var(--blur-surface)) saturate(108%);
-
-    box-shadow: var(--shadow-surface);
+    @apply popover-glass;
   }
 
   .glass-subtle {
@@ -389,40 +412,7 @@ body,
     backdrop-filter: blur(12px) saturate(106%);
   }
   .composer-glass {
-    background:
-      linear-gradient(180deg, oklch(1 0 0 / 0.038) 0%, oklch(1 0 0 / 0.015) 42%, transparent 100%),
-      oklch(0.265 0.004 270 / 0.46);
-
-    border: 1px solid oklch(1 0 0 / 0.068);
-
-    backdrop-filter: blur(24px) saturate(108%);
-    -webkit-backdrop-filter: blur(24px) saturate(108%);
-
-    box-shadow:
-      inset 0 1px 0 oklch(1 0 0 / 0.035),
-      0 10px 28px oklch(0 0 0 / 0.14);
-  }
-
-  .glass-raised {
-    background:
-      linear-gradient(
-        180deg,
-        oklch(1 0 0 / 0.045) 0%,
-        oklch(1 0 0 / 0.018) 48%,
-        oklch(1 0 0 / 0.008) 100%
-      ),
-      oklch(0.255 0.005 270 / 0.78);
-
-    border: 1px solid var(--glass-border-hover);
-
-    -webkit-backdrop-filter: blur(24px) saturate(110%);
-
-    backdrop-filter: blur(24px) saturate(110%);
-
-    box-shadow:
-      inset 0 1px 0 oklch(1 0 0 / 0.045),
-      0 1px 0 oklch(0 0 0 / 0.1),
-      0 12px 32px oklch(0 0 0 / 0.16);
+    @apply popover-glass;
   }
   .glass-sidebar {
     background:
@@ -454,17 +444,15 @@ body,
 }
 
 @utility popover-glass {
-  background:
-    linear-gradient(180deg, oklch(1 0 0 / 0.035), transparent 45%), oklch(0.23 0.004 270 / 0.74);
+  background: var(--floating-gradient), var(--floating-background);
 
-  border: 1px solid oklch(1 0 0 / 0.065);
+  border: 1px solid var(--glass-border-hover);
 
-  backdrop-filter: blur(22px) saturate(108%);
-  -webkit-backdrop-filter: blur(22px) saturate(108%);
+  backdrop-filter: blur(var(--blur-raised)) saturate(110%);
+  -webkit-backdrop-filter: blur(var(--blur-raised)) saturate(110%);
 
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.03),
-    0 14px 34px oklch(0 0 0 / 0.18);
+  box-shadow: var(--floating-shadow);
+  color: var(--text-default);
 }
 
 @layer base {

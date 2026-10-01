@@ -54,7 +54,7 @@ function ArtifactBody({ artifact }: { artifact: Artifact }) {
     return <DataTable columns={artifact.columns} rows={artifact.rows} cycle={0} />
   }
   return (
-    <div className={`${codeScroll} max-h-[60vh] rounded-xl border bg-muted/30`}>
+    <div className={`${codeScroll} glass-surface max-h-[60vh] rounded-xl`}>
       <pre className={`${codeSurface} p-4 text-[13px] leading-relaxed whitespace-pre-wrap`}>
         <code className={artifact.kind === 'markdown' ? '' : mono}>{artifact.content}</code>
       </pre>

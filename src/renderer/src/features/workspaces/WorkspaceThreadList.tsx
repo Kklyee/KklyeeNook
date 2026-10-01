@@ -259,7 +259,7 @@ function WorkspaceThreadGroup({
               <PopoverContent
                 side="right"
                 align="start"
-                className="glass-raised w-40 gap-0.5 p-1.5"
+                className="w-40 gap-0.5 p-1.5"
               >
                 <Button
                   variant="ghost"

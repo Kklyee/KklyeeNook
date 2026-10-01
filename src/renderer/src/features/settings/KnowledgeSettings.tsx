@@ -135,7 +135,7 @@ export function KnowledgeSettings({
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={busy ? (event) => event.preventDefault() : drop}
-        className={`rounded-xl border border-dashed px-5 py-8 text-center ${dragging ? 'border-primary bg-primary/5' : ''}`}
+        className={`glass-surface rounded-xl border-dashed px-5 py-8 text-center ${dragging ? 'border-brand-border bg-brand-soft' : ''}`}
       >
         <UploadIcon className="text-muted-foreground mx-auto size-5" />
         <p className="mt-2 text-sm font-medium">拖入文档即可建立知识索引</p>
@@ -161,12 +161,12 @@ export function KnowledgeSettings({
             正在读取…
           </p>
         ) : !sources.length ? (
-          <div className="bg-card rounded-xl border p-5 text-center">
+          <div className="glass-surface rounded-xl p-5 text-center">
             <BookOpenIcon className="text-muted-foreground mx-auto size-5" />
             <p className="mt-2 text-sm">添加知识后，Agent 可以检索文档和代码并引用来源。</p>
           </div>
         ) : (
-          <div className="bg-card divide-y rounded-xl border">
+          <div className="glass-surface divide-y divide-glass-border rounded-xl">
             {sources.filter(source => (source.workspaceId ?? null) === (workspaceId ?? null)).map((source) => (
               <div key={source.id} className="p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -176,7 +176,7 @@ export function KnowledgeSettings({
                   </div>
                   <span
                     role="status"
-                    className={`shrink-0 rounded-full px-2 py-1 text-xs ${source.status === 'error' ? 'bg-destructive/10 text-destructive' : source.status === 'ready' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-muted text-muted-foreground'}`}
+                    className={`shrink-0 rounded-full px-2 py-1 text-xs ${source.status === 'error' ? 'bg-destructive/10 text-destructive' : source.status === 'ready' ? 'bg-success-soft text-success' : 'bg-muted text-muted-foreground'}`}
                   >
                     {statuses[source.status]}
                   </span>
@@ -257,7 +257,7 @@ export function KnowledgeSettings({
           <div className="mt-3 space-y-3">
             {results.length ? (
               results.map(({ chunk }) => (
-                <div key={chunk.id} className="bg-card rounded-xl border p-4">
+                <div key={chunk.id} className="glass-surface rounded-xl p-4">
                   <KnowledgeCitationLink
                     chunkId={chunk.id}
                     href="#"
@@ -278,7 +278,7 @@ export function KnowledgeSettings({
           </div>
         )}
       </div>
-      <details className="bg-card rounded-xl border p-4">
+      <details className="glass-surface rounded-xl p-4">
         <summary className="cursor-pointer text-sm font-medium">本地检索模型</summary>
         <p className="text-muted-foreground mt-2 text-xs">
           首次使用会下载模型，之后复用本地缓存。更改 Embedding 模型后需要重新索引。

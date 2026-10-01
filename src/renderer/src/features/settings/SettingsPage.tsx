@@ -212,7 +212,7 @@ export function SettingsPage({
 }
 
 function SettingsCard({ children }: { children: ReactNode }) {
-  return <div className="bg-card divide-y overflow-hidden rounded-xl border">{children}</div>
+  return <div className="glass-surface divide-y divide-glass-border overflow-hidden rounded-xl">{children}</div>
 }
 
 
@@ -581,32 +581,38 @@ function ModelSettings({
       </div>
       <SettingsCard>
         <SettingsField label="提供方" description="模型服务商来自 pi-ai 的内置目录">
-          <select
-            aria-label="模型服务商"
-            className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          <Select
             value={provider}
-            onChange={(event) => chooseProvider(event.target.value)}
+            onValueChange={(value) => value !== null && chooseProvider(value)}
           >
-            {selectableBuiltinProviders.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-            {selectableCustomProviders.length > 0 && (
-              <optgroup label="自定义提供商">
-                {selectableCustomProviders.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-            {selectableBuiltinProviders.length === 0 && selectableCustomProviders.length === 0 && (
-              <option value="" disabled>
-                没有可添加的提供方
-              </option>
-            )}
-          </select>
+            <SelectTrigger aria-label="模型服务商" className="h-9">
+              {[...selectableBuiltinProviders, ...selectableCustomProviders].find(
+                (item) => item.id === provider,
+              )?.name ?? '没有可添加的提供方'}
+            </SelectTrigger>
+            <SelectContent>
+              {selectableBuiltinProviders.map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                  {item.name}
+                </SelectItem>
+              ))}
+              {selectableCustomProviders.length > 0 && (
+                <div role="group" aria-label="自定义提供商">
+                  <p className="px-2 py-1.5 text-xs text-text-muted">自定义提供商</p>
+                  {selectableCustomProviders.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.name}
+                    </SelectItem>
+                  ))}
+                </div>
+              )}
+              {selectableBuiltinProviders.length === 0 && selectableCustomProviders.length === 0 && (
+                <SelectItem value="" disabled>
+                  没有可添加的提供方
+                </SelectItem>
+              )}
+            </SelectContent>
+          </Select>
         </SettingsField>
 
         <SettingsField label="API 密钥" description="密钥不会返回到渲染进程">
@@ -680,7 +686,7 @@ function ModelSettings({
                   )}
                 </div>
                 {customModels.length > 0 ? (
-                  <div className="border-border/70 grid gap-1 rounded-md border p-2">
+                  <div className="glass-subtle grid gap-1 rounded-md p-2">
                     {customModels.map((model) => (
                       <div
                         key={model.id}
@@ -747,7 +753,7 @@ function ModelSettings({
                   </Button>
                 )}
                 {discoveredProvider === provider && discoveredModels.length > 0 && (
-                  <div className="border-border/70 grid gap-1 rounded-md border p-2">
+                  <div className="glass-subtle grid gap-1 rounded-md p-2">
                     {discoveredModels.map((model) => {
                       const added = customModels.some((item) => item.id === model.id)
                       const builtin = model.builtin === true
@@ -755,7 +761,7 @@ function ModelSettings({
                         <button
                           key={model.id}
                           type="button"
-                          className="hover:bg-muted flex items-center justify-between rounded px-2 py-1.5 text-left text-xs disabled:cursor-default disabled:opacity-60"
+                          className="hover:bg-interactive-hover active:bg-interactive-pressed focus-visible:ring-1 focus-visible:ring-brand-border outline-none transition-colors flex items-center justify-between rounded px-2 py-1.5 text-left text-xs disabled:cursor-default disabled:opacity-60"
                           disabled={added || builtin}
                           onClick={() => addDiscoveredModel(model)}
                         >
@@ -953,7 +959,7 @@ function SkillSettings() {
           正在读取 Skills…
         </p>
       ) : skills.length === 0 ? (
-        <div className="rounded-xl border border-dashed px-5 py-9 text-center">
+        <div className="glass-surface rounded-xl border-dashed px-5 py-9 text-center">
           <SparklesIcon className="text-muted-foreground/60 mx-auto size-5" />
           <p className="mt-3 text-sm font-medium">暂无可用 Skills</p>
           <p className="text-muted-foreground mt-1 text-xs">
@@ -1041,7 +1047,7 @@ function MemorySettings() {
           正在读取 Memory…
         </p>
       ) : memories.length === 0 ? (
-        <div className="rounded-xl border border-dashed px-5 py-9 text-center">
+        <div className="glass-surface rounded-xl border-dashed px-5 py-9 text-center">
           <BrainIcon className="text-muted-foreground/60 mx-auto size-5" />
           <p className="mt-3 text-sm font-medium">暂无已保存的 Memory</p>
           <p className="text-muted-foreground mt-1 text-xs">Agent 保存长期信息后，会在这里显示。</p>
@@ -1133,7 +1139,7 @@ function PermissionSettings({
         </p>
       )}
       {permissionGrants.length === 0 ? (
-        <div className="rounded-xl border border-dashed px-5 py-9 text-center">
+        <div className="glass-surface rounded-xl border-dashed px-5 py-9 text-center">
           <ShieldCheckIcon className="text-muted-foreground/60 mx-auto size-5" />
           <p className="mt-3 text-sm font-medium">尚无已保存的权限</p>
           <p className="text-muted-foreground mx-auto mt-1 max-w-sm text-xs leading-relaxed">

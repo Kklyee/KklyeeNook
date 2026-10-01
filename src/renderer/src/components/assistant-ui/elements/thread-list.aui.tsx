@@ -246,12 +246,12 @@ const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
         align="start"
         sideOffset={6}
         data-slot="aui_thread-list-item-more-content"
-        className="bg-surface-raised text-text-default data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:animate-out data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-32 overflow-hidden rounded-xl border border-glass-border p-1.5 shadow-[var(--shadow-raised)]"
+        className="popover-glass data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:animate-out data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-32 overflow-hidden rounded-xl p-1.5"
       >
         <WorkspaceMove />
         <ThreadListItemMorePrimitive.Item
           data-slot="aui_thread-list-item-more-item"
-          className="text-text-muted hover:bg-interactive-hover hover:text-text-strong focus:bg-interactive-hover focus:text-text-strong active:bg-interactive-pressed flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none select-none"
+          className="text-text-muted hover:bg-interactive-hover hover:text-text-strong focus:bg-interactive-hover focus:text-text-strong active:bg-interactive-pressed data-highlighted:bg-interactive-hover data-highlighted:text-text-strong transition-colors flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none select-none"
           onSelect={onRename}
         >
           <PencilIcon className="size-4" />
@@ -261,7 +261,7 @@ const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
           render={
             <ThreadListItemMorePrimitive.Item
               data-slot="aui_thread-list-item-more-item"
-              className="text-text-muted hover:bg-interactive-hover hover:text-text-strong focus:bg-interactive-hover focus:text-text-strong active:bg-interactive-pressed flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none select-none"
+              className="text-text-muted hover:bg-interactive-hover hover:text-text-strong focus:bg-interactive-hover focus:text-text-strong active:bg-interactive-pressed data-highlighted:bg-interactive-hover data-highlighted:text-text-strong transition-colors flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none select-none"
             />
           }
         >
@@ -272,7 +272,7 @@ const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
           render={
             <ThreadListItemMorePrimitive.Item
               data-slot="aui_thread-list-item-more-item"
-              className="text-text-muted hover:bg-interactive-hover hover:text-text-strong focus:bg-interactive-hover focus:text-text-strong active:bg-interactive-pressed flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none select-none"
+              className="text-text-muted hover:bg-interactive-hover hover:text-text-strong focus:bg-interactive-hover focus:text-text-strong active:bg-interactive-pressed data-highlighted:bg-interactive-hover data-highlighted:text-text-strong transition-colors flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none select-none"
             />
           }
         >

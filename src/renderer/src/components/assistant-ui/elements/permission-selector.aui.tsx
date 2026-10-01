@@ -54,7 +54,7 @@ export function PermissionSelector() {
           <ShieldCheckIcon className="size-3.5" />
           {PERMISSION_LABELS[mode]}
         </SelectTrigger>
-        <SelectContent className="glass-raised">
+        <SelectContent>
           {PERMISSION_MODES.map((item) => (
             <SelectItem key={item} value={item} disabled={item === 'workspace-write' && !workspace}>
               {PERMISSION_LABELS[item]}

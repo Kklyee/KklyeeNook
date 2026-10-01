@@ -372,13 +372,12 @@ function ModelSelectorContent({
       side={renderedSide ?? side ?? 'bottom'}
       sideOffset={sideOffset}
       className={cn(
-        'popover-glass w-72 min-w-(--anchor-width) overflow-hidden rounded-[12px] p-0',
+        'w-72 min-w-(--anchor-width) overflow-hidden rounded-[12px] p-0',
         className,
       )}
       {...props}
     >
       <Command
-        className="!bg-transparent"
         shouldFilter={isCompactLayout ? expandedSection === 'model' : !unfiltered}
         {...(value !== undefined ? { defaultValue: value } : {})}
       >
@@ -475,7 +474,7 @@ function ModelSelectorSearch({
       data-slot="model-selector-search"
       className={cn('text-text-default placeholder:text-text-faint text-xs', className)}
       inputGroupClassName={cn(
-        'border-glass-border-subtle !bg-white/[0.025] transition-[background-color,border-color,box-shadow] hover:!border-interactive-border-hover hover:!bg-interactive-hover focus-within:!border-brand-border focus-within:!bg-white/[0.04] focus-within:!ring-0',
+        'border-glass-border-subtle !bg-glass-hover transition-[background-color,border-color,box-shadow] hover:!border-interactive-border-hover hover:!bg-interactive-hover focus-within:!border-brand-border focus-within:!bg-interactive-hover focus-within:!ring-0',
         inputGroupClassName,
       )}
       placeholder={placeholder}
@@ -561,7 +560,7 @@ function ModelSelectorItem({
       }}
       data-model-selected={isSelected || undefined}
       className={cn(
-        'relative items-start gap-2 rounded-lg bg-transparent! py-1.5 ps-3 pe-9 text-text-default text-[11px] leading-4 transition-colors hover:bg-interactive-hover! data-selected:text-text-default data-[model-selected=true]:bg-interactive-selected! data-[model-selected=true]:text-text-strong data-[model-selected=true]:hover:bg-interactive-selected-hover! [&_svg:not([class*="size-"])]:size-3.5',
+        'relative items-start gap-2 rounded-lg bg-transparent py-1.5 ps-3 pe-9 text-text-default text-[11px] leading-4 transition-colors hover:bg-interactive-hover data-selected:bg-interactive-hover data-selected:text-text-strong active:bg-interactive-pressed data-[model-selected=true]:bg-interactive-selected data-[model-selected=true]:text-text-strong data-[model-selected=true]:hover:bg-interactive-selected-hover data-[model-selected=true]:data-selected:bg-interactive-selected-hover [&_svg:not([class*="size-"])]:size-3.5',
         className,
       )}
       {...props}

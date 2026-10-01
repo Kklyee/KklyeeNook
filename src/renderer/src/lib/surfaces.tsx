@@ -4,20 +4,20 @@ import type { ComponentProps } from 'react'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { cn } from '@/renderer/src/lib/utils'
 
-export const paper = 'bg-background border border-border/60 dark:bg-popover'
+export const paper = 'glass-surface'
 
-export const floating = 'bg-background border border-border/60 dark:bg-popover'
+export const floating = 'popover-glass'
 
-export const field = 'bg-foreground/[0.04] dark:bg-foreground/[0.06]'
+export const field = 'bg-glass-hover'
 
 export const fieldInteractive =
-  'bg-foreground/[0.04] transition-colors hover:bg-foreground/[0.07] dark:bg-foreground/[0.06] dark:hover:bg-foreground/[0.09]'
+  'bg-glass-hover transition-colors hover:bg-interactive-hover-strong'
 
 export const pressable =
   'transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.96] motion-reduce:transition-none'
 
 export const ghostButton =
-  'flex items-center justify-center rounded-full text-foreground/45 outline-none transition-[background-color,color,scale] duration-150 hover:bg-foreground/[0.06] hover:text-foreground/90 active:scale-[0.96] focus-visible:ring-1 focus-visible:ring-foreground/20 motion-reduce:transition-none dark:hover:bg-foreground/[0.09]'
+  'flex items-center justify-center rounded-full text-text-muted outline-none transition-[background-color,color,scale] duration-150 hover:bg-interactive-hover hover:text-text-strong active:bg-interactive-pressed active:scale-[0.96] focus-visible:ring-1 focus-visible:ring-brand-border motion-reduce:transition-none'
 
 export const inkButton =
   'bg-foreground text-background transition-[opacity,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:opacity-90 active:scale-[0.96] motion-reduce:transition-none'

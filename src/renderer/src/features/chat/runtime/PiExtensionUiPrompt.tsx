@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from '../../../components/ui/dialog'
 import { Input } from '../../../components/ui/input'
+import { Textarea } from '../../../components/ui/textarea'
 
 function RequestDialog({
   request,
@@ -68,9 +69,9 @@ function RequestDialog({
                 onChange={(event) => setValue(event.target.value)}
               />
             ) : (
-              <textarea
+              <Textarea
                 autoFocus
-                className="border-input bg-background min-h-40 rounded-md border p-3 text-sm outline-none"
+                className="min-h-40 p-3 text-sm"
                 value={value}
                 onChange={(event) => setValue(event.target.value)}
               />
@@ -117,7 +118,7 @@ function SelectRequestBar({
     <div
       role="alertdialog"
       aria-label={request.title}
-      className="bg-popover/95 border-border/80 absolute inset-x-4 bottom-36 z-50 mx-auto flex max-w-2xl items-center gap-3 rounded-2xl border p-3 shadow-2xl backdrop-blur-md"
+      className="popover-glass absolute inset-x-4 bottom-36 z-50 mx-auto flex max-w-2xl items-center gap-3 rounded-2xl p-3"
     >
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">{request.title}</p>

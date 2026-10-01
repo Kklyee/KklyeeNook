@@ -88,7 +88,7 @@ function SidebarAccountMenu({
           role="menu"
           aria-label="应用菜单"
           className={cn(
-            'bg-surface-raised text-text-default absolute bottom-full z-50 mb-2 w-56 rounded-2xl border border-glass-border p-2 shadow-[var(--shadow-raised)]',
+            'popover-glass absolute bottom-full z-50 mb-2 w-56 rounded-2xl p-2',
             collapsed ? 'left-0' : 'inset-x-0 w-auto',
           )}
         >
@@ -101,7 +101,7 @@ function SidebarAccountMenu({
           <button
             type="button"
             role="menuitem"
-            className="text-text-muted hover:bg-interactive-hover hover:text-text-strong active:bg-interactive-pressed flex h-9 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm outline-none focus-visible:border-brand-border focus-visible:ring-0"
+            className="text-text-muted hover:bg-interactive-hover hover:text-text-strong active:bg-interactive-pressed flex h-9 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm outline-none focus-visible:bg-interactive-hover focus-visible:ring-1 focus-visible:ring-brand-border transition-colors"
             onClick={() => {
               setOpen(false)
               onOpenSettings()
@@ -113,7 +113,7 @@ function SidebarAccountMenu({
           <button
             type="button"
             role="menuitem"
-            className="text-text-muted hover:bg-interactive-hover hover:text-text-strong active:bg-interactive-pressed flex h-9 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm outline-none focus-visible:border-brand-border focus-visible:ring-0"
+            className="text-text-muted hover:bg-interactive-hover hover:text-text-strong active:bg-interactive-pressed flex h-9 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm outline-none focus-visible:bg-interactive-hover focus-visible:ring-1 focus-visible:ring-brand-border transition-colors"
             onClick={() => {
               setOpen(false)
               onOpenScheduledTasks()
