@@ -3,7 +3,6 @@
 import { type ComponentProps, useMemo } from 'react'
 import {
   ArrowUpIcon,
-  TriangleAlertIcon,
   CheckIcon,
   ChevronDownIcon,
   FileArchiveIcon,
@@ -30,7 +29,6 @@ import {
 import { clamp, pct } from '@/renderer/src/lib/range'
 import type { AgentContextBudget, AgentContextBudgetState } from '@/shared/agent/agentContextBudget'
 import { formatContextTokens } from '@/shared/agent/contextTokens'
-import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@/renderer/src/components/ui/popover'
 
 export interface ComposerAttachment {
   name: string
@@ -429,106 +427,85 @@ export function ComposerModelItem({
 
 export function ComposerContext({
   budget,
-  autoCompaction,
   className,
   ...props
-}: Omit<ComponentProps<'div'>, 'children'> & {
-  budget: AgentContextBudget
-  autoCompaction: boolean
-}) {
+}: Omit<ComponentProps<'div'>, 'children'> & { budget: AgentContextBudget }) {
   const fraction = budget.usedPercent ?? 0
   const warn = budget.state === 'warning' || budget.state === 'critical'
   const circumference = 2 * Math.PI * 6
   const status = CONTEXT_STATE_LABELS[budget.state]
   const format = (value?: number) => (value === undefined ? '未知' : formatContextTokens(value))
-  const rows = [
-    ['已使用', budget.tokens],
-    ['上下文窗口', budget.contextWindow],
-    ['预留', budget.reserveTokens],
-    ['剩余窗口', budget.remainingTokens],
-    ['距预计压缩', budget.remainingBeforeCompaction],
-  ] as const
 
   return (
-    <div data-slot="composer-context" data-state={budget.state} className={className} {...props}>
-      <Popover>
-        <PopoverTrigger
-          openOnHover
-          aria-label={`上下文 ${format(budget.tokens)} / ${format(budget.contextWindow)}，${status}`}
-          title={status}
-          className={cn(
-            ghostButton,
-            'h-8 gap-1.5 px-2 text-[11px] tabular-nums',
-            budget.state === 'warning' && 'text-amber-600 dark:text-amber-400',
-            budget.state === 'critical' && 'text-destructive',
-          )}
-        >
-          <svg viewBox="0 0 16 16" className="size-3.5 -rotate-90" aria-hidden>
-            <circle
-              cx="8"
-              cy="8"
-              r="6"
-              fill="none"
-              strokeWidth="2.5"
-              className="stroke-foreground/10"
-            />
-            <circle
-              cx="8"
-              cy="8"
-              r="6"
-              fill="none"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              className="stroke-current transition-[stroke-dashoffset] duration-700 motion-reduce:transition-none"
-              strokeDasharray={circumference}
-              strokeDashoffset={circumference * (1 - clamp(fraction, 0, 1))}
-            />
-          </svg>
-          <span>
-            {format(budget.tokens)} / {format(budget.contextWindow)}
-          </span>
-          {warn && <TriangleAlertIcon className="size-3" aria-hidden />}
-        </PopoverTrigger>
-        <PopoverContent side="top" align="end" className="w-64 gap-3.5 rounded-2xl p-4">
-          <div className="flex items-baseline justify-between">
-            <PopoverTitle>上下文</PopoverTitle>
-            <span className="text-foreground/40 text-xs tabular-nums">
-              {Math.round(fraction * 100)}%
-            </span>
-          </div>
+    <div
+      data-slot="composer-context"
+      data-state={budget.state}
+      className={cn('group/ctx relative', className)}
+      {...props}
+    >
+      <div
+        className={cn(
+          'glass-surface',
+          'absolute end-0 bottom-full z-10 mb-2 flex w-60 origin-bottom-right flex-col gap-3.5 rounded-2xl p-4',
+          'transition-[opacity,scale] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none',
+          'pointer-events-none scale-[0.97] opacity-0',
+          'group-hover/ctx:pointer-events-auto group-hover/ctx:scale-100 group-hover/ctx:opacity-100',
+          'group-focus-within/ctx:pointer-events-auto group-focus-within/ctx:scale-100 group-focus-within/ctx:opacity-100',
+        )}
+      >
+        <div className="flex items-baseline justify-between">
+          <p className="text-[13.5px] font-medium">Context</p>
           <p
             className={cn(
-              'text-xs',
-              warn ? 'text-amber-600 dark:text-amber-400' : 'text-foreground/40',
+              mono,
+              'tabular-nums',
+              warn ? 'text-red-500 dark:text-red-400' : 'text-foreground/35',
             )}
           >
-            {status}
+            {Math.round(fraction * 100)}%
           </p>
-          <div className="bg-foreground/[0.06] h-[5px] overflow-hidden rounded-full" aria-hidden>
-            <div
-              className="bg-current h-full transition-[width] duration-700 motion-reduce:transition-none"
-              style={{ width: `${clamp(fraction, 0, 1) * 100}%` }}
-            />
-          </div>
-          <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 text-xs">
-            {rows.map(([label, value]) => (
-              <div key={label} className="contents">
-                <dt className="text-foreground/55">{label}</dt>
-                <dd
-                  className="text-right tabular-nums"
-                  title={
-                    value === undefined ? undefined : `${value.toLocaleString('en-US')} tokens`
-                  }
-                >
-                  {format(value)}
-                </dd>
-              </div>
-            ))}
-            <dt className="text-foreground/55">自动压缩</dt>
-            <dd className="text-right">{autoCompaction ? '开启' : '关闭'}</dd>
-          </dl>
-        </PopoverContent>
-      </Popover>
+        </div>
+        <div className="bg-foreground/[0.06] flex h-[5px] w-full gap-px overflow-hidden rounded-full">
+          <span
+            className="bg-foreground/80 h-full transition-[width] duration-700 motion-reduce:transition-none"
+            style={{ width: `${clamp(fraction, 0, 1) * 100}%` }}
+          />
+        </div>
+        <div className="text-foreground/55 flex items-center justify-between text-[13px]">
+          <span>Total</span>
+          <span className={cn(mono, 'text-foreground/40 tabular-nums')}>
+            {format(budget.tokens)} / {format(budget.contextWindow)}
+          </span>
+        </div>
+      </div>
+      <button
+        type="button"
+        aria-label={`上下文 ${format(budget.tokens)} / ${format(budget.contextWindow)}，${status}`}
+        title={status}
+        className={cn(ghostButton, 'size-8', warn && 'text-red-500 dark:text-red-400')}
+      >
+        <svg viewBox="0 0 16 16" className="size-4 -rotate-90" aria-hidden>
+          <circle
+            cx="8"
+            cy="8"
+            r="6"
+            fill="none"
+            strokeWidth="2.5"
+            className="stroke-foreground/10"
+          />
+          <circle
+            cx="8"
+            cy="8"
+            r="6"
+            fill="none"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            className="stroke-current transition-[stroke-dashoffset] duration-700 motion-reduce:transition-none"
+            strokeDasharray={circumference}
+            strokeDashoffset={circumference * (1 - clamp(fraction, 0, 1))}
+          />
+        </svg>
+      </button>
     </div>
   )
 }

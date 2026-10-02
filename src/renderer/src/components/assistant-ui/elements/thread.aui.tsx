@@ -466,7 +466,7 @@ const ComposerAction: FC<{
             正在整理上下文…
           </span>
         ) : budget.tokens !== undefined && budget.contextWindow !== undefined && budget.contextWindow > 0 ? (
-          <ComposerContext budget={budget} autoCompaction={compactionSettings.enabled} />
+          <ComposerContext budget={budget} />
         ) : null}
         <AuiIf condition={(s) => s.thread.capabilities.dictation}>
           <AuiIf condition={(s) => s.composer.dictation == null}>

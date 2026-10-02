@@ -414,10 +414,6 @@ function validateMcpServer(server: McpServerConfig): McpServerConfig {
   }
 }
 
-function isNonNegativeInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0
-}
-
 function validateProviderModel(model: ProviderModelConfig): ProviderModelConfig {
   const id = model?.id?.trim()
   const name = model?.name?.trim()
