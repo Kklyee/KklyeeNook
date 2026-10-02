@@ -181,9 +181,10 @@ export const Thread: FC<ThreadProps> = ({
   composerAccessory,
 }) => {
   const isEmpty = useAuiState((state) => !readOnly && isNewChatView(state))
+  const contextValue = useMemo(() => ({ ...components, readOnly }), [components, readOnly])
 
   return (
-    <ThreadComponentsContext.Provider value={{ ...components, readOnly }}>
+    <ThreadComponentsContext.Provider value={contextValue}>
       <ThreadRoot
         isEmpty={isEmpty}
         autoFocus={autoFocus}

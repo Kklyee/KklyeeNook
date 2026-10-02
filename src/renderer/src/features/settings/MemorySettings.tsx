@@ -9,39 +9,6 @@ import { SettingsCard } from './SettingsComponents'
 export function MemorySettings() {
   const { workspaces } = useWorkspaces()
   const [workspaceId, setWorkspaceId] = useState<string>('global')
-  const [memories, setMemories] = useState<AgentMemory[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [deleting, setDeleting] = useState<string | null>(null)
-
-  const loadMemories = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      setMemories(await window.api.listMemories(workspaceId === 'global' ? undefined : workspaceId))
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Memory 读取失败，请重试。')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const removeMemory = async (id: string) => {
-    setDeleting(id)
-    setError(null)
-    try {
-      await window.api.deleteMemory({ id })
-      setMemories((current) => current.filter((memory) => memory.id !== id))
-    } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : 'Memory 删除失败，请重试。')
-    } finally {
-      setDeleting(null)
-    }
-  }
-
-  useEffect(() => {
-    void loadMemories()
-  }, [workspaceId])
 
   return (
     <section aria-labelledby="memory-section-title">
@@ -65,6 +32,51 @@ export function MemorySettings() {
           ))}
         </SelectContent>
       </Select>
+      <MemoryList key={workspaceId} workspaceId={workspaceId} />
+    </section>
+  )
+}
+
+function MemoryList({ workspaceId }: { workspaceId: string }) {
+  const [memories, setMemories] = useState<AgentMemory[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    void window.api.listMemories(workspaceId === 'global' ? undefined : workspaceId).then(
+      (items) => {
+        if (!active) return
+        setMemories(items)
+        setLoading(false)
+      },
+      (loadError) => {
+        if (!active) return
+        setError(loadError instanceof Error ? loadError.message : 'Memory 读取失败，请重试。')
+        setLoading(false)
+      },
+    )
+    return () => {
+      active = false
+    }
+  }, [workspaceId])
+
+  const removeMemory = async (id: string) => {
+    setDeleting(id)
+    setError(null)
+    try {
+      await window.api.deleteMemory({ id })
+      setMemories((current) => current.filter((memory) => memory.id !== id))
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Memory 删除失败，请重试。')
+    } finally {
+      setDeleting(null)
+    }
+  }
+
+  return (
+    <>
       <div className="mb-3 flex items-end justify-between gap-4">
         <div>
           <h2 id="memory-section-title" className="text-xs font-medium">
@@ -117,12 +129,12 @@ export function MemorySettings() {
           ))}
         </SettingsCard>
       )}
-    </section>
+    </>
   )
 }
 
+const memoryTimeFormatter = new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' })
+
 function formatMemoryTime(timestamp: number): string {
-  return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(
-    timestamp,
-  )
+  return memoryTimeFormatter.format(timestamp)
 }

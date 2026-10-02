@@ -5,7 +5,8 @@ import type { AgentRunOverview, AgentRunOverviewStatus } from '@/shared/agent/ag
 const activeStatuses = new Set<AgentRunOverviewStatus>(['created', 'running', 'waiting'])
 const notificationStatuses = new Set<AgentRunOverviewStatus>(['completed', 'failed'])
 const queryKey = ['agent-run-overviews'] as const
-const AgentRunOverviewContext = createContext<readonly AgentRunOverview[]>([])
+const emptyOverviews: readonly AgentRunOverview[] = []
+const AgentRunOverviewContext = createContext<readonly AgentRunOverview[]>(emptyOverviews)
 
 export function useAgentRunOverviews() {
   return useQuery({
@@ -54,7 +55,7 @@ export function AgentRunOverviewProvider({ children }: { children: ReactNode }) 
   }, [data])
 
   return (
-    <AgentRunOverviewContext.Provider value={data ?? []}>
+    <AgentRunOverviewContext.Provider value={data ?? emptyOverviews}>
       {children}
     </AgentRunOverviewContext.Provider>
   )

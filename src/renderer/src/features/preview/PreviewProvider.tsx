@@ -87,21 +87,18 @@ export function PreviewProvider({
   const { conversations, workspaces } = useWorkspaces()
   const workspaceId = conversations.find((session) => session.id === sessionId)?.workspaceId
   const root = workspaces.find((workspace) => workspace.id === workspaceId)?.rootPath
-  const current = useRef({ target, root })
-  current.current = { target, root }
   const messages = useAuiState((state) => state.thread.messages)
   const transcript = usePiThreadState((state) => state.messages)
   const completedTools = useRef(new Set<string>())
 
-  const refreshFile = useCallback((path: string) => {
-    const active = current.current
-    if (
-      active.target?.kind === 'workspace-file' &&
-      fileKey(active.target.path, active.root) === fileKey(path, active.root)
-    ) {
-      setRevision((value) => value + 1)
-    }
-  }, [])
+  const refreshFile = useCallback(
+    (path: string) => {
+      if (target && fileKey(target.path, root) === fileKey(path, root)) {
+        setRevision((value) => value + 1)
+      }
+    },
+    [target, root],
+  )
 
   useEffect(() => {
     const results = new Map<string, unknown>()

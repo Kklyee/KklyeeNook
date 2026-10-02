@@ -62,6 +62,7 @@ export function ChatWorkspace({ children }: { children: ReactNode }) {
                 if (event.currentTarget.hasPointerCapture(event.pointerId)) resizeAt(event)
               }}
               onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
+              onPointerCancel={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
               onKeyDown={(event) => {
                 if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
                 event.preventDefault()

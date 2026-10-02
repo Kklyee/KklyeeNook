@@ -43,8 +43,6 @@ function MermaidZoom({ svg, children }: MermaidZoomProps) {
     originX: number;
     originY: number;
   } | null>(null);
-  const transformRef = useRef(transform);
-  transformRef.current = transform;
 
   const zoomSvg = useMemo(
     () =>
@@ -101,18 +99,15 @@ function MermaidZoom({ svg, children }: MermaidZoomProps) {
   }, [isOpen]);
 
   const zoomBy = useCallback((factor: number, cx?: number, cy?: number) => {
+    const centerX = cx ?? (viewportRef.current?.clientWidth ?? 0) / 2;
+    const centerY = cy ?? (viewportRef.current?.clientHeight ?? 0) / 2;
     setTransform((t) => {
       const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, t.scale * factor));
       const ratio = scale / t.scale;
-      if (cx === undefined || cy === undefined) {
-        const viewport = viewportRef.current;
-        cx = (viewport?.clientWidth ?? 0) / 2;
-        cy = (viewport?.clientHeight ?? 0) / 2;
-      }
       return {
         scale,
-        x: cx - (cx - t.x) * ratio,
-        y: cy - (cy - t.y) * ratio,
+        x: centerX - (centerX - t.x) * ratio,
+        y: centerY - (centerY - t.y) * ratio,
       };
     });
   }, []);
@@ -133,14 +128,13 @@ function MermaidZoom({ svg, children }: MermaidZoomProps) {
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     e.currentTarget.setPointerCapture(e.pointerId);
-    const t = transformRef.current;
     drag.current = {
       startX: e.clientX,
       startY: e.clientY,
-      originX: t.x,
-      originY: t.y,
+      originX: transform.x,
+      originY: transform.y,
     };
-  }, []);
+  }, [transform.x, transform.y]);
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
     const d = drag.current;
