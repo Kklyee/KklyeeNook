@@ -42,7 +42,6 @@ import {
 import { TooltipIconButton } from '@/renderer/src/components/assistant-ui/elements/tooltip-icon-button'
 import { Button } from '@/renderer/src/components/ui/button'
 import { Skeleton } from '@/renderer/src/components/ui/skeleton'
-import { floating } from '@/renderer/src/lib/surfaces'
 import { cn } from '@/renderer/src/lib/utils'
 import type { AgentSkill } from '@/shared/agent/agentSkill'
 import {
@@ -290,7 +289,7 @@ const ThreadScrollToBottom: FC = () => {
         <TooltipIconButton
           tooltip="Scroll to bottom"
           variant="outline"
-          className="aui-thread-scroll-to-bottom popover-glass hover:border-glass-border-strong absolute -top-12 z-10 self-center rounded-full p-4 disabled:invisible"
+          className="aui-thread-scroll-to-bottom glass-surface hover:border-glass-border-strong absolute -top-12 z-10 self-center rounded-full p-4 disabled:invisible"
         />
       }
     >
@@ -357,7 +356,7 @@ const Composer: FC<{
               char="/"
               adapter={slash.adapter}
               className={cn(
-                floating,
+                'glass-surface',
                 'absolute inset-x-0 bottom-full z-20 mb-2 max-h-72 overflow-y-auto rounded-2xl p-1.5',
               )}
               aria-label="Skills"
@@ -706,7 +705,7 @@ const AssistantActionBar: FC = () => {
           side="bottom"
           align="start"
           sideOffset={6}
-          className="aui-action-bar-more-content popover-glass data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:animate-out data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-[8rem] overflow-hidden rounded-xl p-1.5"
+          className="aui-action-bar-more-content glass-surface data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:animate-out data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-[8rem] overflow-hidden rounded-xl p-1.5"
         >
           <ActionBarPrimitive.ExportMarkdown
             render={

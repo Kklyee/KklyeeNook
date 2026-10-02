@@ -4,10 +4,6 @@ import type { ComponentProps } from 'react'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { cn } from '@/renderer/src/lib/utils'
 
-export const paper = 'glass-surface'
-
-export const floating = 'popover-glass'
-
 export const field = 'bg-glass-hover'
 
 export const fieldInteractive =

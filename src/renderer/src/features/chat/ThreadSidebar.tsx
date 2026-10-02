@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ComponentProps } from 'react'
+import { type ComponentProps } from 'react'
 import { BotIcon, CalendarClockIcon, SettingsIcon } from 'lucide-react'
 import { Button } from '@/renderer/src/components/ui/button'
 import { cn } from '@/renderer/src/lib/utils'
@@ -51,7 +51,7 @@ function SidebarBrand({ canCollapse }: { canCollapse: boolean }) {
   )
 }
 
-function SidebarAccountMenu({
+function SidebarGlobalNav({
   onOpenSettings,
   onOpenScheduledTasks,
 }: {
@@ -60,92 +60,38 @@ function SidebarAccountMenu({
 }) {
   const { isMobile, state } = useSidebar()
   const collapsed = state === 'collapsed' && !isMobile
-  const [open, setOpen] = useState(false)
-  const rootRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-
-    const closeOnOutsideClick = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
-    }
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false)
-    }
-
-    document.addEventListener('mousedown', closeOnOutsideClick)
-    document.addEventListener('keydown', closeOnEscape)
-    return () => {
-      document.removeEventListener('mousedown', closeOnOutsideClick)
-      document.removeEventListener('keydown', closeOnEscape)
-    }
-  }, [open])
 
   return (
-    <div ref={rootRef} className="relative">
-      {open && (
-        <div
-          role="menu"
-          aria-label="应用菜单"
+    <SidebarMenu className="gap-0.5">
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          aria-label="定时任务"
+          tooltip="定时任务"
+          onClick={onOpenScheduledTasks}
           className={cn(
-            'popover-glass absolute bottom-full z-50 mb-2 w-56 rounded-2xl p-2',
-            collapsed ? 'left-0' : 'inset-x-0 w-auto',
+            collapsed ? 'mx-auto size-8 justify-center rounded-md p-0!' : 'h-9 rounded-md px-2.5',
+            'text-[13px] text-text-muted hover:bg-interactive-hover hover:text-text-default active:bg-interactive-pressed focus-visible:border-brand-border focus-visible:ring-0',
           )}
         >
-          <div className="flex items-center gap-3 px-2 py-2.5">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">KklyeeNook</p>
-            </div>
-          </div>
-          <div className="my-1" />
-          <button
-            type="button"
-            role="menuitem"
-            className="text-text-muted hover:bg-interactive-hover hover:text-text-strong active:bg-interactive-pressed flex h-9 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm outline-none focus-visible:bg-interactive-hover focus-visible:ring-1 focus-visible:ring-brand-border transition-colors"
-            onClick={() => {
-              setOpen(false)
-              onOpenSettings()
-            }}
-          >
-            <SettingsIcon className="text-text-faint size-4" />
-            <span className="flex-1">设置</span>
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="text-text-muted hover:bg-interactive-hover hover:text-text-strong active:bg-interactive-pressed flex h-9 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm outline-none focus-visible:bg-interactive-hover focus-visible:ring-1 focus-visible:ring-brand-border transition-colors"
-            onClick={() => {
-              setOpen(false)
-              onOpenScheduledTasks()
-            }}
-          >
-            <CalendarClockIcon className="text-text-faint size-4" />
-            <span className="flex-1">Scheduled Tasks</span>
-          </button>
-        </div>
-      )}
-      <SidebarMenu>
-        <SidebarMenuItem>
-          <SidebarMenuButton
-            size="lg"
-            tooltip="应用菜单"
-            aria-haspopup="menu"
-            aria-expanded={open}
-            onClick={() => setOpen((value) => !value)}
-            className={cn(
-              collapsed ? 'mx-auto size-8! justify-center rounded-lg p-0!' : 'h-10 rounded-lg px-2',
-              'text-text-muted hover:bg-interactive-hover hover:text-text-default aria-expanded:bg-interactive-selected aria-expanded:hover:bg-interactive-selected-hover aria-expanded:text-text-strong active:bg-interactive-pressed focus-visible:border-brand-border focus-visible:ring-0',
-            )}
-          >
-            {!collapsed && (
-              <>
-                <span className="min-w-0 flex-1 truncate text-left">KklyeeNook</span>
-              </>
-            )}
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-      </SidebarMenu>
-    </div>
+          <CalendarClockIcon className="size-4" />
+          {!collapsed && <span>定时任务</span>}
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          aria-label="设置"
+          tooltip="设置"
+          onClick={onOpenSettings}
+          className={cn(
+            collapsed ? 'mx-auto size-8 justify-center rounded-md p-0!' : 'h-9 rounded-md px-2.5',
+            'text-[13px] text-text-muted hover:bg-interactive-hover hover:text-text-default active:bg-interactive-pressed focus-visible:border-brand-border focus-visible:ring-0',
+          )}
+        >
+          <SettingsIcon className="size-4" />
+          {!collapsed && <span>设置</span>}
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    </SidebarMenu>
   )
 }
 
@@ -169,8 +115,8 @@ export function ThreadSidebar({
         <ThreadList />
       </SidebarContent>
       {canCollapse && <SidebarRail />}
-      <SidebarFooter className="border-glass-border-subtle  px-2 py-2 group-data-[collapsible=icon]:px-1.5">
-        <SidebarAccountMenu
+      <SidebarFooter className="border-t border-glass-border-subtle px-2 py-2 group-data-[collapsible=icon]:px-1.5">
+        <SidebarGlobalNav
           onOpenSettings={onOpenSettings}
           onOpenScheduledTasks={onOpenScheduledTasks}
         />

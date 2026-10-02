@@ -7,6 +7,7 @@ import { useWorkspaces } from '@/renderer/src/features/workspaces/WorkspaceProvi
 import { Button } from '@/renderer/src/components/ui/button'
 import { Input } from '@/renderer/src/components/ui/input'
 import { useSidebar } from '@/renderer/src/components/ui/sidebar'
+import { TooltipIconButton } from './tooltip-icon-button'
 import { cn } from '@/renderer/src/lib/utils'
 import {
   isActiveRunStatus,
@@ -61,21 +62,31 @@ export const ThreadListNew = forwardRef<
   return (
     <ThreadListPrimitive.New
       render={
-        <Button
-          ref={ref}
-          variant="ghost"
-          data-slot="aui_thread-list-new"
-          className={cn(
-            collapsed
-              ? 'mx-auto size-8 justify-center rounded-lg p-0'
-              : 'h-8 justify-start gap-2 rounded-lg px-2 text-sm font-normal',
-            'text-text-muted hover:bg-interactive-hover hover:text-text-default data-active:bg-interactive-selected data-active:hover:bg-interactive-selected-hover data-active:text-text-strong active:bg-interactive-pressed focus-visible:border-brand-border focus-visible:ring-0',
-            className,
-          )}
-          aria-label={collapsed ? '新建对话' : undefined}
-          title={collapsed ? '新建对话' : undefined}
-          {...props}
-        />
+        collapsed ? (
+          <TooltipIconButton
+            ref={ref}
+            tooltip="新会话"
+            data-slot="aui_thread-list-new"
+            className={cn(
+              'mx-auto size-8 justify-center rounded-lg p-0',
+              'text-text-muted hover:bg-interactive-hover hover:text-text-default active:bg-interactive-pressed focus-visible:border-brand-border focus-visible:ring-0',
+              className,
+            )}
+            {...props}
+          />
+        ) : (
+          <Button
+            ref={ref}
+            variant="ghost"
+            data-slot="aui_thread-list-new"
+            className={cn(
+              'h-10 justify-start gap-2 rounded-md px-2 text-sm font-normal',
+              'text-text-muted hover:bg-interactive-hover hover:text-text-default active:bg-interactive-pressed focus-visible:border-brand-border focus-visible:ring-0',
+              className,
+            )}
+            {...props}
+          />
+        )
       }
     >
       {collapsed ? (
@@ -88,7 +99,7 @@ export const ThreadListNew = forwardRef<
               data-slot="aui_thread-list-new-label"
               className={cn('whitespace-nowrap', labelClassName)}
             >
-              新对话
+              新会话
             </span>
           </>
         ))
@@ -246,7 +257,7 @@ const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
         align="start"
         sideOffset={6}
         data-slot="aui_thread-list-item-more-content"
-        className="popover-glass data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:animate-out data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-32 overflow-hidden rounded-xl p-1.5"
+        className="glass-surface data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:animate-out data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-32 overflow-hidden rounded-xl p-1.5"
       >
         <ThreadListItemMorePrimitive.Item
           data-slot="aui_thread-list-item-more-item"

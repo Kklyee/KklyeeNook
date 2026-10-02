@@ -293,7 +293,7 @@ function ImageZoom({ src, alt = 'Image preview', children }: ImageZoomProps) {
                 e.stopPropagation()
                 handleClose()
               }}
-              className="popover-glass text-text-muted hover:text-text-strong hover:bg-interactive-hover-strong active:bg-interactive-pressed outline-none focus-visible:ring-1 focus-visible:ring-brand-border transition-colors absolute end-4 top-4 cursor-pointer rounded-lg p-2"
+              className="glass-surface text-text-muted hover:text-text-strong hover:bg-interactive-hover-strong active:bg-interactive-pressed outline-none focus-visible:ring-1 focus-visible:ring-brand-border transition-colors absolute end-4 top-4 cursor-pointer rounded-lg p-2"
             >
               <XIcon className="size-5" />
             </button>

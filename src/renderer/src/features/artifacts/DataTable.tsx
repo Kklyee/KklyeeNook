@@ -2,7 +2,7 @@
 
 import type { ComponentProps } from 'react'
 import { cn } from '@/renderer/src/lib/utils'
-import { mono, paper } from '@/renderer/src/lib/surfaces'
+import { mono } from '@/renderer/src/lib/surfaces'
 
 export interface DataTableProps extends Omit<ComponentProps<'div'>, 'children'> {
   columns: readonly string[]
@@ -14,7 +14,7 @@ export function DataTable({ columns, rows, cycle, className, ...props }: DataTab
   return (
     <div
       data-slot="data-table"
-      className={cn(paper, 'w-full overflow-hidden rounded-2xl text-[13px]', className)}
+      className={cn('glass-surface', 'w-full overflow-hidden rounded-2xl text-[13px]', className)}
       {...props}
     >
       <div className="overflow-x-auto">

@@ -2,7 +2,7 @@
 
 import type { ComponentProps } from 'react'
 import { cn } from '@/renderer/src/lib/utils'
-import { codeScroll, codeSurface, mono, paper } from '@/renderer/src/lib/surfaces'
+import { codeScroll, codeSurface, mono } from '@/renderer/src/lib/surfaces'
 
 export type DiffKind = 'context' | 'added' | 'removed'
 
@@ -35,7 +35,7 @@ export function CodeDiff({
     <div
       data-slot="code-diff"
       className={cn(
-        paper,
+        'glass-surface',
         'w-full max-w-md overflow-hidden rounded-2xl font-mono text-xs',
         className,
       )}

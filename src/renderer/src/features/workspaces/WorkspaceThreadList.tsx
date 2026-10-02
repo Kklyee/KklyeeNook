@@ -61,15 +61,8 @@ export function WorkspaceThreadList() {
     <ThreadListRoot className="gap-1.5">
       <ThreadListNew
         onClick={() => setDraftWorkspaceId(null)}
-        className={
-          collapsed
-            ? ''
-            : 'mb-3 h-10 justify-center border border-glass-border bg-interactive-selected text-text-strong'
-        }
-      >
-        <MessageCirclePlusIcon className="size-4" />
-        <span>新会话</span>
-      </ThreadListNew>
+        className={collapsed ? '' : 'mb-2'}
+      />
       {collapsed ? (
         <TooltipIconButton
           tooltip="添加项目"
@@ -218,20 +211,22 @@ function WorkspaceThreadGroup({
           }
           title={workspace?.rootPath ?? workspace?.lastKnownPath}
         >
-          <span className="relative size-4 shrink-0">
-            <FolderIcon
-              className={cn(
-                'absolute size-4 group-hover/workspace:opacity-0 group-focus-within/workspace:opacity-0',
-                selected && workspace && 'text-blue-400',
-              )}
-            />
-            <ChevronDownIcon
-              className={cn(
-                'absolute size-4 opacity-0 group-hover/workspace:opacity-100 group-focus-within/workspace:opacity-100',
-                !open && !search && '-rotate-90',
-              )}
-            />
-          </span>
+          {workspaceId && (
+            <span className="relative size-4 shrink-0">
+              <FolderIcon
+                className={cn(
+                  'absolute size-4 group-hover/workspace:opacity-0 group-focus-within/workspace:opacity-0',
+                  selected && workspace && 'text-blue-400',
+                )}
+              />
+              <ChevronDownIcon
+                className={cn(
+                  'absolute size-4 opacity-0 group-hover/workspace:opacity-100 group-focus-within/workspace:opacity-100',
+                  !open && !search && '-rotate-90',
+                )}
+              />
+            </span>
+          )}
           <span className={cn('truncate', selected && 'text-text-strong')}>{label}</span>
         </CollapsibleTrigger>
         <div className="flex shrink-0 items-center opacity-0 group-hover/workspace:opacity-100 group-focus-within/workspace:opacity-100 has-data-popup-open:opacity-100 [@media(hover:none)]:opacity-100">

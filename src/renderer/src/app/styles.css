@@ -114,18 +114,17 @@
 
   --shadow-raised: inset 0 1px 0 oklch(1 0 0 / 0.55), 0 12px 36px oklch(0 0 0 / 0.11);
 
-  --blur-surface: 16px;
-  --blur-raised: 24px;
+  --glass-surface-blur: 24px;
 
-  --floating-background: oklch(0.985 0.002 270 / 0.78);
-  --floating-border: var(--glass-border-hover);
-  --floating-gradient: linear-gradient(
+  --glass-surface-background: oklch(0.985 0.002 270 / 0.78);
+  --glass-surface-border: var(--glass-border-hover);
+  --glass-surface-gradient: linear-gradient(
     180deg,
     oklch(1 0 0 / 0.55) 0%,
     oklch(1 0 0 / 0.22) 48%,
     oklch(1 0 0 / 0.08) 100%
   );
-  --floating-shadow: inset 0 1px 0 oklch(1 0 0 / 0.55), 0 1px 0 oklch(0 0 0 / 0.04),
+  --glass-surface-shadow: inset 0 1px 0 oklch(1 0 0 / 0.55), 0 1px 0 oklch(0 0 0 / 0.04),
     0 12px 32px oklch(0 0 0 / 0.11);
   --overlay: oklch(0.22 0.006 270 / 0.14);
 }
@@ -240,15 +239,15 @@
 
   --shadow-raised: inset 0 1px 0 oklch(1 0 0 / 0.04), 0 16px 48px oklch(0 0 0 / 0.22);
 
-  --floating-background: oklch(0.25 0.006 270 / 0.78);
-  --floating-border: oklch(1 0 0 / 0.075);
-  --floating-gradient: linear-gradient(
+  --glass-surface-background: oklch(0.25 0.006 270 / 0.78);
+  --glass-surface-border: oklch(1 0 0 / 0.075);
+  --glass-surface-gradient: linear-gradient(
     180deg,
     oklch(1 0 0 / 0.032) 0%,
     oklch(1 0 0 / 0.014) 48%,
     oklch(1 0 0 / 0.006) 100%
   );
-  --floating-shadow: inset 0 1px 0 oklch(1 0 0 / 0.032), 0 1px 0 oklch(0 0 0 / 0.1),
+  --glass-surface-shadow: inset 0 1px 0 oklch(1 0 0 / 0.032), 0 1px 0 oklch(0 0 0 / 0.1),
     0 12px 32px oklch(0 0 0 / 0.16);
   --overlay: oklch(0 0 0 / 0.3);
 }
@@ -401,30 +400,12 @@ body,
 
 @layer components {
   .glass-surface {
-    @apply popover-glass;
-  }
-
-  .glass-subtle {
-    background: var(--surface-subtle);
-
-    border: 1px solid var(--glass-border-subtle);
-
-    -webkit-backdrop-filter: blur(12px) saturate(106%);
-
-    backdrop-filter: blur(12px) saturate(106%);
-  }
-  .composer-glass {
-    @apply popover-glass;
-  }
-  .glass-sidebar {
-    background:
-      linear-gradient(to bottom, oklch(1 0 0 / 0.018), transparent 38%), var(--surface-strong);
-
-    border-right: 1px solid var(--glass-border-subtle);
-
-    -webkit-backdrop-filter: blur(22px) saturate(108%);
-
-    backdrop-filter: blur(22px) saturate(108%);
+    background: var(--glass-surface-gradient), var(--glass-surface-background);
+    border: 1px solid var(--glass-surface-border);
+    backdrop-filter: blur(var(--glass-surface-blur)) saturate(110%);
+    -webkit-backdrop-filter: blur(var(--glass-surface-blur)) saturate(110%);
+    box-shadow: var(--glass-surface-shadow);
+    color: var(--text-default);
   }
   .surface-interactive {
     background: transparent;
@@ -443,18 +424,6 @@ body,
   .surface-interactive[data-state='active'] {
     background: var(--glass-active);
   }
-}
-
-@utility popover-glass {
-  background: var(--floating-gradient), var(--floating-background);
-
-  border: 1px solid var(--floating-border);
-
-  backdrop-filter: blur(var(--blur-raised)) saturate(110%);
-  -webkit-backdrop-filter: blur(var(--blur-raised)) saturate(110%);
-
-  box-shadow: var(--floating-shadow);
-  color: var(--text-default);
 }
 
 @layer base {

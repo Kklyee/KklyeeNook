@@ -180,7 +180,7 @@ function MermaidZoom({ svg, children }: MermaidZoomProps) {
             role="dialog"
             aria-modal="true"
             aria-label="Diagram"
-            className="aui-mermaid-zoom-overlay fade-in animate-in popover-glass fixed inset-0 z-50 duration-200"
+            className="aui-mermaid-zoom-overlay fade-in animate-in glass-surface fixed inset-0 z-50 duration-200"
           >
             <div
               ref={viewportRef}
@@ -203,7 +203,7 @@ function MermaidZoom({ svg, children }: MermaidZoomProps) {
             </div>
             <div
               data-slot="mermaid-zoom-toolbar"
-              className="aui-mermaid-zoom-toolbar popover-glass absolute top-4 right-4 flex items-center gap-1 rounded-lg p-1"
+              className="aui-mermaid-zoom-toolbar glass-surface absolute top-4 right-4 flex items-center gap-1 rounded-lg p-1"
             >
               <button
                 type="button"

@@ -120,7 +120,7 @@ function SelectRequestBar({
     <div
       role="alertdialog"
       aria-label={request.title}
-      className="popover-glass animate-in slide-in-from-bottom-2 fade-in relative z-10 mx-auto grid w-full max-w-(--thread-max-width) grid-cols-1 items-center gap-3 rounded-2xl p-3 duration-200 motion-reduce:animate-none sm:grid-cols-[minmax(0,1fr)_auto]"
+      className="glass-surface animate-in slide-in-from-bottom-2 fade-in relative z-10 mx-auto grid w-full max-w-(--thread-max-width) grid-cols-1 items-center gap-3 rounded-2xl p-3 duration-200 motion-reduce:animate-none sm:grid-cols-[minmax(0,1fr)_auto]"
     >
       <p className="min-w-0 break-words text-sm leading-relaxed font-medium">{request.title}</p>
       <div className="flex flex-wrap justify-end gap-2">

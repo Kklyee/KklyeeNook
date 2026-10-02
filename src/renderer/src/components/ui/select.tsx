@@ -35,19 +35,28 @@ function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
   )
 }
 
-function SelectContent({ className, children, ...props }: SelectPrimitive.Popup.Props) {
+function SelectContent({
+  className,
+  children,
+  alignItemWithTrigger = true,
+  ...props
+}: SelectPrimitive.Popup.Props & { alignItemWithTrigger?: boolean }) {
   return (
     <SelectPrimitive.Portal>
-      <SelectPrimitive.Positioner className="isolate z-50" sideOffset={4}>
+      <SelectPrimitive.Positioner
+        className="isolate z-50"
+        sideOffset={4}
+        alignItemWithTrigger={alignItemWithTrigger}
+      >
         <SelectPrimitive.Popup
           data-slot="select-content"
           className={cn(
-            'popover-glass min-w-(--anchor-width) overflow-hidden rounded-xl p-1.5 text-sm outline-hidden duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
+            'glass-surface min-w-(--anchor-width) overflow-hidden rounded-xl p-1.5 text-sm outline-hidden duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
             className,
           )}
           {...props}
         >
-          <SelectPrimitive.List className="max-h-[min(20rem,var(--available-height))] overflow-y-auto">
+          <SelectPrimitive.List className="max-h-[min(20rem,var(--available-height,70vh))] overflow-y-auto">
             {children}
           </SelectPrimitive.List>
         </SelectPrimitive.Popup>

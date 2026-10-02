@@ -64,7 +64,7 @@ export function KnowledgeCitationLink({
                 {result.context.citation.sourceName}
                 {result.context.citation.heading ? ` · ${result.context.citation.heading}` : ''}
               </p>
-              <pre className="glass-subtle whitespace-pre-wrap break-words rounded-lg p-4 font-sans text-sm leading-relaxed">
+              <pre className="glass-surface whitespace-pre-wrap break-words rounded-lg p-4 font-sans text-sm leading-relaxed">
                 {result.context.content}
               </pre>
               {result.adjacent.map((chunk) => (

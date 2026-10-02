@@ -3,7 +3,7 @@
 import type { ComponentProps } from 'react'
 import { KeyRoundIcon } from 'lucide-react'
 import { cn } from '@/renderer/src/lib/utils'
-import { field, inkButton, mono, paper } from '@/renderer/src/lib/surfaces'
+import { field, inkButton, mono } from '@/renderer/src/lib/surfaces'
 
 export type GrantScope = 'once' | 'session' | 'always' | 'denied'
 
@@ -28,8 +28,11 @@ export function PermissionGrant({
   return (
     <div
       data-slot="permission-grant"
-      className={cn(paper, 'flex w-full max-w-sm flex-col gap-3.5 rounded-[20px] p-4', className)}
-
+      className={cn(
+        'glass-surface',
+        'flex w-full max-w-sm flex-col gap-3.5 rounded-[20px] p-4',
+        className,
+      )}
       {...props}
     >
       <div className="flex items-center gap-2.5">
