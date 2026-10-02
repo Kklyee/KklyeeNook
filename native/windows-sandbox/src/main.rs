@@ -1,5 +1,19 @@
 #[cfg(windows)]
+mod acl;
+#[cfg(windows)]
+mod job;
+#[cfg(windows)]
+mod objects;
+#[cfg(windows)]
+mod probe;
+#[cfg(windows)]
+mod process;
+#[cfg(windows)]
 mod sandbox;
+#[cfg(windows)]
+mod token;
+#[cfg(windows)]
+mod win32;
 
 fn main() {
     #[cfg(windows)]

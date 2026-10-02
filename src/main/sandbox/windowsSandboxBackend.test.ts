@@ -15,6 +15,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { WindowsSandboxBackend } from './windowsSandboxBackend'
 import type { SandboxExecutionRequest } from './sandboxBackend'
+import { SandboxService } from './sandboxService'
+import { ToolExecutionHarness } from '@/main/agent/toolExecutionHarness'
+import { ToolRegistry } from '@/main/tools/toolRegistry'
+import { registerPiBuiltinTools } from '@/main/agent/pi/adapters/piBuiltinToolAdapter'
 
 describe.skipIf(process.platform !== 'win32')('Windows filesystem sandbox', () => {
   let directory: string
@@ -55,19 +59,45 @@ describe.skipIf(process.platform !== 'win32')('Windows filesystem sandbox', () =
       ...options,
     })
 
-  test('refuses a token that cannot enforce filesystem deletion restrictions', async () => {
-    expect(backend.support()).toBe('unavailable')
-    await expect(execute('echo unsafe > started.txt')).rejects.toMatchObject({
-      code: 'EXECUTION_ERROR',
-      message: expect.stringContaining('cannot enforce the filesystem boundary'),
-    })
-    await expect(access(join(workspace, 'started.txt'))).rejects.toThrow()
-    expect(await readFile(join(workspace, 'existing.txt'), 'utf8')).toBe('original')
+  test('a successful real process probe reports partial support', () => {
+    expect(backend.support()).toBe('partial')
+    expect(backend.support()).toBe('partial')
   })
+
+  test('workspace-write bash runs through the harness without full-access approval', async () => {
+    const registry = new ToolRegistry()
+    registerPiBuiltinTools(registry, workspace)
+    const approve = vi.fn()
+    const harness = new ToolExecutionHarness(
+      registry,
+      new SandboxService(backend),
+      { process: async (_run, _call, result) => result },
+      approve,
+    )
+    const result = await harness.execute(
+      'run',
+      { id: 'call', toolName: 'bash', args: { command: 'echo sandbox > started.txt' } },
+      {
+        executionContext: {
+          conversationId: 'chat',
+          workspaceId: 'ws',
+          workspace: { id: 'ws', rootPath: workspace },
+          mode: 'workspace-write',
+        },
+      },
+      executeDirect,
+    )
+    expect(result).toMatchObject({
+      status: 'success',
+      details: { sandbox: { mode: 'workspace-write', enforcement: 'partial' } },
+    })
+    expect(await readFile(join(workspace, 'started.txt'), 'utf8')).toContain('sandbox')
+    expect(approve).not.toHaveBeenCalled()
+  }, 30000)
 
   test('workspace create, write, delete and private temp write succeed with sandbox metadata', async () => {
     const result = await execute(
-      'echo created > new.txt && echo changed > existing.txt && mkdir nested && echo temp > "%TEMP%\\private.txt" && type "%TEMP%\\private.txt" && del new.txt && rmdir nested',
+      'echo created > new.txt && echo changed > existing.txt && mkdir nested && echo temp > "%TEMP%\\private.txt" && echo temp > "%TEMP%\\delete.txt" && del "%TEMP%\\delete.txt" && mkdir "%TEMP%\\nested" && rmdir "%TEMP%\\nested" && type "%TEMP%\\private.txt" && del new.txt && rmdir nested',
     )
     expect(result, JSON.stringify(result)).toMatchObject({
       isError: false,
@@ -101,6 +131,8 @@ describe.skipIf(process.platform !== 'win32')('Windows filesystem sandbox', () =
     for (const command of [
       `echo escaped > ${quote(join(outside, 'new.txt'))}`,
       remove(join(outside, 'existing.txt')),
+      'echo escaped > "..\\outside\\relative.txt"',
+      'echo escaped > "..\\outside\\existing.txt"',
       'echo escaped > junction\\escaped.txt',
       remove('junction\\existing.txt'),
     ])
@@ -108,16 +140,37 @@ describe.skipIf(process.platform !== 'win32')('Windows filesystem sandbox', () =
     expect(await readFile(join(outside, 'existing.txt'), 'utf8')).toBe('outside')
     await expect(access(join(outside, 'new.txt'))).rejects.toThrow()
     await expect(access(join(outside, 'escaped.txt'))).rejects.toThrow()
+    await expect(access(join(outside, 'relative.txt'))).rejects.toThrow()
   }, 30000)
 
-  test('read-only reads workspace and writes private temp but rejects workspace mutation', async () => {
+  test('file and directory symlinks cannot grant writes or deletes outside', async ({ skip }) => {
+    try {
+      await symlink(join(outside, 'existing.txt'), join(workspace, 'file-link.txt'), 'file')
+      await symlink(outside, join(workspace, 'directory-link'), 'dir')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EPERM')
+        skip('Creating symbolic links requires Developer Mode or SeCreateSymbolicLinkPrivilege')
+      throw error
+    }
+    for (const command of [
+      'echo escaped > file-link.txt',
+      remove('file-link.txt'),
+      'echo escaped > directory-link\\new.txt',
+      remove('directory-link\\existing.txt'),
+    ]) {
+      const result = await execute(command)
+      expect(result.isError, JSON.stringify(result)).toBe(true)
+    }
+    expect(await readFile(join(outside, 'existing.txt'), 'utf8')).toBe('outside')
+    await expect(access(join(outside, 'new.txt'))).rejects.toThrow()
+  }, 30000)
+
+  test('read-only reads workspace but grants no writable root', async () => {
+    expect((await execute('type existing.txt', { mode: 'read-only' })).isError).toBe(false)
+    expect((await execute('echo created > new.txt', { mode: 'read-only' })).isError).toBe(true)
     expect(
-      (
-        await execute('type existing.txt && echo temp > "%TEMP%\\private.txt"', {
-          mode: 'read-only',
-        })
-      ).isError,
-    ).toBe(false)
+      (await execute('echo temp > "%TEMP%\\private.txt"', { mode: 'read-only' })).isError,
+    ).toBe(true)
     expect((await execute('echo changed > existing.txt', { mode: 'read-only' })).isError).toBe(true)
     expect((await execute(remove('existing.txt'), { mode: 'read-only' })).isError).toBe(true)
     expect(await readFile(join(workspace, 'existing.txt'), 'utf8')).toBe('original')
@@ -154,19 +207,32 @@ describe.skipIf(process.platform !== 'win32')('Windows filesystem sandbox', () =
     expect(await readdir(workspace)).toEqual(['existing.txt'])
   }, 30000)
 
-  test('outside low integrity directories cannot be mutated or deleted', async () => {
-    const target = join(outside, 'existing.txt')
-    for (const args of [
-      [outside, '/grant:r', '*S-1-1-0:(OI)(CI)(F)'],
-      [outside, '/setintegritylevel', '(OI)(CI)L'],
-      [target, '/setintegritylevel', 'L'],
-    ]) {
-      const preparation = spawnSync('icacls.exe', args, { encoding: 'utf8', windowsHide: true })
-      expect(preparation.status, preparation.stderr).toBe(0)
+  test('directory grants close the ambient parent-delete channel', async () => {
+    const target = join(workspace, 'existing.txt')
+    const preparation = spawnSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        "$path = '" +
+          target.replaceAll("'", "''") +
+          "'; $acl = [IO.File]::GetAccessControl($path); $raw = [Security.AccessControl.RawSecurityDescriptor]::new($acl.Sddl); $ace = [Security.AccessControl.CommonAce]::new([Security.AccessControl.AceFlags]::None, [Security.AccessControl.AceQualifier]::AccessDenied, 0x10000, [Security.Principal.SecurityIdentifier]::new('S-1-1-0'), $false, $null); $raw.DiscretionaryAcl.InsertAce(0, $ace); $acl.SetSecurityDescriptorSddlForm($raw.GetSddlForm([Security.AccessControl.AccessControlSections]::Access), [Security.AccessControl.AccessControlSections]::Access); [IO.File]::SetAccessControl($path, $acl)",
+      ],
+      { encoding: 'utf8', windowsHide: true },
+    )
+    expect(preparation.status, preparation.stderr).toBe(0)
+    try {
+      const deletion = await execute(remove(target))
+      expect(deletion.isError, JSON.stringify(deletion)).toBe(true)
+      expect(await readFile(target, 'utf8')).toBe('original')
+    } finally {
+      const cleanup = spawnSync('icacls.exe', [target, '/remove:d', '*S-1-1-0'], {
+        encoding: 'utf8',
+        windowsHide: true,
+      })
+      expect(cleanup.status, cleanup.stderr).toBe(0)
     }
-    const deletion = await execute(remove(target))
-    expect(deletion.isError, JSON.stringify(deletion)).toBe(true)
-    expect(await readFile(target, 'utf8')).toBe('outside')
   }, 30000)
 
   test('read-only supports system cryptography while npm workspace writes remain denied', async () => {
@@ -187,11 +253,6 @@ describe.skipIf(process.platform !== 'win32')('Windows filesystem sandbox', () =
 
   test.each([
     ['cmd', 'cmd.exe /d /c "echo cmd>cmd.txt"', 'cmd.txt'],
-    [
-      'PowerShell',
-      `${quote(process.env.SANDBOX_TEST_POWERSHELL ?? 'powershell.exe')} -NoProfile -NonInteractive -Command "[IO.File]::WriteAllText('powershell.txt', 'powershell')"`,
-      'powershell.txt',
-    ],
     ['node', 'node script.js', 'node.txt'],
     ['npm', 'npm test', 'node.txt'],
     ['pnpm', 'pnpm build', 'node.txt'],
@@ -223,6 +284,27 @@ describe.skipIf(process.platform !== 'win32')('Windows filesystem sandbox', () =
     60000,
   )
 
+  test('PowerShell reports supported execution or a confined initialization error', async () => {
+    const host = quote(process.env.SANDBOX_TEST_POWERSHELL ?? 'powershell.exe')
+    const result = await execute(
+      host +
+        " -NoProfile -NonInteractive -Command \"[IO.File]::WriteAllText('powershell.txt', 'powershell')\"",
+    )
+    expect(result.details).toMatchObject({
+      sandbox: { mode: 'workspace-write', backend: 'windows-acl', enforcement: 'partial' },
+    })
+    if (result.isError) {
+      const text = result.content
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text.replaceAll('\0', ''))
+        .join('\n')
+      expect(text).toMatch(/Starting the CLR failed|Unhandled exception/)
+      await expect(access(join(workspace, 'powershell.txt'))).rejects.toThrow()
+    } else {
+      expect(await readFile(join(workspace, 'powershell.txt'), 'utf8')).toBe('powershell')
+    }
+  }, 30000)
+
   test('child and grandchild processes inherit the boundary', async () => {
     await writeFile(
       join(workspace, 'child.js'),
@@ -236,6 +318,65 @@ describe.skipIf(process.platform !== 'win32')('Windows filesystem sandbox', () =
     expect(result.isError).toBe(true)
     await expect(access(join(outside, 'child.txt'))).rejects.toThrow()
   }, 30000)
+
+  test.each([
+    ['node', 'node parent.js'],
+    ['npm', 'npm test'],
+    ['pnpm', 'pnpm build'],
+    ['Python', '"' + (process.env.SANDBOX_TEST_PYTHON ?? 'python') + '" parent.py'],
+  ])(
+    '%s descendants cannot write or delete outside',
+    async (_name, command) => {
+      const target = JSON.stringify(join(outside, 'existing.txt'))
+      const created = JSON.stringify(join(outside, 'child.txt'))
+      await writeFile(
+        join(workspace, 'boundary.js'),
+        "const fs = require('node:fs'); for (const op of [() => fs.writeFileSync(" +
+          created +
+          ", 'escaped'), () => fs.writeFileSync(" +
+          target +
+          ", 'escaped'), () => fs.unlinkSync(" +
+          target +
+          ")]) { try { op(); process.exit(1) } catch (error) { if (!['EACCES', 'EPERM'].includes(error.code)) throw error } } fs.writeFileSync('checked.txt', 'checked')",
+      )
+      await writeFile(
+        join(workspace, 'parent.js'),
+        "const { spawnSync } = require('node:child_process'); process.exit(spawnSync(process.execPath, ['boundary.js'], { stdio: 'inherit' }).status)",
+      )
+      await writeFile(
+        join(workspace, 'package.json'),
+        JSON.stringify({
+          name: 'sandbox-boundary-fixture',
+          version: '1.0.0',
+          scripts: { test: 'node parent.js', build: 'node parent.js' },
+        }),
+      )
+      await writeFile(
+        join(workspace, 'boundary.py'),
+        'from pathlib import Path\n' +
+          'for op in [lambda: Path(' +
+          created +
+          ').write_text("escaped"), lambda: Path(' +
+          target +
+          ').write_text("escaped"), lambda: Path(' +
+          target +
+          ').unlink()]:\n' +
+          '    try:\n        op()\n    except PermissionError:\n        pass\n' +
+          '    else:\n        raise RuntimeError("outside operation succeeded")\n' +
+          'Path("checked.txt").write_text("checked")\n',
+      )
+      await writeFile(
+        join(workspace, 'parent.py'),
+        'import subprocess, sys\nsys.exit(subprocess.run([sys.executable, "boundary.py"]).returncode)\n',
+      )
+      const result = await execute(command)
+      expect(result.isError, JSON.stringify(result)).toBe(false)
+      expect(await readFile(join(workspace, 'checked.txt'), 'utf8')).toBe('checked')
+      expect(await readFile(join(outside, 'existing.txt'), 'utf8')).toBe('outside')
+      await expect(access(join(outside, 'child.txt'))).rejects.toThrow()
+    },
+    60000,
+  )
 
   test('hard-linked files stay readable without granting writes to the external inode', async () => {
     await link(join(outside, 'existing.txt'), join(workspace, 'hardlink.txt'))
@@ -254,6 +395,27 @@ describe.skipIf(process.platform !== 'win32')('Windows filesystem sandbox', () =
     await writeFile(join(directory, 'data-file'), '')
     backend = new WindowsSandboxBackend(join(directory, 'data-file'))
     await expect(execute('echo escaped')).rejects.toMatchObject({ code: 'EXECUTION_ERROR' })
+  })
+
+  test('an ACL initialization failure restores earlier grants and never starts the command', async () => {
+    const target = join(workspace, 'existing.txt')
+    const permissions = spawnSync(
+      'icacls.exe',
+      [target, '/inheritance:r', '/grant:r', (process.env.USERNAME ?? 'kk') + ':(M)'],
+      { encoding: 'utf8', windowsHide: true },
+    )
+    expect(permissions.status, permissions.stderr).toBe(0)
+    const before = spawnSync('icacls.exe', [workspace], { encoding: 'utf8', windowsHide: true })
+    expect(before.status, before.stderr).toBe(0)
+    await expect(execute('echo started > started.txt')).rejects.toMatchObject({
+      code: 'EXECUTION_ERROR',
+      message: expect.stringContaining('ACL open'),
+    })
+    await expect(access(join(workspace, 'started.txt'))).rejects.toThrow()
+    expect(await readFile(target, 'utf8')).toBe('original')
+    const after = spawnSync('icacls.exe', [workspace], { encoding: 'utf8', windowsHide: true })
+    expect(after.status, after.stderr).toBe(0)
+    expect(after.stdout).toBe(before.stdout)
   })
 
   test('cancellation terminates the process tree and restores workspace ACLs', async () => {
@@ -281,17 +443,25 @@ describe.skipIf(process.platform !== 'win32')('Windows filesystem sandbox', () =
       windowsHide: true,
     })
     expect(protectedAcl.status, protectedAcl.stderr).toBe(0)
-    const security = () =>
-      spawnSync(
+    const security = () => {
+      const result = spawnSync(
         'powershell.exe',
         [
           '-NoProfile',
           '-NonInteractive',
           '-Command',
-          `Get-Acl -LiteralPath '${workspace.replaceAll("'", "''")}', '${existing.replaceAll("'", "''")}' | Select-Object -ExpandProperty Sddl`,
+          "[IO.Directory]::GetAccessControl('" +
+            workspace.replaceAll("'", "''") +
+            "').Sddl; [IO.File]::GetAccessControl('" +
+            existing.replaceAll("'", "''") +
+            "').Sddl",
         ],
         { encoding: 'utf8', windowsHide: true },
-      ).stdout.trim()
+      )
+      expect(result.status, result.stderr).toBe(0)
+      expect(result.stdout.trim().split(/\r?\n/)).toHaveLength(2)
+      return result.stdout.trim()
+    }
     const before = security()
     const labels = () =>
       [workspace, existing].map((path) =>

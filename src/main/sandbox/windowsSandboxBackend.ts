@@ -26,6 +26,7 @@ function launcherPath(): string {
 }
 
 export class WindowsSandboxBackend implements SandboxBackend {
+  private cachedSupport?: SandboxSupport
   private readonly directories = new Map<string, Promise<string>>()
   private readonly executions = new Map<string, Set<Promise<SandboxExecutionResult>>>()
   constructor(
@@ -34,11 +35,13 @@ export class WindowsSandboxBackend implements SandboxBackend {
   ) {}
 
   support(): SandboxSupport {
+    if (this.cachedSupport) return this.cachedSupport
     const check = spawnSync(this.launcher, ['--check-enforcement'], {
       windowsHide: true,
       timeout: 5000,
     })
-    return check.status === 0 ? 'partial' : 'unavailable'
+    this.cachedSupport = check.status === 0 ? 'partial' : 'unavailable'
+    return this.cachedSupport
   }
 
   async execute(request: SandboxExecutionRequest): Promise<SandboxExecutionResult> {
