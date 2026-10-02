@@ -52,7 +52,14 @@ export class SandboxService {
     const authorized = await this.authorize(request, toolCallId)
     return authorized.mode === 'full-access'
       ? new DirectExecutionBackend().execute({ ...execution, mode: authorized.mode })
-      : this.backend.execute({ ...execution, mode: authorized.mode })
+      : this.backend.execute({
+          ...execution,
+          mode: authorized.mode,
+          workspaceRoot: authorized.workspace?.rootPath,
+        })
+  }
+  async finishRun(runId: string): Promise<void> {
+    await this.backend.finishRun?.(runId)
   }
 }
 

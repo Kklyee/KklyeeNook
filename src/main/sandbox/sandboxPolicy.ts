@@ -43,7 +43,7 @@ export class SandboxPolicy {
           }
       }
       if (mode === 'full-access') return { outcome: 'allow' }
-      if (this.backend.support() !== 'full')
+      if (this.backend.support() === 'unavailable')
         return {
           outcome: 'ask',
           requestedMode: 'full-access',

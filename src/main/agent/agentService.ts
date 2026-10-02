@@ -53,6 +53,7 @@ export interface AgentRunStartOptions {
 
 export interface AgentServiceOptions {
   buildChildContext?: (sessionId: string) => Promise<AgentRunContext | undefined>
+  onRunFinished?: (runId: string) => Promise<void>
 }
 
 const MAX_CHILD_DEPTH = 1
@@ -661,6 +662,11 @@ export class AgentService {
       if (ephemeralRuntime) {
         runtime.dispose()
         this.runtimes.delete(runtimeSessionId)
+      }
+      try {
+        await this.options.onRunFinished?.(runId)
+      } catch (error) {
+        console.error('Run cleanup failed', error)
       }
     }
 

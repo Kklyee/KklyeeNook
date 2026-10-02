@@ -8,6 +8,7 @@ out
 docs/*
 !docs/architecture.md
 !docs/dsh-reference.md
+!docs/dsh-reference.zh.md
 .tmp*
 .env
 .env*

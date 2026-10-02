@@ -131,6 +131,39 @@ function run(status: AgentRun['status'], id: string, createdAt: number): AgentRu
   }
 }
 
+test('run cleanup is awaited and cleanup failure does not fail the agent run', async () => {
+  const cleanup = vi.fn(async () => {
+    throw new Error('cleanup failed')
+  })
+  const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  const service = new AgentService(
+    {
+      create: () => ({
+        async run(_input, emit) {
+          emit({ type: 'pi_turn_start', piTurnIndex: 0, deliveries: ['initial'] })
+          emit({ type: 'pi_turn_end', result: 'committed' })
+          emit({ type: 'agent_completed' })
+        },
+        dispose() {},
+      }),
+    },
+    new MemorySessionRepo([sessionRecord]),
+    new MemoryRunRepo(),
+    new MemoryExecutionRecordRepo(),
+    new MemoryArtifactRepo(),
+    { onRunFinished: cleanup },
+  )
+  try {
+    await service.initialize()
+    const handle = service.startRun(sessionRecord.id, { prompt: 'run' })
+    expect((await handle.completion).status).toBe('completed')
+    expect(cleanup).toHaveBeenCalledExactlyOnceWith(handle.run.id)
+    expect(log).toHaveBeenCalledWith('Run cleanup failed', expect.any(Error))
+  } finally {
+    log.mockRestore()
+  }
+})
+
 test('initialize recovers active runs and restores run history', async () => {
   const runRepo = new MemoryRunRepo([
     run('running', 'running-run', 1),

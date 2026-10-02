@@ -53,7 +53,9 @@ function createBash(cwd: string): AnyPiToolDefinition {
   return {
     ...tool,
     description:
-      'Execute a shell command and return stdout and stderr. Optional timeout is in seconds. Large results are retained with a resultRef for read_tool_result.',
+      process.platform === 'win32'
+        ? 'Execute a shell command and return stdout and stderr. Windows read-only and workspace-write commands use cmd.exe syntax; full-access commands use Bash. Optional timeout is in seconds. Large results are retained with a resultRef for read_tool_result.'
+        : 'Execute a shell command and return stdout and stderr. Optional timeout is in seconds. Large results are retained with a resultRef for read_tool_result.',
     parameters: Type.Object({
       command: Type.String(),
       timeout: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 2147483 })),

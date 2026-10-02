@@ -13,6 +13,7 @@ import type { PermissionRequest } from '@/shared/approval/permission'
 import { ToolRegistry } from '../tools/toolRegistry'
 import { registerPiBuiltinTools } from '../agent/pi/adapters/piBuiltinToolAdapter'
 import { SandboxService } from './sandboxService'
+import { LinuxSandboxBackend } from './sandboxBackend'
 
 let directory: string
 let root: string
@@ -110,7 +111,7 @@ test('the harness protects file adapters and consumes one-shot approvals', async
 })
 
 test('shell fails closed and executes direct only with full access or one-shot approval', async () => {
-  const sandbox = new SandboxService()
+  const sandbox = new SandboxService(new LinuxSandboxBackend())
   const input: PermissionRequest = {
     ...request(''),
     toolName: 'bash',

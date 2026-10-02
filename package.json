@@ -6,6 +6,12 @@
   "author": "example.com",
   "main": "./out/main/index.mjs",
   "scripts": {
+    "sandbox:build": "node scripts/build-windows-sandbox.mjs",
+    "sandbox:setup": "npm run sandbox:build && node scripts/setup-windows-sandbox.mjs",
+    "sandbox:remove-device-grants": "node scripts/setup-windows-sandbox.mjs --remove",
+    "predev": "npm run sandbox:build",
+    "prebuild": "npm run sandbox:build",
+    "pretest": "npm run sandbox:build",
     "test": "vitest run",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",

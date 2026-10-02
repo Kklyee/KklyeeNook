@@ -1,16 +1,23 @@
 import type { PermissionMode } from '@/shared/approval/permission'
+import { WindowsSandboxBackend } from './windowsSandboxBackend'
+export { WindowsSandboxBackend } from './windowsSandboxBackend'
+export type SandboxSupport = 'full' | 'partial' | 'unavailable'
 export interface SandboxExecutionRequest {
   mode: PermissionMode
   command: string
   cwd?: string
+  workspaceRoot?: string
+  privateTemp?: string
+  runId?: string
   signal?: AbortSignal
   executeDirect(): Promise<SandboxExecutionResult>
 }
 export type SandboxExecutionResult =
-  import('@earendil-works/pi-agent-core').AgentToolResult<unknown>
+  import('@earendil-works/pi-agent-core').AgentToolResult<unknown> & { isError?: boolean }
 export interface SandboxBackend {
-  support(): 'full' | 'partial' | 'unavailable'
+  support(): SandboxSupport
   execute(request: SandboxExecutionRequest): Promise<SandboxExecutionResult>
+  finishRun?(runId: string): Promise<void>
 }
 
 class UnavailableSandboxBackend implements SandboxBackend {
@@ -23,7 +30,6 @@ class UnavailableSandboxBackend implements SandboxBackend {
 }
 export class LinuxSandboxBackend extends UnavailableSandboxBackend {}
 export class MacSandboxBackend extends UnavailableSandboxBackend {}
-export class WindowsSandboxBackend extends UnavailableSandboxBackend {}
 export class DirectExecutionBackend implements SandboxBackend {
   support(): 'full' {
     return 'full'
@@ -33,9 +39,9 @@ export class DirectExecutionBackend implements SandboxBackend {
     return request.executeDirect()
   }
 }
-export function platformSandboxBackend(): SandboxBackend {
+export function platformSandboxBackend(userData?: string): SandboxBackend {
   return process.platform === 'win32'
-    ? new WindowsSandboxBackend()
+    ? new WindowsSandboxBackend(userData)
     : process.platform === 'darwin'
       ? new MacSandboxBackend()
       : new LinuxSandboxBackend()

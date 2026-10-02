@@ -1,4 +1,5 @@
 import { SandboxService } from '@/main/sandbox/sandboxService'
+import { platformSandboxBackend } from '@/main/sandbox/sandboxBackend'
 import { PERMISSION_MODES } from '@/shared/approval/permission'
 import { ExecutionContextService } from '@/main/workspace/executionContextService'
 import { AgentService } from '@/main/agent/agentService'
@@ -92,7 +93,7 @@ export async function createAgentBackend(
     const skillLoader = new SkillLoader()
     await skillLoader.reload()
     const toolRegistry = new ToolRegistry()
-    const sandbox = new SandboxService()
+    const sandbox = new SandboxService(platformSandboxBackend(join(sessionDir, '..')))
     const toolResultStore = new ToolResultStore(join(sessionDir, '..', 'tool-results'))
     registerPiBuiltinTools(toolRegistry, '')
     registerPiToolResultTool(toolRegistry, toolResultStore)
@@ -136,7 +137,10 @@ export async function createAgentBackend(
       runRepo,
       executionRecordRepo,
       artifactRepo,
-      { buildChildContext: async sessionId => contextBuilder.build([], (await executionContexts.resolve(sessionId)).workspaceId) },
+      {
+        buildChildContext: async sessionId => contextBuilder.build([], (await executionContexts.resolve(sessionId)).workspaceId),
+        onRunFinished: runId => sandbox.finishRun(runId),
+      },
     )
     registerPiDelegateTaskTool(toolRegistry, (parentRunId, input, onProgress) =>
       agentService.delegateTask(parentRunId, input, onProgress),

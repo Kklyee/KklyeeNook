@@ -120,6 +120,7 @@ export class ToolExecutionHarness {
                 request,
                 {
                   command: request.resource.command,
+                  runId,
                   cwd,
                   signal: controller.signal,
                   executeDirect: () =>
