@@ -445,7 +445,7 @@ export function ComposerContext({
     >
       <div
         className={cn(
-          'glass-surface',
+          'bg-popover border border-border shadow-lg',
           'absolute end-0 bottom-full z-10 mb-2 flex w-60 origin-bottom-right flex-col gap-3.5 rounded-2xl p-4',
           'transition-[opacity,scale] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none',
           'pointer-events-none scale-[0.97] opacity-0',
