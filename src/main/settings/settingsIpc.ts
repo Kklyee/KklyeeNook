@@ -1,4 +1,5 @@
 import { PERMISSION_MODES } from '@/shared/approval/permission'
+import { getAgentCompactionSettingsErrors } from '@/shared/agent/agentContextBudget'
 import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import type {
   AgentSettingsSnapshot,
@@ -82,7 +83,11 @@ export function registerSettingsIpc(
       modelID: activeModel.modelID,
       baseUrl: activeModel.baseUrl,
       providerName: providerNames.get(activeModel.provider),
-      contextWindow: activeModel.contextWindow,
+      contextWindow:
+        activeModel.contextWindow ??
+        catalog
+          .find((provider) => provider.id === activeModel.provider)?.models
+          .find((model) => model.id === activeModel.modelID)?.contextWindow,
       maxTokens: activeModel.maxTokens,
       thinkingLevel: activeModel.thinkingLevel ?? 'medium',
       defaultPermissionMode: config.defaultPermissionMode ?? 'workspace-write',
@@ -187,6 +192,17 @@ export function registerSettingsIpc(
         throw new Error('不能重复添加同一个模型')
       }
       if (!activeModel) throw new Error('没有可用的活动模型')
+      const contextWindow =
+        activeModel.contextWindow ??
+        getAgentModelChoices({
+          ...current,
+          ...(providerUpdate ? { providers } : {}),
+          model: activeModel,
+          models,
+          activeModelId: activeModel.id,
+        }).catalog
+          .find((provider) => provider.id === activeModel.provider)?.models
+          .find((model) => model.id === activeModel.modelID)?.contextWindow
 
       const nextConfig: AgentConfig = {
         ...current,
@@ -200,7 +216,7 @@ export function registerSettingsIpc(
         compaction:
           request.compaction === undefined
             ? getAgentCompactionSettings(current)
-            : validateCompaction(request.compaction),
+            : validateCompaction(request.compaction, contextWindow),
       }
       const credentialProvider = request.credential?.provider
       const previousApiKey = credentialProvider
@@ -341,15 +357,16 @@ function validateProvider(provider: ProviderConfig): ProviderConfig {
   }
 }
 
-function validateCompaction(compaction: AgentCompactionSettings): AgentCompactionSettings {
-  if (
-    !compaction ||
-    typeof compaction.enabled !== 'boolean' ||
-    !isNonNegativeInteger(compaction.reserveTokens) ||
-    !isNonNegativeInteger(compaction.keepRecentTokens)
-  ) {
+function validateCompaction(
+  compaction: AgentCompactionSettings,
+  contextWindow?: number,
+): AgentCompactionSettings {
+  if (!compaction || typeof compaction.enabled !== 'boolean') {
     throw new Error('上下文压缩设置无效')
   }
+  const errors = getAgentCompactionSettingsErrors(compaction, contextWindow)
+  const error = errors.reserveTokens ?? errors.keepRecentTokens
+  if (error) throw new Error(error)
   return {
     enabled: compaction.enabled,
     reserveTokens: compaction.reserveTokens,

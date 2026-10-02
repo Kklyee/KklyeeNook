@@ -2,6 +2,7 @@ import type { AgentPlan } from './agentPlan'
 import type { ToolCall, ToolResult } from '../tool/tool'
 import type { Artifact } from '../artifact/artifact'
 import type { StepResult } from './agentStep'
+import type { AgentContextUsage } from './agentContextUsage'
 
 export type InputDelivery = 'initial' | 'steer' | 'follow-up'
 
@@ -18,20 +19,26 @@ export type AgentEvent =
   | { type: 'tool_finished'; result: ToolResult }
   | { type: 'plan_updated'; plan: AgentPlan }
   | { type: 'artifact_created'; artifact: Artifact }
+  | { type: 'context_usage_updated'; usage: AgentContextUsage; source: 'step' | 'compaction' }
   | {
       type: 'context_compaction_started'
       reason: 'manual' | 'threshold' | 'overflow'
+      tokensBefore?: number
+      contextWindow?: number
     }
   | {
       type: 'context_compaction_completed'
       reason: 'manual' | 'threshold' | 'overflow'
       tokensBefore?: number
       estimatedTokensAfter?: number
+      contextWindow?: number
     }
   | {
       type: 'context_compaction_failed'
       reason: 'manual' | 'threshold' | 'overflow'
       error: string
+      tokensBefore?: number
+      contextWindow?: number
     }
   | { type: 'approval_required'; approvalId: string; call: ToolCall }
   | {

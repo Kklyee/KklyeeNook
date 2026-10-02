@@ -16,9 +16,10 @@ import {
   ComposerBar,
   ComposerContext,
   ComposerSend,
-  type ComposerUsage,
 } from '@/renderer/src/components/assistant-ui/elements/composer'
 import type { AgentContextUsage } from '@/shared/agent/agentContextUsage'
+import { DEFAULT_AGENT_COMPACTION_SETTINGS, type AgentCompactionSettings } from '@/shared/agent/agentConfig'
+import { calculateAgentContextBudget } from '@/shared/agent/agentContextBudget'
 import {
   ModelSelectorContent,
   ModelSelectorRoot,
@@ -120,6 +121,7 @@ export type ThreadProps = {
     onEffortChange: (effort: string) => void
   }
   contextUsage?: AgentContextUsage
+  compactionSettings?: AgentCompactionSettings
   isCompacting?: boolean
   composerAccessory?: ReactNode
 }
@@ -172,6 +174,7 @@ export const Thread: FC<ThreadProps> = ({
   readOnly = false,
   modelSelector,
   contextUsage,
+  compactionSettings = DEFAULT_AGENT_COMPACTION_SETTINGS,
   isCompacting = false,
   composerAccessory,
 }) => {
@@ -185,6 +188,7 @@ export const Thread: FC<ThreadProps> = ({
         readOnly={readOnly}
         modelSelector={modelSelector}
         contextUsage={contextUsage}
+        compactionSettings={compactionSettings}
         isCompacting={isCompacting}
         composerAccessory={composerAccessory}
       />
@@ -198,6 +202,7 @@ const ThreadRoot: FC<{
   readOnly: boolean
   modelSelector?: ThreadProps['modelSelector']
   contextUsage?: AgentContextUsage
+  compactionSettings: AgentCompactionSettings
   isCompacting: boolean
   composerAccessory?: ReactNode
 }> = ({
@@ -206,6 +211,7 @@ const ThreadRoot: FC<{
   readOnly,
   modelSelector,
   contextUsage,
+  compactionSettings,
   isCompacting,
   composerAccessory,
 }) => {
@@ -261,6 +267,7 @@ const ThreadRoot: FC<{
                 autoFocus={autoFocus}
                 modelSelector={modelSelector}
                 contextUsage={contextUsage}
+                compactionSettings={compactionSettings}
                 isCompacting={isCompacting}
               />
             </ThreadPrimitive.ViewportFooter>
@@ -312,8 +319,9 @@ const Composer: FC<{
   autoFocus: boolean
   modelSelector?: ThreadProps['modelSelector']
   contextUsage?: AgentContextUsage
+  compactionSettings: AgentCompactionSettings
   isCompacting: boolean
-}> = ({ autoFocus, modelSelector, contextUsage, isCompacting }) => {
+}> = ({ autoFocus, modelSelector, contextUsage, compactionSettings, isCompacting }) => {
   const skills = useAvailableSkills()
   const commands = useMemo(
     () =>
@@ -348,6 +356,7 @@ const Composer: FC<{
             <ComposerAction
               modelSelector={modelSelector}
               contextUsage={contextUsage}
+              compactionSettings={compactionSettings}
               isCompacting={isCompacting}
             />
           </ComposerPrimitive.AttachmentDropzone>
@@ -421,19 +430,11 @@ function useAvailableSkills(): AgentSkill[] {
 const ComposerAction: FC<{
   modelSelector?: ThreadProps['modelSelector']
   contextUsage?: AgentContextUsage
+  compactionSettings: AgentCompactionSettings
   isCompacting: boolean
-}> = ({ modelSelector, contextUsage, isCompacting }) => {
+}> = ({ modelSelector, contextUsage, compactionSettings, isCompacting }) => {
   const canSend = useAuiState((s) => s.composer.canSend)
-  const tokens = contextUsage?.tokens
-  const contextWindow = contextUsage?.contextWindow
-  const hasContextUsage = typeof tokens === 'number' && typeof contextWindow === 'number'
-  const composerUsage = useMemo<ComposerUsage | undefined>(
-    () =>
-      hasContextUsage
-        ? { used: Math.round(tokens / 1000), total: Math.round(contextWindow / 1000) }
-        : undefined,
-    [contextWindow, hasContextUsage, tokens],
-  )
+  const budget = calculateAgentContextBudget(contextUsage, compactionSettings, { compacting: isCompacting })
 
   return (
     <div className="aui-composer-action-wrapper relative flex items-center justify-between">
@@ -462,10 +463,10 @@ const ComposerAction: FC<{
             aria-live="polite"
             className="text-foreground/40 whitespace-nowrap text-[11px]"
           >
-            Compressing context…
+            正在整理上下文…
           </span>
-        ) : composerUsage ? (
-          <ComposerContext usage={composerUsage} />
+        ) : budget.tokens !== undefined && budget.contextWindow !== undefined && budget.contextWindow > 0 ? (
+          <ComposerContext budget={budget} autoCompaction={compactionSettings.enabled} />
         ) : null}
         <AuiIf condition={(s) => s.thread.capabilities.dictation}>
           <AuiIf condition={(s) => s.composer.dictation == null}>

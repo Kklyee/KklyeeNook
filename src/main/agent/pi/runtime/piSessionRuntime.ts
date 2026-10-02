@@ -145,6 +145,7 @@ export interface PiSessionRuntimeOptions {
  * SDK session and its model, tools, extensions, queues, and event streams.
  */
 export class PiSessionRuntime implements PiSessionRuntimePort {
+  private compactionUsage?: AgentContextUsage
   private readonly sandbox: SandboxService
   private readonly getExecutionContext: () => Promise<AgentExecutionContext & { mode?: PermissionMode }>
   private executionContextKey: string | undefined
@@ -791,6 +792,10 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
   }
 
   private onSessionEvent(event: AgentSessionEvent): void {
+    const contextUsage = ['turn_end', 'agent_end', 'compaction_start', 'compaction_end'].includes(event.type)
+      ? this.getPiSession().getContextUsage()
+      : undefined
+    const usage = toAgentContextUsage(contextUsage)
     if (event.type === 'tool_execution_end') normalizePiToolExecutionEnd(event)
     if (event.type === 'turn_start') {
       this.turnIndex += 1
@@ -802,6 +807,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     }
     if (event.type === 'turn_end') {
       this.startPendingPiTurn()
+      if (usage) this.publishProductEvent({ type: 'context_usage_updated', usage, source: 'step' })
       this.publishExecutionEvent({
         type: 'pi_turn_end',
         result: event.message.role === 'assistant' && ['error', 'aborted'].includes(event.message.stopReason)
@@ -812,9 +818,12 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     for (const listener of this.listeners) this.notify(listener, event)
     this.publishClientEvent(toPiClientEventBody(event, this.turnIndex))
     if (event.type === 'compaction_start') {
+      this.compactionUsage = usage
       this.publishProductEvent({
         type: 'context_compaction_started',
         reason: event.reason,
+        tokensBefore: usage?.tokens,
+        contextWindow: usage?.contextWindow,
       })
     }
     if (event.type === 'compaction_end') {
@@ -826,7 +835,9 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
           ...(event.result.estimatedTokensAfter !== undefined
             ? { estimatedTokensAfter: event.result.estimatedTokensAfter }
             : {}),
+          contextWindow: this.compactionUsage?.contextWindow ?? usage?.contextWindow,
         })
+        if (usage) this.publishProductEvent({ type: 'context_usage_updated', usage, source: 'compaction' })
       } else {
         this.publishProductEvent({
           type: 'context_compaction_failed',
@@ -834,15 +845,17 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
           error:
             event.errorMessage ??
             (event.aborted ? 'Context compaction aborted' : 'Context compaction failed'),
+          tokensBefore: this.compactionUsage?.tokens,
+          contextWindow: this.compactionUsage?.contextWindow ?? usage?.contextWindow,
         })
       }
+      this.compactionUsage = undefined
     }
     if (
       event.type === 'turn_end' ||
       event.type === 'agent_end' ||
       event.type === 'compaction_end'
     ) {
-      const contextUsage = this.getPiSession().getContextUsage()
       if (contextUsage) this.publishClientEvent({ type: 'context_usage', contextUsage })
     }
   }

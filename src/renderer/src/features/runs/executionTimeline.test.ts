@@ -147,8 +147,8 @@ test('shows completed and failed context compaction events', () => {
   expect(completed.items).toMatchObject([
     {
       kind: 'compaction',
-      title: 'Context compressed',
-      summary: '112k → ~36k',
+      title: '已整理上下文',
+      summary: '112K → ~36K\n达到自动压缩阈值',
       status: 'completed',
       durationMs: 60,
     },
@@ -166,12 +166,58 @@ test('shows completed and failed context compaction events', () => {
   expect(failed.items).toMatchObject([
     {
       kind: 'compaction',
-      title: 'Context compaction failed',
-      summary: 'context window is full',
+      title: '上下文整理失败',
+      summary: '上下文溢出\ncontext window is full',
       status: 'failed',
       durationMs: 30,
     },
   ])
+})
+
+test('projects step budgets and keeps estimated and actual compaction usage distinct', () => {
+  const records = [
+    { ...record(1, 100, { type: 'step_started', stepId: 's1', ordinal: 1, piTurnIndex: 0, acceptedInputIds: [] }), stepId: 's1' },
+    { ...record(2, 110, { type: 'context_usage_updated', source: 'step', usage: { tokens: 31_000, contextWindow: 128_000 } }), stepId: 's1' },
+    { ...record(3, 120, { type: 'step_started', stepId: 's2', ordinal: 2, piTurnIndex: 1, acceptedInputIds: [] }), stepId: 's2' },
+    { ...record(4, 140, { type: 'context_usage_updated', source: 'step', usage: { tokens: 76_000, contextWindow: 128_000 } }), stepId: 's2' },
+    record(5, 150, { type: 'context_compaction_started', reason: 'threshold', tokensBefore: 76_421, contextWindow: 128_000 }),
+    record(6, 170, { type: 'context_compaction_completed', reason: 'threshold', tokensBefore: 76_421, estimatedTokensAfter: 24_180, contextWindow: 128_000 }),
+    record(7, 171, { type: 'context_usage_updated', source: 'compaction', usage: { tokens: 25_044, contextWindow: 128_000 } }),
+    { ...record(8, 180, { type: 'step_started', stepId: 's3', ordinal: 3, piTurnIndex: 2, acceptedInputIds: [] }), stepId: 's3' },
+    { ...record(9, 190, { type: 'context_usage_updated', source: 'step', usage: { tokens: 33_000, contextWindow: 128_000 } }), stepId: 's3' },
+  ]
+  const model = buildExecutionTimeline(run, records.reverse())
+  expect(model.stepContextUsage).toEqual({
+    s1: { tokens: 31_000, contextWindow: 128_000 },
+    s2: { tokens: 76_000, contextWindow: 128_000 },
+    s3: { tokens: 33_000, contextWindow: 128_000 },
+  })
+  expect(model.items).toHaveLength(1)
+  expect(model.items[0]).toMatchObject({
+    title: '已整理上下文', timestamp: 150, durationMs: 20, summary: '76K → ~24K\n达到自动压缩阈值',
+    detail: { reason: 'threshold', tokensBefore: 76_421, estimatedTokensAfter: 24_180, actualTokensAfter: 25_044, contextWindow: 128_000, usageTimestamp: 171 },
+  })
+})
+
+test('does not convert a compaction estimate into actual usage', () => {
+  const model = buildExecutionTimeline(run, [
+    record(1, 100, { type: 'context_compaction_completed', reason: 'manual', estimatedTokensAfter: 24_000 }),
+    record(2, 110, { type: 'context_usage_updated', source: 'compaction', usage: { contextWindow: 128_000 } }),
+    record(3, 120, { type: 'context_usage_updated', source: 'step', usage: { tokens: 33_000, contextWindow: 128_000 } }),
+  ])
+  expect(model.items[0]).toMatchObject({ summary: '~24K\n手动整理', detail: { estimatedTokensAfter: 24_000, actualTokensAfter: undefined, contextWindow: 128_000 } })
+  expect(model.stepContextUsage).toEqual({})
+})
+
+test('retains failure context from the compaction start event', () => {
+  const model = buildExecutionTimeline(run, [
+    record(1, 100, { type: 'context_compaction_started', reason: 'overflow', tokensBefore: 126_000, contextWindow: 128_000 }),
+    record(2, 110, { type: 'context_compaction_failed', reason: 'overflow', error: 'failed' }),
+  ])
+  expect(model.items[0]).toMatchObject({
+    title: '上下文整理失败', summary: '上下文溢出\n126K / 128K\nfailed',
+    detail: { reason: 'overflow', tokensBefore: 126_000, contextWindow: 128_000, error: 'failed' },
+  })
 })
 
 test('shows plan updates in the execution timeline', () => {

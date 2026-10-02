@@ -3,6 +3,7 @@
 import { type ComponentProps, useMemo } from 'react'
 import {
   ArrowUpIcon,
+  TriangleAlertIcon,
   CheckIcon,
   ChevronDownIcon,
   FileArchiveIcon,
@@ -27,6 +28,9 @@ import {
   ShimmerLabel,
 } from '@/renderer/src/lib/surfaces'
 import { clamp, pct } from '@/renderer/src/lib/range'
+import type { AgentContextBudget, AgentContextBudgetState } from '@/shared/agent/agentContextBudget'
+import { formatContextTokens } from '@/shared/agent/contextTokens'
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@/renderer/src/components/ui/popover'
 
 export interface ComposerAttachment {
   name: string
@@ -50,11 +54,6 @@ export interface ComposerPerson {
 export interface ComposerModel {
   name: string
   meta: string
-}
-
-export interface ComposerUsage {
-  used: number
-  total: number
 }
 
 const ATTACHMENT_ICONS: Record<NonNullable<ComposerAttachment['kind']>, LucideIcon> = {
@@ -429,86 +428,117 @@ export function ComposerModelItem({
 }
 
 export function ComposerContext({
-  usage,
+  budget,
+  autoCompaction,
   className,
   ...props
-}: Omit<ComponentProps<'div'>, 'children'> & { usage: ComposerUsage }) {
-  const used = usage.used
-  const fraction = usage.total === 0 ? 0 : used / usage.total
-  const warn = fraction > 0.85
+}: Omit<ComponentProps<'div'>, 'children'> & {
+  budget: AgentContextBudget
+  autoCompaction: boolean
+}) {
+  const fraction = budget.usedPercent ?? 0
+  const warn = budget.state === 'warning' || budget.state === 'critical'
   const circumference = 2 * Math.PI * 6
+  const status = CONTEXT_STATE_LABELS[budget.state]
+  const format = (value?: number) => (value === undefined ? '未知' : formatContextTokens(value))
+  const rows = [
+    ['已使用', budget.tokens],
+    ['上下文窗口', budget.contextWindow],
+    ['预留', budget.reserveTokens],
+    ['剩余窗口', budget.remainingTokens],
+    ['距预计压缩', budget.remainingBeforeCompaction],
+  ] as const
 
   return (
-    <div data-slot="composer-context" className={cn('group/ctx relative', className)} {...props}>
-      <div
-        className={cn(
-          'glass-surface',
-          'absolute end-0 bottom-full z-10 mb-2 flex w-60 origin-bottom-right flex-col gap-3.5 rounded-2xl p-4',
-          'transition-[opacity,scale] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none',
-          'pointer-events-none scale-[0.97] opacity-0',
-          'group-hover/ctx:pointer-events-auto group-hover/ctx:scale-100 group-hover/ctx:opacity-100',
-          'group-focus-within/ctx:pointer-events-auto group-focus-within/ctx:scale-100 group-focus-within/ctx:opacity-100',
-        )}
-      >
-        <div className="flex items-baseline justify-between">
-          <p className="text-[13.5px] font-medium">Context</p>
+    <div data-slot="composer-context" data-state={budget.state} className={className} {...props}>
+      <Popover>
+        <PopoverTrigger
+          openOnHover
+          aria-label={`上下文 ${format(budget.tokens)} / ${format(budget.contextWindow)}，${status}`}
+          title={status}
+          className={cn(
+            ghostButton,
+            'h-8 gap-1.5 px-2 text-[11px] tabular-nums',
+            budget.state === 'warning' && 'text-amber-600 dark:text-amber-400',
+            budget.state === 'critical' && 'text-destructive',
+          )}
+        >
+          <svg viewBox="0 0 16 16" className="size-3.5 -rotate-90" aria-hidden>
+            <circle
+              cx="8"
+              cy="8"
+              r="6"
+              fill="none"
+              strokeWidth="2.5"
+              className="stroke-foreground/10"
+            />
+            <circle
+              cx="8"
+              cy="8"
+              r="6"
+              fill="none"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              className="stroke-current transition-[stroke-dashoffset] duration-700 motion-reduce:transition-none"
+              strokeDasharray={circumference}
+              strokeDashoffset={circumference * (1 - clamp(fraction, 0, 1))}
+            />
+          </svg>
+          <span>
+            {format(budget.tokens)} / {format(budget.contextWindow)}
+          </span>
+          {warn && <TriangleAlertIcon className="size-3" aria-hidden />}
+        </PopoverTrigger>
+        <PopoverContent side="top" align="end" className="w-64 gap-3.5 rounded-2xl p-4">
+          <div className="flex items-baseline justify-between">
+            <PopoverTitle>上下文</PopoverTitle>
+            <span className="text-foreground/40 text-xs tabular-nums">
+              {Math.round(fraction * 100)}%
+            </span>
+          </div>
           <p
             className={cn(
-              mono,
-              'tabular-nums',
-              warn ? 'text-red-500 dark:text-red-400' : 'text-foreground/35',
+              'text-xs',
+              warn ? 'text-amber-600 dark:text-amber-400' : 'text-foreground/40',
             )}
           >
-            {Math.round(fraction * 100)}%
+            {status}
           </p>
-        </div>
-        <div className="bg-foreground/[0.06] flex h-[5px] w-full gap-px overflow-hidden rounded-full">
-          <span
-            className="bg-foreground/80 h-full transition-[width] duration-700 motion-reduce:transition-none"
-            style={{ width: `${pct(used, usage.total)}%` }}
-          />
-        </div>
-        <div className="text-foreground/55 flex items-center justify-between text-[13px]">
-          <span>Total</span>
-          <span className={cn(mono, 'text-foreground/40 tabular-nums')}>
-            {formatComposerTokens(used)} / {formatComposerTokens(usage.total)}
-          </span>
-        </div>
-      </div>
-      <button
-        type="button"
-        aria-label="Context usage"
-        className={cn(ghostButton, 'size-8', warn && 'text-red-500 dark:text-red-400')}
-      >
-        <svg viewBox="0 0 16 16" className="size-4 -rotate-90" aria-hidden>
-          <circle
-            cx="8"
-            cy="8"
-            r="6"
-            fill="none"
-            strokeWidth="2.5"
-            className="stroke-foreground/10"
-          />
-          <circle
-            cx="8"
-            cy="8"
-            r="6"
-            fill="none"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            className="stroke-current transition-[stroke-dashoffset] duration-700 motion-reduce:transition-none"
-            strokeDasharray={circumference}
-            strokeDashoffset={circumference * (1 - clamp(fraction, 0, 1))}
-          />
-        </svg>
-      </button>
+          <div className="bg-foreground/[0.06] h-[5px] overflow-hidden rounded-full" aria-hidden>
+            <div
+              className="bg-current h-full transition-[width] duration-700 motion-reduce:transition-none"
+              style={{ width: `${clamp(fraction, 0, 1) * 100}%` }}
+            />
+          </div>
+          <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 text-xs">
+            {rows.map(([label, value]) => (
+              <div key={label} className="contents">
+                <dt className="text-foreground/55">{label}</dt>
+                <dd
+                  className="text-right tabular-nums"
+                  title={
+                    value === undefined ? undefined : `${value.toLocaleString('en-US')} tokens`
+                  }
+                >
+                  {format(value)}
+                </dd>
+              </div>
+            ))}
+            <dt className="text-foreground/55">自动压缩</dt>
+            <dd className="text-right">{autoCompaction ? '开启' : '关闭'}</dd>
+          </dl>
+        </PopoverContent>
+      </Popover>
     </div>
   )
 }
 
-function formatComposerTokens(value: number): string {
-  if (value < 1000) return `${value}k`
-  return `${Math.round((value / 1000) * 10) / 10}M`
+const CONTEXT_STATE_LABELS: Record<AgentContextBudgetState, string> = {
+  unknown: '上下文预算未知',
+  normal: '上下文预算充足',
+  warning: '接近预计压缩边界',
+  critical: '即将达到预计压缩边界',
+  compacting: '正在整理上下文…',
 }
 
 export function ComposerVoiceButton({

@@ -36,6 +36,8 @@ import {
   type ExecutionTimelineModel,
   type TimelineItem,
   type TimelineItemKind,
+  type CompactionTimelineDetail,
+  COMPACTION_REASON_LABELS,
 } from './executionTimeline'
 
 interface RunTimeline {
@@ -274,6 +276,14 @@ function RunGroup({
     .filter((event) => matchesSearch(event, query))
   const claimedInputs = new Set(timeline.trace.steps.flatMap((step) => step.acceptedInputIds))
   const toolCount = model.items.filter((event) => event.kind === 'tool').length
+  const entries = [
+    ...timeline.trace.steps.map((step) => ({ seq: step.startedSeq, step, event: undefined })),
+    ...unscopedItems.filter((event) => event.title !== 'System Prompt').map((event) => ({
+      seq: timeline.records.find((record) => String(record.id) === event.id)!.seq,
+      step: undefined,
+      event,
+    })),
+  ].sort((a, b) => a.seq - b.seq)
   const renderEvent = (event: TimelineItem) => {
     const input = event.kind === 'user'
       ? timeline.records.find((record) => String(record.id) === event.id)?.event
@@ -346,7 +356,14 @@ function RunGroup({
       </div>
       {open ? (
         <div>
-          {timeline.trace.steps.map((step) => {
+          {entries.map(({ step, event }, index) => {
+            if (event) {
+              if (entries[index - 1]?.event) return null
+              const nextStep = entries.findIndex((entry, nextIndex) => nextIndex > index && entry.step)
+              const events = entries.slice(index, nextStep === -1 ? undefined : nextStep).map((entry) => entry.event!)
+              return <div key={`unscoped-${event.id}`} className="pl-[36px]">{renderItems(events)}</div>
+            }
+            if (!step) return null
             const inputRecords = timeline.records.filter(
               (record) => record.event.type === 'user_message' && step.acceptedInputIds.includes(record.event.inputId),
             )
@@ -362,6 +379,7 @@ function RunGroup({
                 run={run}
                 empty={!items.length}
                 inputs={inputItems.map(renderEvent)}
+                contextUsage={model.stepContextUsage[step.id]}
               >
                 {renderItems(items)}
               </StepTrace>
@@ -373,9 +391,6 @@ function RunGroup({
                 ? '未处理输入' : 'Legacy Execution'}
             </p>
           )}
-          <div className="pl-[36px]">
-            {renderItems(unscopedItems.filter((event) => event.title !== 'System Prompt'))}
-          </div>
           {!model.items.length && (
             <p className="text-foreground/30 px-16 py-3 text-xs">
               该历史 Run 没有可回溯的事件明细。
@@ -467,6 +482,7 @@ function EventRow({
       className={cn(
         'group grid h-[24px] w-full grid-cols-[24px_minmax(0,1fr)_56px] items-center gap-x-[8px] border-b border-foreground/[0.035] px-[4px] text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-blue-400/60',
         selected ? 'bg-foreground/[0.08]' : 'hover:bg-foreground/[0.035]',
+        event.kind === 'compaction' && 'h-auto min-h-[40px] py-1',
       )}
     >
       <span
@@ -477,7 +493,7 @@ function EventRow({
       >
         {meta.label}
       </span>
-      <span className="flex min-w-0 items-center gap-[8px] pr-[4px] text-[11px] leading-[16px]">
+      <span className={cn('flex min-w-0 items-center gap-[8px] pr-[4px] text-[11px] leading-[16px]', event.kind === 'compaction' && 'flex-col items-start gap-0')}>
         {event.title === '用户消息' || event.title === 'AI 消息' ? (
           <>
             {inputLabel && <span className="shrink-0 text-[10px] text-blue-500 dark:text-blue-300">{inputLabel}</span>}
@@ -487,7 +503,7 @@ function EventRow({
           <>
             <span className="shrink-0 whitespace-nowrap text-foreground/85">{event.title === 'System Prompt' ? '初始系统提示词' : event.title}</span>
             {summary && event.title !== 'System Prompt' && (
-              <span className="min-w-0 truncate text-foreground/60">{summary}</span>
+              <span className={cn('min-w-0 truncate text-foreground/60', event.kind === 'compaction' && 'whitespace-pre-line', event.kind === 'compaction' && event.status === 'failed' && 'text-destructive')}>{summary}</span>
             )}
           </>
         )}
@@ -522,6 +538,7 @@ function EventDetailPanel({ selected, onClose }: { selected: SelectedEvent; onCl
   const { run, event } = selected
   const meta = EVENT_META[event.kind]
   const sections = eventDetailSections(event)
+  const compaction = event.kind === 'compaction' ? event.detail as CompactionTimelineDetail : undefined
   const [activeTab, setActiveTab] = useState<'overview' | 'input' | 'output'>('overview')
   const tabs = [
     { id: 'overview' as const, label: '概览', visible: true },
@@ -594,6 +611,12 @@ function EventDetailPanel({ selected, onClose }: { selected: SelectedEvent; onCl
               {run.parentRunId && (
                 <DetailRow label="Parent Run" value={run.parentRunId} monoValue />
               )}
+              {compaction && <DetailRow label="原因" value={`${COMPACTION_REASON_LABELS[compaction.reason]} (${compaction.reason})`} />}
+              {compaction?.tokensBefore !== undefined && <DetailRow label="压缩前" value={compaction.tokensBefore.toLocaleString('en-US')} monoValue />}
+              {compaction?.estimatedTokensAfter !== undefined && <DetailRow label="预计压缩后" value={`~${compaction.estimatedTokensAfter.toLocaleString('en-US')}`} monoValue />}
+              {compaction?.actualTokensAfter !== undefined && <DetailRow label="压缩后实际" value={compaction.actualTokensAfter.toLocaleString('en-US')} monoValue />}
+              {compaction?.contextWindow !== undefined && <DetailRow label="上下文窗口" value={compaction.contextWindow.toLocaleString('en-US')} monoValue />}
+              {compaction?.error && <DetailRow label="错误" value={compaction.error} error />}
             </dl>
             {sections.input !== undefined && (
               <DetailPreview

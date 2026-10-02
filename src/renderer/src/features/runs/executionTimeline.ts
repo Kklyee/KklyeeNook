@@ -1,5 +1,23 @@
 import type { AgentExecutionRecord } from '@/shared/agent/agentExecutionRecord'
 import type { AgentRun } from '@/shared/agent/agentRun'
+import type { AgentContextUsage } from '@/shared/agent/agentContextUsage'
+import { formatContextTokens } from '@/shared/agent/contextTokens'
+
+export interface CompactionTimelineDetail {
+  reason: 'manual' | 'threshold' | 'overflow'
+  tokensBefore?: number
+  estimatedTokensAfter?: number
+  actualTokensAfter?: number
+  contextWindow?: number
+  usageTimestamp?: number
+  error?: string
+}
+
+export const COMPACTION_REASON_LABELS = {
+  manual: '手动整理',
+  threshold: '达到自动压缩阈值',
+  overflow: '上下文溢出',
+} as const
 
 export type TimelineItemKind =
   | 'system'
@@ -26,6 +44,7 @@ export interface TimelineItem {
 export interface ExecutionTimelineModel {
   totalMs: number
   items: TimelineItem[]
+  stepContextUsage: Record<string, AgentContextUsage>
 }
 
 export function buildExecutionTimeline(
@@ -39,7 +58,9 @@ export function buildExecutionTimeline(
   const items: TimelineItem[] = []
   const tools = new Map<string, TimelineItem>()
   const approvals = new Map<string, TimelineItem>()
+  const stepContextUsage: Record<string, AgentContextUsage> = {}
   let activeCompaction: TimelineItem | undefined
+  let completedCompaction: TimelineItem | undefined
   let streamStepId: string | undefined
 
   for (const record of [...records].sort((a, b) => a.seq - b.seq)) {
@@ -63,6 +84,16 @@ export function buildExecutionTimeline(
         break
       case 'step_started':
         streamStepId = undefined
+        break
+      case 'context_usage_updated':
+        if (event.source === 'step' && record.stepId) stepContextUsage[record.stepId] = event.usage
+        if (event.source === 'compaction' && completedCompaction) {
+          const detail = completedCompaction.detail as CompactionTimelineDetail
+          detail.actualTokensAfter = event.usage.tokens
+          detail.contextWindow ??= event.usage.contextWindow
+          detail.usageTimestamp = record.timestamp
+          completedCompaction = undefined
+        }
         break
       case 'thinking_delta': {
         const previous = items.at(-1)
@@ -154,43 +185,58 @@ export function buildExecutionTimeline(
         break
       case 'context_compaction_started': {
         const compaction = {
-          ...item(record.id, 'compaction', 'Compressing context', record.timestamp),
-          detail: { reason: event.reason },
+          ...item(record.id, 'compaction', '正在整理上下文…', record.timestamp),
+          summary: COMPACTION_REASON_LABELS[event.reason],
+          detail: { reason: event.reason, tokensBefore: event.tokensBefore, contextWindow: event.contextWindow },
           status: 'running' as const,
         }
         activeCompaction = compaction
+        completedCompaction = undefined
         items.push(compaction)
         break
       }
       case 'context_compaction_completed': {
         const compaction =
-          activeCompaction ?? item(record.id, 'compaction', 'Context compressed', record.timestamp)
+          activeCompaction ?? item(record.id, 'compaction', '已整理上下文', record.timestamp)
         if (!activeCompaction) items.push(compaction)
-        compaction.title = 'Context compressed'
+        compaction.title = '已整理上下文'
         compaction.durationMs = Math.max(0, record.timestamp - compaction.timestamp)
-        compaction.summary = compactionSummary(event.tokensBefore, event.estimatedTokensAfter)
         compaction.detail = {
+          ...asObject(compaction.detail),
           reason: event.reason,
           ...(event.tokensBefore !== undefined ? { tokensBefore: event.tokensBefore } : {}),
           ...(event.estimatedTokensAfter !== undefined
             ? { estimatedTokensAfter: event.estimatedTokensAfter }
             : {}),
+          ...(event.contextWindow !== undefined ? { contextWindow: event.contextWindow } : {}),
         }
+        const detail = compaction.detail as CompactionTimelineDetail
+        compaction.summary = [compactionSummary(detail.tokensBefore, detail.estimatedTokensAfter), COMPACTION_REASON_LABELS[event.reason]].filter(Boolean).join('\n')
         compaction.status = 'completed'
         activeCompaction = undefined
+        completedCompaction = compaction
         break
       }
       case 'context_compaction_failed': {
         const compaction =
           activeCompaction ??
-          item(record.id, 'compaction', 'Context compaction failed', record.timestamp)
+          item(record.id, 'compaction', '上下文整理失败', record.timestamp)
         if (!activeCompaction) items.push(compaction)
-        compaction.title = 'Context compaction failed'
+        compaction.title = '上下文整理失败'
         compaction.durationMs = Math.max(0, record.timestamp - compaction.timestamp)
-        compaction.summary = event.error
-        compaction.detail = { reason: event.reason, error: event.error }
+        compaction.detail = {
+          ...asObject(compaction.detail),
+          reason: event.reason,
+          error: event.error,
+          ...(event.tokensBefore !== undefined ? { tokensBefore: event.tokensBefore } : {}),
+          ...(event.contextWindow !== undefined ? { contextWindow: event.contextWindow } : {}),
+        }
+        const detail = compaction.detail as CompactionTimelineDetail
+        const usage = detail.tokensBefore === undefined ? undefined : `${formatContextTokens(detail.tokensBefore)}${detail.contextWindow === undefined ? '' : ` / ${formatContextTokens(detail.contextWindow)}`}`
+        compaction.summary = [COMPACTION_REASON_LABELS[event.reason], usage, event.error].filter(Boolean).join('\n')
         compaction.status = 'failed'
         activeCompaction = undefined
+        completedCompaction = undefined
         break
       }
       case 'approval_required': {
@@ -239,7 +285,7 @@ export function buildExecutionTimeline(
     items.unshift(items.splice(systemPromptIndex, 1)[0]!)
   }
 
-  return { totalMs, items }
+  return { totalMs, items, stepContextUsage }
 }
 
 function item(id: number, kind: TimelineItemKind, title: string, timestamp: number): TimelineItem {
@@ -283,14 +329,8 @@ function planSummary(plan: { steps: readonly { status: string }[] }): string {
 }
 
 function compactionSummary(tokensBefore?: number, estimatedTokensAfter?: number): string {
-  const before = formatTokens(tokensBefore)
-  const after = formatTokens(estimatedTokensAfter)
+  const before = tokensBefore === undefined ? undefined : formatContextTokens(tokensBefore)
+  const after = estimatedTokensAfter === undefined ? undefined : formatContextTokens(estimatedTokensAfter)
   if (before && after) return `${before} → ~${after}`
-  return before ?? after ?? ''
-}
-
-function formatTokens(value: number | undefined): string | undefined {
-  if (typeof value !== 'number') return undefined
-  if (value < 1_000) return String(value)
-  return `${Math.round(value / 1_000)}k`
+  return before ?? (after ? `~${after}` : '')
 }

@@ -99,6 +99,53 @@ function fakeSessionManager(
   return { buildSessionContext: vi.fn(() => context), getBranch: vi.fn(() => branch) }
 }
 
+test.each([
+  undefined,
+  { tokens: null, contextWindow: 128_000, percent: null },
+])('does not invent usage at step and compaction boundaries: %j', async (postUsage) => {
+  const session = fakeSession()
+  vi.mocked(createAgentSession).mockResolvedValue({ session } as never)
+  vi.mocked(SessionManager.create).mockReturnValue(fakeSessionManager() as never)
+  vi.mocked(ModelRuntime.create).mockResolvedValue({
+    registerProvider: vi.fn(), unregisterProvider: vi.fn(), setRuntimeApiKey: vi.fn(),
+    getModel: () => ({ provider: 'custom', id: 'model-1' }),
+  } as never)
+  const runtime = new PiSessionRuntime(
+    'session-1',
+    new AgentConfigStore({ model: { provider: 'custom', modelID: 'model-1', baseUrl: 'https://example.test', thinkingLevel: 'off' }, tools: { enabled: [] } }),
+    { getApiKey: () => 'secret' } as unknown as CredentialStore,
+    { findBySessionId: vi.fn(), save: vi.fn() } as unknown as AgentRuntimeStateRepo,
+    new ToolRegistry(), 'sessions',
+  )
+  const events: AgentEvent[] = []
+  runtime.subscribeProductEvents((event) => events.push(event))
+  await runtime.initialize()
+  session.getContextUsage.mockReturnValue(undefined)
+  session.emit({ type: 'turn_end', message: { role: 'assistant', stopReason: 'stop' }, toolResults: [] } as never)
+  expect(events).toEqual([])
+  session.getContextUsage.mockReturnValue({ tokens: 126_000, contextWindow: 128_000, percent: 98.4375 })
+  session.emit({ type: 'compaction_start', reason: 'overflow' })
+  session.getContextUsage.mockReturnValue(postUsage)
+  session.emit({
+    type: 'compaction_end', reason: 'overflow', aborted: false, willRetry: false,
+    result: { summary: 'private', firstKeptEntryId: 'entry-1', tokensBefore: 126_000, estimatedTokensAfter: 24_000 },
+  })
+  const usageEvents = events.filter((event) => event.type === 'context_usage_updated')
+  expect(usageEvents).toEqual(postUsage ? [{ type: 'context_usage_updated', source: 'compaction', usage: { contextWindow: 128_000 } }] : [])
+  const eventCount = events.length
+  session.emit({ type: 'agent_end', messages: [], willRetry: false })
+  expect(events).toHaveLength(eventCount)
+  session.getContextUsage.mockReturnValue({ tokens: 126_000, contextWindow: 128_000, percent: 98.4375 })
+  session.emit({ type: 'compaction_start', reason: 'overflow' })
+  session.getContextUsage.mockReturnValue(undefined)
+  session.emit({ type: 'compaction_end', reason: 'overflow', result: undefined, aborted: false, willRetry: false, errorMessage: 'provider error' })
+  expect(events.at(-1)).toEqual({
+    type: 'context_compaction_failed', reason: 'overflow', tokensBefore: 126_000, contextWindow: 128_000, error: 'provider error',
+  })
+  expect(events.filter((event) => event.type === 'context_usage_updated')).toEqual(usageEvents)
+  runtime.dispose()
+})
+
 test('uses configured custom-provider limits and keeps client subscriptions across reloads', async () => {
   const model = { provider: 'custom', id: 'model-1' }
   let registered = false
@@ -184,7 +231,9 @@ test('uses configured custom-provider limits and keeps client subscriptions acro
     contextWindow: 128_000,
     percent: 32.8125,
   })
+  firstSession.getContextUsage.mockReturnValue({ tokens: 112_000, contextWindow: 128_000, percent: 87.5 })
   firstSession.emit({ type: 'compaction_start', reason: 'threshold' })
+  firstSession.getContextUsage.mockReturnValue({ tokens: 37_000, contextWindow: 128_000, percent: 28.90625 })
   firstSession.emit({
     type: 'compaction_end',
     reason: 'threshold',
@@ -198,13 +247,15 @@ test('uses configured custom-provider limits and keeps client subscriptions acro
     willRetry: false,
   })
   expect(productEvents).toEqual([
-    { type: 'context_compaction_started', reason: 'threshold' },
+    { type: 'context_compaction_started', reason: 'threshold', tokensBefore: 112_000, contextWindow: 128_000 },
     {
       type: 'context_compaction_completed',
       reason: 'threshold',
       tokensBefore: 112_000,
       estimatedTokensAfter: 36_000,
+      contextWindow: 128_000,
     },
+    { type: 'context_usage_updated', source: 'compaction', usage: { tokens: 37_000, contextWindow: 128_000, percent: 28.90625 } },
   ])
   expect(runtime.registerProvider).toHaveBeenCalledWith(
     'custom',
@@ -406,8 +457,11 @@ test('maps real Pi turns, batched duplicate steering and follow-up to execution 
   )
   const boundaries: ExecutionBoundaryEvent[] = []
   const toolEvents: AgentEvent[] = []
+  const runtimeEvents: import('@/main/agent/agentRuntime').AgentRuntimeEvent[] = []
+  session.getContextUsage.mockReturnValue({ tokens: 31_000, contextWindow: 128_000, percent: 24.21875 })
   const runtime = new PiAgentRuntime(sessionRuntime, () => sessionRuntime.dispose())
   const completion = runtime.run({ prompt: 'same', runId: 'run-1' }, (event) => {
+    runtimeEvents.push(event)
     if (event.type === 'pi_turn_start' || event.type === 'pi_turn_end' || event.type === 'pi_agent_settled') boundaries.push(event)
     else toolEvents.push(event)
   })
@@ -435,6 +489,12 @@ test('maps real Pi turns, batched duplicate steering and follow-up to execution 
   expect(toolEvents.filter((event) => event.type === 'tool_started')).toHaveLength(3)
   expect(toolEvents.filter((event) => event.type === 'tool_finished').every((event) => event.result.status === 'success')).toBe(true)
   expect(toolEvents.at(-1)?.type).toBe('agent_completed')
+  const usageEvents = runtimeEvents.filter((event) => event.type === 'context_usage_updated')
+  expect(usageEvents).toHaveLength(3)
+  expect(usageEvents.every((event) => event.source === 'step' && event.usage.tokens === 31_000)).toBe(true)
+  for (const event of usageEvents) {
+    expect(runtimeEvents[runtimeEvents.indexOf(event) + 1]?.type).toBe('pi_turn_end')
+  }
   expect(session.setSteeringMode).toHaveBeenCalledWith('all')
   expect(session.setFollowUpMode).toHaveBeenCalledWith('all')
   await sessionRuntime.sendMessage({ content: 'queued before abort', streamingBehavior: 'steer' })

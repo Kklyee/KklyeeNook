@@ -118,6 +118,45 @@ const sessionRecord: AgentSessionRecord = {
   archived: false,
 }
 
+test('persists usage at step boundaries with durable run ordering and leaves compaction unscoped', async () => {
+  const recordRepo = new MemoryExecutionRecordRepo()
+  const usage = { tokens: 76_000, contextWindow: 128_000 }
+  const service = new AgentService(
+    {
+      create: () => ({
+        async run(_input, emit) {
+          emit({ type: 'pi_turn_start', piTurnIndex: 0, deliveries: ['initial'] })
+          emit({ type: 'context_usage_updated', source: 'step', usage })
+          emit({ type: 'pi_turn_end', result: 'committed' })
+          emit({ type: 'context_compaction_started', reason: 'threshold', tokensBefore: 76_000, contextWindow: 128_000 })
+          emit({ type: 'context_compaction_completed', reason: 'threshold', tokensBefore: 76_000, estimatedTokensAfter: 24_000, contextWindow: 128_000 })
+          emit({ type: 'context_usage_updated', source: 'compaction', usage: { tokens: 25_000, contextWindow: 128_000 } })
+          emit({ type: 'pi_turn_start', piTurnIndex: 1, deliveries: [] })
+          emit({ type: 'context_usage_updated', source: 'step', usage: { tokens: 33_000, contextWindow: 128_000 } })
+          emit({ type: 'pi_turn_end', result: 'committed' })
+          emit({ type: 'agent_completed' })
+        },
+        dispose() {},
+      }),
+    },
+    new MemorySessionRepo([sessionRecord]), new MemoryRunRepo(), recordRepo, new MemoryArtifactRepo(),
+  )
+  await service.initialize()
+  const handle = service.startRun(sessionRecord.id, { prompt: 'test budget' })
+  await handle.completion
+  const records = await recordRepo.findByRunId(handle.run.id)
+  expect(records.every((record) => record.runId === handle.run.id && record.sessionId === sessionRecord.id)).toBe(true)
+  expect(records.map((record) => record.seq)).toEqual(records.map((_, index) => index + 1))
+  const stepStarts = records.filter((record) => record.event.type === 'step_started')
+  const usageRecords = records.filter((record) => record.event.type === 'context_usage_updated')
+  expect(usageRecords.map((record) => record.stepId)).toEqual([stepStarts[0]?.stepId, undefined, stepStarts[1]?.stepId])
+  expect(usageRecords[0]?.stepId).toBeDefined()
+  expect(usageRecords[2]?.stepId).toBeDefined()
+  for (const record of usageRecords.filter((record) => record.event.type === 'context_usage_updated' && record.event.source === 'step')) {
+    expect(records[records.indexOf(record) + 1]?.event.type).toBe('step_ended')
+  }
+})
+
 function run(status: AgentRun['status'], id: string, createdAt: number): AgentRun {
   return {
     id,

@@ -2,6 +2,8 @@ import type { ReactNode } from 'react'
 import { LoaderCircleIcon } from 'lucide-react'
 import type { AgentStepTrace } from '@/shared/agent/agentStep'
 import type { AgentRun } from '@/shared/agent/agentRun'
+import type { AgentContextUsage } from '@/shared/agent/agentContextUsage'
+import { formatContextTokens } from '@/shared/agent/contextTokens'
 import { cn } from '@/renderer/src/lib/utils'
 
 export function StepTrace({
@@ -9,12 +11,14 @@ export function StepTrace({
   run,
   empty,
   inputs,
+  contextUsage,
   children,
 }: {
   step: AgentStepTrace
   run: AgentRun
   empty: boolean
   inputs: ReactNode
+  contextUsage?: AgentContextUsage
   children: ReactNode
 }) {
   const start =
@@ -45,6 +49,14 @@ export function StepTrace({
             {running ? '正在请求模型…' : `请求${status}`}
           </div>
         ) : children}
+        {contextUsage?.tokens !== undefined && contextUsage.contextWindow !== undefined && contextUsage.contextWindow > 0 && (
+          <p
+            className="px-1 py-1 text-right text-[10px] text-foreground/40 tabular-nums"
+            title={`${contextUsage.tokens.toLocaleString('en-US')} / ${contextUsage.contextWindow.toLocaleString('en-US')} tokens`}
+          >
+            上下文 {formatContextTokens(contextUsage.tokens)} / {formatContextTokens(contextUsage.contextWindow)}
+          </p>
+        )}
       </div>
     </div>
   )

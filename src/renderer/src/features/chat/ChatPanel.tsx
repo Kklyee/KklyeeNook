@@ -170,6 +170,7 @@ export function ChatPanel({
             <Thread
               composerAccessory={<PiExtensionUiPrompt />}
               contextUsage={toAgentContextUsage(piRuntime.contextUsage)}
+              compactionSettings={settings?.compaction}
               isCompacting={piRuntime.compaction?.active === true}
               modelSelector={{
                 models: modelOptions,

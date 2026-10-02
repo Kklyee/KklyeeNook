@@ -54,6 +54,10 @@ test('migrates legacy ordering without inventing boundaries and enforces durable
     await repo.append({ ...envelope, runId: 'run-2', seq: 2 })
     expect((await repo.findByRunId('run-1')).at(-1)).toMatchObject(envelope)
     expect(await repo.getMaxSeq('run-1')).toBe(10)
+    const contextEnvelope = { ...envelope, seq: 11, event: { type: 'context_usage_updated' as const, source: 'step' as const, usage: { tokens: 31_000, contextWindow: 128_000 } } }
+    await repo.append(contextEnvelope)
+    expect((await repo.findByRunId('run-1')).at(-1)).toMatchObject(contextEnvelope)
+    expect(await repo.getMaxSeq('run-1')).toBe(11)
     await db.$client.execute("DELETE FROM agent_runs WHERE id = 'run-1'")
     expect(await repo.findByRunId('run-1')).toEqual([])
     expect(await repo.findByRunId('run-2')).toHaveLength(2)
