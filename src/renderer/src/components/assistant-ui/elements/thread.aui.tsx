@@ -669,8 +669,7 @@ const PendingToolGroup: FC<PropsWithChildren<{ group: ThreadGroupPart }>> = ({
     <ToolGroupRoot variant="ghost" open={open} onOpenChange={setOpen}>
       <ToolGroupTrigger
         count={group.indices.length}
-        active={group.status.type === 'running'}
-        attention={requiresAction}
+        active={group.status.type === 'running' || requiresAction}
       />
       <ToolGroupContent>{children}</ToolGroupContent>
     </ToolGroupRoot>

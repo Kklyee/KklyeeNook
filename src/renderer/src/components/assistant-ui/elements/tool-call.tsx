@@ -2,7 +2,6 @@
 
 import { useCallback, useRef, useState, type ReactNode } from 'react'
 import {
-  AlertCircleIcon,
   BotIcon,
   CheckIcon,
   ChevronRightIcon,
@@ -146,22 +145,13 @@ export function ToolCard({
   const open = isControlled ? controlledOpen : uncontrolledOpen
   const statusType = status?.type ?? 'complete'
   const isShimmerActive = statusType === 'running' || statusType === 'requires-action'
-  const StatusIcon =
-    statusType === 'running'
-      ? null
-      : statusType === 'complete'
-        ? CheckIcon
-        : statusType === 'requires-action'
-          ? AlertCircleIcon
-          : XCircleIcon
+  const StatusIcon = isShimmerActive ? null : statusType === 'complete' ? CheckIcon : XCircleIcon
   const statusClassName =
     statusType === 'complete'
       ? 'text-success'
-      : statusType === 'requires-action'
-        ? 'text-warning'
-        : status?.type === 'incomplete' && status.reason === 'cancelled'
-          ? 'text-text-faint'
-          : 'text-danger'
+      : status?.type === 'incomplete' && status.reason === 'cancelled'
+        ? 'text-text-faint'
+        : 'text-danger'
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {

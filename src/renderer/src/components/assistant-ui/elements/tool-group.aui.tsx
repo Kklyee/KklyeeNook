@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useCallback, useRef, useState, type FC, type PropsWithChildren } from 'react'
-import { AlertCircleIcon, ChevronDownIcon } from 'lucide-react'
+import { ChevronDownIcon } from 'lucide-react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { useScrollLock } from '@assistant-ui/react'
 import {
@@ -82,13 +82,11 @@ function ToolGroupRoot({
 function ToolGroupTrigger({
   count,
   active = false,
-  attention = false,
   className,
   ...props
 }: React.ComponentProps<typeof CollapsibleTrigger> & {
   count: number
   active?: boolean
-  attention?: boolean
 }) {
   const label = `${count} tool ${count === 1 ? 'call' : 'calls'}`
 
@@ -104,12 +102,6 @@ function ToolGroupTrigger({
       )}
       {...props}
     >
-      {attention && !active && (
-        <AlertCircleIcon
-          data-slot="tool-group-trigger-attention"
-          className="size-3.5 shrink-0 text-warning"
-        />
-      )}
       <span
         data-slot="tool-group-trigger-label"
         className={cn(
