@@ -4,7 +4,6 @@ import type { PiClientEventBody, PiThreadMetadata } from '@assistant-ui/react-pi
 import { AgentConfigStore } from '@/main/settings/agentConfigStore'
 import type { AgentService } from '../../agentService'
 import type { MessageProjectionService } from '../../messageProjectionService'
-import type { ArtifactService } from '@/main/artifact/artifactService'
 import { ContextAttachmentService } from '@/main/context/contextAttachmentService'
 import { ContextBuilder } from '@/main/context/contextBuilder'
 import type { AgentSessionSummary } from '@/shared/agent/agentSession'
@@ -58,7 +57,6 @@ function setup(running = false) {
     updatedAt: 2,
     toolCalls: [],
     toolResults: [],
-    artifactIds: [],
   })
   const agentService = {
     listSessions: vi.fn(() => Promise.resolve([session])),
@@ -73,7 +71,6 @@ function setup(running = false) {
     subscribe: vi.fn(() => () => undefined),
   } as unknown as AgentService
   const projection = { project: vi.fn() } as unknown as MessageProjectionService
-  const artifacts = { list: vi.fn(() => Promise.resolve([])) } as unknown as ArtifactService
   const contextAttachments = new ContextAttachmentService()
   const manager = new PiSessionRuntimeManager(() => sessionRuntime)
   const client = new PiClientService(
@@ -81,7 +78,6 @@ function setup(running = false) {
     manager,
     projection,
     new AgentConfigStore({ model: { provider: 'test', modelID: 'test', thinkingLevel: 'off' } }),
-    artifacts,
     new ContextBuilder(contextAttachments),
     contextAttachments,
   )

@@ -8,9 +8,10 @@ import {
   ComposerAttachments,
   UserMessageAttachments,
 } from '@/renderer/src/components/assistant-ui/elements/attachment.aui'
-import { File } from '@/renderer/src/features/artifacts/FilePreview'
+import { File } from './file-preview'
+import { FileChangeCards } from '@/renderer/src/features/chat/tools/FileChangeCards'
 import { ThreadFollowupSuggestions } from '@/renderer/src/components/assistant-ui/elements/follow-up-suggestions.aui'
-import { Image } from '@/renderer/src/features/artifacts/ImagePreview'
+import { Image } from './image-preview'
 import { MarkdownText } from '@/renderer/src/components/assistant-ui/elements/markdown-text'
 import {
   ComposerBar,
@@ -45,6 +46,7 @@ import { Button } from '@/renderer/src/components/ui/button'
 import { Skeleton } from '@/renderer/src/components/ui/skeleton'
 import { cn } from '@/renderer/src/lib/utils'
 import type { AgentSkill } from '@/shared/agent/agentSkill'
+import { formatMessageTimestamp, formatMessageTimestampFull } from '@/shared/formatMessageTimestamp'
 import {
   ActionBarMorePrimitive,
   ActionBarPrimitive,
@@ -639,16 +641,20 @@ const AssistantMessage: FC = () => {
             }
           }}
         </MessagePrimitive.GroupedParts>
+        <FileChangeCards />
         <MessageError />
       </div>
 
       {!readOnly && (
         <div
           data-slot="aui_assistant-message-footer"
-          className={cn('ms-2 flex items-center', ACTION_BAR_HEIGHT)}
+          className={cn('ms-2 flex items-center justify-between', ACTION_BAR_HEIGHT)}
         >
-          <BranchPicker />
-          <AssistantActionBar />
+          <div className="flex items-center">
+            <BranchPicker />
+            <AssistantActionBar />
+          </div>
+          <MessageTimestamp />
         </div>
       )}
     </MessagePrimitive.Root>
@@ -681,8 +687,7 @@ const AssistantActionBar: FC = () => {
   return (
     <ActionBarPrimitive.Root
       hideWhenRunning
-      autohide="not-last"
-      className="aui-assistant-action-bar-root text-muted-foreground animate-in fade-in col-start-3 row-start-2 -ms-1 flex gap-1 duration-200"
+      className="aui-assistant-action-bar-root text-muted-foreground animate-in fade-in col-start-3 row-start-2 -ms-1 flex gap-1 opacity-55 duration-200 transition-opacity hover:opacity-100 focus-within:opacity-100"
     >
       <ActionBarPrimitive.Copy render={<TooltipIconButton tooltip="Copy" />}>
         <AuiIf condition={(s) => s.message.isCopied}>
@@ -718,6 +723,23 @@ const AssistantActionBar: FC = () => {
         </ActionBarMorePrimitive.Content>
       </ActionBarMorePrimitive.Root>
     </ActionBarPrimitive.Root>
+  )
+}
+
+const MessageTimestamp: FC = () => {
+  const createdAt = useAuiState((s) => s.message.createdAt)
+  const timestamp = createdAt.getTime()
+  const label = formatMessageTimestamp(timestamp)
+  if (!label) return null
+
+  return (
+    <time
+      dateTime={createdAt.toISOString()}
+      title={formatMessageTimestampFull(timestamp)}
+      className="text-text-faint me-1 text-[11px] tabular-nums"
+    >
+      {label}
+    </time>
   )
 }
 

@@ -44,7 +44,6 @@ export interface AgentRun {
   plan?: AgentPlan
   toolCalls: ToolCall[]
   toolResults: ToolResult[]
-  artifactIds: string[]
 }
 
 export interface LoadAgentRunsRequest {

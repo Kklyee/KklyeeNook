@@ -33,7 +33,6 @@ function toAgentRun(row: AgentRunRow): AgentRun {
     plan: row.plan ?? undefined,
     toolCalls: row.toolCalls,
     toolResults: row.toolResults.map(migrateToolResult),
-    artifactIds: row.artifactIds,
   }
 }
 
@@ -78,7 +77,6 @@ export class DrizzleAgentRunRepo implements AgentRunRepo {
         plan: run.plan,
         toolCalls: run.toolCalls,
         toolResults: run.toolResults,
-        artifactIds: run.artifactIds,
       })
       .onConflictDoUpdate({
         target: agentRuns.id,
@@ -98,7 +96,6 @@ export class DrizzleAgentRunRepo implements AgentRunRepo {
           plan: run.plan,
           toolCalls: run.toolCalls,
           toolResults: run.toolResults,
-          artifactIds: run.artifactIds,
         },
       })
   }

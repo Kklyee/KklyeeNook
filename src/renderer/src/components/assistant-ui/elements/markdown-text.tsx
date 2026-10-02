@@ -10,7 +10,7 @@ import {
 } from '@assistant-ui/react-markdown'
 import remarkGfm from 'remark-gfm'
 import { type FC, memo, useMemo, useRef } from 'react'
-import type { TextMessagePartProps } from '@assistant-ui/react'
+import { TextMessagePartProvider, type TextMessagePartProps } from '@assistant-ui/react'
 import { CheckIcon, CopyIcon } from 'lucide-react'
 
 import { TooltipIconButton } from '@/renderer/src/components/assistant-ui/elements/tooltip-icon-button'
@@ -56,6 +56,14 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = ({ components }) => {
 }
 
 export const MarkdownText = memo(MarkdownTextImpl)
+
+export function MarkdownContent({ content }: { content: string }) {
+  return (
+    <TextMessagePartProvider text={content}>
+      <MarkdownText />
+    </TextMessagePartProvider>
+  )
+}
 
 const markdownComponentsByLanguage = {
   mermaid: { SyntaxHighlighter: MermaidDiagram },

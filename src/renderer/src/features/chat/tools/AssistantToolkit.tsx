@@ -18,11 +18,10 @@ const UpdatePlanToolCall: ToolCallMessagePartComponent<UpdatePlanArgs, unknown> 
 }
 
 export const assistantToolkit = {
-  read: { type: 'backend', render: ToolCallRenderer },
+  read: { type: 'backend', display: 'standalone', render: ToolCallRenderer },
   bash: { type: 'backend', render: ToolCallRenderer },
-  edit: { type: 'backend', render: ToolCallRenderer },
-  write: { type: 'backend', render: ToolCallRenderer },
-  create_artifact: { type: 'backend', render: ToolCallRenderer },
+  edit: { type: 'backend', display: 'standalone', render: ToolCallRenderer },
+  write: { type: 'backend', display: 'standalone', render: ToolCallRenderer },
   update_plan: { type: 'backend', display: 'standalone', render: UpdatePlanToolCall },
   delegate_task: { type: 'backend', render: ToolCallRenderer },
   search_knowledge: { type: 'backend', render: ToolCallRenderer },

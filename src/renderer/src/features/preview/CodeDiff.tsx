@@ -18,18 +18,13 @@ export function CodeDiff({
   additions,
   deletions,
   lines,
-  cycle,
   className,
   ...props
-}: Omit<
-  ComponentProps<'div'>,
-  'children' | 'filename' | 'additions' | 'deletions' | 'lines' | 'cycle'
-> & {
+}: Omit<ComponentProps<'div'>, 'children' | 'filename' | 'additions' | 'deletions' | 'lines'> & {
   filename: string
   additions: number
   deletions: number
   lines: readonly DiffLine[]
-  cycle: number
 }) {
   return (
     <div
@@ -53,15 +48,14 @@ export function CodeDiff({
         <div className={codeSurface}>
           {lines.map((line, i) => (
             <div
-              key={`${cycle}-${i}-${line.text}`}
+              key={i}
               className={cn(
-                'fade-in animate-in fill-mode-both flex px-4 py-0.5 leading-relaxed whitespace-pre duration-300',
+                'flex px-4 py-0.5 leading-relaxed whitespace-pre',
                 line.kind === 'context' && 'text-foreground/45',
                 line.kind === 'added' &&
                   'bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300',
                 line.kind === 'removed' && 'bg-red-500/10 text-red-700 dark:text-red-300',
               )}
-              style={{ animationDelay: `${i * 60}ms` }}
             >
               <span className="w-4 shrink-0 select-none">{GUTTER[line.kind]}</span>
               <span>{line.text}</span>

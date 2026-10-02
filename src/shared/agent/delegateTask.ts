@@ -25,5 +25,4 @@ export interface DelegateTaskResult {
   name?: string
   avatar?: SubagentAvatar
   result?: string
-  artifactIds?: string[]
 }

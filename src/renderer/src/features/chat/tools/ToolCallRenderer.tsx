@@ -1,4 +1,6 @@
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react'
+import { useEffect, useRef } from 'react'
+import { usePreview } from '@/renderer/src/features/preview/PreviewProvider'
 import { resolveToolExecutionStatus } from '@/shared/tool/toolExecutionStatus'
 
 import { BashToolRenderer } from './bash/BashToolRenderer'
@@ -18,13 +20,21 @@ const toolRenderers: Record<string, ToolCallMessagePartComponent> = {
   bash: BashToolRenderer,
   edit: EditToolRenderer,
   write: WriteToolRenderer,
-  create_artifact: GenericToolRenderer,
   delegate_task: SubagentToolRenderer,
 }
 
 export const ToolCallRenderer: ToolCallMessagePartComponent = (props) => {
+  const { refreshFile } = usePreview()
+  const refreshed = useRef<string | undefined>(undefined)
   const Renderer = toolRenderers[props.toolName] ?? GenericToolRenderer
   const result = props.result === undefined ? undefined : normalizeToolResult(props.result, props.isError)
   const status = resolveToolExecutionStatus(props.status, props.isError, formatToolResult(result))
+  useEffect(() => {
+    if (status.type !== 'complete' || result?.status !== 'success' ||
+      (props.toolName !== 'write' && props.toolName !== 'edit') || refreshed.current === props.toolCallId) return
+    refreshed.current = props.toolCallId
+    const path = props.args.path ?? props.args.file_path
+    if (typeof path === 'string') refreshFile(path)
+  }, [status.type, result, props.toolName, props.toolCallId, props.args, refreshFile])
   return <><Renderer {...props} result={result} status={status} /><ToolResultRetention result={result} /></>
 }

@@ -2,6 +2,7 @@ export type WindowMenu = 'application' | 'edit'
 export type WindowMenuAction = 'settings'
 
 export const IPC_CHANNELS = {
+  PREVIEW_WORKSPACE_FILE: 'preview:workspace-file',
   CONVERSATION_PERMISSION: 'conversation:permission',
   CONVERSATION_LIST: 'conversation:list',
   CONVERSATION_CREATE: 'conversation:create',
@@ -50,9 +51,6 @@ export const IPC_CHANNELS = {
   SCHEDULED_TASK_DELETE: 'scheduled-task:delete',
   SCHEDULED_TASK_ENABLE: 'scheduled-task:enable',
   SCHEDULED_TASK_DISABLE: 'scheduled-task:disable',
-  ARTIFACT_LIST: 'artifact:list',
-  ARTIFACT_APPLY: 'artifact:apply',
-  ARTIFACT_EXPORT: 'artifact:export',
   CONTEXT_ATTACHMENT_STAGE: 'context-attachment:stage',
   CONTEXT_ATTACHMENT_REMOVE: 'context-attachment:remove',
 } as const

@@ -157,7 +157,9 @@ export function ComposerMenuItem({
       data-active={active || undefined}
       className={cn(
         'flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-[13.5px] text-text-default outline-none transition-colors active:bg-interactive-pressed focus-visible:ring-1 focus-visible:ring-brand-border',
-        active ? 'bg-interactive-selected hover:bg-interactive-selected-hover text-text-strong' : 'hover:bg-interactive-hover',
+        active
+          ? 'bg-interactive-selected hover:bg-interactive-selected-hover text-text-strong'
+          : 'hover:bg-interactive-hover',
         className,
       )}
       {...props}
@@ -445,7 +447,7 @@ export function ComposerContext({
     >
       <div
         className={cn(
-          'bg-popover border border-border shadow-lg',
+          'glass-surface border border-border shadow-lg',
           'absolute end-0 bottom-full z-10 mb-2 flex w-60 origin-bottom-right flex-col gap-3.5 rounded-2xl p-4',
           'transition-[opacity,scale] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none',
           'pointer-events-none scale-[0.97] opacity-0',

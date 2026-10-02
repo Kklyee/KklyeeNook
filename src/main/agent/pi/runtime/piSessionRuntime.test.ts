@@ -177,7 +177,7 @@ test('uses configured custom-provider limits and keeps client subscriptions acro
       maxTokens: 4_000,
       thinkingLevel: 'off',
     },
-    tools: { enabled: [] },
+    tools: { enabled: ['removed-tool'] },
     cwd: 'C:\\workspace',
     compaction: { enabled: false, reserveTokens: 2_048, keepRecentTokens: 4_096 },
   })
@@ -217,7 +217,7 @@ test('uses configured custom-provider limits and keeps client subscriptions acro
   expect(vi.mocked(createAgentSession).mock.calls.at(-1)?.[0]?.tools).toEqual([
     'mcp__filesystem__search',
   ])
-  expect(configStore.get().tools.enabled).toEqual([])
+  expect(configStore.get().tools.enabled).toEqual(['removed-tool'])
   expect(settingsManager.applyOverrides).toHaveBeenCalledWith({
     compaction: { enabled: false, reserveTokens: 2_048, keepRecentTokens: 4_096 },
   })

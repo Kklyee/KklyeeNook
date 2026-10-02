@@ -5,6 +5,13 @@ import { afterAll, expect, test } from 'vitest'
 
 import { AgentConfigStore } from './agentConfigStore'
 
+test('defaults to workspace tools and the supported agent helpers', () => {
+  expect(new AgentConfigStore().get().tools.enabled).toEqual([
+    'read', 'bash', 'edit', 'write', 'update_plan', 'save_memory', 'delegate_task',
+    'search_knowledge', 'read_knowledge',
+  ])
+})
+
 const directory = mkdtempSync(join(tmpdir(), 'kklyeenook-config-'))
 afterAll(() => rmSync(directory, { recursive: true }))
 

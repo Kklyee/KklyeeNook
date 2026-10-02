@@ -8,8 +8,6 @@ import type { AgentRunRepo } from '../db/repositories/agentRunRepo'
 import type { AgentSessionRecord, AgentSessionRepo } from '../db/repositories/agentSessionRepo'
 import type { AgentEventEnvelope } from './agentEventEnvelope'
 import type { AgentExecutionRecordRepo } from '../db/repositories/agentExecutionRecordRepo'
-import type { ArtifactRepo } from '../db/repositories/artifactRepo'
-import type { Artifact } from '@/shared/artifact/artifact'
 import type { DelegateTaskProgress } from '@/shared/agent/delegateTask'
 
 class MemorySessionRepo implements AgentSessionRepo {
@@ -90,26 +88,6 @@ class MemoryExecutionRecordRepo implements AgentExecutionRecordRepo {
   }
 }
 
-class MemoryArtifactRepo implements ArtifactRepo {
-  readonly artifacts: Artifact[] = []
-
-  async findById(id: string) {
-    return this.artifacts.find((artifact) => artifact.id === id)
-  }
-
-  async findBySessionId(sessionId: string) {
-    return this.artifacts.filter((artifact) => artifact.sessionId === sessionId)
-  }
-
-  async findByRunId(runId: string) {
-    return this.artifacts.filter((artifact) => artifact.runId === runId)
-  }
-
-  async save(artifact: Artifact) {
-    this.artifacts.push(artifact)
-  }
-}
-
 const sessionRecord: AgentSessionRecord = {
   id: 'session-1',
   title: 'Test session',
@@ -139,7 +117,7 @@ test('persists usage at step boundaries with durable run ordering and leaves com
         dispose() {},
       }),
     },
-    new MemorySessionRepo([sessionRecord]), new MemoryRunRepo(), recordRepo, new MemoryArtifactRepo(),
+    new MemorySessionRepo([sessionRecord]), new MemoryRunRepo(), recordRepo,
   )
   await service.initialize()
   const handle = service.startRun(sessionRecord.id, { prompt: 'test budget' })
@@ -166,7 +144,6 @@ function run(status: AgentRun['status'], id: string, createdAt: number): AgentRu
     updatedAt: createdAt,
     toolCalls: [],
     toolResults: [],
-    artifactIds: [],
   }
 }
 
@@ -189,7 +166,6 @@ test('run cleanup is awaited and cleanup failure does not fail the agent run', a
     new MemorySessionRepo([sessionRecord]),
     new MemoryRunRepo(),
     new MemoryExecutionRecordRepo(),
-    new MemoryArtifactRepo(),
     { onRunFinished: cleanup },
   )
   try {
@@ -219,7 +195,6 @@ test('initialize recovers active runs and restores run history', async () => {
     new MemorySessionRepo([sessionRecord]),
     runRepo,
     new MemoryExecutionRecordRepo(),
-    new MemoryArtifactRepo(),
   )
 
   const stages: Array<[string, number]> = []
@@ -254,7 +229,6 @@ test('lists the latest run overview for every session', async () => {
     new MemorySessionRepo([sessionRecord, idleSession]),
     new MemoryRunRepo([oldRun, latestRun]),
     new MemoryExecutionRecordRepo(),
-    new MemoryArtifactRepo(),
   )
 
   await service.initialize()
@@ -283,7 +257,6 @@ test('rejects steering when Pi has no active product run', async () => {
     new MemorySessionRepo([sessionRecord]),
     new MemoryRunRepo(),
     new MemoryExecutionRecordRepo(),
-    new MemoryArtifactRepo(),
   )
   await service.initialize()
 
@@ -313,7 +286,6 @@ test('records steering against the run during its startup window', async () => {
     new MemorySessionRepo([sessionRecord]),
     new MemoryRunRepo(),
     executionRecordRepo,
-    new MemoryArtifactRepo(),
   )
   await service.initialize()
 
@@ -358,7 +330,6 @@ test('persists a run before execution and serializes status changes', async () =
     new MemorySessionRepo([sessionRecord]),
     runRepo,
     executionRecordRepo,
-    new MemoryArtifactRepo(),
   )
   await service.initialize()
 
@@ -392,58 +363,6 @@ test('persists a run before execution and serializes status changes', async () =
     'step_ended',
     'agent_completed',
   ])
-})
-
-test('turns a successful create_artifact tool call into a durable run artifact', async () => {
-  const runRepo = new MemoryRunRepo()
-  const artifactRepo = new MemoryArtifactRepo()
-  const runtime: AgentRuntime = {
-    async run(_prompt, emit) {
-      emit({ type: 'pi_turn_start', piTurnIndex: 0, deliveries: ['initial'] })
-      emit({
-        type: 'tool_started',
-        call: {
-          id: 'tool-artifact',
-          toolName: 'create_artifact',
-          args: { kind: 'markdown', title: 'Plan', content: '# Plan' },
-        },
-      })
-      emit({
-        type: 'tool_finished',
-        result: {
-          toolCallId: 'tool-artifact',
-          toolName: 'create_artifact',
-          content: [{ type: 'text', text: 'created' }],
-          status: 'success',
-        },
-      })
-      emit({ type: 'pi_turn_end', result: 'committed' })
-      emit({ type: 'agent_completed' })
-    },
-    dispose() {},
-  }
-  const service = new AgentService(
-    { create: () => runtime },
-    new MemorySessionRepo([sessionRecord]),
-    runRepo,
-    new MemoryExecutionRecordRepo(),
-    artifactRepo,
-  )
-  await service.initialize()
-
-  const finalRun = await service.startRun(sessionRecord.id, { prompt: 'create a plan' }).completion
-
-  expect(artifactRepo.artifacts).toMatchObject([
-    {
-      sessionId: sessionRecord.id,
-      runId: finalRun.id,
-      toolCallId: 'tool-artifact',
-      kind: 'markdown',
-      title: 'Plan',
-      content: '# Plan',
-    },
-  ])
-  expect(finalRun.artifactIds).toEqual([artifactRepo.artifacts[0]!.id])
 })
 
 test('turns a successful update_plan tool call into a persisted run plan and event', async () => {
@@ -481,7 +400,6 @@ test('turns a successful update_plan tool call into a persisted run plan and eve
     new MemorySessionRepo([sessionRecord]),
     runRepo,
     executionRecordRepo,
-    new MemoryArtifactRepo(),
   )
   await service.initialize()
 
@@ -542,7 +460,6 @@ test('completes the active plan step when the agent run completes', async () => 
     new MemorySessionRepo([sessionRecord]),
     runRepo,
     new MemoryExecutionRecordRepo(),
-    new MemoryArtifactRepo(),
   )
   await service.initialize()
 
@@ -594,7 +511,6 @@ test('delegates an isolated child run and returns its result', async () => {
     new MemorySessionRepo([sessionRecord]),
     runRepo,
     new MemoryExecutionRecordRepo(),
-    new MemoryArtifactRepo(),
     {
       buildChildContext: async () => ({
         attachments: [],
@@ -694,7 +610,6 @@ test('limits child depth and concurrency and aborts children with the parent', a
     new MemorySessionRepo([sessionRecord]),
     runRepo,
     new MemoryExecutionRecordRepo(),
-    new MemoryArtifactRepo(),
   )
   await service.initialize()
 
@@ -757,7 +672,7 @@ test.each(['aborted', 'failed'] as const)('persists active Step closure before a
       },
       dispose() {},
     }) },
-    new MemorySessionRepo([sessionRecord]), new MemoryRunRepo(), repo, new MemoryArtifactRepo(),
+    new MemorySessionRepo([sessionRecord]), new MemoryRunRepo(), repo,
   )
   await service.initialize()
   const finalRun = await service.startRun(sessionRecord.id, { prompt: 'start' }).completion
@@ -779,7 +694,7 @@ test('creates a new Run after the previous runtime settles', async () => {
       },
       dispose() {},
     }) },
-    new MemorySessionRepo([sessionRecord]), new MemoryRunRepo(), new MemoryExecutionRecordRepo(), new MemoryArtifactRepo(),
+    new MemorySessionRepo([sessionRecord]), new MemoryRunRepo(), new MemoryExecutionRecordRepo(),
   )
   await service.initialize()
   const first = await service.startRun(sessionRecord.id, { prompt: 'first' }).completion
@@ -819,7 +734,7 @@ test('keeps one Run open until Pi delivers steering, late inputs and follow-up i
       },
       dispose() {},
     }) },
-    new MemorySessionRepo([sessionRecord]), new MemoryRunRepo(), repo, new MemoryArtifactRepo(),
+    new MemorySessionRepo([sessionRecord]), new MemoryRunRepo(), repo,
   )
   await service.initialize()
   const handle = service.startRun(sessionRecord.id, { prompt: 'initial' })

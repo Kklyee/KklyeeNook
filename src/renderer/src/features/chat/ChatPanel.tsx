@@ -10,6 +10,8 @@ import { RunHistoryPanel } from '../runs/RunHistoryPanel'
 import { AgentRunFocusProvider } from '../runs/AgentRunFocusContext'
 import { PiExtensionUiPrompt } from './runtime/PiExtensionUiPrompt'
 import { SubagentSessionPanel } from '../../components/assistant-ui/elements/subagent-session-panel.aui'
+import { PreviewProvider } from '../preview/PreviewProvider'
+import { ChatWorkspace } from '../preview/ChatWorkspace'
 
 const THINKING_LEVELS = [
   { id: 'off', name: '关闭' },
@@ -135,6 +137,7 @@ export function ChatPanel({
   }
 
   return (
+    <PreviewProvider key={threadItemId} sessionId={sessionId}>
     <AgentRunFocusProvider
       value={{
         focusRun: (runId) => {
@@ -143,7 +146,7 @@ export function ChatPanel({
         },
       }}
     >
-      <div className="relative flex h-full w-full flex-col">
+      <ChatWorkspace>
         {modelError && (
           <p className="bg-destructive/10 text-destructive px-4 py-2 text-xs" role="alert">
             {modelError}
@@ -197,8 +200,9 @@ export function ChatPanel({
         ) : (
           <div className="min-h-0 flex-1" />
         )}
-      </div>
+      </ChatWorkspace>
     </AgentRunFocusProvider>
+    </PreviewProvider>
   )
 }
 

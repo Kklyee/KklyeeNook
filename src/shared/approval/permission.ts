@@ -8,7 +8,7 @@ export const PERMISSION_LABELS: Record<PermissionMode, string> = {
   'full-access': '完全权限',
 }
 export type PermissionResource =
-  | { kind: 'path'; path: string; action: 'read' | 'write' | 'edit' | 'artifact-apply' }
+  | { kind: 'path'; path: string; action: 'read' | 'write' | 'edit' }
   | { kind: 'command'; command: string; cwd?: string }
   | { kind: 'tool'; name: string }
 export interface PermissionRequest extends AgentExecutionContext {

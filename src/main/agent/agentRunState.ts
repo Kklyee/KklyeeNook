@@ -60,14 +60,6 @@ export function getAgentRunPatch(
     case 'plan_updated':
       return { status: 'running', plan: event.plan }
 
-    case 'artifact_created':
-      return {
-        status: 'running',
-        artifactIds: run.artifactIds.includes(event.artifact.id)
-          ? run.artifactIds
-          : [...run.artifactIds, event.artifact.id],
-      }
-
     case 'approval_required':
       if (run.status === 'waiting') return undefined
       return { status: 'waiting' }

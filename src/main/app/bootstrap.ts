@@ -1,4 +1,6 @@
 import { ExecutionContextService } from '../workspace/executionContextService'
+import { WorkspacePreviewService } from '../preview/workspacePreviewService'
+import { registerPreviewIpc } from '../preview/previewIpc'
 import { WorkspaceService } from '../workspace/workspaceService'
 import { DrizzleWorkspaceRepo } from '../db/repositories/workspaceRepo'
 import { DrizzleAgentSessionRepo } from '../db/repositories/agentSessionRepo'
@@ -16,11 +18,8 @@ import { registerAgentSkillIpc } from '../agent/ipc/agentSkillIpc'
 import { registerScheduledTaskIpc } from '../agent/ipc/scheduledTaskIpc'
 import { connectDatabase } from '../db/client'
 import { getDatabaseUrl, getMigrationsPath } from '../db/databasePath'
-import { DrizzleArtifactRepo } from '../db/repositories/artifactRepo'
 import { DrizzlePermissionGrantRepo } from '../db/repositories/permissionGrantRepo'
 import { DrizzleAgentMemoryRepo } from '../db/repositories/memoryRepo'
-import { ArtifactService } from '../artifact/artifactService'
-import { registerArtifactIpc } from '../artifact/artifactIpc'
 import { ContextAttachmentService } from '../context/contextAttachmentService'
 import { registerContextIpc } from '../context/contextIpc'
 import { createChatWindow } from '../electron/chatWindow'
@@ -56,7 +55,6 @@ export async function bootstrap(): Promise<AppContext> {
         'bash',
         'edit',
         'write',
-        'create_artifact',
         'update_plan',
         'save_memory',
         'delegate_task',
@@ -92,11 +90,9 @@ export async function bootstrap(): Promise<AppContext> {
   const { database: db, close: closeDb } = await connectDatabase(databaseUrl, migrationsPath)
   const permissionGrantRepo = new DrizzlePermissionGrantRepo(db)
   const memoryRepo = new DrizzleAgentMemoryRepo(db)
-  const artifactRepo = new DrizzleArtifactRepo(db)
   const approvalPolicy = new ApprovalPolicy(permissionGrantRepo)
   const workspaceService = new WorkspaceService(new DrizzleWorkspaceRepo(db))
   const executionContexts = new ExecutionContextService(new DrizzleAgentSessionRepo(db), workspaceService, () => configStore.get().defaultPermissionMode ?? 'workspace-write')
-  const artifactService = new ArtifactService(artifactRepo, sessionId => executionContexts.resolve(sessionId), undefined, id => workspaceService.resolve(id))
   const contextAttachments = new ContextAttachmentService()
   const backendProcess = createAgentBackendProcess()
   const disposeBackendNotifications = backendProcess.onNotification((notification) => {
@@ -116,6 +112,7 @@ export async function bootstrap(): Promise<AppContext> {
   if (backendStatus.state === 'unavailable') console.error('[bootstrap] agent backend unavailable')
 
   const chatWindow = createChatWindow()
+  const disposePreviewIpc = registerPreviewIpc(chatWindow, new WorkspacePreviewService(sessionId => executionContexts.resolve(sessionId)))
   const disposeWorkspaceIpc = registerWorkspaceIpc(chatWindow, backendProcess)
   const disposeAgentBackendIpc = registerAgentBackendIpc(chatWindow, backendProcess)
   const disposeContextIpc = registerContextIpc(chatWindow, contextAttachments, {
@@ -152,7 +149,6 @@ export async function bootstrap(): Promise<AppContext> {
   const disposeAgentRunIpc = registerAgentRunIpc(backendProcess)
   const disposeAgentSkillIpc = registerAgentSkillIpc(backendProcess)
   const disposeScheduledTaskIpc = registerScheduledTaskIpc(backendProcess)
-  registerArtifactIpc(chatWindow, artifactService)
 
   loadRenderer(chatWindow, 'chat')
   chatWindow.on('ready-to-show', () => chatWindow.show())
@@ -166,6 +162,7 @@ export async function bootstrap(): Promise<AppContext> {
 
   return {
     async dispose() {
+      disposePreviewIpc()
       disposeWorkspaceIpc()
       disposeAgentBackendIpc()
       disposeAgentRunIpc()

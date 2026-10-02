@@ -8,11 +8,8 @@ import type {
   PiThinkingLevel,
   PiThreadMetadata,
   PiThreadSnapshot,
-  PiTranscriptMessage,
 } from '@assistant-ui/react-pi/node'
 
-import type { ArtifactService } from '@/main/artifact/artifactService'
-import type { Artifact } from '@/shared/artifact/artifact'
 import type { AgentSessionSummary } from '@/shared/agent/agentSession'
 import type { AgentConfigStore } from '@/main/settings/agentConfigStore'
 import {
@@ -38,22 +35,15 @@ type Relay = {
 
 export class PiClientService implements PiClient {
   private readonly relays = new Map<string, Relay>()
-  private readonly unsubscribeAgentEvents: () => void
 
   constructor(
     private readonly agentService: AgentService,
     private readonly sessionRuntimeManager: PiSessionRuntimeManager,
     private readonly messageProjection: MessageProjectionService,
     private readonly configStore: AgentConfigStore,
-    private readonly artifactService: ArtifactService,
     private readonly contextBuilder: ContextBuilder,
     private readonly contextAttachments: ContextAttachmentService,
-  ) {
-    this.unsubscribeAgentEvents = agentService.subscribe((envelope) => {
-      if (envelope.event.type !== 'artifact_created') return
-      this.emitArtifact(envelope.sessionId, envelope.event.artifact, envelope.timestamp)
-    })
-  }
+  ) {}
 
   async listThreads(input?: {
     workspacePath?: string
@@ -83,7 +73,7 @@ export class PiClientService implements PiClient {
     const sessionRuntime = this.sessionRuntimeManager.getOrCreate(threadId)
     await sessionRuntime.initialize()
     await sessionRuntime.applyConfiguredModelSelection()
-    const snapshot = await this.withArtifacts(sessionRuntime.getSnapshot(this.metadataOf(session)))
+    const snapshot = sessionRuntime.getSnapshot(this.metadataOf(session))
     await this.messageProjection.project(threadId, snapshot.messages)
     return snapshot
   }
@@ -239,9 +229,7 @@ export class PiClientService implements PiClient {
         if (options?.includeSnapshot !== false) {
           const session = this.requireSession(threadId)
           const snapshotSeq = relay.seq
-          const snapshot = await this.withArtifacts(
-            relay.sessionRuntime.getSnapshot(this.metadataOf(session)),
-          )
+          const snapshot = relay.sessionRuntime.getSnapshot(this.metadataOf(session))
           if (!active) {
             relay.listeners.delete(relayListener)
             return
@@ -271,48 +259,8 @@ export class PiClientService implements PiClient {
   }
 
   dispose(): void {
-    this.unsubscribeAgentEvents()
     for (const relay of this.relays.values()) relay.unsubscribe()
     this.relays.clear()
-  }
-
-  private emitArtifact(threadId: string, artifact: Artifact, timestamp: number): void {
-    const relay = this.relays.get(threadId)
-    if (!relay) return
-    const message = this.artifactMessage(artifact, timestamp)
-    this.emit(threadId, relay, { type: 'message_start', message })
-    this.emit(threadId, relay, { type: 'message_end', message })
-  }
-
-  private async withArtifacts(snapshot: PiThreadSnapshot): Promise<PiThreadSnapshot> {
-    const artifacts = await this.artifactService.list(snapshot.metadata.id)
-    if (!artifacts.length) return snapshot
-    const messages = [
-      ...snapshot.messages.map((message, index) => ({ message, index, artifact: false })),
-      ...artifacts.map((artifact, index) => ({
-        message: this.artifactMessage(artifact, artifact.createdAt),
-        index,
-        artifact: true,
-      })),
-    ]
-      .sort((a, b) => {
-        const timeA = typeof a.message.timestamp === 'number' ? a.message.timestamp : 0
-        const timeB = typeof b.message.timestamp === 'number' ? b.message.timestamp : 0
-        return timeA - timeB || Number(a.artifact) - Number(b.artifact) || a.index - b.index
-      })
-      .map(({ message }) => message)
-    return { ...snapshot, messages }
-  }
-
-  private artifactMessage(artifact: Artifact, timestamp: number): PiTranscriptMessage {
-    return {
-      role: 'custom',
-      customType: 'artifact',
-      content: '',
-      display: true,
-      details: artifact,
-      timestamp,
-    }
   }
 
   private async ensureRelay(threadId: string): Promise<Relay> {

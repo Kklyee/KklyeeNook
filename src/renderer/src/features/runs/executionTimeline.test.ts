@@ -14,7 +14,6 @@ const run: AgentRun = {
   completedAt: 500,
   toolCalls: [],
   toolResults: [],
-  artifactIds: [],
 }
 
 function record(

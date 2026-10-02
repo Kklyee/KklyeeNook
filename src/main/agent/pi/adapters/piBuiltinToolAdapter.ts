@@ -1,4 +1,6 @@
 import { readFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { Type } from 'typebox'
 import {
   createBashToolDefinition,
@@ -87,12 +89,24 @@ function createBash(cwd: string): AnyPiToolDefinition {
   }
 }
 
+function createWrite(cwd: string): AnyPiToolDefinition {
+  const tool = createWriteToolDefinition(cwd) as AnyPiToolDefinition
+  return {
+    ...tool,
+    async execute(id, input, signal, onUpdate, context) {
+      const existed = existsSync(resolve(cwd, (input as { path: string }).path))
+      const result = await tool.execute(id, input, signal, onUpdate, context)
+      return { ...result, details: { ...result.details, created: !existed, updated: existed } }
+    },
+  }
+}
+
 export function registerPiBuiltinTools(registry: ToolRegistry, metadataCwd: string): void {
   const factories: Array<(cwd: string) => AnyPiToolDefinition> = [
     createRead,
     createBash,
     createEditToolDefinition as (cwd: string) => AnyPiToolDefinition,
-    createWriteToolDefinition as (cwd: string) => AnyPiToolDefinition,
+    createWrite,
   ]
   for (const create of factories) {
     const tool = create(metadataCwd)

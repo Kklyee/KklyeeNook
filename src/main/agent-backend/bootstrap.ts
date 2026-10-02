@@ -10,12 +10,10 @@ import { MessageProjectionService } from '@/main/agent/messageProjectionService'
 import { createPiAgentRuntimeFactory } from '@/main/agent/pi/runtime/createPiAgentRuntime'
 import { PiSessionRuntime } from '@/main/agent/pi/runtime/piSessionRuntime'
 import { PiSessionRuntimeManager } from '@/main/agent/pi/runtime/piSessionRuntimeManager'
-import { registerPiArtifactTool } from '@/main/agent/pi/adapters/piArtifactToolAdapter'
 import { registerPiBuiltinTools } from '@/main/agent/pi/adapters/piBuiltinToolAdapter'
 import { registerPiMemoryTool } from '@/main/agent/pi/adapters/piMemoryToolAdapter'
 import { registerPiPlanTool } from '@/main/agent/pi/adapters/piPlanToolAdapter'
 import { registerPiDelegateTaskTool } from '@/main/agent/pi/adapters/piDelegateTaskToolAdapter'
-import { ArtifactService } from '@/main/artifact/artifactService'
 import { ContextAttachmentService } from '@/main/context/contextAttachmentService'
 import { ContextBuilder } from '@/main/context/contextBuilder'
 import { connectDatabase } from '@/main/db/client'
@@ -25,7 +23,6 @@ import { DrizzleAgentMemoryRepo } from '@/main/db/repositories/memoryRepo'
 import { DrizzleAgentRunRepo } from '@/main/db/repositories/agentRunRepo'
 import { DrizzleAgentRuntimeStateRepo } from '@/main/db/repositories/agentRuntimeStateRepo'
 import { DrizzleAgentSessionRepo } from '@/main/db/repositories/agentSessionRepo'
-import { DrizzleArtifactRepo } from '@/main/db/repositories/artifactRepo'
 import { DrizzleScheduledTaskRepo } from '@/main/db/repositories/scheduledTaskRepo'
 import { AgentConfigStore } from '@/main/settings/agentConfigStore'
 import { MemoryCredentialStore } from '@/main/settings/credentialStore'
@@ -97,7 +94,6 @@ export async function createAgentBackend(
     const toolResultStore = new ToolResultStore(join(sessionDir, '..', 'tool-results'))
     registerPiBuiltinTools(toolRegistry, '')
     registerPiToolResultTool(toolRegistry, toolResultStore)
-    registerPiArtifactTool(toolRegistry)
     registerPiMemoryTool(toolRegistry, memoryRepo)
     registerPiPlanTool(toolRegistry)
     knowledge = await createKnowledgeRuntime(db, options.databaseUrl, join(options.sessionDir, '..', 'knowledge-cache'), configStore.get().knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS, workspaceService)
@@ -128,7 +124,6 @@ export async function createAgentBackend(
     const runtimeFactory = createPiAgentRuntimeFactory(sessionRuntimeManager)
     const runRepo = new DrizzleAgentRunRepo(db)
     const executionRecordRepo = new DrizzleAgentExecutionRecordRepo(db)
-    const artifactRepo = new DrizzleArtifactRepo(db)
     const contextAttachments = new ContextAttachmentService()
     const contextBuilder = new ContextBuilder(contextAttachments, memoryRepo)
     const agentService = new AgentService(
@@ -136,7 +131,6 @@ export async function createAgentBackend(
       sessionRepo,
       runRepo,
       executionRecordRepo,
-      artifactRepo,
       {
         buildChildContext: async sessionId => contextBuilder.build([], (await executionContexts.resolve(sessionId)).workspaceId),
         onRunFinished: runId => sandbox.finishRun(runId),
@@ -145,7 +139,6 @@ export async function createAgentBackend(
     registerPiDelegateTaskTool(toolRegistry, (parentRunId, input, onProgress) =>
       agentService.delegateTask(parentRunId, input, onProgress),
     )
-    const artifactService = new ArtifactService(artifactRepo, sessionId => executionContexts.resolve(sessionId), sandbox, id => workspaceService.resolve(id))
 
     await agentService.initialize((stage, count) => reportStartupStage(stage, String(count)))
     const messageProjection = new MessageProjectionService(new DrizzleAgentMessageRepo(db))
@@ -154,7 +147,6 @@ export async function createAgentBackend(
       sessionRuntimeManager,
       messageProjection,
       configStore,
-      artifactService,
       contextBuilder,
       contextAttachments,
     )

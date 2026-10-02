@@ -44,7 +44,6 @@ function completedRun(sessionId: string): AgentRun {
     updatedAt: 2,
     toolCalls: [],
     toolResults: [],
-    artifactIds: [],
   }
 }
 

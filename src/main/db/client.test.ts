@@ -2,7 +2,6 @@ import { fileURLToPath } from 'node:url'
 import { expect, test } from 'vitest'
 
 import { DrizzleAgentRunRepo } from './repositories/agentRunRepo'
-import { DrizzleArtifactRepo } from './repositories/artifactRepo'
 import { DrizzleAgentSessionRepo } from './repositories/agentSessionRepo'
 import { connectDatabase } from './client'
 
@@ -31,24 +30,8 @@ test('applies pending migrations before repositories access the database', async
       updatedAt: 1,
       toolCalls: [],
       toolResults: [],
-      artifactIds: ['artifact-1'],
     })
-    const artifactRepo = new DrizzleArtifactRepo(database)
-    await artifactRepo.save({
-      id: 'artifact-1',
-      sessionId: 'session-1',
-      runId: 'run-1',
-      toolCallId: 'tool-1',
-      kind: 'code',
-      title: 'Example',
-      content: 'const x = 1',
-      language: 'ts',
-      metadata: { source: 'test' },
-      createdAt: 2,
-    })
-    await expect(artifactRepo.findByRunId('run-1')).resolves.toMatchObject([
-      { id: 'artifact-1', kind: 'code', metadata: { source: 'test' }, content: 'const x = 1' },
-    ])
+    await expect(runRepo.findBySessionId('session-1')).resolves.toMatchObject([{ id: 'run-1' }])
   } finally {
     await close()
   }

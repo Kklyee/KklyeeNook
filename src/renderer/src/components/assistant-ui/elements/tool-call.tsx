@@ -63,7 +63,7 @@ export function getToolIconKind(toolName: string): ToolIconKind {
   if (name.includes('read')) return 'read'
   if (name.includes('bash') || name.includes('shell') || name.includes('command')) return 'bash'
   if (name.includes('edit')) return 'edit'
-  if (name.includes('write') || name.includes('artifact')) return 'write'
+  if (name.includes('write')) return 'write'
   if (name.includes('delegate') || name.includes('subagent')) return 'agent'
   return 'generic'
 }
@@ -75,7 +75,6 @@ export function getToolDisplayName(toolName: string): string {
     edit: 'Edit file',
     write: 'Write file',
     delegate_task: 'Subagent',
-    create_artifact: 'Create artifact',
   }
   return labels[toolName] ?? toolName
 }

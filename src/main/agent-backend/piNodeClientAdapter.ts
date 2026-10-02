@@ -13,7 +13,7 @@ function getLongLivedNodeClient(options: PiNodeClientOptions): PiClient {
 }
 
 /**
- * Keeps the app-owned Pi facade (context, approvals, artifacts and run history)
+ * Keeps the app-owned Pi facade (context, approvals and run history)
  * while anchoring the backend to the package's process-long NodeClient seam.
  * The NodeClient is created once per backend process, never per HTTP request.
  */

@@ -542,7 +542,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
 
       const enabledTools = [
         ...new Set([
-          ...config.tools.enabled.filter((name) => !name.startsWith('mcp__')),
+          ...config.tools.enabled.filter((name) => !name.startsWith('mcp__') && this.toolRegistry.get(name)),
           ...this.toolRegistry
             .list()
             .filter((definition) => definition.origin?.kind === 'mcp' || definition.name === 'read_tool_result')
@@ -564,7 +564,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
         noPromptTemplates: true,
         noThemes: true,
         noContextFiles: !executionContext.workspace,
-        systemPromptOverride: base => executionContext.workspace ? base : 'You are a helpful assistant. This conversation has no local workspace. Use global memory, knowledge, MCP, attachments and artifacts. Local tools require explicit absolute paths and full access.',
+        systemPromptOverride: base => executionContext.workspace ? base : 'You are a helpful assistant. This conversation has no local workspace. Use global memory, knowledge, MCP and attachments. Local tools require explicit absolute paths and full access.',
         additionalSkillPaths: [this.skillDirectory],
         skillsOverride: (result) => mergeLoadedSkills(result, this.getLoadedSkills()),
         settingsManager,

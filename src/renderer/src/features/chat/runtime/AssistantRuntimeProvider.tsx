@@ -6,7 +6,6 @@ import { usePiRuntime } from '@assistant-ui/react-pi'
 import type { AgentBackendInfo, AgentBackendStatus } from '@/shared/agentBackend'
 import { Skeleton } from '../../../components/ui/skeleton'
 import { assistantToolkit } from '../tools/AssistantToolkit'
-import { ArtifactDataUI } from '../../artifacts/ArtifactRenderer'
 import { createElectronPiClient } from './electronPiClient'
 import { contextAttachmentAdapter } from '../context/contextAttachmentAdapter'
 
@@ -101,7 +100,6 @@ function ReadyAssistantRuntime({
 
   return (
     <AssistantRuntimeProvider runtime={runtime} config={config}>
-      <ArtifactDataUI />
       {children}
     </AssistantRuntimeProvider>
   )

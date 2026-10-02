@@ -131,13 +131,6 @@ export function buildExecutionTimeline(
         streamStepId = record.stepId
         break
       }
-      case 'artifact_created':
-        items.push({
-          ...item(record.id, 'system', 'Artifact', record.timestamp),
-          summary: event.artifact.title,
-          detail: event.artifact,
-        })
-        break
       case 'tool_started': {
         const tool = {
           ...item(record.id, 'tool', event.call.toolName, record.timestamp),

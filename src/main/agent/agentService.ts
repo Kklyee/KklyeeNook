@@ -31,8 +31,6 @@ import { AgentSessionRepo } from '../db/repositories/agentSessionRepo'
 import { AgentRunRepo } from '../db/repositories/agentRunRepo'
 import type { AgentExecutionRecord } from '@/shared/agent/agentExecutionRecord'
 import type { AgentExecutionRecordRepo } from '../db/repositories/agentExecutionRecordRepo'
-import type { ArtifactRepo } from '../db/repositories/artifactRepo'
-import { parseArtifactDraft, type Artifact, type ArtifactDraft } from '@/shared/artifact/artifact'
 
 export interface AgentRunHandle {
   run: AgentRun
@@ -117,7 +115,6 @@ export class AgentService {
     private readonly sessionRepo: AgentSessionRepo,
     private readonly runRepo: AgentRunRepo,
     private readonly executionRecordRepo: AgentExecutionRecordRepo,
-    private readonly artifactRepo: ArtifactRepo,
     private readonly options: AgentServiceOptions = {},
   ) {}
 
@@ -312,7 +309,6 @@ export class AgentService {
       updatedRun = session.updateRun(runId, { ...patch, updatedAt: timestamp })
     }
     void this.queuePersistence(runId, async () => {
-      if (event.type === 'artifact_created') await this.artifactRepo.save(event.artifact)
       await this.executionRecordRepo.append(envelope)
       if (updatedRun) await this.runRepo.save(updatedRun)
     }).catch((error) => {
@@ -332,45 +328,6 @@ export class AgentService {
       if (plan) this.handleAgentEvent(session, runId, { type: 'plan_updated', plan })
     }
 
-    if (
-      event.type === 'tool_finished' &&
-      event.result.status === 'success' &&
-      event.result.toolName === 'create_artifact'
-    ) {
-      const call = run.toolCalls.find(({ id }) => id === event.result.toolCallId)
-      const draft = parseArtifactDraft(call?.args)
-      if (draft) this.createArtifact(session, runId, draft, event.result.toolCallId)
-    }
-  }
-
-  addArtifact(
-    sessionId: string,
-    runId: string,
-    draft: ArtifactDraft,
-    toolCallId?: string,
-  ): Artifact {
-    const session = this.sessions.get(sessionId)
-    if (!session?.getRun(runId)) throw new Error(`AgentRun not found: ${runId}`)
-    return this.createArtifact(session, runId, draft, toolCallId)
-  }
-
-  private createArtifact(
-    session: AgentSession,
-    runId: string,
-    draft: ArtifactDraft,
-    toolCallId?: string,
-  ): Artifact {
-    const artifact: Artifact = {
-      ...draft,
-      id: randomUUID(),
-      sessionId: session.id,
-      workspaceId: session.getRun(runId)?.workspaceId ?? null,
-      runId,
-      toolCallId,
-      createdAt: Date.now(),
-    }
-    this.handleAgentEvent(session, runId, { type: 'artifact_created', artifact })
-    return artifact
   }
 
   async listRuns(sessionId: string): Promise<AgentRun[]> {
@@ -474,7 +431,6 @@ export class AgentService {
           name: displayName,
           avatar,
           ...(child.result !== undefined ? { result: child.result } : {}),
-          ...(child.artifactIds.length ? { artifactIds: child.artifactIds } : {}),
         } satisfies DelegateTaskResult
         const progressStatus = child.status === 'aborted' ? 'aborted' : status
         onProgress?.({
@@ -571,7 +527,6 @@ export class AgentService {
       startedAt: now,
       toolCalls: [],
       toolResults: [],
-      artifactIds: [],
     }
     session.addRun(run)
     this.sequencer.restore(run.id, 0)

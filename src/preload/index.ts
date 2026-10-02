@@ -1,4 +1,5 @@
 import type { PermissionMode } from '@/shared/approval/permission'
+import type { PreviewWorkspaceFileRequest, WorkspaceFilePreview } from '@/shared/preview/workspacePreview'
 import type { AgentSessionSummary } from '@/shared/agent/agentSession'
 import type { Workspace, WorkspaceAttachResult } from '@/shared/workspace/workspace'
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
@@ -24,13 +25,6 @@ import type {
   LoadAgentExecutionRecordsRequest,
 } from '@/shared/agent/agentExecutionRecord'
 import type {
-  ApplyArtifactRequest,
-  Artifact,
-  ArtifactActionResult,
-  ExportArtifactRequest,
-  ListArtifactsRequest,
-} from '@/shared/artifact/artifact'
-import type {
   ContextAttachmentRef,
   RemoveContextAttachmentRequest,
   StageContextAttachmentRequest,
@@ -52,6 +46,11 @@ const context = {
 }
 
 const api = {
+  preview: {
+    readWorkspaceFile(request: PreviewWorkspaceFileRequest): Promise<WorkspaceFilePreview> {
+      return ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_WORKSPACE_FILE, request)
+    },
+  },
   conversations: {
     setPermission(id: string, mode: PermissionMode): Promise<AgentSessionSummary> { return ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_PERMISSION, { id, mode }) },
     list(): Promise<AgentSessionSummary[]> { return ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_LIST) },
@@ -207,17 +206,6 @@ const api = {
     return ipcRenderer.invoke(IPC_CHANNELS.AGENT_EXECUTION_RECORD_LIST, request)
   },
 
-  listArtifacts(request: ListArtifactsRequest): Promise<Artifact[]> {
-    return ipcRenderer.invoke(IPC_CHANNELS.ARTIFACT_LIST, request)
-  },
-
-  applyArtifact(request: ApplyArtifactRequest): Promise<ArtifactActionResult> {
-    return ipcRenderer.invoke(IPC_CHANNELS.ARTIFACT_APPLY, request)
-  },
-
-  exportArtifact(request: ExportArtifactRequest): Promise<ArtifactActionResult> {
-    return ipcRenderer.invoke(IPC_CHANNELS.ARTIFACT_EXPORT, request)
-  },
 }
 
 if (process.contextIsolated) {
