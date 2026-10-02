@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useCallback, useRef, useState, type FC, type PropsWithChildren } from 'react'
-import { AlertCircleIcon, ChevronDownIcon, LoaderIcon } from 'lucide-react'
+import { AlertCircleIcon, ChevronDownIcon } from 'lucide-react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { useScrollLock } from '@assistant-ui/react'
 import {
@@ -104,12 +104,6 @@ function ToolGroupTrigger({
       )}
       {...props}
     >
-      {active && (
-        <LoaderIcon
-          data-slot="tool-group-trigger-loader"
-          className="aui-tool-group-trigger-loader size-3 shrink-0 animate-spin text-warning [animation-duration:0.6s]"
-        />
-      )}
       {attention && !active && (
         <AlertCircleIcon
           data-slot="tool-group-trigger-attention"

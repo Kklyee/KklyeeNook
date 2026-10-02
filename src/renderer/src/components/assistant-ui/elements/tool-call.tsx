@@ -6,7 +6,6 @@ import {
   BotIcon,
   CheckIcon,
   ChevronRightIcon,
-  LoaderIcon,
   WrenchIcon,
   XCircleIcon,
 } from 'lucide-react'
@@ -149,22 +148,20 @@ export function ToolCard({
   const isShimmerActive = statusType === 'running' || statusType === 'requires-action'
   const StatusIcon =
     statusType === 'running'
-      ? LoaderIcon
+      ? null
       : statusType === 'complete'
         ? CheckIcon
         : statusType === 'requires-action'
           ? AlertCircleIcon
           : XCircleIcon
   const statusClassName =
-    statusType === 'running'
-      ? 'text-text-muted'
-      : statusType === 'complete'
-        ? 'text-success'
-        : statusType === 'requires-action'
-          ? 'text-warning'
-          : status?.type === 'incomplete' && status.reason === 'cancelled'
-            ? 'text-text-faint'
-            : 'text-danger'
+    statusType === 'complete'
+      ? 'text-success'
+      : statusType === 'requires-action'
+        ? 'text-warning'
+        : status?.type === 'incomplete' && status.reason === 'cancelled'
+          ? 'text-text-faint'
+          : 'text-danger'
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -205,14 +202,9 @@ export function ToolCard({
         >
           {summary}
         </ShimmerLabel>
-        <StatusIcon
-          aria-hidden="true"
-          className={cn(
-            'size-3.5 shrink-0',
-            statusClassName,
-            statusType === 'running' && 'animate-spin [animation-duration:0.8s]',
-          )}
-        />
+        {StatusIcon && (
+          <StatusIcon aria-hidden="true" className={cn('size-3.5 shrink-0', statusClassName)} />
+        )}
         {elapsedMs !== undefined && (
           <span className="shrink-0 font-mono text-[10px] tabular-nums text-text-faint">
             {formatToolDuration(elapsedMs)}
