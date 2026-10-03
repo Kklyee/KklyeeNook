@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
-import { useAuiState } from '@assistant-ui/react'
-import { usePiThreadState } from '@assistant-ui/react-pi'
+import { useAui, useAuiState, type ThreadMessage } from '@assistant-ui/react'
+import type { PiRuntimeExtras } from '@assistant-ui/react-pi'
 import { createPatch } from 'diff'
 
 import { usePreview, type PreviewTarget } from '@/renderer/src/features/preview/PreviewProvider'
@@ -9,10 +9,22 @@ import { FileResultCard, type FileResultOperation } from './FileResultCard'
 import { getStringValue, isRecord } from './toolUtils'
 
 export function FileChangeCards() {
-  const message = useAuiState((state) => state.message)
-  const transcript = usePiThreadState((state) => state.messages)
+  const content = useAuiState((state) => state.message.content)
+  const status = useAuiState((state) => state.message.status?.type)
+  if (status === 'running' || status === 'requires-action') return null
+  if (!content.some((part) =>
+    part.type === 'tool-call' && (part.toolName === 'write' || part.toolName === 'edit'),
+  ))
+    return null
+  return <CompletedFileChangeCards content={content} />
+}
+
+function CompletedFileChangeCards({ content }: { content: ThreadMessage['content'] }) {
+  const aui = useAui()
   const { open } = usePreview()
   const files = useMemo(() => {
+    const transcript =
+      (aui.thread.getState().extras as PiRuntimeExtras | undefined)?.state.messages ?? []
     const results = new Map<string, unknown>()
     for (const entry of transcript) {
       if (entry.role === 'toolResult' && typeof entry.toolCallId === 'string') {
@@ -20,7 +32,7 @@ export function FileChangeCards() {
       }
     }
     const changes = new Map<string, { operation: FileResultOperation; target: PreviewTarget }>()
-    for (const part of message.content) {
+    for (const part of content) {
       if (part.type !== 'tool-call' || (part.toolName !== 'write' && part.toolName !== 'edit'))
         continue
       const raw = results.get(part.toolCallId) ?? part.result
@@ -51,14 +63,9 @@ export function FileChangeCards() {
       })
     }
     return [...changes.values()]
-  }, [message.content, transcript])
+  }, [aui, content])
 
-  if (
-    message.status?.type === 'running' ||
-    message.status?.type === 'requires-action' ||
-    !files.length
-  )
-    return null
+  if (!files.length) return null
 
   return (
     <div data-slot="file-change-cards" className="flex flex-col gap-2">

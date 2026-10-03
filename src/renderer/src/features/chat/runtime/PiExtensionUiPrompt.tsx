@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react'
+import { useAui } from '@assistant-ui/react'
 import {
-  usePiRuntimeExtras,
+  usePiThreadState,
+  type PiRuntimeExtras,
   type PiHostUiRequest as PiExtensionUiRequest,
 } from '@assistant-ui/react-pi'
 
@@ -21,7 +23,7 @@ function RequestDialog({
   respond,
 }: {
     request: PiExtensionUiRequest
-  respond: ReturnType<typeof usePiRuntimeExtras>['respondToHostUiRequest']
+  respond: PiRuntimeExtras['respondToHostUiRequest']
 }) {
   const [value, setValue] = useState(request.kind === 'editor' ? (request.prefill ?? '') : '')
   const answer = (response: Parameters<typeof respond>[0]) => void respond(response)
@@ -112,7 +114,7 @@ function SelectRequestBar({
   respond,
 }: {
   request: Extract<PiExtensionUiRequest, { kind: 'select' }>
-  respond: ReturnType<typeof usePiRuntimeExtras>['respondToHostUiRequest']
+  respond: PiRuntimeExtras['respondToHostUiRequest']
 }) {
   const isPermissionRequest = request.options.includes('允许一次') && request.options.includes('拒绝')
 
@@ -146,11 +148,10 @@ function SelectRequestBar({
 }
 
 export function PiExtensionUiPrompt() {
-  const {
-    allHostUiRequests: requests,
-    respondToHostUiRequest: respondToExtensionUiRequest,
-  } = usePiRuntimeExtras()
-  const request = requests[0]
+  const aui = useAui()
+  const request = usePiThreadState((state) => state.hostUiRequests[0])
+  const respondToExtensionUiRequest: PiRuntimeExtras['respondToHostUiRequest'] = (response) =>
+    (aui.thread.getState().extras as PiRuntimeExtras).respondToHostUiRequest(response)
 
   if (!request) return null
   if (request.kind === 'select') {

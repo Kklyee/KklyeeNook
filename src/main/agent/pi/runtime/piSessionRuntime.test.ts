@@ -99,6 +99,31 @@ function fakeSessionManager(
   return { buildSessionContext: vi.fn(() => context), getBranch: vi.fn(() => branch) }
 }
 
+test('reports a product run as running before Pi begins streaming', async () => {
+  const session = fakeSession()
+  vi.mocked(createAgentSession).mockResolvedValue({ session } as never)
+  vi.mocked(SessionManager.create).mockReturnValue(fakeSessionManager() as never)
+  vi.mocked(ModelRuntime.create).mockResolvedValue({
+    registerProvider: vi.fn(), unregisterProvider: vi.fn(), setRuntimeApiKey: vi.fn(),
+    getModel: () => ({ provider: 'custom', id: 'model-1' }),
+  } as never)
+  const runtime = new PiSessionRuntime(
+    'session-1',
+    new AgentConfigStore({ model: { provider: 'custom', modelID: 'model-1', baseUrl: 'https://example.test', thinkingLevel: 'off' }, tools: { enabled: [] } }),
+    { getApiKey: () => 'secret' } as unknown as CredentialStore,
+    { findBySessionId: vi.fn(), save: vi.fn() } as unknown as AgentRuntimeStateRepo,
+    new ToolRegistry(), 'sessions',
+  )
+  try {
+    await runtime.initialize()
+    expect(runtime.isRunning()).toBe(false)
+    expect(runtime.getSnapshot({ id: 'session-1', status: 'running', runningRunId: 'run-1' }).metadata.status).toBe('running')
+    expect(runtime.getSnapshot({ id: 'session-1', status: 'idle' }).metadata.status).toBe('idle')
+  } finally {
+    runtime.dispose()
+  }
+})
+
 test.each([
   undefined,
   { tokens: null, contextWindow: 128_000, percent: null },

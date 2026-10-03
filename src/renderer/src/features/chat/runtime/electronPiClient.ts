@@ -17,6 +17,9 @@ export function createElectronPiClient(
   const endpoint = baseUrl.replace(/\/+$/, '')
   const attachmentAwareClient: ContextAwarePiClient = {
     ...httpClient,
+    subscribe(threadId, listener) {
+      return httpClient.subscribe(threadId, listener, { includeSnapshot: true })
+    },
     async createThread(input) {
       const session = await window.api.conversations.create({
         title: input?.title,

@@ -31,6 +31,9 @@ type Relay = {
   listeners: Set<Listener>
   unsubscribe: () => void
   seq: number
+  ready?: Promise<void>
+  pendingUpdates: Map<string, PiClientEventBody>
+  flushTimer?: ReturnType<typeof setTimeout>
 }
 
 export class PiClientService implements PiClient {
@@ -69,13 +72,11 @@ export class PiClientService implements PiClient {
   }
 
   async getThread(threadId: string): Promise<PiThreadSnapshot> {
-    const session = this.requireSession(threadId)
+    this.requireSession(threadId)
     const sessionRuntime = this.sessionRuntimeManager.getOrCreate(threadId)
     await sessionRuntime.initialize()
     await sessionRuntime.applyConfiguredModelSelection()
-    const snapshot = sessionRuntime.getSnapshot(this.metadataOf(session))
-    await this.messageProjection.project(threadId, snapshot.messages)
-    return snapshot
+    return sessionRuntime.getSnapshot(this.metadataOf(this.requireSession(threadId)))
   }
 
   async sendMessage(
@@ -196,7 +197,7 @@ export class PiClientService implements PiClient {
 
   async deleteThread(threadId: string): Promise<void> {
     const relay = this.relays.get(threadId)
-    relay?.unsubscribe()
+    if (relay) this.disposeRelay(relay)
     this.relays.delete(threadId)
     await this.agentService.deleteSession(threadId)
     this.sessionRuntimeManager.delete(threadId)
@@ -214,34 +215,47 @@ export class PiClientService implements PiClient {
     options?: { includeSnapshot?: boolean },
   ): () => void {
     let active = true
-    let relay: Relay | undefined
+    let relay: Relay
     const bufferedEvents: PiClientEvent[] = []
     let snapshotDelivered = options?.includeSnapshot === false
     const relayListener: Listener = (event) => {
       if (snapshotDelivered) this.notify(listener, event)
       else bufferedEvents.push(event)
     }
-    void this.ensureRelay(threadId).then(
-      async (resolved) => {
+    try {
+      relay = this.ensureRelay(threadId)
+      relay.listeners.add(relayListener)
+      relay.ready ??= (async () => {
+        await relay.sessionRuntime.initialize()
+        await relay.sessionRuntime.applyConfiguredModelSelection()
+      })()
+    } catch (error) {
+      this.notify(listener, {
+        type: 'error',
+        error: error instanceof Error ? error.message : String(error),
+        threadId,
+        seq: 0,
+      })
+      return () => undefined
+    }
+    void relay.ready
+      .then(() => {
         if (!active) return
-        relay = resolved
-        relay.listeners.add(relayListener)
         if (options?.includeSnapshot !== false) {
           const session = this.requireSession(threadId)
           const snapshotSeq = relay.seq
           const snapshot = relay.sessionRuntime.getSnapshot(this.metadataOf(session))
-          if (!active) {
-            relay.listeners.delete(relayListener)
-            return
-          }
-          await this.messageProjection.project(threadId, snapshot.messages)
           this.notify(listener, { type: 'snapshot', snapshot, threadId, seq: snapshotSeq })
           snapshotDelivered = true
-          for (const event of bufferedEvents) this.notify(listener, event)
+          for (const event of bufferedEvents) {
+            if (!active) break
+            if (event.seq > snapshotSeq) this.notify(listener, event)
+          }
           bufferedEvents.length = 0
         }
-      },
-      (error: unknown) => {
+      })
+      .catch((error: unknown) => {
+        relay.ready = undefined
         if (!active) return
         this.notify(listener, {
           type: 'error',
@@ -249,21 +263,20 @@ export class PiClientService implements PiClient {
           threadId,
           seq: 0,
         })
-      },
-    )
+      })
 
     return () => {
       active = false
-      relay?.listeners.delete(relayListener)
+      relay.listeners.delete(relayListener)
     }
   }
 
   dispose(): void {
-    for (const relay of this.relays.values()) relay.unsubscribe()
+    for (const relay of this.relays.values()) this.disposeRelay(relay)
     this.relays.clear()
   }
 
-  private async ensureRelay(threadId: string): Promise<Relay> {
+  private ensureRelay(threadId: string): Relay {
     const existing = this.relays.get(threadId)
     if (existing) return existing
 
@@ -274,22 +287,51 @@ export class PiClientService implements PiClient {
       listeners: new Set(),
       unsubscribe: () => undefined,
       seq: 0,
+      pendingUpdates: new Map(),
     }
     relay.unsubscribe = sessionRuntime.subscribeClientEvents((body) =>
       this.emit(threadId, relay, body),
     )
     this.relays.set(threadId, relay)
-    await sessionRuntime.initialize()
-    await sessionRuntime.applyConfiguredModelSelection()
     return relay
   }
 
   private emit(threadId: string, relay: Relay, body: PiClientEventBody): void {
+    if (body.type === 'message_update' || body.type === 'tool_execution_update') {
+      if (!relay.listeners.size) return
+      const key = body.type === 'message_update' ? 'message' : `tool:${body.toolCallId}`
+      relay.pendingUpdates.set(key, body)
+      relay.flushTimer ??= setTimeout(() => this.flushUpdates(threadId, relay), 32)
+      relay.flushTimer.unref()
+      return
+    }
+    this.flushUpdates(threadId, relay)
+    this.publishEvent(threadId, relay, body)
+  }
+
+  private flushUpdates(threadId: string, relay: Relay): void {
+    clearTimeout(relay.flushTimer)
+    relay.flushTimer = undefined
+    const updates = [...relay.pendingUpdates.values()]
+    relay.pendingUpdates.clear()
+    for (const body of updates) this.publishEvent(threadId, relay, body)
+  }
+
+  private disposeRelay(relay: Relay): void {
+    clearTimeout(relay.flushTimer)
+    relay.pendingUpdates.clear()
+    relay.unsubscribe()
+  }
+
+  private publishEvent(threadId: string, relay: Relay, body: PiClientEventBody): void {
     relay.seq += 1
     const event = { ...body, threadId, seq: relay.seq } as PiClientEvent
     for (const listener of relay.listeners) this.notify(listener, event)
 
-    if (body.type === 'message_end') {
+    if (
+      body.type === 'message_end' &&
+      (body.message.role === 'user' || body.message.role === 'assistant')
+    ) {
       const session = this.agentService.getSession(threadId)
       if (!session) return
       const snapshot = relay.sessionRuntime.getSnapshot(this.metadataOf(session.toSummary()))

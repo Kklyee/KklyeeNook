@@ -1,6 +1,11 @@
 import { useEffect, useState, type ButtonHTMLAttributes } from 'react'
-import { useAuiState } from '@assistant-ui/react'
-import { usePiRuntimeExtras, usePiSession, type PiThinkingLevel } from '@assistant-ui/react-pi'
+import { useAui, useAuiState } from '@assistant-ui/react'
+import {
+  usePiSession,
+  usePiThreadState,
+  type PiRuntimeExtras,
+  type PiThinkingLevel,
+} from '@assistant-ui/react-pi'
 import { toAgentContextUsage } from '@/shared/agent/agentContextUsage'
 import type { AgentSettingsSnapshot } from '@/shared/agent/agentSettings'
 import type { ThinkingLevel } from '@/shared/agent/agentConfig'
@@ -39,11 +44,12 @@ export function ChatPanel({
   const [focusedRunId, setFocusedRunId] = useState<string>()
   const threadItemId = useAuiState((state) => state.threadListItem.id)
   const sessionId = useAuiState((state) => state.threadListItem.remoteId)
+  const contextUsage = usePiThreadState((state) => state.contextUsage)
+  const isCompacting = usePiThreadState((state) => state.compaction.active)
   const {
     switchingModel,
     modelError,
     session,
-    piRuntime,
     modelOptions,
     selectedModel,
     selectedThinkingLevel,
@@ -92,9 +98,9 @@ export function ChatPanel({
             <div className="relative min-h-0 flex-1">
               <Thread
                 composerAccessory={<PiExtensionUiPrompt />}
-                contextUsage={toAgentContextUsage(piRuntime.contextUsage)}
+                contextUsage={toAgentContextUsage(contextUsage)}
                 compactionSettings={settings?.compaction}
-                isCompacting={piRuntime.compaction?.active === true}
+                isCompacting={isCompacting}
                 modelSelector={{
                   models: modelOptions,
                   value: selectedModel?.id ?? settings?.activeModelId,
@@ -151,7 +157,7 @@ function useChatModelSelection(
   const [switchingModel, setSwitchingModel] = useState(false)
   const [modelError, setModelError] = useState<string | null>(null)
   const session = usePiSession()
-  const piRuntime = usePiRuntimeExtras()
+  const aui = useAui()
   const configuredModels = settings?.models ?? []
   const [globalSelection, setGlobalSelection] = useState<{
     modelId: string
@@ -208,6 +214,7 @@ function useChatModelSelection(
     const model = configuredModels.find((item) => item.id === id)
     if (!model) return
     const thinkingLevel = model.thinkingLevel ?? (model.reasoning ? 'medium' : 'off')
+    const piRuntime = aui.thread.getState().extras as PiRuntimeExtras
     setSwitchingModel(true)
     setModelError(null)
     try {
@@ -226,6 +233,7 @@ function useChatModelSelection(
   const switchThinkingLevel = async (level: string) => {
     if (!isThinkingLevel(level)) return
     if (!selectedModel) return
+    const piRuntime = aui.thread.getState().extras as PiRuntimeExtras
     setSwitchingModel(true)
     setModelError(null)
     try {
@@ -243,7 +251,6 @@ function useChatModelSelection(
     switchingModel,
     modelError,
     session,
-    piRuntime,
     modelOptions,
     selectedModel,
     selectedThinkingLevel,

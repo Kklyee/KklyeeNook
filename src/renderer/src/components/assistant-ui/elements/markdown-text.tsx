@@ -23,6 +23,8 @@ type MarkdownTextProps = Partial<TextMessagePartProps> & {
   components?: Parameters<typeof memoizeMarkdownComponents>[0]
 }
 
+const remarkPlugins = [remarkGfm]
+
 const MarkdownTextImpl: FC<MarkdownTextProps> = ({ components }) => {
   const markdownComponents = useMemo(() => {
     if (!components) return defaultComponents
@@ -31,7 +33,7 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = ({ components }) => {
 
   return (
     <MarkdownTextPrimitive
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={remarkPlugins}
       className="aui-md"
       components={markdownComponents}
       componentsByLanguage={markdownComponentsByLanguage}

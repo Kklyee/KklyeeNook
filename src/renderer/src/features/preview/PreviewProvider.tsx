@@ -8,10 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { useAuiState } from '@assistant-ui/react'
-import { usePiThreadState } from '@assistant-ui/react-pi'
 import { useWorkspaces } from '../workspaces/WorkspaceProvider'
-import { normalizeToolResult } from '@/shared/tool/toolExecutionResult'
 
 export type PreviewTarget = {
   kind: 'workspace-file'
@@ -87,9 +84,6 @@ export function PreviewProvider({
   const { conversations, workspaces } = useWorkspaces()
   const workspaceId = conversations.find((session) => session.id === sessionId)?.workspaceId
   const root = workspaces.find((workspace) => workspace.id === workspaceId)?.rootPath
-  const messages = useAuiState((state) => state.thread.messages)
-  const transcript = usePiThreadState((state) => state.messages)
-  const completedTools = useRef(new Set<string>())
 
   const refreshFile = useCallback(
     (path: string) => {
@@ -99,30 +93,6 @@ export function PreviewProvider({
     },
     [target, root],
   )
-
-  useEffect(() => {
-    const results = new Map<string, unknown>()
-    for (const entry of transcript) {
-      if (entry.role === 'toolResult' && typeof entry.toolCallId === 'string')
-        results.set(entry.toolCallId, entry)
-    }
-    for (const message of messages) {
-      for (const part of message.content) {
-        if (
-          part.type !== 'tool-call' ||
-          !results.has(part.toolCallId) ||
-          (part.toolName !== 'write' && part.toolName !== 'edit') ||
-          completedTools.current.has(part.toolCallId)
-        )
-          continue
-        completedTools.current.add(part.toolCallId)
-        if (normalizeToolResult(results.get(part.toolCallId), part.isError).status !== 'success')
-          continue
-        const path = part.args.path ?? part.args.file_path
-        if (typeof path === 'string') refreshFile(path)
-      }
-    }
-  }, [messages, transcript, refreshFile])
 
   useEffect(() => {
     if (placement !== 'focus') previousDock.current = placement

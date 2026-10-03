@@ -248,7 +248,9 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     return {
       metadata: {
         ...metadata,
-        status: this.lastError ? 'failed' : this.isRunning() ? 'running' : 'idle',
+        status: metadata.status === 'running' || this.isRunning()
+          ? 'running'
+          : this.lastError ? 'failed' : 'idle',
         sessionFile: session.sessionFile,
         messageCount: session.messages.length,
         config: {
