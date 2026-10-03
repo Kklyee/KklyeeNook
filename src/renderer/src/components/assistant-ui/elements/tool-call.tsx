@@ -162,7 +162,7 @@ export function ToolCard({
       onOpenChange={handleOpenChange}
       style={{ '--animation-duration': `${ANIMATION_DURATION}ms` } as React.CSSProperties}
       className={cn(
-        'tool-row bg-surface-muted border border-border relative w-full overflow-hidden rounded-lg transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-[var(--ui-shadow-raised)]',
+        'tool-row bg-surface-muted border border-border w-full overflow-visible rounded-lg transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-[var(--ui-shadow-raised)]',
         className,
       )}
     >

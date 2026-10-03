@@ -6,7 +6,6 @@ import {
   isValidElement,
   memo,
   useCallback,
-  useId,
   useRef,
   useState,
   type FC,
@@ -67,7 +66,6 @@ function ToolGroupRoot({
   style,
   ...props
 }: ToolGroupRootProps) {
-  const anchorScopeId = useId().replace(/[^a-zA-Z0-9_-]/g, '')
   const collapsibleRef = useRef<HTMLDivElement>(null)
   const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen)
   const lockScroll = useScrollLock(collapsibleRef, ANIMATION_DURATION)
@@ -97,7 +95,6 @@ function ToolGroupRoot({
       style={{
         ...style,
         '--animation-duration': `${ANIMATION_DURATION}ms`,
-        '--tool-group-anchor': `--tool-group-${anchorScopeId}`,
       } as React.CSSProperties}
       {...props}
     >
@@ -160,14 +157,13 @@ function ToolGroupContent({
   children,
   ...props
 }: React.ComponentProps<typeof CollapsibleContent>) {
-  const anchorScopeId = useId().replace(/[^a-zA-Z0-9_-]/g, '')
   const toolGroupChildren = flattenToolGroupChildren(children)
 
   return (
     <CollapsibleContent
       data-slot="tool-group-content"
       className={cn(
-        'aui-tool-group-content relative overflow-hidden text-sm outline-none',
+        'aui-tool-group-content overflow-visible text-sm outline-none data-closed:overflow-hidden',
         'group/collapsible-content ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:animate-none',
         'data-closed:animate-collapsible-up',
         'data-open:animate-collapsible-down',
@@ -185,12 +181,6 @@ function ToolGroupContent({
           'group-data-[variant=ghost]/tool-group-root:mt-1',
           'group-data-[variant=outline]/tool-group-root:mt-2 group-data-[variant=outline]/tool-group-root:border-t group-data-[variant=outline]/tool-group-root:border-border group-data-[variant=outline]/tool-group-root:px-3 group-data-[variant=outline]/tool-group-root:pt-2',
           'group-data-[variant=muted]/tool-group-root:mt-2 group-data-[variant=muted]/tool-group-root:border-t group-data-[variant=muted]/tool-group-root:border-border group-data-[variant=muted]/tool-group-root:px-3 group-data-[variant=muted]/tool-group-root:pt-2',
-          '[&>*]:animate-in [&>*]:fade-in-0 [&>*]:blur-in-[2px] [&>*]:slide-in-from-top-1 [&>*]:animation-duration-(--animation-duration) [&>*]:ease-[cubic-bezier(0.32,0.72,0,1)]',
-          '[&>*]:motion-reduce:animate-none',
-          '[&>*:nth-child(2)]:[animation-delay:40ms]',
-          '[&>*:nth-child(3)]:[animation-delay:80ms]',
-          '[&>*:nth-child(4)]:[animation-delay:120ms]',
-          '[&>*:nth-child(n+5)]:[animation-delay:160ms]',
         )}
       >
         {toolGroupChildren.map((child, index) => (
@@ -198,8 +188,7 @@ function ToolGroupContent({
             key={index}
             data-slot="aui-tool-group-node"
             style={{
-              '--tool-call-anchor': `--tool-call-${anchorScopeId}-${index}`,
-              '--tool-call-connector-delay': `${Math.min(index * 40, 160)}ms`,
+              '--tool-call-connector-delay': `${index * 32}ms`,
             } as React.CSSProperties}
             className="aui-tool-group-node"
           >

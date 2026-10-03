@@ -313,8 +313,13 @@ body,
   }
 }
 
+.aui-tool-group-root {
+  position: relative;
+  anchor-scope: --tool-group-trigger;
+}
+
 .aui-tool-group-trigger {
-  anchor-name: var(--tool-group-anchor);
+  anchor-name: --tool-group-trigger;
 }
 
 .aui-tool-group-items {
@@ -322,24 +327,25 @@ body,
 }
 
 .aui-tool-group-node {
-  position: relative;
   min-width: 0;
 }
 
 .tool-row {
-  anchor-name: var(--tool-call-anchor);
+  anchor-name: --tool-call;
+  anchor-scope: --tool-call;
 }
 
-.aui-tool-group-node::before {
+.tool-row::before {
   content: '';
+  display: none;
   position: absolute;
-  inset-block-start: calc(50% - 10px);
-  position-anchor: var(--tool-group-anchor);
-  inset-inline-start: -1rem;
-  inline-size: 1rem;
-  block-size: 10px;
-  border-inline-start: 1px solid color-mix(in oklch, var(--ui-fg-muted) 42%, transparent);
-  border-block-end: 1px solid color-mix(in oklch, var(--ui-fg-muted) 42%, transparent);
+  top: anchor(bottom --tool-group-trigger);
+  left: calc(anchor(left --tool-group-trigger) + 0.75rem);
+  right: calc(anchor(left --tool-call) - 1px);
+  bottom: anchor(center --tool-call);
+  border: 1px solid transparent;
+  border-left-color: color-mix(in oklch, var(--ui-fg-muted) 42%, var(--ui-bg));
+  border-bottom-color: color-mix(in oklch, var(--ui-fg-muted) 42%, var(--ui-bg));
   border-end-start-radius: 4px;
   transform-origin: left bottom;
   pointer-events: none;
@@ -347,11 +353,9 @@ body,
   animation-delay: var(--tool-call-connector-delay, 0ms);
 }
 
-@supports (inset-block-start: anchor(bottom)) {
-  .aui-tool-group-node::before {
-    inset-block-start: anchor(bottom, 0px);
-    inset-block-end: anchor(var(--tool-call-anchor) center, 0px);
-    block-size: auto;
+@supports (anchor-scope: --tool-call) and (top: anchor(bottom --tool-group-trigger)) {
+  .tool-row::before {
+    display: block;
   }
 }
 
@@ -368,7 +372,7 @@ body,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .aui-tool-group-node::before {
+  .tool-row::before {
     animation: none;
   }
 }
