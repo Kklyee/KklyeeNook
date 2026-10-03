@@ -188,7 +188,7 @@ function ToolGroupContent({
             key={index}
             data-slot="aui-tool-group-node"
             style={{
-              '--tool-call-connector-delay': `${index * 32}ms`,
+              '--tool-call-connector-delay': `${index * 100}ms`,
             } as React.CSSProperties}
             className="aui-tool-group-node"
           >
