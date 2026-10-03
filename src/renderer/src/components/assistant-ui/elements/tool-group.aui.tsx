@@ -2,6 +2,8 @@
 
 import {
   Children,
+  Fragment,
+  isValidElement,
   memo,
   useCallback,
   useId,
@@ -9,6 +11,7 @@ import {
   useState,
   type FC,
   type PropsWithChildren,
+  type ReactNode,
 } from 'react'
 import { ChevronDownIcon } from 'lucide-react'
 import { cva, type VariantProps } from 'class-variance-authority'
@@ -21,6 +24,15 @@ import {
 import { cn } from '@/renderer/src/lib/utils'
 
 const ANIMATION_DURATION = 200
+
+function flattenToolGroupChildren(children: ReactNode): ReactNode[] {
+  return Children.toArray(children).flatMap((child) => {
+    if (isValidElement<{ children?: ReactNode }>(child) && child.type === Fragment) {
+      return flattenToolGroupChildren(child.props.children)
+    }
+    return [child]
+  })
+}
 
 const toolGroupVariants = cva('aui-tool-group-root group/tool-group w-full', {
   variants: {
@@ -174,7 +186,7 @@ function ToolGroupContent({
           '[&>*:nth-child(n+5)]:[animation-delay:160ms]',
         )}
       >
-        {Children.toArray(children).map((child, index) => (
+        {flattenToolGroupChildren(children).map((child, index) => (
           <div
             key={index}
             data-slot="aui-tool-group-node"
