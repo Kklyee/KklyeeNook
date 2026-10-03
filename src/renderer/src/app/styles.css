@@ -317,6 +317,10 @@ body,
   anchor-scope: all;
 }
 
+.aui-tool-group-trigger {
+  anchor-name: --tool-group-trigger;
+}
+
 .aui-tool-group-items {
   padding-inline-start: 1.5rem;
 }
@@ -334,7 +338,7 @@ body,
   content: '';
   position: absolute;
   inset-block-start: calc(50% - 10px);
-  position-anchor: var(--tool-call-anchor);
+  position-anchor: --tool-group-trigger;
   inset-inline-start: -1rem;
   inline-size: 1rem;
   block-size: 10px;
@@ -347,9 +351,11 @@ body,
   animation-delay: var(--tool-call-connector-delay, 0ms);
 }
 
-@supports (inset-block-start: anchor(center)) {
+@supports (inset-block-start: anchor(bottom)) {
   .aui-tool-group-node::before {
-    inset-block-start: calc(anchor(center, 50%) - 10px);
+    inset-block-start: anchor(bottom, 0px);
+    inset-block-end: anchor(var(--tool-call-anchor) center, 0px);
+    block-size: auto;
   }
 }
 
