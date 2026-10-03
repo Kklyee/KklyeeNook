@@ -287,6 +287,20 @@ body,
     -webkit-backdrop-filter: blur(var(--ui-blur-raised)) saturate(112%);
     box-shadow: var(--ui-shadow-raised);
   }
+
+  .sidebar-accessory {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms ease;
+  }
+
+  .sidebar-row:hover .sidebar-accessory,
+  .sidebar-row:focus-within .sidebar-accessory,
+  .sidebar-section:hover .sidebar-accessory,
+  .sidebar-section:focus-within .sidebar-accessory {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 @layer base {

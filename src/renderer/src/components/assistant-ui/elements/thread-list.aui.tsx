@@ -20,15 +20,7 @@ import {
   useAui,
   useAuiState,
 } from '@assistant-ui/react'
-import {
-  ArchiveIcon,
-  CircleAlertIcon,
-  LoaderCircleIcon,
-  MoreHorizontalIcon,
-  PencilIcon,
-  PlusIcon,
-  TrashIcon,
-} from 'lucide-react'
+import { MoreHorizontalIcon, PlusIcon } from 'lucide-react'
 import {
   forwardRef,
   useEffect,
@@ -137,7 +129,7 @@ export const ThreadListItem: FC = () => {
   return (
     <ThreadListItemPrimitive.Root
       data-slot="aui_thread-list-item"
-      className="group relative flex h-[34px] items-center rounded-lg text-muted-foreground transition-colors hover:bg-hover hover:text-foreground focus-visible:bg-hover active:bg-active active:text-foreground data-active:bg-selected data-active:hover:bg-selected data-active:text-foreground has-focus-visible:bg-hover has-data-[state=open]:bg-selected has-data-[state=open]:text-foreground focus-visible:outline-none"
+      className="sidebar-row group relative flex h-[34px] items-center rounded-lg text-muted-foreground transition-colors hover:bg-hover hover:text-foreground focus-visible:bg-hover active:bg-active active:text-foreground data-active:bg-selected data-active:hover:bg-selected data-active:text-foreground has-focus-visible:bg-hover has-data-[state=open]:bg-selected has-data-[state=open]:text-foreground focus-visible:outline-none"
     >
       {isRenaming ? (
         <ThreadListItemRename
@@ -160,35 +152,24 @@ export const ThreadListItem: FC = () => {
             )
           }}
         >
-          {isWaiting ? (
-            <CircleAlertIcon
-              aria-hidden
-              data-slot="aui_thread-list-item-waiting"
-              className="text-faint-foreground me-1.5 size-3 shrink-0"
-              strokeWidth={1.5}
-            />
-          ) : isRunning ? (
-            <LoaderCircleIcon
-              aria-hidden
-              data-slot="aui_thread-list-item-running"
-              className="text-faint-foreground me-1.5 size-3 shrink-0 animate-spin"
-              strokeWidth={1.5}
-            />
-          ) : null}
           <span data-slot="aui_thread-list-item-title" className="min-w-0 flex-1 truncate">
             <ThreadListItemPrimitive.Title fallback="新对话" />
           </span>
+          {isRunning && (
+            <span className="me-1.5 shrink-0 text-[10px] text-faint-foreground">运行中</span>
+          )}
+          {isWaiting && (
+            <span className="me-1.5 shrink-0 text-[10px] text-faint-foreground">等待</span>
+          )}
           {updatedAt && (
             <time
               dateTime={new Date(updatedAt).toISOString()}
               title={new Date(updatedAt).toLocaleString()}
-              className="ml-2 shrink-0 text-[10px] tabular-nums text-faint-foreground group-hover:hidden group-focus-within:hidden group-has-data-[state=open]:hidden"
+              className="ml-2 shrink-0 text-[10px] tabular-nums text-faint-foreground"
             >
               {formatThreadAge(updatedAt)}
             </time>
           )}
-          {isRunning && <span className="sr-only">Running</span>}
-          {isWaiting && <span className="sr-only">Waiting for approval</span>}
         </ThreadListItemPrimitive.Trigger>
       )}
       <ThreadListItemMore onRename={() => setIsRenaming(true)} />
@@ -267,7 +248,7 @@ const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
             variant="ghost"
             size="icon"
             data-slot="aui_thread-list-item-more"
-            className="absolute end-1 top-1/2 size-6 -translate-y-1/2 rounded-md p-0 text-faint-foreground opacity-0 hover:bg-hover hover:text-foreground active:bg-active focus-visible:border-ring focus-visible:ring-0 group-hover:opacity-100 group-has-focus-visible:opacity-100 data-[state=open]:bg-selected data-[state=open]:text-foreground data-[state=open]:opacity-100 data-[state=open]:hover:bg-selected"
+            className="sidebar-accessory absolute end-1 top-1/2 size-6 -translate-y-1/2 rounded-md p-0 text-faint-foreground hover:bg-hover hover:text-foreground active:bg-active focus-visible:border-ring focus-visible:ring-0 data-[state=open]:bg-selected data-[state=open]:text-foreground data-[state=open]:hover:bg-selected"
           />
         }
       >
@@ -286,7 +267,6 @@ const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
           className="text-muted-foreground hover:bg-hover hover:text-foreground focus:bg-hover focus:text-foreground active:bg-active data-highlighted:bg-hover data-highlighted:text-foreground transition-colors flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none select-none"
           onSelect={onRename}
         >
-          <PencilIcon className="size-3.5" strokeWidth={1.5} />
           Rename
         </ThreadListItemMorePrimitive.Item>
         <ThreadListItemPrimitive.Archive
@@ -297,7 +277,6 @@ const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
             />
           }
         >
-          <ArchiveIcon className="size-3.5" strokeWidth={1.5} />
           Archive
         </ThreadListItemPrimitive.Archive>
         <ThreadListItemPrimitive.Delete
@@ -308,7 +287,6 @@ const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
             />
           }
         >
-          <TrashIcon className="size-3.5" strokeWidth={1.5} />
           Delete
         </ThreadListItemPrimitive.Delete>
       </ThreadListItemMorePrimitive.Content>

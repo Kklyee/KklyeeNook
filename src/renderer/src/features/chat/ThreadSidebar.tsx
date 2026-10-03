@@ -1,18 +1,10 @@
 import { type ComponentProps } from 'react'
-import {
-  CalendarClockIcon,
-  PanelLeftCloseIcon,
-  PanelLeftOpenIcon,
-  SettingsIcon,
-  SparklesIcon,
-} from 'lucide-react'
-import { Button } from '@/renderer/src/components/ui/button'
+import { CalendarClockIcon, SettingsIcon } from 'lucide-react'
 import { cn } from '@/renderer/src/lib/utils'
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -20,49 +12,6 @@ import {
   useSidebar,
 } from '@/renderer/src/components/ui/sidebar'
 import { ThreadList } from '@/renderer/src/components/assistant-ui/elements/thread-list.aui'
-
-function SidebarBrand({ canCollapse }: { canCollapse: boolean }) {
-  const { isMobile, state, toggleSidebar } = useSidebar()
-  const collapsed = state === 'collapsed' && !isMobile
-
-  if (collapsed) {
-    return (
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="mx-auto size-8 rounded-lg text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active focus-visible:border-ring focus-visible:ring-0"
-        aria-label="展开侧边栏"
-        title="展开侧边栏"
-        onClick={toggleSidebar}
-      >
-        <PanelLeftOpenIcon className="size-3.5" strokeWidth={1.5} />
-      </Button>
-    )
-  }
-
-  return (
-    <div className="flex h-9 min-w-0 items-center gap-2 px-1.5">
-      <SparklesIcon className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.5} />
-      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
-        KklyeeNook
-      </span>
-      {canCollapse && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className="size-7 shrink-0 rounded-md text-faint-foreground hover:bg-hover hover:text-foreground active:bg-active focus-visible:border-ring focus-visible:ring-0"
-          aria-label="收起侧边栏"
-          title="收起侧边栏"
-          onClick={toggleSidebar}
-        >
-          <PanelLeftCloseIcon className="size-3.5" strokeWidth={1.5} />
-        </Button>
-      )}
-    </div>
-  )
-}
 
 function SidebarGlobalNav({
   onOpenSettings,
@@ -121,10 +70,7 @@ export function ThreadSidebar({
 
   return (
     <Sidebar className={cn('border-border', className)} {...props}>
-      <SidebarHeader className="px-2 pt-2 pb-1 group-data-[collapsible=icon]:px-1.5">
-        <SidebarBrand canCollapse={canCollapse} />
-      </SidebarHeader>
-      <SidebarContent className="px-2 pb-2 group-data-[collapsible=icon]:px-1.5">
+      <SidebarContent className="px-2 pt-2 pb-2 group-data-[collapsible=icon]:px-1.5">
         <ThreadList />
       </SidebarContent>
       {canCollapse && <SidebarRail />}

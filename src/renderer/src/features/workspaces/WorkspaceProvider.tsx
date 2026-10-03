@@ -15,12 +15,14 @@ import type { AgentSessionSummary } from '@/shared/agent/agentSession'
 export const WORKSPACE_CHANGED = 'nook:workspace-changed'
 const WORKSPACE_DISPLAY_MODE_KEY = 'nook:workspace-display-mode'
 const ACTIVE_WORKSPACE_ID_KEY = 'nook:active-workspace-id'
+const EXPANDED_WORKSPACE_IDS_KEY = 'nook:expanded-workspace-ids'
 
 export type WorkspaceDisplayMode = 'single' | 'multiple'
 
 export interface WorkspaceUiState {
   displayMode: WorkspaceDisplayMode
   activeWorkspaceId: string | null
+  expandedWorkspaceIds: string[]
 }
 
 export function notifyWorkspaceChanged(): void {
@@ -32,6 +34,7 @@ interface WorkspaceState extends WorkspaceUiState {
   conversations: AgentSessionSummary[]
   setDisplayMode(mode: WorkspaceDisplayMode): void
   setActiveWorkspaceId(id: string | null): void
+  setExpandedWorkspaceIds(ids: string[]): void
   draftMode: PermissionMode | null
   defaultMode: PermissionMode
   setDraftMode(mode: PermissionMode): void
@@ -86,6 +89,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     },
     [setDraftWorkspaceId],
   )
+  const [expandedWorkspaceIds, setExpandedWorkspaceIdsState] = useState<string[]>(() => {
+    const stored = window.localStorage.getItem(EXPANDED_WORKSPACE_IDS_KEY)
+    return stored ? (JSON.parse(stored) as string[]) : []
+  })
+  const expandedWorkspaceIdsInitialized = useRef(
+    window.localStorage.getItem(EXPANDED_WORKSPACE_IDS_KEY) !== null,
+  )
+  const setExpandedWorkspaceIds = useCallback((ids: string[]) => {
+    expandedWorkspaceIdsInitialized.current = true
+    window.localStorage.setItem(EXPANDED_WORKSPACE_IDS_KEY, JSON.stringify(ids))
+    setExpandedWorkspaceIdsState(ids)
+  }, [])
   const getDraftWorkspaceId = useCallback(() => draftRef.current, [])
   const reload = useCallback(async () => {
     const [projects, sessions, settings] = await Promise.all([
@@ -109,6 +124,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     ) {
       setActiveWorkspaceId(attachedWorkspaces[0].id)
     }
+    if (attachedWorkspaces.length && !expandedWorkspaceIdsInitialized.current) {
+      setExpandedWorkspaceIds([activeWorkspaceIdRef.current ?? attachedWorkspaces[0].id])
+    }
     setConversations(sessions)
   }, [])
   useEffect(() => {
@@ -127,6 +145,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setDisplayMode,
       activeWorkspaceId,
       setActiveWorkspaceId,
+      expandedWorkspaceIds,
+      setExpandedWorkspaceIds,
       setDraftMode,
       getDraftMode,
       workspaces,
@@ -143,6 +163,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setDisplayMode,
       activeWorkspaceId,
       setActiveWorkspaceId,
+      expandedWorkspaceIds,
+      setExpandedWorkspaceIds,
       setDraftMode,
       getDraftMode,
       workspaces,

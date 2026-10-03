@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { ThreadListPrimitive, useAui, useAuiState } from '@assistant-ui/react'
 import {
-  ArchiveIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   FolderIcon,
@@ -29,7 +28,7 @@ import {
 } from '../../components/assistant-ui/elements/thread-list.aui'
 import { cn } from '../../lib/utils'
 import { useWorkspaces } from './WorkspaceProvider'
-import { WorkspaceDisplayModeOptions, WorkspaceSwitcher } from './WorkspaceSwitcher'
+import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 
 export function WorkspaceThreadList() {
   const {
@@ -39,12 +38,12 @@ export function WorkspaceThreadList() {
     displayMode,
     setDisplayMode,
     activeWorkspaceId,
+    setActiveWorkspaceId,
   } = useWorkspaces()
   const [pending, setPending] = useState<WorkspaceAttachResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [menuOpen, setMenuOpen] = useState(false)
   const { isMobile, state } = useSidebar()
   const collapsed = state === 'collapsed' && !isMobile
   const pick = async () => {
@@ -74,20 +73,23 @@ export function WorkspaceThreadList() {
         className={collapsed ? '' : 'mb-2'}
       />
       {collapsed ? (
-        <TooltipIconButton
-          tooltip="添加工作区"
-          className="mx-auto size-8"
-          onClick={() => void pick()}
-        >
-          <PlusIcon className="size-3.5" strokeWidth={1.5} />
-        </TooltipIconButton>
+        <div className="sidebar-section flex h-8 items-center justify-center">
+          <TooltipIconButton
+            tooltip="添加工作区"
+            className="sidebar-accessory mx-auto size-8"
+            onClick={() => void pick()}
+          >
+            <PlusIcon className="size-3.5" strokeWidth={1.5} />
+          </TooltipIconButton>
+        </div>
       ) : (
         <>
-          <div className="flex h-8 items-center gap-1 px-2 text-[11px] tracking-wide text-faint-foreground">
-            <span className="flex-1">{displayMode === 'single' ? 'WORKSPACE' : 'WORKSPACES'}</span>
+          <div className="sidebar-section flex h-8 items-center gap-1 px-2 text-[11px] tracking-wide text-faint-foreground">
+            <span className="flex-1">WORKSPACE</span>
             <TooltipIconButton
               tooltip="搜索会话"
               aria-pressed={searchOpen}
+              className="sidebar-accessory"
               onClick={() => {
                 setSearchOpen(!searchOpen)
                 setQuery('')
@@ -95,44 +97,14 @@ export function WorkspaceThreadList() {
             >
               <SearchIcon className="size-3.5" strokeWidth={1.5} />
             </TooltipIconButton>
-            {displayMode === 'multiple' && (
-              <Popover open={menuOpen} onOpenChange={setMenuOpen}>
-                <PopoverTrigger
-                  render={
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="工作区选项"
-                      className="size-7 text-faint-foreground hover:bg-hover hover:text-foreground"
-                    />
-                  }
-                >
-                  <MoreHorizontalIcon className="size-3.5" strokeWidth={1.5} />
-                </PopoverTrigger>
-                <PopoverContent side="right" align="start" className="w-52 gap-1.5 p-2">
-                  <WorkspaceDisplayModeOptions
-                    displayMode={displayMode}
-                    onChange={(mode) => {
-                      setDisplayMode(mode)
-                      setMenuOpen(false)
-                    }}
-                  />
-                  <div className="border-t border-border pt-1">
-                    <Button
-                      variant="ghost"
-                      className="h-8 w-full justify-start gap-2 rounded-lg px-2 text-xs font-normal"
-                      onClick={() => {
-                        setMenuOpen(false)
-                        void pick()
-                      }}
-                    >
-                      <PlusIcon className="size-3.5" strokeWidth={1.5} />
-                      添加工作区
-                    </Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            )}
+            <WorkspaceSwitcher
+              workspaces={workspaces}
+              activeWorkspaceId={activeWorkspaceId}
+              displayMode={displayMode}
+              setActiveWorkspaceId={setActiveWorkspaceId}
+              setDisplayMode={setDisplayMode}
+              onAddWorkspace={() => void pick()}
+            />
           </div>
           {searchOpen && (
             <Input
@@ -160,7 +132,6 @@ export function WorkspaceThreadList() {
               }
               query={query}
               mode="single"
-              onAddWorkspace={() => void pick()}
             />
           ) : (
             <>
@@ -171,7 +142,6 @@ export function WorkspaceThreadList() {
                   label={workspace.displayName}
                   query={query}
                   mode="multiple"
-                  onAddWorkspace={() => void pick()}
                 />
               ))}
               <WorkspaceThreadGroup
@@ -179,7 +149,6 @@ export function WorkspaceThreadList() {
                 label="未分组"
                 query={query}
                 mode="multiple"
-                onAddWorkspace={() => void pick()}
               />
             </>
           )}
@@ -220,13 +189,11 @@ function WorkspaceThreadGroup({
   label,
   query,
   mode,
-  onAddWorkspace,
 }: {
   workspaceId: string | null
   label: string
   query: string
   mode: 'single' | 'multiple'
-  onAddWorkspace: () => void
 }) {
   const {
     conversations,
@@ -234,20 +201,32 @@ function WorkspaceThreadGroup({
     draftWorkspaceId,
     setDraftWorkspaceId,
     setActiveWorkspaceId,
+    expandedWorkspaceIds,
+    setExpandedWorkspaceIds,
     activeWorkspaceId,
-    displayMode,
-    setDisplayMode,
     reload,
   } = useWorkspaces()
   const aui = useAui()
   const ids = useAuiState((s) => s.threads.threadIds)
   const items = useAuiState((s) => s.threads.threadItems)
-  const [open, setOpen] = useState(true)
-  const [expanded, setExpanded] = useState(false)
+  const [unassignedOpen, setUnassignedOpen] = useState(true)
+  const [expandedSessions, setExpandedSessions] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const workspace = workspaces.find((item) => item.id === workspaceId)
   const visibleWorkspaceId = (id?: string | null) => getVisibleWorkspaceId(workspaces, id)
+  const open = workspaceId ? expandedWorkspaceIds.includes(workspaceId) : unassignedOpen
+  const setOpen = (nextOpen: boolean) => {
+    if (!workspaceId) {
+      setUnassignedOpen(nextOpen)
+      return
+    }
+    setExpandedWorkspaceIds(
+      nextOpen
+        ? [...new Set([...expandedWorkspaceIds, workspaceId])]
+        : expandedWorkspaceIds.filter((id) => id !== workspaceId),
+    )
+  }
   const search = query.trim().toLocaleLowerCase()
   const matchesGroup = label.toLocaleLowerCase().includes(search)
   const indices = workspaceThreadIndices(
@@ -277,8 +256,12 @@ function WorkspaceThreadGroup({
     }
   }
   const actions = (
-    <div className="flex shrink-0 items-center opacity-0 group-hover/workspace:opacity-100 group-focus-within/workspace:opacity-100 has-data-popup-open:opacity-100">
-      <TooltipIconButton tooltip="新会话" className="size-6" onClick={startNewThread}>
+    <div className="flex shrink-0 items-center">
+      <TooltipIconButton
+        tooltip="新会话"
+        className="sidebar-accessory size-6"
+        onClick={startNewThread}
+      >
         <PlusIcon className="size-3.5" strokeWidth={1.5} />
       </TooltipIconButton>
       {workspace && (
@@ -288,7 +271,7 @@ function WorkspaceThreadGroup({
               <Button
                 variant="ghost"
                 size="icon-xs"
-                className="size-6 text-faint-foreground"
+                className="sidebar-accessory size-6 text-faint-foreground"
                 aria-label={label + '工作区选项'}
               />
             }
@@ -301,7 +284,6 @@ function WorkspaceThreadGroup({
               className="justify-start gap-2 text-xs font-normal"
               onClick={() => void detach()}
             >
-              <ArchiveIcon className="size-3.5" strokeWidth={1.5} />
               移除工作区
             </Button>
           </PopoverContent>
@@ -311,72 +293,42 @@ function WorkspaceThreadGroup({
   )
 
   return (
-    <div className="flex flex-col gap-0.5">
-      {mode === 'single' ? (
-        <div className="group/workspace flex h-9 items-center gap-0.5 rounded-lg pr-1 text-muted-foreground hover:bg-hover has-focus-visible:bg-hover has-data-popup-open:bg-hover">
-          <WorkspaceSwitcher
-            workspaces={workspaces}
-            activeWorkspaceId={activeWorkspaceId}
-            displayMode={displayMode}
-            setActiveWorkspaceId={setActiveWorkspaceId}
-            setDisplayMode={setDisplayMode}
-            onAddWorkspace={onAddWorkspace}
-          />
-          {actions}
-        </div>
-      ) : (
-        <Collapsible open={open} onOpenChange={setOpen} className="flex flex-col gap-0.5">
-          <div
-            className={cn(
-              'group/workspace flex h-9 items-center gap-0.5 rounded-lg pr-1 text-muted-foreground hover:bg-hover has-focus-visible:bg-hover has-data-popup-open:bg-hover',
-              workspaceId === activeWorkspaceId && 'bg-selected text-foreground',
-            )}
-          >
-            <CollapsibleTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  className="h-full min-w-0 flex-1 justify-start gap-2 rounded-lg px-2 text-sm font-normal hover:bg-transparent aria-expanded:bg-transparent active:bg-active"
-                  title={workspace?.rootPath ?? workspace?.lastKnownPath}
-                  onClick={() => setActiveWorkspaceId(workspaceId)}
-                />
-              }
-            >
-              <WorkspaceGroupIcon open={open || Boolean(search)} />
-              <span
-                className={cn('truncate', workspaceId === activeWorkspaceId && 'text-foreground')}
-              >
-                {label}
-              </span>
-            </CollapsibleTrigger>
-            {actions}
-          </div>
-          <WorkspaceThreadItems
-            ids={ids}
-            indices={indices}
-            expanded={expanded}
-            search={search}
-            setExpanded={setExpanded}
-          />
-        </Collapsible>
-      )}
-      {mode === 'single' && (
-        <Collapsible open={open} onOpenChange={setOpen} className="flex flex-col gap-0.5">
-          <WorkspaceThreadItems
-            ids={ids}
-            indices={indices}
-            expanded={expanded}
-            search={search}
-            setExpanded={setExpanded}
-          />
-        </Collapsible>
-      )}
+    <Collapsible open={open} onOpenChange={setOpen} className="flex flex-col gap-0.5">
+      <div
+        className={cn(
+          'sidebar-row flex h-9 items-center gap-0.5 rounded-lg pr-1 text-muted-foreground hover:bg-hover has-focus-visible:bg-hover has-data-popup-open:bg-hover',
+          workspaceId === activeWorkspaceId && 'bg-selected text-foreground',
+        )}
+      >
+        <CollapsibleTrigger
+          render={
+            <Button
+              variant="ghost"
+              className="h-full min-w-0 flex-1 justify-start gap-2 rounded-lg px-2 text-sm font-normal hover:bg-transparent aria-expanded:bg-transparent active:bg-active"
+              title={workspace?.rootPath ?? workspace?.lastKnownPath}
+            />
+          }
+        >
+          <WorkspaceGroupIcon open={open} />
+          <span className={cn('truncate', workspaceId === activeWorkspaceId && 'text-foreground')}>
+            {label}
+          </span>
+        </CollapsibleTrigger>
+        {actions}
+      </div>
+      <WorkspaceThreadItems
+        ids={ids}
+        indices={indices}
+        expanded={expandedSessions}
+        search={search}
+        setExpanded={setExpandedSessions}
+      />
       {error && (
         <p role="alert" className="px-2 text-xs text-destructive">
           {error}
         </p>
       )}
-    </div>
+    </Collapsible>
   )
 }
 

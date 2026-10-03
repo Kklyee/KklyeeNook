@@ -1,14 +1,5 @@
 import { useState } from 'react'
-import {
-  CheckIcon,
-  ChevronDownIcon,
-  FolderIcon,
-  FolderOpenIcon,
-  ListTreeIcon,
-  PanelTopIcon,
-  PlusIcon,
-  SearchIcon,
-} from 'lucide-react'
+import { ChevronsUpDownIcon, FolderIcon, FolderOpenIcon, PlusIcon, SearchIcon } from 'lucide-react'
 import type { Workspace } from '@/shared/workspace/workspace'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -62,24 +53,17 @@ export function WorkspaceSwitcher({
         render={
           <Button
             variant="ghost"
+            size="icon-xs"
             aria-label="切换工作区"
-            title={activeWorkspace?.rootPath ?? activeWorkspace?.lastKnownPath}
+            title={activeWorkspace?.rootPath ?? activeWorkspace?.lastKnownPath ?? '切换工作区'}
             className={cn(
-              'h-full min-w-0 flex-1 justify-start gap-2 rounded-lg px-2 text-sm font-normal hover:bg-transparent aria-expanded:bg-transparent',
+              'sidebar-accessory size-6 text-faint-foreground hover:bg-hover hover:text-foreground',
               className,
             )}
           />
         }
       >
-        {activeWorkspace ? (
-          <FolderOpenIcon className="size-3.5 shrink-0" strokeWidth={1.5} />
-        ) : (
-          <FolderIcon className="size-3.5 shrink-0" strokeWidth={1.5} />
-        )}
-        <span className="min-w-0 flex-1 truncate text-start">
-          {activeWorkspace?.displayName ?? '未分组'}
-        </span>
-        <ChevronDownIcon className="size-3 shrink-0 text-faint-foreground" strokeWidth={1.5} />
+        <ChevronsUpDownIcon className="size-3.5" strokeWidth={1.5} />
       </PopoverTrigger>
       <PopoverContent side="right" align="start" className="w-72 gap-2 p-2">
         <div className="px-1 text-xs font-medium text-foreground">工作区</div>
@@ -175,9 +159,7 @@ export function WorkspaceDisplayModeOptions({
         )}
         onClick={() => onChange('single')}
       >
-        <PanelTopIcon className="size-3.5" strokeWidth={1.5} />
         单工作区
-        {displayMode === 'single' && <CheckIcon className="ms-auto size-3.5" strokeWidth={1.5} />}
       </Button>
       <Button
         variant="ghost"
@@ -188,9 +170,7 @@ export function WorkspaceDisplayModeOptions({
         )}
         onClick={() => onChange('multiple')}
       >
-        <ListTreeIcon className="size-3.5" strokeWidth={1.5} />
         多工作区
-        {displayMode === 'multiple' && <CheckIcon className="ms-auto size-3.5" strokeWidth={1.5} />}
       </Button>
     </div>
   )
@@ -226,7 +206,6 @@ function WorkspaceOption({
         <span className="w-full truncate">{label}</span>
         {path && <span className="w-full truncate text-[10px] text-faint-foreground">{path}</span>}
       </span>
-      {selected && <CheckIcon className="size-3.5 shrink-0" strokeWidth={1.5} />}
     </Button>
   )
 }
