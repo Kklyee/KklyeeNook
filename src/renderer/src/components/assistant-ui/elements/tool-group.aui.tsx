@@ -184,7 +184,7 @@ function ToolGroupContent({
             } as React.CSSProperties}
             className="aui-tool-group-node"
           >
-            <div className="aui-tool-group-node-content">{child}</div>
+            {child}
           </div>
         ))}
       </div>

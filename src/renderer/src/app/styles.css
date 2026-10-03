@@ -344,8 +344,7 @@ body,
   min-width: 0;
 }
 
-.aui-tool-group-node-content {
-  min-width: 0;
+.tool-row {
   anchor-name: var(--tool-call-anchor);
 }
 
