@@ -313,12 +313,8 @@ body,
   }
 }
 
-.aui-tool-group-root {
-  anchor-scope: all;
-}
-
 .aui-tool-group-trigger {
-  anchor-name: --tool-group-trigger;
+  anchor-name: var(--tool-group-anchor);
 }
 
 .aui-tool-group-items {
@@ -338,7 +334,7 @@ body,
   content: '';
   position: absolute;
   inset-block-start: calc(50% - 10px);
-  position-anchor: --tool-group-trigger;
+  position-anchor: var(--tool-group-anchor);
   inset-inline-start: -1rem;
   inline-size: 1rem;
   block-size: 10px;

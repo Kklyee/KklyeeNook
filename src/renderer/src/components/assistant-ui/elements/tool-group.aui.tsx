@@ -64,8 +64,10 @@ function ToolGroupRoot({
   onOpenChange: controlledOnOpenChange,
   defaultOpen = true,
   children,
+  style,
   ...props
 }: ToolGroupRootProps) {
+  const anchorScopeId = useId().replace(/[^a-zA-Z0-9_-]/g, '')
   const collapsibleRef = useRef<HTMLDivElement>(null)
   const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen)
   const lockScroll = useScrollLock(collapsibleRef, ANIMATION_DURATION)
@@ -92,7 +94,11 @@ function ToolGroupRoot({
       open={isOpen}
       onOpenChange={handleOpenChange}
       className={cn(toolGroupVariants({ variant }), 'group/tool-group-root', className)}
-      style={{ '--animation-duration': `${ANIMATION_DURATION}ms` } as React.CSSProperties}
+      style={{
+        ...style,
+        '--animation-duration': `${ANIMATION_DURATION}ms`,
+        '--tool-group-anchor': `--tool-group-${anchorScopeId}`,
+      } as React.CSSProperties}
       {...props}
     >
       {children}
