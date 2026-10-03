@@ -55,6 +55,8 @@ export async function bootstrap(): Promise<AppContext> {
         'bash',
         'edit',
         'write',
+        'find',
+        'grep',
         'update_plan',
         'save_memory',
         'delegate_task',
@@ -66,9 +68,14 @@ export async function bootstrap(): Promise<AppContext> {
 
   const configStore = new AgentConfigStore(defaultConfig, join(userDataPath, 'agent-settings.json'))
   const savedConfig = configStore.get()
-  const requiredTools = ['save_memory', 'delegate_task', 'search_knowledge', 'read_knowledge'].filter(
-    (toolName) => !savedConfig.tools.enabled.includes(toolName),
-  )
+  const requiredTools = [
+    'find',
+    'grep',
+    'save_memory',
+    'delegate_task',
+    'search_knowledge',
+    'read_knowledge',
+  ].filter((toolName) => !savedConfig.tools.enabled.includes(toolName))
   if (requiredTools.length) {
     configStore.set({
       ...savedConfig,

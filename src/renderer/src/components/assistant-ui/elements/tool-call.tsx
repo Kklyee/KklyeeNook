@@ -5,6 +5,7 @@ import {
   BotIcon,
   CheckIcon,
   ChevronRightIcon,
+  LoaderCircleIcon,
   WrenchIcon,
   XCircleIcon,
 } from 'lucide-react'
@@ -17,6 +18,8 @@ import {
 import bashIcon from '@/renderer/src/assets/icon/bash.svg'
 import editFileIcon from '@/renderer/src/assets/icon/edit-file.svg'
 import readFileIcon from '@/renderer/src/assets/icon/read-file.svg'
+import searchIcon from '@/renderer/src/assets/icon/tool-search.svg'
+import globIcon from '@/renderer/src/assets/icon/tool-glob.svg'
 import writeFileIcon from '@/renderer/src/assets/icon/write-file.svg'
 import {
   Collapsible,
@@ -28,12 +31,21 @@ import { collapsePanel, ShimmerLabel } from '@/renderer/src/lib/surfaces'
 
 const ANIMATION_DURATION = 200
 
-export type ToolIconKind = 'read' | 'bash' | 'edit' | 'write' | 'agent' | 'generic'
+export type ToolIconKind =
+  | 'read'
+  | 'bash'
+  | 'edit'
+  | 'write'
+  | 'search'
+  | 'glob'
+  | 'agent'
+  | 'generic'
 
 export interface ToolCardProps {
   toolName: string
   label: string
   summary?: string
+  resultCount?: string
   status?: ToolCallMessagePartStatus
   children: ReactNode
   open?: boolean
@@ -47,10 +59,14 @@ const iconAssets: Partial<Record<ToolIconKind, string>> = {
   bash: bashIcon,
   edit: editFileIcon,
   write: writeFileIcon,
+  search: searchIcon,
+  glob: globIcon,
 }
 
 export function getToolIconKind(toolName: string): ToolIconKind {
   const name = toolName.toLowerCase()
+  if (name === 'grep') return 'search'
+  if (name === 'find') return 'glob'
   if (name.includes('read')) return 'read'
   if (name.includes('bash') || name.includes('shell') || name.includes('command')) return 'bash'
   if (name.includes('edit')) return 'edit'
@@ -65,6 +81,8 @@ export function getToolDisplayName(toolName: string): string {
     bash: 'Bash',
     edit: 'Edit file',
     write: 'Write file',
+    find: 'Find files',
+    grep: 'Search',
     delegate_task: 'Subagent',
   }
   return labels[toolName] ?? toolName
@@ -120,6 +138,7 @@ export function ToolCard({
   toolName,
   label,
   summary,
+  resultCount,
   status,
   children,
   open: controlledOpen,
@@ -134,8 +153,13 @@ export function ToolCard({
   const isControlled = controlledOpen !== undefined
   const open = isControlled ? controlledOpen : uncontrolledOpen
   const statusType = status?.type ?? 'complete'
+  const isSearchTool = toolName === 'find' || toolName === 'grep'
+  const isSingular = resultCount === '1'
+  const resultWord =
+    toolName === 'find' ? (isSingular ? 'result' : 'results') : isSingular ? 'match' : 'matches'
   const isShimmerActive = statusType === 'running' || statusType === 'requires-action'
-  const StatusIcon = isShimmerActive ? null : statusType === 'complete' ? CheckIcon : XCircleIcon
+  const StatusIcon =
+    isShimmerActive || isSearchTool ? null : statusType === 'complete' ? CheckIcon : XCircleIcon
   const statusClassName =
     statusType === 'complete'
       ? 'text-success'
@@ -184,6 +208,25 @@ export function ToolCard({
         </ShimmerLabel>
         {StatusIcon && (
           <StatusIcon aria-hidden="true" className={cn('size-3.5 shrink-0', statusClassName)} />
+        )}
+        {isSearchTool && isShimmerActive && (
+          <LoaderCircleIcon
+            aria-hidden="true"
+            className="size-3.5 shrink-0 animate-spin text-faint-foreground"
+          />
+        )}
+        {isSearchTool && statusType === 'complete' && (
+          <span
+            aria-label={`${resultCount ?? '0'} ${resultWord}`}
+            className="shrink-0 font-mono text-[11px] tabular-nums text-success/80"
+          >
+            ✓ {resultCount ?? '0'} {resultWord}
+          </span>
+        )}
+        {isSearchTool && statusType === 'incomplete' && (
+          <span aria-label="Failed" className={cn('shrink-0 font-mono text-xs', statusClassName)}>
+            !
+          </span>
         )}
         {elapsedMs !== undefined && (
           <span className="shrink-0 font-mono text-[11px] tabular-nums text-faint-foreground">

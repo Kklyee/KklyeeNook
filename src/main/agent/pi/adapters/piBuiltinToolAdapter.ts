@@ -6,6 +6,8 @@ import {
   createBashToolDefinition,
   createLocalBashOperations,
   createEditToolDefinition,
+  createFindToolDefinition,
+  createGrepToolDefinition,
   createReadToolDefinition,
   createWriteToolDefinition,
   type ToolDefinition as PiToolDefinition,
@@ -104,6 +106,8 @@ function createWrite(cwd: string): AnyPiToolDefinition {
 export function registerPiBuiltinTools(registry: ToolRegistry, metadataCwd: string): void {
   const factories: Array<(cwd: string) => AnyPiToolDefinition> = [
     createRead,
+    createFindToolDefinition as (cwd: string) => AnyPiToolDefinition,
+    createGrepToolDefinition as (cwd: string) => AnyPiToolDefinition,
     createBash,
     createEditToolDefinition as (cwd: string) => AnyPiToolDefinition,
     createWrite,

@@ -9,6 +9,7 @@ import { GenericToolRenderer } from './generic/GenericToolRenderer'
 import { ReadToolRenderer } from './read/ReadToolRenderer'
 import { SubagentToolRenderer } from './subagent/SubagentToolRenderer'
 import { WriteToolRenderer } from './write/WriteToolRenderer'
+import { SearchToolRenderer } from './search/SearchToolRenderer'
 import { formatToolResult } from './toolUtils'
 import { normalizeToolResult } from '@/shared/tool/toolExecutionResult'
 import { ToolResultRetention } from '@/renderer/src/components/assistant-ui/elements/tool-result-retention'
@@ -17,6 +18,8 @@ export { formatToolResult }
 
 const toolRenderers: Record<string, ToolCallMessagePartComponent> = {
   read: ReadToolRenderer,
+  find: SearchToolRenderer,
+  grep: SearchToolRenderer,
   bash: BashToolRenderer,
   edit: EditToolRenderer,
   write: WriteToolRenderer,

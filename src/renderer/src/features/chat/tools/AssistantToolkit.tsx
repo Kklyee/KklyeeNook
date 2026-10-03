@@ -19,6 +19,8 @@ const UpdatePlanToolCall: ToolCallMessagePartComponent<UpdatePlanArgs, unknown> 
 
 export const assistantToolkit = {
   read: { type: 'backend', render: ToolCallRenderer },
+  find: { type: 'backend', render: ToolCallRenderer },
+  grep: { type: 'backend', render: ToolCallRenderer },
   bash: { type: 'backend', render: ToolCallRenderer },
   edit: { type: 'backend', display: 'standalone', render: ToolCallRenderer },
   write: { type: 'backend', display: 'standalone', render: ToolCallRenderer },

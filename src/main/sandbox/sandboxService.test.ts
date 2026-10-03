@@ -12,7 +12,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { PermissionRequest } from '@/shared/approval/permission'
 import { ToolRegistry } from '../tools/toolRegistry'
 import { registerPiBuiltinTools } from '../agent/pi/adapters/piBuiltinToolAdapter'
-import { SandboxService } from './sandboxService'
+import { SandboxService, toolPermissionResource } from './sandboxService'
 import { LinuxSandboxBackend } from './sandboxBackend'
 
 let directory: string
@@ -53,6 +53,30 @@ test('resolves new nested paths and detects traversal, prefix collisions and jun
   await symlink(outside, join(root, 'link'), process.platform === 'win32' ? 'junction' : 'dir')
   expect((await sandbox.paths.resolve('link/new/a.txt', root)).inside).toBe(false)
   await expect(sandbox.resolveFile(request('link/new/a.txt'))).rejects.toThrow('工作区外')
+})
+
+test('treats Pi find and grep as workspace-scoped read paths', async () => {
+  const sandbox = new SandboxService()
+  const findRequest: PermissionRequest = {
+    ...request('.'),
+    toolName: 'find',
+    resource: toolPermissionResource('find', { pattern: '**/*.tsx' }),
+  }
+  const grepRequest: PermissionRequest = {
+    ...request('src'),
+    toolName: 'grep',
+    resource: toolPermissionResource('grep', { path: 'src', pattern: 'needle' }),
+  }
+
+  expect(findRequest.resource).toEqual({ kind: 'path', path: '.', action: 'read' })
+  expect(grepRequest.resource).toEqual({ kind: 'path', path: 'src', action: 'read' })
+  await expect(sandbox.resolveFile(findRequest)).resolves.toBe(root)
+  await expect(
+    sandbox.resolveFile({
+      ...grepRequest,
+      resource: toolPermissionResource('grep', { path: '../project-evil', pattern: 'needle' }),
+    }),
+  ).rejects.toThrow('工作区外')
 })
 
 test('one-shot elevation is tied to the call and exact resource and is consumed once', async () => {

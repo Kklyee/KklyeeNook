@@ -69,6 +69,13 @@ export function toolPermissionResource(toolName: string, args: unknown): Permiss
     if (typeof input?.path !== 'string') throw new Error('File path is required')
     return { kind: 'path', path: input.path, action: toolName as 'read' | 'write' | 'edit' }
   }
+  if (toolName === 'find' || toolName === 'grep') {
+    return {
+      kind: 'path',
+      path: typeof input?.path === 'string' && input.path ? input.path : '.',
+      action: 'read',
+    }
+  }
   if (toolName === 'bash') {
     if (typeof input?.command !== 'string') throw new Error('Command is required')
     return {

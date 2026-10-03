@@ -7,7 +7,7 @@ import { AgentConfigStore } from './agentConfigStore'
 
 test('defaults to workspace tools and the supported agent helpers', () => {
   expect(new AgentConfigStore().get().tools.enabled).toEqual([
-    'read', 'bash', 'edit', 'write', 'update_plan', 'save_memory', 'delegate_task',
+    'read', 'bash', 'edit', 'write', 'find', 'grep', 'update_plan', 'save_memory', 'delegate_task',
     'search_knowledge', 'read_knowledge',
   ])
 })

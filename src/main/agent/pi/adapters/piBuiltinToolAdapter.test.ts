@@ -11,10 +11,19 @@ test('registers Pi built-ins as product tools and creates cwd-scoped adapters', 
   const registry = new ToolRegistry()
   registerPiBuiltinTools(registry, process.cwd())
 
-  expect(registry.list().map(({ name }) => name)).toEqual(['read', 'bash', 'edit', 'write'])
+  expect(registry.list().map(({ name }) => name)).toEqual([
+    'read',
+    'find',
+    'grep',
+    'bash',
+    'edit',
+    'write',
+  ])
 
-  const tools = registry.resolve<{ name: string }>('pi', ['read', 'write'], { cwd: process.cwd() })
-  expect(tools.map(({ name }) => name)).toEqual(['read', 'write'])
+  const tools = registry.resolve<{ name: string }>('pi', ['read', 'find', 'grep', 'write'], {
+    cwd: process.cwd(),
+  })
+  expect(tools.map(({ name }) => name)).toEqual(['read', 'find', 'grep', 'write'])
 })
 
 test('reports creation and updates only after writing the real file', async () => {

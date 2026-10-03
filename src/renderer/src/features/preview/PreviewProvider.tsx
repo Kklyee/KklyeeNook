@@ -13,6 +13,7 @@ import { useWorkspaces } from '../workspaces/WorkspaceProvider'
 export type PreviewTarget = {
   kind: 'workspace-file'
   path: string
+  line?: number
   preferredView?: 'file' | 'diff'
   diff?: string
 }

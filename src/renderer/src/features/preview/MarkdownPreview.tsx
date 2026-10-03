@@ -1,10 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '@/renderer/src/components/ui/button'
 import { MarkdownContent } from '@/renderer/src/components/assistant-ui/elements/markdown-text'
 import { CodeFilePreview } from './CodeFilePreview'
 
-export function MarkdownPreview({ content }: { content: string }) {
-  const [source, setSource] = useState(false)
+export function MarkdownPreview({ content, focusLine }: { content: string; focusLine?: number }) {
+  const [source, setSource] = useState(focusLine !== undefined)
+  useEffect(() => {
+    if (focusLine !== undefined) setSource(true)
+  }, [focusLine])
   return (
     <>
       <nav
@@ -29,7 +32,7 @@ export function MarkdownPreview({ content }: { content: string }) {
         </Button>
       </nav>
       {source ? (
-        <CodeFilePreview content={content} />
+        <CodeFilePreview content={content} focusLine={focusLine} />
       ) : (
         <div className="min-h-0 flex-1 overflow-auto p-5 text-sm">
           <MarkdownContent content={content} />

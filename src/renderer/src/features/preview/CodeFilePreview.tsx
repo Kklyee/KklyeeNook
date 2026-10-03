@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-export function CodeFilePreview({ content }: { content: string }) {
-  return <CodeFileContent key={content} content={content} />
+export function CodeFilePreview({ content, focusLine }: { content: string; focusLine?: number }) {
+  return <CodeFileContent key={content} content={content} focusLine={focusLine} />
 }
 
-function CodeFileContent({ content }: { content: string }) {
+function CodeFileContent({ content, focusLine }: { content: string; focusLine?: number }) {
   const lines = useMemo(() => content.split('\n'), [content])
   const container = useRef<HTMLDivElement>(null)
   const [height, setHeight] = useState(600)
@@ -14,6 +14,20 @@ function CodeFileContent({ content }: { content: string }) {
     (scrollTop * Math.max(0, lines.length * 20 + 24 - height)) / Math.max(1, scrollHeight - height)
   const start = Math.max(0, Math.floor(logicalTop / 20) - 10)
   const end = Math.min(lines.length, start + Math.ceil(height / 20) + 20)
+  useEffect(() => {
+    if (focusLine === undefined || !container.current) return
+    const fullHeight = lines.length * 20 + 24
+    const logicalTop = Math.min(
+      Math.max(0, (Math.min(focusLine, lines.length) - 1) * 20 - height / 3),
+      Math.max(0, fullHeight - height),
+    )
+    const nextTop =
+      fullHeight <= height
+        ? 0
+        : (logicalTop * Math.max(0, scrollHeight - height)) / (fullHeight - height)
+    container.current.scrollTop = nextTop
+    setScrollTop(nextTop)
+  }, [focusLine, height, lines.length, scrollHeight])
   const longestLine = useMemo(
     () =>
       lines.reduce((longest, line) => Math.max(longest, line.replaceAll('\t', '    ').length), 0),
@@ -38,7 +52,7 @@ function CodeFileContent({ content }: { content: string }) {
         {lines.slice(start, end).map((line, index) => (
           <div
             key={start + index}
-            className="absolute flex w-max min-w-full"
+            className={`absolute flex w-max min-w-full ${focusLine === start + index + 1 ? 'bg-hover' : ''}`}
             style={{ top: scrollTop + (start + index) * 20 - logicalTop + 12 }}
           >
             <span

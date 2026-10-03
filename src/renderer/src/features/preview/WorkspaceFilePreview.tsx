@@ -93,9 +93,9 @@ function WorkspaceFileContent({
     return <UnavailableFilePreview file={file} error={error} close={close} />
   } else if (file?.kind === 'text') {
     return /\.(md|markdown)$/i.test(file.filename) ? (
-      <MarkdownPreview content={file.content} />
+      <MarkdownPreview content={file.content} focusLine={target.line} />
     ) : (
-      <CodeFilePreview content={file.content} />
+      <CodeFilePreview content={file.content} focusLine={target.line} />
     )
   } else if (file?.kind === 'image') {
     return <ImageFilePreview {...file} />
