@@ -154,20 +154,24 @@ unsafe fn set_file_security(
 }
 
 pub(crate) unsafe fn get_security(handle: HANDLE) -> Result<Local> {
+    read_security(handle).map_err(|error| format!("ACL read failed: {error}"))
+}
+
+unsafe fn read_security(handle: HANDLE) -> std::io::Result<Local> {
     let mut value = null_mut();
-    status(
-        GetSecurityInfo(
-            handle,
-            SE_FILE_OBJECT,
-            DACL_SECURITY_INFORMATION | LABEL_SECURITY_INFORMATION,
-            null_mut(),
-            null_mut(),
-            null_mut(),
-            null_mut(),
-            &mut value,
-        ),
-        "ACL read",
-    )?;
+    let code = GetSecurityInfo(
+        handle,
+        SE_FILE_OBJECT,
+        DACL_SECURITY_INFORMATION | LABEL_SECURITY_INFORMATION,
+        null_mut(),
+        null_mut(),
+        null_mut(),
+        null_mut(),
+        &mut value,
+    );
+    if code != 0 {
+        return Err(std::io::Error::from_raw_os_error(code as i32));
+    }
     Ok(Local(value))
 }
 
@@ -295,12 +299,16 @@ unsafe fn has_exact_ace(
 }
 
 pub(crate) fn open(path: &Path, access: u32, pin: bool) -> Result<File> {
+    open_file(path, access, pin)
+        .map_err(|error| format!("ACL open {} failed: {error}", path.display()))
+}
+
+fn open_file(path: &Path, access: u32, pin: bool) -> std::io::Result<File> {
     OpenOptions::new()
         .access_mode(access)
         .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | if pin { 0 } else { FILE_SHARE_DELETE })
         .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
         .open(path)
-        .map_err(|error| format!("ACL open {} failed: {error}", path.display()))
 }
 
 pub(crate) unsafe fn information(file: &File) -> Result<BY_HANDLE_FILE_INFORMATION> {
@@ -368,18 +376,69 @@ pub(crate) struct AclScope<'a> {
     pub(crate) security: &'a Security,
     pub(crate) roots: Vec<PathBuf>,
     pub(crate) saved: Vec<SavedSecurity>,
+    pub(crate) inaccessible: Vec<PathBuf>,
 }
 
 impl AclScope<'_> {
     pub(crate) unsafe fn grant_tree(&mut self, path: &Path, cancelled: &AtomicBool) -> Result<()> {
+        self.grant_subtree(path, cancelled, false, false)
+    }
+
+    pub(crate) unsafe fn grant_workspace(
+        &mut self,
+        path: &Path,
+        cancelled: &AtomicBool,
+    ) -> Result<()> {
+        self.grant_subtree(path, cancelled, true, false)
+            .map_err(|error| {
+                if error.starts_with("sandbox_policy_init_failed: ") {
+                    error
+                } else {
+                    format!("workspace_root_acl_failed: {error}")
+                }
+            })
+    }
+
+    fn inspect<T>(
+        &mut self,
+        path: &Path,
+        child: bool,
+        result: std::io::Result<T>,
+    ) -> Result<Option<T>> {
+        match result {
+            Ok(value) => Ok(Some(value)),
+            Err(error) if child && error.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32) => {
+                self.inaccessible.push(path.to_path_buf());
+                Ok(None)
+            }
+            Err(error) => Err(format!("ACL inspection {} failed: {error}", path.display())),
+        }
+    }
+
+    unsafe fn grant_subtree(
+        &mut self,
+        path: &Path,
+        cancelled: &AtomicBool,
+        skip_children: bool,
+        child: bool,
+    ) -> Result<()> {
         if cancelled.load(Ordering::Acquire) {
             return Err("execution cancelled".into());
         }
-        let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
+        let Some(metadata) = self.inspect(path, child, fs::symlink_metadata(path))? else {
+            return Ok(());
+        };
         if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
             return Ok(());
         }
-        let file = open(path, READ_CONTROL | WRITE_DAC | WRITE_OWNER, false)?;
+        let Some(file) = self.inspect(
+            path,
+            child,
+            open_file(path, READ_CONTROL | WRITE_DAC | WRITE_OWNER, false),
+        )?
+        else {
+            return Ok(());
+        };
         let info = information(&file)?;
         if info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
             return Ok(());
@@ -388,7 +447,9 @@ impl AclScope<'_> {
         if !metadata.is_dir() && info.nNumberOfLinks > 1 {
             return Ok(());
         }
-        let original = get_security(file.as_raw_handle())?;
+        let Some(original) = self.inspect(path, child, read_security(file.as_raw_handle()))? else {
+            return Ok(());
+        };
         let original_dacl = dacl(original.0)?;
         let inheritance = if metadata.is_dir() {
             SUB_CONTAINERS_AND_OBJECTS_INHERIT
@@ -427,8 +488,17 @@ impl AclScope<'_> {
             record.descriptor.0,
         )?;
         if metadata.is_dir() {
-            for entry in fs::read_dir(path).map_err(|error| error.to_string())? {
-                self.grant_tree(&entry.map_err(|error| error.to_string())?.path(), cancelled)?;
+            let Some(entries) = self.inspect(path, child, fs::read_dir(path))? else {
+                return Ok(());
+            };
+            for entry in entries {
+                self.grant_subtree(
+                    &entry.map_err(|error| error.to_string())?.path(),
+                    cancelled,
+                    skip_children,
+                    skip_children,
+                )
+                .map_err(|error| format!("sandbox_policy_init_failed: {error}"))?;
             }
         }
         Ok(())
@@ -440,6 +510,9 @@ impl AclScope<'_> {
         existing: &HashMap<FileId, &SavedSecurity>,
         inherited_user_deny: bool,
     ) -> Result<()> {
+        if self.inaccessible.iter().any(|root| path.starts_with(root)) {
+            return Ok(());
+        }
         let metadata = match fs::symlink_metadata(path) {
             Ok(value) => value,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
@@ -531,6 +604,7 @@ impl AclScope<'_> {
             }
         }
         self.roots.clear();
+        self.inaccessible.clear();
         while let Some(record) = self.saved.pop() {
             if let Err(error) = prepare_inheritance(record.descriptor.0, record.descriptor.0) {
                 errors.push(error);
@@ -735,6 +809,108 @@ mod tests {
         }
     }
 
+    struct RestoreDescriptor {
+        file: File,
+        descriptor: Local,
+    }
+
+    impl Drop for RestoreDescriptor {
+        fn drop(&mut self) {
+            unsafe {
+                assert_ne!(
+                    SetKernelObjectSecurity(
+                        self.file.as_raw_handle(),
+                        DACL_SECURITY_INFORMATION | LABEL_SECURITY_INFORMATION,
+                        self.descriptor.0,
+                    ),
+                    0
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn inaccessible_workspace_root_is_fatal_in_both_modes() {
+        unsafe {
+            let timestamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let root = std::env::temp_dir()
+                .join(format!("nook-root-acl-{}-{timestamp}", std::process::id()));
+            fs::create_dir(&root).unwrap();
+            let root = Directory(fs::canonicalize(root).unwrap());
+            let workspace = root.0.join("workspace");
+            let temp = root.0.join("temp");
+            fs::create_dir(&workspace).unwrap();
+            fs::create_dir(&temp).unwrap();
+            let file = open(&workspace, READ_CONTROL | WRITE_DAC | WRITE_OWNER, false).unwrap();
+            let original = get_security(file.as_raw_handle()).unwrap();
+            let world = sid("S-1-1-0").unwrap();
+            let owner = sid("S-1-3-4").unwrap();
+            let denied = add_entries(
+                &[
+                    entry(world.0, DENY_ACCESS, READ_CONTROL, 0),
+                    entry(owner.0, DENY_ACCESS, READ_CONTROL, 0),
+                ],
+                dacl(original.0).unwrap(),
+            )
+            .unwrap();
+            let fixture = RestoreDescriptor {
+                file,
+                descriptor: original,
+            };
+            set_security(
+                fixture.file.as_raw_handle(),
+                denied.0.cast(),
+                null_mut(),
+                DACL_SECURITY_INFORMATION,
+            )
+            .unwrap();
+            for writable in [true, false] {
+                let result = crate::sandbox::execute_request(
+                    writable,
+                    workspace.as_os_str(),
+                    temp.as_os_str(),
+                    workspace.as_os_str(),
+                    std::env::current_exe().unwrap().as_os_str(),
+                    &[],
+                    &AtomicBool::new(false),
+                );
+                assert!(result
+                    .unwrap_err()
+                    .starts_with("workspace_root_acl_failed: "));
+            }
+        }
+    }
+
+    #[test]
+    fn only_child_access_denied_is_skipped() {
+        unsafe {
+            let security = Security::new().unwrap();
+            let mut scope = AclScope {
+                security: &security,
+                roots: Vec::new(),
+                saved: Vec::new(),
+                inaccessible: Vec::new(),
+            };
+            let root = Path::new(r"D:\repo");
+            let child = root.join(".agents");
+            assert!(scope
+                .inspect::<()>(&root, false, Err(std::io::Error::from_raw_os_error(5)))
+                .is_err());
+            assert!(scope.inaccessible.is_empty());
+            assert!(scope
+                .inspect::<()>(&child, true, Err(std::io::Error::from_raw_os_error(5)))
+                .unwrap()
+                .is_none());
+            assert_eq!(scope.inaccessible, vec![child.clone()]);
+            assert!(scope
+                .inspect::<()>(&child, true, Err(std::io::Error::from_raw_os_error(2)))
+                .is_err());
+        }
+    }
+
     #[test]
     fn deny_inherits_only_to_directories_and_cleanup_preserves_user_aces() {
         check_inheritance_and_cleanup(false);
@@ -793,6 +969,7 @@ mod tests {
                 security: &security,
                 roots: vec![root.0.clone()],
                 saved: Vec::new(),
+                inaccessible: Vec::new(),
             };
             scope.grant_tree(&root.0, &AtomicBool::new(false)).unwrap();
             let nested = root.0.join("nested");

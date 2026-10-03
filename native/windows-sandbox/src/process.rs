@@ -17,7 +17,6 @@ use windows_sys::Win32::Security::*;
 use windows_sys::Win32::Storage::FileSystem::READ_CONTROL;
 use windows_sys::Win32::System::Console::*;
 use windows_sys::Win32::System::JobObjects::AssignProcessToJobObject;
-use windows_sys::Win32::System::SystemInformation::GetSystemDirectoryW;
 use windows_sys::Win32::System::Threading::*;
 
 struct Process {
@@ -80,7 +79,8 @@ impl Drop for Attributes {
 pub(crate) unsafe fn execute(
     security: &Security,
     cwd: &Path,
-    command: &OsStr,
+    executable: &OsStr,
+    args: &[OsString],
     cancelled: &AtomicBool,
 ) -> Result<u32> {
     let cwd = match cwd.components().next() {
@@ -89,7 +89,14 @@ pub(crate) unsafe fn execute(
                 &cwd.as_os_str().encode_wide().skip(4).collect::<Vec<_>>(),
             ))
         }
-        _ => return Err("the Windows command shell requires a local drive cwd".into()),
+        Some(Component::Prefix(prefix)) if matches!(prefix.kind(), Prefix::VerbatimUNC(_, _)) => {
+            let mut value = OsString::from("\\\\");
+            value.push(OsString::from_wide(
+                &cwd.as_os_str().encode_wide().skip(8).collect::<Vec<_>>(),
+            ));
+            PathBuf::from(value)
+        }
+        _ => cwd.to_path_buf(),
     };
     let desktop_acl = add_entries(
         &[
@@ -135,18 +142,7 @@ pub(crate) unsafe fn execute(
     startup.StartupInfo.hStdOutput = handles[1];
     startup.StartupInfo.hStdError = handles[2];
     startup.lpAttributeList = attribute_list.pointer;
-    let mut system = vec![0u16; 260];
-    let length = GetSystemDirectoryW(system.as_mut_ptr(), system.len() as u32);
-    if length == 0 || length as usize >= system.len() {
-        return Err("system shell lookup failed".into());
-    }
-    let shell = PathBuf::from(OsString::from_wide(&system[..length as usize])).join("cmd.exe");
-    let mut line = OsString::from("\"");
-    line.push(&shell);
-    line.push("\" /d /s /c \"");
-    line.push(command);
-    line.push("\"");
-    let mut line = wide(line);
+    let mut line = command_line(executable, args);
     let mut info: PROCESS_INFORMATION = zeroed();
     let job = Job::new()?;
     if cancelled.load(Ordering::Acquire) {
@@ -155,7 +151,7 @@ pub(crate) unsafe fn execute(
     check(
         CreateProcessAsUserW(
             security.token.0,
-            wide(&shell).as_ptr(),
+            wide(executable).as_ptr(),
             line.as_mut_ptr(),
             &attributes,
             &attributes,
@@ -167,7 +163,8 @@ pub(crate) unsafe fn execute(
             &mut info,
         ),
         "sandboxed process creation",
-    )?;
+    )
+    .map_err(|error| format!("process_spawn_failed: {error}"))?;
     let process = Process {
         handle: Handle(info.hProcess),
         thread: Handle(info.hThread),
@@ -212,4 +209,33 @@ pub(crate) unsafe fn execute(
     drop(_desktop);
     station.access(false)?;
     result
+}
+
+fn command_line(executable: &OsStr, args: &[OsString]) -> Vec<u16> {
+    let mut line = Vec::new();
+    for value in std::iter::once(executable).chain(args.iter().map(OsString::as_os_str)) {
+        if !line.is_empty() {
+            line.push(b' ' as u16);
+        }
+        line.push(b'"' as u16);
+        let mut slashes = 0;
+        for character in value.encode_wide() {
+            if character == b'\\' as u16 {
+                slashes += 1;
+                continue;
+            }
+            let count = if character == b'"' as u16 {
+                slashes * 2 + 1
+            } else {
+                slashes
+            };
+            line.extend(std::iter::repeat_n(b'\\' as u16, count));
+            slashes = 0;
+            line.push(character);
+        }
+        line.extend(std::iter::repeat_n(b'\\' as u16, slashes * 2));
+        line.push(b'"' as u16);
+    }
+    line.push(0);
+    line
 }

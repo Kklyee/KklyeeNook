@@ -9,7 +9,7 @@ export function createPiApprovalExtension(
     pi.on('before_agent_start', (event) => ({
       systemPrompt:
         (executionContext.workspace
-          ? event.systemPrompt
+          ? event.systemPrompt.replace(/Current working directory: [^\n]*/g, () => 'Current working directory: ' + executionContext.workspace!.rootPath)
           : event.systemPrompt.replace(/\nCurrent working directory: [^\n]*\n?/g, '\n')) +
         '\nCurrent permission mode: ' +
         executionContext.mode,

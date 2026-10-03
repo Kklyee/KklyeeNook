@@ -1,4 +1,4 @@
-use crate::acl::{open, setup_devices, verify_path, AclScope};
+use crate::acl::{get_security, open, setup_devices, verify_path, AclScope};
 use crate::objects::check_devices;
 use crate::process::execute;
 use crate::token::Security;
@@ -6,11 +6,12 @@ use crate::win32::{wide, Handle, Result};
 use std::ffi::OsStr;
 use std::fs;
 use std::io::Read;
+use std::os::windows::io::AsRawHandle;
 use std::ptr::null;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use windows_sys::Win32::Foundation::*;
-use windows_sys::Win32::Storage::FileSystem::FILE_READ_ATTRIBUTES;
+use windows_sys::Win32::Storage::FileSystem::{FILE_READ_ATTRIBUTES, READ_CONTROL};
 use windows_sys::Win32::System::Threading::*;
 
 struct WorkspaceLock(Handle);
@@ -74,7 +75,7 @@ pub fn run() -> Result<u32> {
             }
         }
     }
-    if args.len() != 6 || (args[1] != "read-only" && args[1] != "workspace-write") {
+    if args.len() < 6 || (args[1] != "read-only" && args[1] != "workspace-write") {
         return Err("invalid restricted execution request".into());
     }
     let cancelled = Arc::new(AtomicBool::new(false));
@@ -89,6 +90,7 @@ pub fn run() -> Result<u32> {
         &args[3],
         &args[4],
         &args[5],
+        &args[6..],
         &cancelled,
     )
 }
@@ -98,11 +100,13 @@ pub(crate) fn execute_request(
     workspace: &OsStr,
     temp: &OsStr,
     cwd: &OsStr,
-    command: &OsStr,
+    executable: &OsStr,
+    args: &[std::ffi::OsString],
     cancelled: &AtomicBool,
 ) -> Result<u32> {
-    let workspace = fs::canonicalize(workspace)
-        .map_err(|error| format!("workspace canonicalization failed: {error}"))?;
+    let workspace = fs::canonicalize(workspace).map_err(|error| {
+        format!("workspace_root_acl_failed: workspace canonicalization failed: {error}")
+    })?;
     let temp = fs::canonicalize(temp)
         .map_err(|error| format!("private temp canonicalization failed: {error}"))?;
     let cwd =
@@ -110,10 +114,13 @@ pub(crate) fn execute_request(
     if !workspace.is_dir() || !temp.is_dir() || !cwd.is_dir() {
         return Err("sandbox roots and cwd must be directories".into());
     }
-    let workspace_pin = open(&workspace, FILE_READ_ATTRIBUTES, true)?;
+    let workspace_pin = open(&workspace, FILE_READ_ATTRIBUTES | READ_CONTROL, true)
+        .map_err(|error| format!("workspace_root_acl_failed: {error}"))?;
     let temp_pin = open(&temp, FILE_READ_ATTRIBUTES, true)?;
     unsafe {
-        verify_path(&workspace_pin, &workspace)?;
+        verify_path(&workspace_pin, &workspace)
+            .and_then(|_| get_security(workspace_pin.as_raw_handle()).map(|_| ()))
+            .map_err(|error| format!("workspace_root_acl_failed: {error}"))?;
         verify_path(&temp_pin, &temp)?;
         let _lock = WorkspaceLock::acquire(cancelled)?;
         let security = Security::new()?;
@@ -122,15 +129,16 @@ pub(crate) fn execute_request(
             security: &security,
             roots: Vec::new(),
             saved: Vec::new(),
+            inaccessible: Vec::new(),
         };
         let result = (|| {
             if writable {
                 scope.roots.push(temp.clone());
                 scope.grant_tree(&temp, cancelled)?;
                 scope.roots.push(workspace.clone());
-                scope.grant_tree(&workspace, cancelled)?;
+                scope.grant_workspace(&workspace, cancelled)?;
             }
-            execute(&security, &cwd, command, cancelled)
+            execute(&security, &cwd, executable, args, cancelled)
         })();
         let restored = scope.restore();
         match (result, restored) {

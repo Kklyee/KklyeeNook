@@ -12,6 +12,7 @@ import { SandboxService, toolPermissionResource } from '@/main/sandbox/sandboxSe
 import type { SandboxExecutionResult } from '@/main/sandbox/sandboxBackend'
 import type { ToolAdapterContext, ToolRegistry } from '@/main/tools/toolRegistry'
 import type { ToolResultRetentionPolicy } from '@/main/tools/toolResultRetentionPolicy'
+import { resolveShellRuntime } from '@/main/sandbox/shellRuntime'
 
 type ExecuteTool = (args: unknown, signal: AbortSignal) => Promise<unknown>
 type ApproveTool = (
@@ -120,6 +121,7 @@ export class ToolExecutionHarness {
                 request,
                 {
                   command: request.resource.command,
+                  runtime: resolveShellRuntime({ workspaceRoot: cwd! }),
                   runId,
                   cwd,
                   signal: controller.signal,

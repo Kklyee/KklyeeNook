@@ -6,6 +6,8 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ToolExecutionError } from '@/shared/tool/toolExecutionResult'
+import { shellArgs, shellExecutable, resolveShellRuntime } from './shellRuntime'
+import { shellResult } from './processLauncher'
 import type {
   SandboxBackend,
   SandboxExecutionRequest,
@@ -101,22 +103,28 @@ export class WindowsSandboxBackend implements SandboxBackend {
     request.signal?.throwIfAborted()
     try {
       if (!request.workspaceRoot) throw new Error('Sandbox execution requires a workspace')
-      const workspace = await realpath(request.workspaceRoot)
-      const cwd = await realpath(request.cwd ?? workspace)
+      const workspace = await realpath(request.workspaceRoot).catch((error) => {
+        throw new ToolExecutionError('workspace_root_acl_failed', String(error))
+      })
+      const runtime = request.runtime ?? resolveShellRuntime({ workspaceRoot: request.cwd ?? workspace })
+      const executable = shellExecutable(runtime)
+      const cwd = await realpath(runtime.cwd)
       const runDirectory = await this.runDirectory(runId)
       const privateTemp = join(runDirectory, 'tmp')
       const canonicalTemp = await realpath(privateTemp)
       request.signal?.throwIfAborted()
-      const chunks: Buffer[] = []
+      const stdout: Buffer[] = []
+      const stderr: Buffer[] = []
       const exitCode = await new Promise<number>((resolve, reject) => {
         const child = spawn(
           this.launcher,
-          [request.mode, workspace, canonicalTemp, cwd, request.command],
+          [request.mode, workspace, canonicalTemp, cwd, executable, ...shellArgs(runtime, request.command)],
           {
             windowsHide: true,
+            cwd,
             stdio: ['pipe', 'pipe', 'pipe'],
             env: {
-              ...process.env,
+              ...runtime.env,
               TEMP: canonicalTemp,
               TMP: canonicalTemp,
               TMPDIR: canonicalTemp,
@@ -127,40 +135,42 @@ export class WindowsSandboxBackend implements SandboxBackend {
         )
         const cancel = () => child.stdin.end()
         child.stdin.on('error', () => undefined)
-        child.stdout.on('data', (data) => chunks.push(Buffer.from(data)))
-        child.stderr.on('data', (data) => chunks.push(Buffer.from(data)))
-        child.once('error', reject)
+        child.stdout.on('data', (data) => stdout.push(Buffer.from(data)))
+        child.stderr.on('data', (data) => stderr.push(Buffer.from(data)))
+        child.once('error', (error) => {
+          request.signal?.removeEventListener('abort', cancel)
+          reject(new ToolExecutionError('process_spawn_failed', error.message))
+        })
         child.once('close', (code) => {
           request.signal?.removeEventListener('abort', cancel)
           if (request.signal?.aborted) reject(request.signal.reason)
-          else if (code === null || code === 125)
-            reject(
-              new Error(Buffer.concat(chunks).toString('utf8').trim() || 'Sandbox launcher failed'),
-            )
-          else resolve(code)
+          else {
+            const error = Buffer.concat(stderr).toString('utf8').trim()
+            const launchError = error.match(/^Sandbox launch error \[(workspace_root_acl_failed|sandbox_policy_init_failed|process_spawn_failed)\]: ([\s\S]*)$/)
+            if (launchError)
+              reject(new ToolExecutionError(launchError[1] as 'workspace_root_acl_failed' | 'sandbox_policy_init_failed' | 'process_spawn_failed', `Sandbox could not start the process.\nReason: ${launchError[2]}`))
+            else if (code === null)
+              reject(new ToolExecutionError('process_spawn_failed', error || 'Sandbox launcher terminated'))
+            else resolve(code)
+          }
         })
         request.signal?.addEventListener('abort', cancel, { once: true })
         if (request.signal?.aborted) cancel()
       })
-      const text = Buffer.concat(chunks).toString('utf8')
+      const result = shellResult(runtime, Buffer.concat(stdout).toString('utf8'), Buffer.concat(stderr).toString('utf8'), exitCode)
       return {
-        content: [
-          {
-            type: 'text',
-            text: exitCode === 0 ? text : `${text}\nCommand exited with code ${exitCode}`,
-          },
-        ],
+        ...result,
         details: {
-          exitCode,
+          ...result.details as Record<string, unknown>,
           sandbox: { mode: request.mode, backend: 'windows-acl', enforcement: 'partial' },
         },
-        isError: exitCode !== 0,
       }
     } catch (error) {
       if (request.signal?.aborted) throw request.signal.reason
+      if (error instanceof ToolExecutionError) throw error
       throw new ToolExecutionError(
-        'EXECUTION_ERROR',
-        `Failed to start sandboxed process: ${error instanceof Error ? error.message : String(error)}`,
+        'sandbox_policy_init_failed',
+        `Sandbox could not start the process.\nReason: ${error instanceof Error ? error.message : String(error)}`,
       )
     }
   }

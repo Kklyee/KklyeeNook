@@ -64,7 +64,18 @@ describe.skipIf(process.platform !== 'win32')('Windows filesystem sandbox', () =
     expect(backend.support()).toBe('partial')
   })
 
-  test('workspace-write bash runs through the harness without full-access approval', async () => {
+  test('PowerShell 7 starts with native cwd and UTF-8 in both restricted modes', async () => {
+    await writeFile(join(workspace, '测试.txt'), '中文')
+    for (const mode of ['workspace-write', 'read-only'] as const) {
+      const result = await execute('(Get-Location).Path; (Get-ChildItem).Name; Write-Error "中文错误" -ErrorAction Continue; Write-Output \'中文 "引号"\'', { mode })
+      expect(result.isError, JSON.stringify(result)).toBe(false)
+      expect(result.details).toMatchObject({ stdout: expect.stringContaining(workspace), stderr: expect.stringContaining('中文错误'), exitCode: 0, shell: 'PowerShell 7' })
+      expect((result.details as { stdout: string }).stdout).toContain('测试.txt')
+      expect((result.details as { stdout: string }).stdout).toContain('中文 "引号"')
+    }
+  }, 30000)
+
+  test('workspace-write Shell runs through the harness without full-access approval', async () => {
     const registry = new ToolRegistry()
     registerPiBuiltinTools(registry, workspace)
     const approve = vi.fn()
@@ -97,7 +108,7 @@ describe.skipIf(process.platform !== 'win32')('Windows filesystem sandbox', () =
 
   test('workspace create, write, delete and private temp write succeed with sandbox metadata', async () => {
     const result = await execute(
-      'echo created > new.txt && echo changed > existing.txt && mkdir nested && echo temp > "%TEMP%\\private.txt" && echo temp > "%TEMP%\\delete.txt" && del "%TEMP%\\delete.txt" && mkdir "%TEMP%\\nested" && rmdir "%TEMP%\\nested" && type "%TEMP%\\private.txt" && del new.txt && rmdir nested',
+      'Set-Content new.txt created; Set-Content existing.txt changed; New-Item nested -ItemType Directory | Out-Null; Set-Content "$env:TEMP\\private.txt" temp; Set-Content "$env:TEMP\\delete.txt" temp; Remove-Item "$env:TEMP\\delete.txt"; New-Item "$env:TEMP\\nested" -ItemType Directory | Out-Null; Remove-Item "$env:TEMP\\nested"; Get-Content "$env:TEMP\\private.txt"; Remove-Item new.txt; Remove-Item nested',
     )
     expect(result, JSON.stringify(result)).toMatchObject({
       isError: false,
@@ -109,15 +120,15 @@ describe.skipIf(process.platform !== 'win32')('Windows filesystem sandbox', () =
     expect(result.content).toEqual([{ type: 'text', text: expect.stringContaining('temp') }])
     expect(await readFile(join(workspace, 'existing.txt'), 'utf8')).toContain('changed')
     await expect(access(join(workspace, 'new.txt'))).rejects.toThrow()
-    expect((await execute('type "%TEMP%\\private.txt"')).isError).toBe(false)
+    expect((await execute('Get-Content "$env:TEMP\\private.txt"')).isError).toBe(false)
     await backend.finishRun('run')
     expect(await readdir(join(directory, 'data', 'sandbox'))).toEqual([])
   }, 30000)
 
   test('private temp is isolated between runs and cleared at run completion', async () => {
-    expect((await execute('echo first > "%TEMP%\\run.txt"')).isError).toBe(false)
-    expect((await execute('type "%TEMP%\\run.txt"', { runId: 'second' })).isError).toBe(true)
-    expect((await execute('type "%TEMP%\\run.txt"')).content).toEqual([
+    expect((await execute('echo first > "$env:TEMP\\run.txt"')).isError).toBe(false)
+    expect((await execute('Get-Content "$env:TEMP\\run.txt"', { runId: 'second' })).isError).toBe(true)
+    expect((await execute('Get-Content "$env:TEMP\\run.txt"')).content).toEqual([
       { type: 'text', text: expect.stringContaining('first') },
     ])
     await backend.finishRun('second')
@@ -169,7 +180,7 @@ describe.skipIf(process.platform !== 'win32')('Windows filesystem sandbox', () =
     expect((await execute('type existing.txt', { mode: 'read-only' })).isError).toBe(false)
     expect((await execute('echo created > new.txt', { mode: 'read-only' })).isError).toBe(true)
     expect(
-      (await execute('echo temp > "%TEMP%\\private.txt"', { mode: 'read-only' })).isError,
+      (await execute('echo temp > "$env:TEMP\\private.txt"', { mode: 'read-only' })).isError,
     ).toBe(true)
     expect((await execute('echo changed > existing.txt', { mode: 'read-only' })).isError).toBe(true)
     expect((await execute(remove('existing.txt'), { mode: 'read-only' })).isError).toBe(true)
@@ -192,13 +203,13 @@ describe.skipIf(process.platform !== 'win32')('Windows filesystem sandbox', () =
     expect(await readFile(target, 'utf8')).toBe('outside')
   }, 30000)
 
-  test('read-only supports NUL redirection and piped searches without workspace writes', async () => {
+  test('read-only supports null redirection and piped searches without workspace writes', async () => {
     await writeFile(join(workspace, 'existing.txt'), 'sandbox fixture')
     for (const command of [
-      'echo ignored >nul',
-      'echo ignored 2>nul',
-      'findstr /i sandbox existing.txt 2>nul',
-      'findstr /i sandbox existing.txt 2>nul | findstr /v missing',
+      'echo ignored >$null',
+      'echo ignored 2>$null',
+      'findstr /i sandbox existing.txt 2>$null',
+      'findstr /i sandbox existing.txt 2>$null | findstr /v missing',
     ]) {
       const result = await execute(command, { mode: 'read-only' })
       expect(result.isError, JSON.stringify(result)).toBe(false)
@@ -252,11 +263,10 @@ describe.skipIf(process.platform !== 'win32')('Windows filesystem sandbox', () =
   }, 30000)
 
   test.each([
-    ['cmd', 'cmd.exe /d /c "echo cmd>cmd.txt"', 'cmd.txt'],
     ['node', 'node script.js', 'node.txt'],
     ['npm', 'npm test', 'node.txt'],
     ['pnpm', 'pnpm build', 'node.txt'],
-    ['Python', `${quote(process.env.SANDBOX_TEST_PYTHON ?? 'python')} script.py`, 'python.txt'],
+    ['Python', `& ${quote(process.env.SANDBOX_TEST_PYTHON ?? 'python')} script.py`, 'python.txt'],
     ['git', 'git init && git status', '.git'],
   ])(
     '%s runs inside the workspace',
@@ -284,25 +294,13 @@ describe.skipIf(process.platform !== 'win32')('Windows filesystem sandbox', () =
     60000,
   )
 
-  test('PowerShell reports supported execution or a confined initialization error', async () => {
-    const host = quote(process.env.SANDBOX_TEST_POWERSHELL ?? 'powershell.exe')
-    const result = await execute(
-      host +
-        " -NoProfile -NonInteractive -Command \"[IO.File]::WriteAllText('powershell.txt', 'powershell')\"",
-    )
+  test('PowerShell writes files without a secondary shell', async () => {
+    const result = await execute('Set-Content powershell.txt powershell')
     expect(result.details).toMatchObject({
       sandbox: { mode: 'workspace-write', backend: 'windows-acl', enforcement: 'partial' },
     })
-    if (result.isError) {
-      const text = result.content
-        .filter((block) => block.type === 'text')
-        .map((block) => block.text.replaceAll('\0', ''))
-        .join('\n')
-      expect(text).toMatch(/Starting the CLR failed|Unhandled exception/)
-      await expect(access(join(workspace, 'powershell.txt'))).rejects.toThrow()
-    } else {
-      expect(await readFile(join(workspace, 'powershell.txt'), 'utf8')).toBe('powershell')
-    }
+    expect(result.isError, JSON.stringify(result)).toBe(false)
+    expect(await readFile(join(workspace, 'powershell.txt'), 'utf8')).toContain('powershell')
   }, 30000)
 
   test('child and grandchild processes inherit the boundary', async () => {
@@ -323,7 +321,7 @@ describe.skipIf(process.platform !== 'win32')('Windows filesystem sandbox', () =
     ['node', 'node parent.js'],
     ['npm', 'npm test'],
     ['pnpm', 'pnpm build'],
-    ['Python', '"' + (process.env.SANDBOX_TEST_PYTHON ?? 'python') + '" parent.py'],
+    ['Python', '& "' + (process.env.SANDBOX_TEST_PYTHON ?? 'python') + '" parent.py'],
   ])(
     '%s descendants cannot write or delete outside',
     async (_name, command) => {
@@ -387,17 +385,17 @@ describe.skipIf(process.platform !== 'win32')('Windows filesystem sandbox', () =
 
   test('initialization failures never call direct execution', async () => {
     backend = new WindowsSandboxBackend(join(directory, 'data'), join(directory, 'missing.exe'))
-    await expect(execute('echo escaped')).rejects.toMatchObject({ code: 'EXECUTION_ERROR' })
+    await expect(execute('echo escaped')).rejects.toMatchObject({ code: 'process_spawn_failed' })
     backend = new WindowsSandboxBackend(join(directory, 'data'))
     await expect(
       execute('echo escaped', { workspaceRoot: join(directory, 'missing') }),
-    ).rejects.toMatchObject({ code: 'EXECUTION_ERROR' })
+    ).rejects.toMatchObject({ code: 'workspace_root_acl_failed' })
     await writeFile(join(directory, 'data-file'), '')
     backend = new WindowsSandboxBackend(join(directory, 'data-file'))
-    await expect(execute('echo escaped')).rejects.toMatchObject({ code: 'EXECUTION_ERROR' })
+    await expect(execute('echo escaped')).rejects.toMatchObject({ code: 'sandbox_policy_init_failed' })
   })
 
-  test('an ACL initialization failure restores earlier grants and never starts the command', async () => {
+  test('a child ACL inspection failure skips its grant and restores accessible roots', async () => {
     const target = join(workspace, 'existing.txt')
     const permissions = spawnSync(
       'icacls.exe',
@@ -407,15 +405,55 @@ describe.skipIf(process.platform !== 'win32')('Windows filesystem sandbox', () =
     expect(permissions.status, permissions.stderr).toBe(0)
     const before = spawnSync('icacls.exe', [workspace], { encoding: 'utf8', windowsHide: true })
     expect(before.status, before.stderr).toBe(0)
-    await expect(execute('echo started > started.txt')).rejects.toMatchObject({
-      code: 'EXECUTION_ERROR',
-      message: expect.stringContaining('ACL open'),
-    })
-    await expect(access(join(workspace, 'started.txt'))).rejects.toThrow()
+    expect((await execute('echo started > started.txt')).isError).toBe(false)
+    await access(join(workspace, 'started.txt'))
+    expect((await execute('echo denied > existing.txt')).isError).toBe(true)
     expect(await readFile(target, 'utf8')).toBe('original')
     const after = spawnSync('icacls.exe', [workspace], { encoding: 'utf8', windowsHide: true })
     expect(after.status, after.stderr).toBe(0)
     expect(after.stdout).toBe(before.stdout)
+  })
+
+  test.each(['.agents', '.git', 'node_modules'])('inaccessible %s is denied while the workspace Shell starts', async (name) => {
+    const target = join(workspace, name)
+    const user = process.env.USERNAME ?? 'kk'
+    await mkdir(target)
+    await writeFile(join(target, 'secret.txt'), 'private')
+    const permissions = spawnSync('icacls.exe', [target, '/inheritance:r', '/grant:r', user + ':(M)', '/deny', user + ':(OI)(CI)(RD)'], {
+      encoding: 'utf8',
+      windowsHide: true,
+    })
+    expect(permissions.status, permissions.stderr).toBe(0)
+    try {
+      const result = await execute('Get-Content existing.txt; Set-Content started.txt started')
+      expect(result.isError, JSON.stringify(result)).toBe(false)
+      expect(await readFile(join(workspace, 'started.txt'), 'utf8')).toContain('started')
+      const denied = await execute('Get-Content "' + name + '\\secret.txt"')
+      expect(denied.isError, JSON.stringify(denied)).toBe(true)
+      expect((denied.details as { stderr: string }).stderr).toMatch(/denied|拒绝|PermissionDenied/i)
+    } finally {
+      const cleanup = spawnSync('icacls.exe', [target, '/remove:d', user, '/grant:r', user + ':(OI)(CI)(F)'], {
+        encoding: 'utf8',
+        windowsHide: true,
+      })
+      expect(cleanup.status, cleanup.stderr).toBe(0)
+    }
+  }, 30000)
+
+  test('missing PowerShell reports a runtime error and never falls back to direct execution', async () => {
+    await expect(execute('Get-ChildItem', {
+      runtime: {
+        kind: 'powershell',
+        executable: 'pwsh.exe',
+        baseArgs: ['-NoLogo', '-NoProfile', '-NonInteractive', '-Mta', '-Command'],
+        cwd: workspace,
+        env: { PATH: '' },
+      },
+    })).rejects.toMatchObject({ code: 'shell_runtime_unavailable' })
+  })
+
+  test('a command exit of 125 is kept separate from launcher failure', async () => {
+    expect(await execute('exit 125')).toMatchObject({ isError: true, details: { exitCode: 125, stdout: '', stderr: '' } })
   })
 
   test('cancellation terminates the process tree and restores workspace ACLs', async () => {

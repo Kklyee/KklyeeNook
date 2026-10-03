@@ -1,4 +1,5 @@
 import { SandboxService } from '@/main/sandbox/sandboxService'
+import { shellRuntimeContext } from '@/main/sandbox/shellRuntime'
 import { ToolExecutionHarness } from '@/main/agent/toolExecutionHarness'
 import { FileToolResultRetentionPolicy } from '@/main/tools/toolResultRetentionPolicy'
 import { ToolResultStore } from '@/main/tools/toolResultStore'
@@ -216,7 +217,11 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
   getSystemPrompt(): string {
     const prompt = this.getPiSession().systemPrompt
     const executionContextKey = this.executionContextKey
-    if (!executionContextKey || hasWorkspaceContext(executionContextKey)) return prompt
+    if (!executionContextKey) return prompt
+    if (hasWorkspaceContext(executionContextKey)) {
+      const context = JSON.parse(executionContextKey) as AgentExecutionContext
+      return prompt.replace(/Current working directory: [^\n]*/g, () => 'Current working directory: ' + context.workspace!.rootPath)
+    }
     return prompt.replace(/\nCurrent working directory: [^\n]*\n?/g, '\n')
   }
 
@@ -569,6 +574,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
         noThemes: true,
         noContextFiles: !executionContext.workspace,
         systemPromptOverride: base => executionContext.workspace ? base : 'You are a helpful assistant. This conversation has no local workspace. Use global memory, knowledge, MCP and attachments. Local tools require explicit absolute paths and full access.',
+        appendSystemPromptOverride: base => [...base, shellRuntimeContext(executionContext.workspace?.rootPath)],
         additionalSkillPaths: [this.skillDirectory],
         skillsOverride: (result) => mergeLoadedSkills(result, this.getLoadedSkills()),
         settingsManager,

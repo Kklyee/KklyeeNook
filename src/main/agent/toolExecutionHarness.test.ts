@@ -321,7 +321,7 @@ test('built-in read retains the full file before any preview truncation', async 
   ])
 })
 
-test('built-in bash retains full stdout and applies timeout in the harness', async () => {
+test('built-in Shell retains full stdout and applies timeout in the harness', async () => {
   const { registry, sandbox, retention, store } = setup()
   registerPiBuiltinTools(registry, directory)
   const context = {
@@ -337,7 +337,7 @@ test('built-in bash retains full stdout and applies timeout in the harness', asy
   const text = `HEAD${'0'.repeat(90000)}TAIL`
   const result = await harness.execute(
     'run-1',
-    { id: 'bash', toolName: 'bash', args: { command: "printf 'HEAD%090000dTAIL' 0" } },
+    { id: 'bash', toolName: 'bash', args: { command: "node -e \"process.stdout.write('HEAD' + '0'.repeat(90000) + 'TAIL')\"" } },
     context,
     (args, signal) => bash.execute('bash', args, signal),
   )
@@ -349,7 +349,7 @@ test('built-in bash retains full stdout and applies timeout in the harness', asy
   let shellExecution: Promise<unknown> | undefined
   const timedOut = await harness.execute(
     'run-1',
-    { id: 'timeout', toolName: 'bash', args: { command: 'sleep 3', timeout: 0.1 } },
+    { id: 'timeout', toolName: 'bash', args: { command: 'node -e "setTimeout(() => {}, 3000)"', timeout: 0.1 } },
     context,
     (args, signal) => {
       shellExecution = bash.execute('timeout', args, signal)

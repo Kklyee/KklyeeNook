@@ -4,7 +4,6 @@ import { resolve } from 'node:path'
 import { Type } from 'typebox'
 import {
   createBashToolDefinition,
-  createLocalBashOperations,
   createEditToolDefinition,
   createFindToolDefinition,
   createGrepToolDefinition,
@@ -13,6 +12,8 @@ import {
   type ToolDefinition as PiToolDefinition,
 } from '@earendil-works/pi-coding-agent'
 import type { ToolRegistry } from '@/main/tools/toolRegistry'
+import { resolveShellRuntime } from '@/main/sandbox/shellRuntime'
+import { launchShellProcess } from '@/main/sandbox/processLauncher'
 
 type AnyPiToolDefinition = PiToolDefinition<any, any, any>
 
@@ -52,13 +53,18 @@ function createRead(cwd: string): AnyPiToolDefinition {
   }
 }
 
-function createBash(cwd: string): AnyPiToolDefinition {
+function createShell(cwd: string): AnyPiToolDefinition {
   const tool = createBashToolDefinition(cwd) as AnyPiToolDefinition
   return {
     ...tool,
+    label: 'Shell',
+    promptSnippet: process.platform === 'win32' ? 'Run PowerShell 7 commands (git, package managers, tests and project CLIs) in the native workspace cwd' : 'Run shell commands in the workspace cwd',
+    promptGuidelines: process.platform === 'win32'
+      ? ['Use PowerShell 7 syntax and native Windows paths for Shell commands. Use read, write, edit, grep and find for native file operations.']
+      : tool.promptGuidelines,
     description:
       process.platform === 'win32'
-        ? 'Execute a shell command and return stdout and stderr. Windows read-only and workspace-write commands use cmd.exe syntax; full-access commands use Bash. Optional timeout is in seconds. Large results are retained with a resultRef for read_tool_result.'
+        ? 'Execute a PowerShell 7 command using native Windows paths in all permission modes. The launcher sets cwd to the workspace root unless an explicit cwd is supplied. Return stdout, stderr and exit code. Optional timeout is in seconds. Large results are retained with a resultRef for read_tool_result.'
         : 'Execute a shell command and return stdout and stderr. Optional timeout is in seconds. Large results are retained with a resultRef for read_tool_result.',
     parameters: Type.Object({
       command: Type.String(),
@@ -71,22 +77,7 @@ function createBash(cwd: string): AnyPiToolDefinition {
     }),
     async execute(_id, input, signal) {
       const args = input as { command: string; cwd?: string }
-      const chunks: Buffer[] = []
-      const { exitCode } = await createLocalBashOperations().exec(args.command, args.cwd ?? cwd, {
-        signal,
-        onData: (data) => chunks.push(Buffer.from(data)),
-      })
-      const text = Buffer.concat(chunks).toString('utf8')
-      return {
-        content: [
-          {
-            type: 'text',
-            text: exitCode === 0 ? text : `${text}\nCommand exited with code ${exitCode}`,
-          },
-        ],
-        details: { exitCode },
-        isError: exitCode !== 0,
-      }
+      return launchShellProcess(resolveShellRuntime({ workspaceRoot: args.cwd ?? cwd }), args.command, signal)
     },
   }
 }
@@ -108,7 +99,7 @@ export function registerPiBuiltinTools(registry: ToolRegistry, metadataCwd: stri
     createRead,
     createFindToolDefinition as (cwd: string) => AnyPiToolDefinition,
     createGrepToolDefinition as (cwd: string) => AnyPiToolDefinition,
-    createBash,
+    createShell,
     createEditToolDefinition as (cwd: string) => AnyPiToolDefinition,
     createWrite,
   ]

@@ -1,10 +1,12 @@
 import type { PermissionMode } from '@/shared/approval/permission'
 import { WindowsSandboxBackend } from './windowsSandboxBackend'
+import type { ShellRuntime } from './shellRuntime'
 export { WindowsSandboxBackend } from './windowsSandboxBackend'
 export type SandboxSupport = 'full' | 'partial' | 'unavailable'
 export interface SandboxExecutionRequest {
   mode: PermissionMode
   command: string
+  runtime?: ShellRuntime
   cwd?: string
   workspaceRoot?: string
   privateTemp?: string

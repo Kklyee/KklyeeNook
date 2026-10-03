@@ -24,6 +24,13 @@ test('registers Pi built-ins as product tools and creates cwd-scoped adapters', 
     cwd: process.cwd(),
   })
   expect(tools.map(({ name }) => name)).toEqual(['read', 'find', 'grep', 'write'])
+  expect(registry.get('bash')?.label).toBe('Shell')
+  if (process.platform === 'win32') {
+    expect(registry.get('bash')?.description).toContain('PowerShell 7')
+    const [shell] = registry.resolve<ToolDefinition<any, any, any>>('pi', ['bash'], { cwd: process.cwd() })
+    expect(shell?.promptSnippet).toContain('PowerShell 7')
+    expect(shell?.promptGuidelines?.join('\n')).toContain('native Windows paths')
+  }
 })
 
 test('reports creation and updates only after writing the real file', async () => {

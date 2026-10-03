@@ -1,6 +1,6 @@
 use crate::sandbox::execute_request;
 use crate::win32::Result;
-use std::ffi::OsStr;
+use std::ffi::OsString;
 use std::fs;
 use std::io::ErrorKind;
 use std::os::windows::process::CommandExt;
@@ -100,19 +100,20 @@ pub(crate) fn check_enforcement() -> Result<u32> {
         for path in [&workspace, &temp, &outside] {
             fs::write(path.join("existing.txt"), "original").map_err(|error| error.to_string())?;
         }
-        let command = format!(
-            "\"{}\" --probe-child {mode} \"{}\" \"{}\" \"{}\"",
-            helper.display(),
-            workspace.display(),
-            temp.display(),
-            outside.display()
-        );
+        let args = [
+            OsString::from("--probe-child"),
+            OsString::from(mode),
+            workspace.as_os_str().to_owned(),
+            temp.as_os_str().to_owned(),
+            outside.as_os_str().to_owned(),
+        ];
         let code = execute_request(
             mode == "workspace-write",
             workspace.as_os_str(),
             temp.as_os_str(),
             workspace.as_os_str(),
-            OsStr::new(&command),
+            helper.as_os_str(),
+            &args,
             &AtomicBool::new(false),
         )?;
         if code != 0 {

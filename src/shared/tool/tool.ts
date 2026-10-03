@@ -26,6 +26,10 @@ export type ToolContent =
   | { type: 'image'; data: string; mimeType: string }
 
 export type ToolErrorCode =
+  | 'workspace_root_acl_failed'
+  | 'sandbox_policy_init_failed'
+  | 'shell_runtime_unavailable'
+  | 'process_spawn_failed'
   | 'INVALID_ARGUMENTS'
   | 'UNKNOWN_TOOL'
   | 'PERMISSION_DENIED'

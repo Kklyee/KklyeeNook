@@ -23,7 +23,18 @@ fn main() {
     match result {
         Ok(code) => std::process::exit(code as i32),
         Err(error) => {
-            eprintln!("Sandbox {error}");
+            let (code, reason) = error
+                .split_once(": ")
+                .filter(|(code, _)| {
+                    matches!(
+                        *code,
+                        "workspace_root_acl_failed"
+                            | "sandbox_policy_init_failed"
+                            | "process_spawn_failed"
+                    )
+                })
+                .unwrap_or(("sandbox_policy_init_failed", &error));
+            eprintln!("Sandbox launch error [{code}]: {reason}");
             std::process::exit(125);
         }
     }

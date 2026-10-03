@@ -1,4 +1,4 @@
-# Windows Process Sandbox V1.1
+# Windows Process Sandbox V1.2
 
 Status: complete.
 
@@ -14,6 +14,16 @@ Enforcement: `partial`.
 The filesystem guarantee covers ordinary user files with normal Medium integrity protection. Arbitrary security descriptors, outside Low integrity directories with ambient parent-delete authority, and NULL DACLs fall outside this guarantee. Reads, network access, and process visibility remain available.
 
 `WindowsSandboxBackend.support()` caches the real enforcement probe result per backend instance: success reports `partial`, and any launch error, failed check, or timeout reports `unavailable`. Initialization errors become tool errors. Unavailable support requires explicit full access through the existing policy; only `full-access` selects `DirectExecutionBackend`.
+
+## Shell execution
+
+Windows Shell commands use PowerShell 7 in every permission mode, with native Windows paths and launcher-controlled cwd. `ShellRuntime` selects the executable, arguments, environment and working directory independently of sandbox permissions. Restricted launches pass the executable and argv to Rust; full-access launches use the same runtime through Node. The existing internal `bash` tool ID remains compatible with saved settings and transcripts, while its label, description and prompt contributions identify Shell / PowerShell 7.
+
+The invocation is `pwsh.exe -NoLogo -NoProfile -NonInteractive -Mta -Command <command>`. The additional `-Mta` flag is required by the current isolated desktop and restricted token: the default STA pipeline crashes during `WaitHandle.WaitOne`, while MTA runs with the same security boundary. A missing `pwsh.exe` produces `shell_runtime_unavailable`, with no alternate shell. PowerShell 7 streams use UTF-8; the prelude sets native-pipeline encoding and initializes console encoding in FullLanguage sessions. Read-only sessions can enter ConstrainedLanguage because their temporary script-write probe is denied, so the prelude respects that language mode.
+
+Native Read, Write, Edit, Find and Grep implementations remain independent of Shell. Commands receive separate stdout, stderr and exit-code fields. Launch failures have explicit `workspace_root_acl_failed`, `sandbox_policy_init_failed` or `process_spawn_failed` codes and no command exit code. A command that exits 125 remains a command failure.
+
+Workspace ACL inspection skips only child paths returning `ERROR_ACCESS_DENIED`. Skipped subtrees receive no writable capability grant, keep their existing access restrictions and are skipped during cleanup traversal. Workspace-root ACL failures remain fatal in both modes; private-temp initialization and ACL mutation failures remain fatal. Existing saved descriptors are still restored.
 
 ## Enforcement
 
@@ -39,18 +49,18 @@ The restricted-token mechanism is described by [Microsoft Learn](https://learn.m
 
 ## Runtime probe and regression coverage
 
-`--check-enforcement` creates a workspace, a private temp directory, an outside directory, and a workspace junction to the outside directory. It launches the real helper child through the same restricted `cmd.exe` execution path in both modes and checks actual filesystem operations.
+`--check-enforcement` creates a workspace, a private temp directory, an outside directory, and a workspace junction to the outside directory. It launches the real helper child directly through the generic restricted executable-and-argv launcher in both modes and checks actual filesystem operations.
 
 The probe requires workspace and private-temp create/modify/delete to succeed in `workspace-write`, outside and junction-target writes/deletes to return permission denied, and all filesystem mutations to fail in `read-only`. It exits zero only after both modes pass and the ACL scope restores successfully.
 
-Permanent regressions cover relative outside paths, junction deletion, symbolic links, directory-only deny inheritance, file FullControl opens, exact ACE cleanup, descriptor restoration, initialization rollback, cancellation, private-temp isolation, and support caching. Harness coverage verifies that workspace-write bash executes without a full-access approval. Node, npm, pnpm, and Python descendants are checked for outside write and delete denial; Git initialization and status run in the workspace.
+Permanent regressions cover PowerShell cwd, UTF-8, quoting, missing runtime, child ACL access denial, fatal root ACL denial, command exit 125, relative outside paths, junction deletion, symbolic links, directory-only deny inheritance, file FullControl opens, exact ACE cleanup, descriptor restoration, initialization rollback, cancellation, private-temp isolation, and support caching. Harness coverage verifies that workspace-write Shell executes without a full-access approval. Node, npm, pnpm, and Python descendants are checked for outside write and delete denial; Git initialization and status run in the workspace.
 
 ## Known boundaries
 
 - Hard links alias file objects, so path-based isolation cannot provide an unconditional boundary for every alias or custom security descriptor.
 - Files with special AppContainer ACLs can remain inaccessible.
 - FullControl directory opens are denied while the grant is active because that mask includes `FILE_DELETE_CHILD`. Ordinary file opens and deletes using an object's own `DELETE` permission continue to work.
-- PowerShell 5 and 7 can fail during CLR or runtime initialization with the current restricting SID list. These failures are reported as confined command errors; PowerShell compatibility is outside the V1.1 acceptance list.
+- PowerShell runs in MTA mode. Commands requiring STA-specific COM behavior are outside this Shell contract.
 - Cleanup failures are reported, and abrupt helper termination can leave ACL residue.
 
 ## Development commands
@@ -63,7 +73,7 @@ npm test
 cargo test --locked --manifest-path native/windows-sandbox/Cargo.toml
 ```
 
-Python regressions require a real installed interpreter. If `python` resolves to a Windows Store alias, set `SANDBOX_TEST_PYTHON` to the interpreter's absolute path before running tests. `SANDBOX_TEST_POWERSHELL` can select another host for the compatibility regression. Symbolic-link fixtures are skipped when Developer Mode or `SeCreateSymbolicLinkPrivilege` is unavailable; junction checks always run.
+PowerShell 7 must be on PATH. Python regressions require a real installed interpreter. If `python` resolves to a Windows Store alias, set `SANDBOX_TEST_PYTHON` to the interpreter's absolute path before running tests. Symbolic-link fixtures are skipped when Developer Mode or `SeCreateSymbolicLinkPrivilege` is unavailable; junction checks always run.
 
 ```powershell
 npm run sandbox:setup

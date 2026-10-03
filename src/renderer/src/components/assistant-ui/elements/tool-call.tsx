@@ -78,7 +78,7 @@ export function getToolIconKind(toolName: string): ToolIconKind {
 export function getToolDisplayName(toolName: string): string {
   const labels: Record<string, string> = {
     read: 'Read file',
-    bash: 'Bash',
+    bash: 'Shell',
     edit: 'Edit file',
     write: 'Write file',
     find: 'Find files',

@@ -14,28 +14,29 @@ import {
   stringifyValue,
 } from '../toolUtils'
 
-export const BashToolRenderer: ToolCallMessagePartComponent = ({ args, result, status }) => {
+export const ShellToolRenderer: ToolCallMessagePartComponent = ({ args, result, status }) => {
   const values = isRecord(args) ? args : {}
   const command = getStringValue(values, 'command') ?? ''
-  const error =
+  const statusError =
     status.type === 'incomplete' && status.error !== undefined
       ? stringifyValue(status.error)
       : undefined
-  const { output, stderr, exitCode } = readBashResult(result, error, status.type === 'complete')
+  const { output, stderr, exitCode, error, shell } = readShellResult(result, statusError)
 
   return (
-    <ToolCard toolName="bash" label="Bash" summary={command} status={status}>
+    <ToolCard toolName="bash" label="Shell" summary={command} status={status}>
+      {shell && <p className="font-mono text-[11px] text-faint-foreground">{shell}</p>}
       {command && (
         <ToolDetailSection label="Command">
-          <pre className={toolCodeClassName}>$ {command}</pre>
+          <pre className={toolCodeClassName}>{command}</pre>
         </ToolDetailSection>
       )}
-      {output && (
+      {!error && output && (
         <ToolDetailSection label="stdout">
           <pre className={toolCodeClassName}>{previewText(output, 24, 2400)}</pre>
         </ToolDetailSection>
       )}
-      {stderr && (
+      {!error && stderr && (
         <ToolDetailSection label="stderr">
           <pre className={toolCodeClassName}>{previewText(stderr, 16, 1200)}</pre>
         </ToolDetailSection>
@@ -52,9 +53,12 @@ export const BashToolRenderer: ToolCallMessagePartComponent = ({ args, result, s
   )
 }
 
-function readBashResult(result: unknown, error: string | undefined, complete: boolean) {
+function readShellResult(result: unknown, statusError: string | undefined) {
   const values = isRecord(result) ? result : {}
-  const details = isRecord(values.details) ? values.details : {}
+  const metadata = isRecord(values.details) ? values.details : {}
+  const details = isRecord(metadata.details) ? metadata.details : metadata
+  const failure = isRecord(values.error) ? values.error : isRecord(metadata.error) ? metadata.error : {}
+  const error = getStringValue(failure, 'message') ?? statusError
   const exitCode =
     values.exitCode ??
     values.exit_code ??
@@ -62,11 +66,18 @@ function readBashResult(result: unknown, error: string | undefined, complete: bo
     details.exitCode ??
     details.exit_code ??
     details.code ??
-    error?.match(/Command exited with code (-?\d+)/i)?.[1] ??
-    (complete ? 0 : undefined)
+    error?.match(/Command exited with code (-?\d+)/i)?.[1]
+  const failed = error !== undefined || (typeof exitCode === 'number' && exitCode !== 0)
+  const output = getStringValue(values, 'stdout', 'output') ?? getStringValue(details, 'stdout') ?? (typeof details.stdout === 'string' ? '' : formatToolResult(result))
+  const stderr = getStringValue(values, 'stderr') ?? getStringValue(details, 'stderr')
+  const failureText = failed
+    ? (exitCode === undefined ? error : stderr || output || error) ?? formatToolResult(result)
+    : undefined
   return {
-    output: getStringValue(values, 'stdout', 'output') ?? formatToolResult(result),
-    stderr: getStringValue(values, 'stderr'),
+    output,
+    stderr,
     exitCode,
+    error: failureText === undefined ? undefined : failureText.replace(/\n?Command exited with code -?\d+\s*$/i, '').trim() || 'Command failed',
+    shell: getStringValue(details, 'shell'),
   }
 }

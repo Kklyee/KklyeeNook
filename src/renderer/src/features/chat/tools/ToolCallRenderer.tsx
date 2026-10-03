@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react'
 import { usePreview } from '@/renderer/src/features/preview/PreviewProvider'
 import { resolveToolExecutionStatus } from '@/shared/tool/toolExecutionStatus'
 
-import { BashToolRenderer } from './bash/BashToolRenderer'
+import { ShellToolRenderer } from './bash/BashToolRenderer'
 import { EditToolRenderer } from './edit/EditToolRenderer'
 import { GenericToolRenderer } from './generic/GenericToolRenderer'
 import { ReadToolRenderer } from './read/ReadToolRenderer'
@@ -20,7 +20,7 @@ const toolRenderers: Record<string, ToolCallMessagePartComponent> = {
   read: ReadToolRenderer,
   find: SearchToolRenderer,
   grep: SearchToolRenderer,
-  bash: BashToolRenderer,
+  bash: ShellToolRenderer,
   edit: EditToolRenderer,
   write: WriteToolRenderer,
   delegate_task: SubagentToolRenderer,
