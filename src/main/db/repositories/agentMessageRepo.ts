@@ -60,6 +60,6 @@ export class DrizzleAgentMessageRepo implements AgentMessageRepo {
     messages: readonly AgentMessageProjection[],
   ): Promise<void> {
     await this.db.delete(agentMessages).where(eq(agentMessages.sessionId, sessionId))
-    for (const message of messages) await this.save(message)
+    await Promise.all(messages.map((message) => this.save(message)))
   }
 }

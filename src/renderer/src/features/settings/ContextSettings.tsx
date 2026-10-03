@@ -108,64 +108,12 @@ export function ContextSettings({
             高级参数
           </summary>
           <div className="mt-3 grid gap-3">
-            <SettingsField label="预留 Token" description="为压缩后的继续执行保留的 token 数量">
-              <div className="grid gap-1.5">
-                <Input
-                  type="number"
-                  min={0}
-                  step={1}
-                  aria-label="预留 Token"
-                  aria-invalid={Boolean(validationErrors.reserveTokens)}
-                  aria-describedby={
-                    validationErrors.reserveTokens ? 'context-reserve-error' : undefined
-                  }
-                  value={compaction.reserveTokens}
-                  onChange={(event) => {
-                    setCompaction((current) => ({
-                      ...current,
-                      reserveTokens: Number(event.target.value),
-                    }))
-                    setSaved(false)
-                  }}
-                />
-                {validationErrors.reserveTokens && (
-                  <p id="context-reserve-error" role="alert" className="text-destructive text-xs">
-                    {validationErrors.reserveTokens}
-                  </p>
-                )}
-              </div>
-            </SettingsField>
-            <SettingsField label="保留最近 Token" description="压缩时保留最近消息的 token 数量">
-              <div className="grid gap-1.5">
-                <Input
-                  type="number"
-                  min={0}
-                  step={1}
-                  aria-label="保留最近 Token"
-                  aria-invalid={Boolean(validationErrors.keepRecentTokens)}
-                  aria-describedby={
-                    validationErrors.keepRecentTokens ? 'context-keep-recent-error' : undefined
-                  }
-                  value={compaction.keepRecentTokens}
-                  onChange={(event) => {
-                    setCompaction((current) => ({
-                      ...current,
-                      keepRecentTokens: Number(event.target.value),
-                    }))
-                    setSaved(false)
-                  }}
-                />
-                {validationErrors.keepRecentTokens && (
-                  <p
-                    id="context-keep-recent-error"
-                    role="alert"
-                    className="text-destructive text-xs"
-                  >
-                    {validationErrors.keepRecentTokens}
-                  </p>
-                )}
-              </div>
-            </SettingsField>
+            <CompactionFields
+              compaction={compaction}
+              setCompaction={setCompaction}
+              validationErrors={validationErrors}
+              setSaved={setSaved}
+            />
           </div>
         </details>
       </SettingsCard>
@@ -190,5 +138,74 @@ export function ContextSettings({
         </Button>
       </div>
     </section>
+  )
+}
+
+function CompactionFields({
+  compaction,
+  setCompaction,
+  validationErrors,
+  setSaved,
+}: {
+  compaction: AgentCompactionSettings
+  setCompaction: React.Dispatch<React.SetStateAction<AgentCompactionSettings>>
+  validationErrors: ReturnType<typeof getAgentCompactionSettingsErrors>
+  setSaved: (saved: boolean) => void
+}) {
+  return (
+    <>
+      <SettingsField label="预留 Token" description="为压缩后的继续执行保留的 token 数量">
+        <div className="grid gap-1.5">
+          <Input
+            type="number"
+            min={0}
+            step={1}
+            aria-label="预留 Token"
+            aria-invalid={Boolean(validationErrors.reserveTokens)}
+            aria-describedby={validationErrors.reserveTokens ? 'context-reserve-error' : undefined}
+            value={compaction.reserveTokens}
+            onChange={(event) => {
+              setCompaction((current) => ({
+                ...current,
+                reserveTokens: Number(event.target.value),
+              }))
+              setSaved(false)
+            }}
+          />
+          {validationErrors.reserveTokens && (
+            <p id="context-reserve-error" role="alert" className="text-destructive text-xs">
+              {validationErrors.reserveTokens}
+            </p>
+          )}
+        </div>
+      </SettingsField>
+      <SettingsField label="保留最近 Token" description="压缩时保留最近消息的 token 数量">
+        <div className="grid gap-1.5">
+          <Input
+            type="number"
+            min={0}
+            step={1}
+            aria-label="保留最近 Token"
+            aria-invalid={Boolean(validationErrors.keepRecentTokens)}
+            aria-describedby={
+              validationErrors.keepRecentTokens ? 'context-keep-recent-error' : undefined
+            }
+            value={compaction.keepRecentTokens}
+            onChange={(event) => {
+              setCompaction((current) => ({
+                ...current,
+                keepRecentTokens: Number(event.target.value),
+              }))
+              setSaved(false)
+            }}
+          />
+          {validationErrors.keepRecentTokens && (
+            <p id="context-keep-recent-error" role="alert" className="text-destructive text-xs">
+              {validationErrors.keepRecentTokens}
+            </p>
+          )}
+        </div>
+      </SettingsField>
+    </>
   )
 }

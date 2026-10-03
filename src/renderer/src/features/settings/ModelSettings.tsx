@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useRef, useState } from 'react'
 import { ChevronRightIcon, PlusIcon, Trash2Icon } from 'lucide-react'
 import type {
   AgentSettingsSnapshot,
@@ -19,9 +19,10 @@ type SavedProvider = NonNullable<AgentSettingsSnapshot['providers']>[number]
 function getProviderEntries(settings: AgentSettingsSnapshot): SavedProvider[] {
   if (settings.providers) return settings.providers
 
+  const catalogById = new Map(settings.catalog.map((provider) => [provider.id, provider]))
   const providers = new Map<string, SavedProvider>()
   for (const model of settings.models ?? []) {
-    const catalogProvider = settings.catalog?.find((item) => item.id === model.provider)
+    const catalogProvider = catalogById.get(model.provider)
     const entry = providers.get(model.provider) ?? {
       id: model.provider,
       name: model.providerName ?? catalogProvider?.name ?? model.provider,
@@ -44,7 +45,7 @@ function getProviderEntries(settings: AgentSettingsSnapshot): SavedProvider[] {
   }
 
   if (!providers.size && settings.provider) {
-    const catalogProvider = settings.catalog?.find((item) => item.id === settings.provider)
+    const catalogProvider = catalogById.get(settings.provider)
     providers.set(settings.provider, {
       id: settings.provider,
       name: catalogProvider?.name ?? settings.provider,
@@ -88,7 +89,7 @@ function findAvailableBuiltinProvider(
   )
 }
 
-export function ModelSettings({
+function useProviderEditor({
   settings,
   onChanged,
 }: {
@@ -98,13 +99,13 @@ export function ModelSettings({
   const initialProviders = getProviderEntries(settings)
   const initialBuiltinProvider = findAvailableBuiltinProvider(settings.catalog, initialProviders)
 
-  const [providerEntries, setProviderEntries] = useState<SavedProvider[]>(initialProviders)
+  const providerEntries = initialProviders
   const [editingId, setEditingId] = useState<string | null>(null)
   const [providerDialogOpen, setProviderDialogOpen] = useState(false)
   const [editorMode, setEditorMode] = useState<EditorMode>('builtin')
   const [provider, setProvider] = useState(initialBuiltinProvider?.id ?? '')
   const [providerName, setProviderName] = useState('')
-  const [api, setApi] = useState('')
+  const api = useRef('')
   const [baseUrl, setBaseUrl] = useState('')
   const [customModels, setCustomModels] = useState<ProviderModelConfig[]>([])
   const [modelID, setModelID] = useState('')
@@ -118,26 +119,6 @@ export function ModelSettings({
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
-
-  useEffect(() => {
-    const nextProviderEntries = getProviderEntries(settings)
-    setProviderEntries(nextProviderEntries)
-    setEditingId(null)
-    setProviderDialogOpen(false)
-    setEditorMode('builtin')
-    setProvider(findAvailableBuiltinProvider(settings.catalog, nextProviderEntries)?.id ?? '')
-    setProviderName('')
-    setApi('')
-    setBaseUrl('')
-    setCustomModels([])
-    setModelID('')
-    setApiKey('')
-    setDeleteApiKey(false)
-    setDiscoveredModels([])
-    setDiscoveredProvider(null)
-    setShowCustomSettings(false)
-    setShowModelDraft(false)
-  }, [settings])
 
   const selectedProvider = providerEntries.find((item) => item.id === provider)
   const selectedProviderHasKey =
@@ -159,7 +140,7 @@ export function ModelSettings({
     setEditorMode(mode)
     setProvider(providerID)
     setProviderName(mode === 'custom' ? (entry?.name ?? '') : '')
-    setApi(entry?.api ?? (mode === 'custom' ? 'openai-completions' : ''))
+    api.current = entry?.api ?? (mode === 'custom' ? 'openai-completions' : '')
     setBaseUrl(entry?.baseUrl ?? '')
     const nextModels =
       entry?.models?.map((model) => ({ ...model, input: model.input?.slice() })) ?? []
@@ -223,7 +204,7 @@ export function ModelSettings({
       const result = await window.api.discoverModels({
         provider,
         ...(baseUrl.trim() ? { baseUrl: baseUrl.trim() } : {}),
-        ...(api.trim() ? { api: api.trim() } : {}),
+        ...(api.current.trim() ? { api: api.current.trim() } : {}),
         ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
       })
       setDiscoveredModels(result)
@@ -292,7 +273,7 @@ export function ModelSettings({
       id: normalizedProvider,
       ...(editorMode === 'custom' && providerName.trim() ? { name: providerName.trim() } : {}),
       ...(normalizedBaseUrl ? { baseUrl: normalizedBaseUrl } : {}),
-      ...(api.trim() ? { api: api.trim() } : {}),
+      ...(api.current.trim() ? { api: api.current.trim() } : {}),
       ...(customModels.length
         ? { models: customModels.map((model) => ({ ...model, input: model.input?.slice() })) }
         : {}),
@@ -316,6 +297,71 @@ export function ModelSettings({
       .map(toProviderConfig)
     await persistProviders(nextProviders, { provider: entry.id, deleteApiKey: true })
   }
+
+  return {
+    providerEntries,
+    providerDialogOpen,
+    setProviderDialogOpen,
+    editingId,
+    selectedProvider,
+    editorMode,
+    loadProvider,
+    selectableBuiltinProviders,
+    selectableCustomProviders,
+    provider,
+    chooseProvider,
+    setProvider,
+    providerName,
+    setProviderName,
+    apiKey,
+    setApiKey,
+    setDeleteApiKey,
+    selectedProviderHasKey,
+    showCustomSettings,
+    setShowCustomSettings,
+    baseUrl,
+    setBaseUrl,
+    setSaved,
+    discovering,
+    discoverModels,
+    customModels,
+    setCustomModels,
+    showModelDraft,
+    modelID,
+    setModelID,
+    addManualModel,
+    clearModelDraft,
+    setShowModelDraft,
+    discoveredProvider,
+    discoveredModels,
+    addDiscoveredModel,
+    saving,
+    saveProvider,
+    deleteApiKey,
+    saveError,
+    saved,
+    addProvider,
+    edit,
+    deleteProvider,
+  }
+}
+
+export function ModelSettings(props: {
+  settings: AgentSettingsSnapshot
+  onChanged: () => Promise<void>
+}) {
+  const { settings } = props
+  const editor = useProviderEditor(props)
+  const {
+    providerEntries,
+    providerDialogOpen,
+    saving,
+    saveError,
+    saved,
+    addProvider,
+    edit,
+    deleteProvider,
+  } = editor
 
   return (
     <section className="space-y-8">
@@ -373,281 +419,7 @@ export function ModelSettings({
         </SettingsCard>
       </section>
 
-      <Dialog open={providerDialogOpen} onOpenChange={setProviderDialogOpen}>
-        <DialogContent className="max-h-[85vh] w-[calc(100%-2rem)] max-w-2xl overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              {editingId ? `编辑 ${selectedProvider?.name ?? '提供商'}` : '添加模型提供商'}
-            </DialogTitle>
-          </DialogHeader>
-          {!editingId && (
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant={editorMode === 'builtin' ? 'default' : 'outline'}
-                onClick={() => {
-                  const nextProvider = findAvailableBuiltinProvider(
-                    settings.catalog,
-                    providerEntries,
-                  )
-                  loadProvider(undefined, nextProvider?.id ?? '', 'builtin')
-                }}
-              >
-                内置提供商
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={editorMode === 'custom' ? 'default' : 'outline'}
-                onClick={() => loadProvider(undefined, '', 'custom')}
-              >
-                自定义提供商
-              </Button>
-            </div>
-          )}
-          <SettingsCard>
-            {editorMode === 'builtin' ? (
-              <SettingsField label="模型服务商" description="选择要使用的服务商。">
-                <Select
-                  value={provider}
-                  onValueChange={(value) => value !== null && chooseProvider(value)}
-                >
-                  <SelectTrigger aria-label="模型服务商" className="h-9">
-                    {[...selectableBuiltinProviders, ...selectableCustomProviders].find(
-                      (item) => item.id === provider,
-                    )?.name ?? '没有可添加的提供方'}
-                  </SelectTrigger>
-                  <SelectContent alignItemWithTrigger={false}>
-                    {selectableBuiltinProviders.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.name}
-                      </SelectItem>
-                    ))}
-                    {selectableCustomProviders.length > 0 && (
-                      <div role="group" aria-label="自定义提供商">
-                        <p className="px-2 py-1.5 text-xs text-text-muted">自定义提供商</p>
-                        {selectableCustomProviders.map((item) => (
-                          <SelectItem key={item.id} value={item.id}>
-                            {item.name}
-                          </SelectItem>
-                        ))}
-                      </div>
-                    )}
-                    {selectableBuiltinProviders.length === 0 &&
-                      selectableCustomProviders.length === 0 && (
-                        <SelectItem value="" disabled>
-                          没有可添加的提供方
-                        </SelectItem>
-                      )}
-                  </SelectContent>
-                </Select>
-              </SettingsField>
-            ) : (
-              <>
-                <SettingsField label="服务商标识" description="用于区分不同的服务商。">
-                  <Input
-                    aria-label="服务商标识"
-                    value={provider}
-                    onChange={(event) => setProvider(event.target.value)}
-                    placeholder="例如：公司模型"
-                  />
-                </SettingsField>
-                <SettingsField label="显示名称" description="显示在服务商列表中。">
-                  <Input
-                    aria-label="显示名称"
-                    value={providerName}
-                    onChange={(event) => setProviderName(event.target.value)}
-                    placeholder="自定义提供商"
-                  />
-                </SettingsField>
-              </>
-            )}
-
-            <SettingsField label="API 密钥" description="留空则保留当前密钥。">
-              <div className="flex gap-2">
-                <Input
-                  aria-label="API 密钥"
-                  type="password"
-                  autoComplete="off"
-                  value={apiKey}
-                  onChange={(event) => {
-                    setApiKey(event.target.value)
-                    setDeleteApiKey(false)
-                  }}
-                  placeholder="输入 API 密钥"
-                />
-                {selectedProviderHasKey && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setApiKey('')
-                      setDeleteApiKey(true)
-                    }}
-                  >
-                    清除
-                  </Button>
-                )}
-              </div>
-            </SettingsField>
-
-            <div className="border-border/70 border-t px-4">
-              <button
-                type="button"
-                className="text-muted-foreground hover:text-foreground flex w-full items-center gap-2 py-3 text-left text-sm"
-                aria-expanded={showCustomSettings}
-                onClick={() => setShowCustomSettings((current) => !current)}
-              >
-                <span className={cn('transition-transform', showCustomSettings && 'rotate-90')}>
-                  ›
-                </span>
-                自定义设置
-              </button>
-            </div>
-            {showCustomSettings && (
-              <>
-                <SettingsField label="API 地址" description="填写服务商提供的 API 地址。">
-                  <Input
-                    aria-label="API 地址"
-                    value={baseUrl}
-                    onChange={(event) => {
-                      setBaseUrl(event.target.value)
-                      setSaved(false)
-                    }}
-                    placeholder={
-                      editorMode === 'builtin' ? '默认 API 地址' : 'https://api.example.com/v1'
-                    }
-                  />
-                </SettingsField>
-                <SettingsField label="模型列表" description="添加要在对话中使用的模型。">
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={discovering || !provider.trim()}
-                        onClick={() => void discoverModels()}
-                      >
-                        {discovering ? '获取中…' : '获取可用模型'}
-                      </Button>
-                      {editorMode === 'builtin' && !baseUrl.trim() && (
-                        <span className="text-muted-foreground text-xs">服务商模型</span>
-                      )}
-                    </div>
-                    {customModels.length > 0 ? (
-                      <div className="glass-surface grid gap-1 rounded-md p-2">
-                        {customModels.map((model) => (
-                          <div
-                            key={model.id}
-                            className="flex items-center gap-2 rounded px-2 py-1.5 text-xs"
-                          >
-                            <span className="min-w-0 flex-1 truncate">
-                              {model.name ?? model.id}
-                              {model.name && (
-                                <span className="text-muted-foreground ml-2">{model.id}</span>
-                              )}
-                            </span>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setCustomModels((current) =>
-                                  current.filter((item) => item.id !== model.id),
-                                )
-                                setSaved(false)
-                              }}
-                            >
-                              移除
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <>
-                        <p className="text-muted-foreground text-xs">
-                          {editorMode === 'builtin'
-                            ? '服务商提供的可用模型会显示在这里。'
-                            : '请添加要使用的模型。'}
-                        </p>
-                        {editorMode === 'custom' && (
-                          <div className="border-border/70 text-muted-foreground rounded-md border border-dashed px-3 py-4 text-center text-xs">
-                            添加模型后，即可在对话中使用。
-                          </div>
-                        )}
-                      </>
-                    )}
-                    {showModelDraft ? (
-                      <div className="flex gap-2">
-                        <Input
-                          aria-label="模型 ID"
-                          value={modelID}
-                          onChange={(event) => setModelID(event.target.value)}
-                          placeholder="例如 deepseek-v4.1-flash"
-                        />
-                        <Button type="button" variant="outline" onClick={addManualModel}>
-                          添加模型
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          clearModelDraft()
-                          setShowModelDraft(true)
-                        }}
-                      >
-                        添加模型
-                      </Button>
-                    )}
-                    {discoveredProvider === provider && discoveredModels.length > 0 && (
-                      <div className="glass-surface grid gap-1 rounded-md p-2">
-                        {discoveredModels.map((model) => {
-                          const added = customModels.some((item) => item.id === model.id)
-                          const builtin = model.builtin === true
-                          return (
-                            <button
-                              key={model.id}
-                              type="button"
-                              className="hover:bg-interactive-hover active:bg-interactive-pressed focus-visible:ring-1 focus-visible:ring-brand-border outline-none transition-colors flex items-center justify-between rounded px-2 py-1.5 text-left text-xs disabled:cursor-default disabled:opacity-60"
-                              disabled={added || builtin}
-                              onClick={() => addDiscoveredModel(model)}
-                            >
-                              <span className="truncate">{model.name}</span>
-                              <span className="text-muted-foreground ml-3 shrink-0">
-                                {builtin ? '内置' : added ? '已添加' : '添加'}
-                              </span>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </SettingsField>
-              </>
-            )}
-            <div className="flex justify-end px-4 py-3.5">
-              <Button
-                type="button"
-                disabled={
-                  saving || !provider.trim() || (editorMode === 'custom' && !baseUrl.trim())
-                }
-                onClick={() => void saveProvider()}
-              >
-                {saving ? '保存中…' : '保存'}
-              </Button>
-            </div>
-          </SettingsCard>
-          {deleteApiKey && <p className="text-amber-600 text-xs">保存后将删除已保存的密钥。</p>}
-          {saveError && (
-            <p className="text-destructive text-sm" role="alert">
-              {saveError}
-            </p>
-          )}
-        </DialogContent>
-      </Dialog>
+      <ProviderDialog editor={editor} settings={settings} />
       {!settings.credentialPersistenceAvailable && (
         <p className="text-amber-600 mt-3 text-xs" role="status">
           关闭应用后，需要重新填写 API 密钥。
@@ -664,5 +436,358 @@ export function ModelSettings({
         </p>
       )}
     </section>
+  )
+}
+
+function ProviderDialog({
+  editor,
+  settings,
+}: {
+  editor: ReturnType<typeof useProviderEditor>
+  settings: AgentSettingsSnapshot
+}) {
+  const {
+    providerEntries,
+    providerDialogOpen,
+    setProviderDialogOpen,
+    editingId,
+    selectedProvider,
+    editorMode,
+    loadProvider,
+    provider,
+    showCustomSettings,
+    setShowCustomSettings,
+    baseUrl,
+    setBaseUrl,
+    setSaved,
+    saving,
+    saveProvider,
+    deleteApiKey,
+    saveError,
+  } = editor
+  return (
+    <Dialog open={providerDialogOpen} onOpenChange={setProviderDialogOpen}>
+      <DialogContent className="max-h-[85vh] w-[calc(100%-2rem)] max-w-2xl overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>
+            {editingId ? `编辑 ${selectedProvider?.name ?? '提供商'}` : '添加模型提供商'}
+          </DialogTitle>
+        </DialogHeader>
+        {!editingId && (
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={editorMode === 'builtin' ? 'default' : 'outline'}
+              onClick={() => {
+                const nextProvider = findAvailableBuiltinProvider(settings.catalog, providerEntries)
+                loadProvider(undefined, nextProvider?.id ?? '', 'builtin')
+              }}
+            >
+              内置提供商
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={editorMode === 'custom' ? 'default' : 'outline'}
+              onClick={() => loadProvider(undefined, '', 'custom')}
+            >
+              自定义提供商
+            </Button>
+          </div>
+        )}
+        <SettingsCard>
+          <ProviderIdentityFields editor={editor} settings={settings} />
+
+          <ProviderCredentials editor={editor} />
+
+          <div className="border-border/70 border-t px-4">
+            <button
+              type="button"
+              className="text-muted-foreground hover:text-foreground flex w-full items-center gap-2 py-3 text-left text-sm"
+              aria-expanded={showCustomSettings}
+              onClick={() => setShowCustomSettings((current) => !current)}
+            >
+              <span className={cn('transition-transform', showCustomSettings && 'rotate-90')}>
+                ›
+              </span>
+              自定义设置
+            </button>
+          </div>
+          {showCustomSettings && (
+            <>
+              <SettingsField label="API 地址" description="填写服务商提供的 API 地址。">
+                <Input
+                  aria-label="API 地址"
+                  value={baseUrl}
+                  onChange={(event) => {
+                    setBaseUrl(event.target.value)
+                    setSaved(false)
+                  }}
+                  placeholder={
+                    editorMode === 'builtin' ? '默认 API 地址' : 'https://api.example.com/v1'
+                  }
+                />
+              </SettingsField>
+              <ProviderModels editor={editor} settings={settings} />
+            </>
+          )}
+          <div className="flex justify-end px-4 py-3.5">
+            <Button
+              type="button"
+              disabled={saving || !provider.trim() || (editorMode === 'custom' && !baseUrl.trim())}
+              onClick={() => void saveProvider()}
+            >
+              {saving ? '保存中…' : '保存'}
+            </Button>
+          </div>
+        </SettingsCard>
+        {deleteApiKey && <p className="text-amber-600 text-xs">保存后将删除已保存的密钥。</p>}
+        {saveError && (
+          <p className="text-destructive text-sm" role="alert">
+            {saveError}
+          </p>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function ProviderIdentityFields({
+  editor,
+}: {
+  editor: ReturnType<typeof useProviderEditor>
+  settings: AgentSettingsSnapshot
+}) {
+  const {
+    editorMode,
+    provider,
+    chooseProvider,
+    selectableBuiltinProviders,
+    selectableCustomProviders,
+    setProvider,
+    providerName,
+    setProviderName,
+  } = editor
+  return (
+    <>
+      {editorMode === 'builtin' ? (
+        <SettingsField label="模型服务商" description="选择要使用的服务商。">
+          <Select
+            value={provider}
+            onValueChange={(value) => value !== null && chooseProvider(value)}
+          >
+            <SelectTrigger aria-label="模型服务商" className="h-9">
+              {[...selectableBuiltinProviders, ...selectableCustomProviders].find(
+                (item) => item.id === provider,
+              )?.name ?? '没有可添加的提供方'}
+            </SelectTrigger>
+            <SelectContent alignItemWithTrigger={false}>
+              {selectableBuiltinProviders.map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                  {item.name}
+                </SelectItem>
+              ))}
+              {selectableCustomProviders.length > 0 && (
+                <div role="group" aria-label="自定义提供商">
+                  <p className="px-2 py-1.5 text-xs text-text-muted">自定义提供商</p>
+                  {selectableCustomProviders.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.name}
+                    </SelectItem>
+                  ))}
+                </div>
+              )}
+              {selectableBuiltinProviders.length === 0 &&
+                selectableCustomProviders.length === 0 && (
+                  <SelectItem value="" disabled>
+                    没有可添加的提供方
+                  </SelectItem>
+                )}
+            </SelectContent>
+          </Select>
+        </SettingsField>
+      ) : (
+        <>
+          <SettingsField label="服务商标识" description="用于区分不同的服务商。">
+            <Input
+              aria-label="服务商标识"
+              value={provider}
+              onChange={(event) => setProvider(event.target.value)}
+              placeholder="例如：公司模型"
+            />
+          </SettingsField>
+          <SettingsField label="显示名称" description="显示在服务商列表中。">
+            <Input
+              aria-label="显示名称"
+              value={providerName}
+              onChange={(event) => setProviderName(event.target.value)}
+              placeholder="自定义提供商"
+            />
+          </SettingsField>
+        </>
+      )}
+    </>
+  )
+}
+
+function ProviderModels({
+  editor,
+}: {
+  editor: ReturnType<typeof useProviderEditor>
+  settings: AgentSettingsSnapshot
+}) {
+  const {
+    discovering,
+    provider,
+    discoverModels,
+    editorMode,
+    baseUrl,
+    customModels,
+    setCustomModels,
+    setSaved,
+    showModelDraft,
+    modelID,
+    setModelID,
+    addManualModel,
+    clearModelDraft,
+    setShowModelDraft,
+    discoveredProvider,
+    discoveredModels,
+    addDiscoveredModel,
+  } = editor
+  return (
+    <SettingsField label="模型列表" description="添加要在对话中使用的模型。">
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={discovering || !provider.trim()}
+            onClick={() => void discoverModels()}
+          >
+            {discovering ? '获取中…' : '获取可用模型'}
+          </Button>
+          {editorMode === 'builtin' && !baseUrl.trim() && (
+            <span className="text-muted-foreground text-xs">服务商模型</span>
+          )}
+        </div>
+        {customModels.length > 0 ? (
+          <div className="glass-surface grid gap-1 rounded-md p-2">
+            {customModels.map((model) => (
+              <div key={model.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-xs">
+                <span className="min-w-0 flex-1 truncate">
+                  {model.name ?? model.id}
+                  {model.name && <span className="text-muted-foreground ml-2">{model.id}</span>}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setCustomModels((current) => current.filter((item) => item.id !== model.id))
+                    setSaved(false)
+                  }}
+                >
+                  移除
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            <p className="text-muted-foreground text-xs">
+              {editorMode === 'builtin'
+                ? '服务商提供的可用模型会显示在这里。'
+                : '请添加要使用的模型。'}
+            </p>
+            {editorMode === 'custom' && (
+              <div className="border-border/70 text-muted-foreground rounded-md border border-dashed px-3 py-4 text-center text-xs">
+                添加模型后，即可在对话中使用。
+              </div>
+            )}
+          </>
+        )}
+        {showModelDraft ? (
+          <div className="flex gap-2">
+            <Input
+              aria-label="模型 ID"
+              value={modelID}
+              onChange={(event) => setModelID(event.target.value)}
+              placeholder="例如 deepseek-v4.1-flash"
+            />
+            <Button type="button" variant="outline" onClick={addManualModel}>
+              添加模型
+            </Button>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              clearModelDraft()
+              setShowModelDraft(true)
+            }}
+          >
+            添加模型
+          </Button>
+        )}
+        {discoveredProvider === provider && discoveredModels.length > 0 && (
+          <div className="glass-surface grid gap-1 rounded-md p-2">
+            {discoveredModels.map((model) => {
+              const added = customModels.some((item) => item.id === model.id)
+              const builtin = model.builtin === true
+              return (
+                <button
+                  key={model.id}
+                  type="button"
+                  className="hover:bg-interactive-hover active:bg-interactive-pressed focus-visible:ring-1 focus-visible:ring-brand-border outline-none transition-colors flex items-center justify-between rounded px-2 py-1.5 text-left text-xs disabled:cursor-default disabled:opacity-60"
+                  disabled={added || builtin}
+                  onClick={() => addDiscoveredModel(model)}
+                >
+                  <span className="truncate">{model.name}</span>
+                  <span className="text-muted-foreground ml-3 shrink-0">
+                    {builtin ? '内置' : added ? '已添加' : '添加'}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </SettingsField>
+  )
+}
+
+function ProviderCredentials({ editor }: { editor: ReturnType<typeof useProviderEditor> }) {
+  const { apiKey, setApiKey, setDeleteApiKey, selectedProviderHasKey } = editor
+  return (
+    <SettingsField label="API 密钥" description="留空则保留当前密钥。">
+      <div className="flex gap-2">
+        <Input
+          aria-label="API 密钥"
+          type="password"
+          autoComplete="off"
+          value={apiKey}
+          onChange={(event) => {
+            setApiKey(event.target.value)
+            setDeleteApiKey(false)
+          }}
+          placeholder="输入 API 密钥"
+        />
+        {selectedProviderHasKey && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setApiKey('')
+              setDeleteApiKey(true)
+            }}
+          >
+            清除
+          </Button>
+        )}
+      </div>
+    </SettingsField>
   )
 }

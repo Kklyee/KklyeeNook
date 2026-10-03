@@ -65,12 +65,10 @@ export function registerKnowledgeIpc(
                   : undefined,
             })
           ).filePaths
-    const sources: KnowledgeSource[] = []
-    for (const path of paths) {
+    return Promise.all(paths.map((path) => {
       if (!path) throw new Error('请选择关联的项目')
-      sources.push(await backend.request({ action: 'knowledge:add', path, kind, workspaceId }))
-    }
-    return sources
+      return backend.request<KnowledgeSource>({ action: 'knowledge:add', path, kind, workspaceId })
+    }))
   })
   handle(IPC_CHANNELS.KNOWLEDGE_REINDEX, (sourceId: string) =>
     backend.request({ action: 'knowledge:reindex', sourceId }),

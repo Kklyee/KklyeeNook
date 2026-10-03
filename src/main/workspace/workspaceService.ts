@@ -9,21 +9,23 @@ export class WorkspaceService {
 
   async list(): Promise<Workspace[]> {
     const result = await this.repo.list()
-    for (const workspace of result) {
-      if (workspace.status !== 'attached' || !workspace.rootPath) continue
-      try {
-        const info = await stat(workspace.rootPath, { bigint: true })
-        if (!info.isDirectory() || (workspace.fsInode && (String(info.ino) !== workspace.fsInode || String(info.dev) !== workspace.fsDevice))) {
-          throw new Error('Workspace directory changed')
+    await Promise.all(
+      result.map(async (workspace) => {
+        if (workspace.status !== 'attached' || !workspace.rootPath) return
+        try {
+          const info = await stat(workspace.rootPath, { bigint: true })
+          if (!info.isDirectory() || (workspace.fsInode && (String(info.ino) !== workspace.fsInode || String(info.dev) !== workspace.fsDevice))) {
+            throw new Error('Workspace directory changed')
+          }
+        } catch {
+          workspace.status = 'missing'
+          workspace.lastKnownPath = workspace.rootPath
+          workspace.rootPath = undefined
+          workspace.updatedAt = Date.now()
+          await this.repo.save(workspace)
         }
-      } catch {
-        workspace.status = 'missing'
-        workspace.lastKnownPath = workspace.rootPath
-        workspace.rootPath = undefined
-        workspace.updatedAt = Date.now()
-        await this.repo.save(workspace)
-      }
-    }
+      }),
+    )
     return result
   }
 

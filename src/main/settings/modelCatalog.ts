@@ -160,9 +160,10 @@ export function getConfiguredModelConfigs(
   catalog: readonly ModelCatalogProvider[],
 ): SavedModelConfig[] {
   const models: SavedModelConfig[] = []
+  const providerById = new Map(catalog.map((provider) => [provider.id, provider]))
 
   for (const configured of providers) {
-    const provider = catalog.find((item) => item.id === configured.id)
+    const provider = providerById.get(configured.id)
     if (!provider) continue
 
     for (const model of provider.models) {

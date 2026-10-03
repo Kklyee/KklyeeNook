@@ -8,7 +8,7 @@ export function KnowledgeCitationLink({
   chunkId,
   children,
   ...props
-}: ComponentProps<'a'> & { chunkId: string }) {
+}: ComponentProps<'button'> & { chunkId: string }) {
   const [open, setOpen] = useState(false)
   const [result, setResult] = useState<KnowledgeReadResult | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -31,15 +31,13 @@ export function KnowledgeCitationLink({
   }
   return (
     <>
-      <a
+      <button
         {...props}
-        onClick={(event) => {
-          event.preventDefault()
-          void show()
-        }}
+        type="button"
+        onClick={() => void show()}
       >
         {children}
-      </a>
+      </button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
           <DialogTitle>

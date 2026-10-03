@@ -667,14 +667,18 @@ const PendingToolGroup: FC<PropsWithChildren<{ group: ThreadGroupPart }>> = ({
   group,
 }) => {
   const requiresAction = group.status.type === 'requires-action'
-  const [open, setOpen] = useState(true)
+  const [state, setState] = useState({ requiresAction, open: true })
 
-  useEffect(() => {
-    if (requiresAction) setOpen(true)
-  }, [requiresAction])
+  if (state.requiresAction !== requiresAction) {
+    setState({ requiresAction, open: requiresAction || state.open })
+  }
 
   return (
-    <ToolGroupRoot variant="ghost" open={open} onOpenChange={setOpen}>
+    <ToolGroupRoot
+      variant="ghost"
+      open={state.open}
+      onOpenChange={(open) => setState({ requiresAction, open })}
+    >
       <ToolGroupTrigger
         count={group.indices.length}
         active={group.status.type === 'running' || requiresAction}

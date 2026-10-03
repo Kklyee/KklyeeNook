@@ -14,7 +14,8 @@ export function takePendingContextAttachmentIds(): string[] {
 }
 
 export function restorePendingContextAttachmentIds(ids: readonly string[]): void {
-  const restored = ids.filter((id) => !pendingContextAttachmentIds.includes(id))
+  const pendingIds = new Set(pendingContextAttachmentIds)
+  const restored = ids.filter((id) => !pendingIds.has(id))
   pendingContextAttachmentIds.unshift(...restored)
 }
 

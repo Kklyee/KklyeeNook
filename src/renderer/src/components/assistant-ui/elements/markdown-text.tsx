@@ -133,7 +133,7 @@ const defaultComponents = memoizeMarkdownComponents({
         className,
     )
     return chunkId
-      ? <KnowledgeCitationLink chunkId={decodeURIComponent(chunkId)} href={href} className={linkClassName} {...props} />
+      ? <KnowledgeCitationLink chunkId={decodeURIComponent(chunkId)} className={linkClassName} title={props.title} id={props.id}>{props.children}</KnowledgeCitationLink>
       : <a href={href} className={linkClassName} {...props} />
   },
   blockquote: ({ className, ...props }) => (

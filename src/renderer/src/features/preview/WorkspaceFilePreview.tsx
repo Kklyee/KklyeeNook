@@ -42,47 +42,6 @@ export function WorkspaceFilePreview({
     }
   }, [sessionId, target.path, revision, view])
 
-  let content
-  if (view === 'diff' && target.diff) {
-    content = (
-      <DiffPreview diff={target.diff} filename={target.path.split(/[\\/]/).pop() ?? target.path} />
-    )
-  } else if (error || file?.kind === 'missing' || file?.kind === 'unsupported') {
-    content = (
-      <div
-        role="status"
-        className="text-muted-foreground flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-sm"
-      >
-        <p>
-          {error ??
-            (file?.kind === 'missing'
-              ? '文件不存在，可能已被移动或删除。'
-              : file?.kind === 'unsupported' && file.reason === 'too-large'
-                ? '文件过大，无法预览'
-                : '暂不支持预览此文件格式')}
-        </p>
-        {file?.kind === 'unsupported' && <p className="text-xs">{formatFileSize(file.size)}</p>}
-        <Button variant="ghost" size="sm" onClick={close}>
-          关闭
-        </Button>
-      </div>
-    )
-  } else if (file?.kind === 'text') {
-    content = /\.(md|markdown)$/i.test(file.filename) ? (
-      <MarkdownPreview content={file.content} />
-    ) : (
-      <CodeFilePreview content={file.content} />
-    )
-  } else if (file?.kind === 'image') {
-    content = <ImageFilePreview {...file} />
-  } else {
-    content = (
-      <div role="status" className="text-muted-foreground p-6 text-sm">
-        正在读取文件…
-      </div>
-    )
-  }
-
   return (
     <>
       {target.diff && (
@@ -108,7 +67,73 @@ export function WorkspaceFilePreview({
           </Button>
         </nav>
       )}
-      {content}
+      <WorkspaceFileContent target={target} view={view} file={file} error={error} close={close} />
     </>
+  )
+}
+
+function WorkspaceFileContent({
+  target,
+  view,
+  file,
+  error,
+  close,
+}: {
+  target: Extract<PreviewTarget, { kind: 'workspace-file' }>
+  view: string
+  file?: FilePreview
+  error?: string
+  close: () => void
+}) {
+  if (view === 'diff' && target.diff) {
+    return (
+      <DiffPreview diff={target.diff} filename={target.path.split(/[\\/]/).pop() ?? target.path} />
+    )
+  } else if (error || file?.kind === 'missing' || file?.kind === 'unsupported') {
+    return <UnavailableFilePreview file={file} error={error} close={close} />
+  } else if (file?.kind === 'text') {
+    return /\.(md|markdown)$/i.test(file.filename) ? (
+      <MarkdownPreview content={file.content} />
+    ) : (
+      <CodeFilePreview content={file.content} />
+    )
+  } else if (file?.kind === 'image') {
+    return <ImageFilePreview {...file} />
+  } else {
+    return (
+      <div role="status" className="text-muted-foreground p-6 text-sm">
+        正在读取文件…
+      </div>
+    )
+  }
+}
+
+function UnavailableFilePreview({
+  file,
+  error,
+  close,
+}: {
+  file?: FilePreview
+  error?: string
+  close: () => void
+}) {
+  return (
+    <div
+      role="status"
+      className="text-muted-foreground flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-sm"
+    >
+      <p>
+        {error ??
+          (file?.kind === 'missing'
+            ? '文件不存在，可能已被移动或删除。'
+            : file?.kind === 'unsupported' && file.reason === 'too-large'
+              ? '文件过大，无法预览'
+              : '暂不支持预览此文件格式')}
+      </p>
+      {file?.kind === 'unsupported' && <p className="text-xs">{formatFileSize(file.size)}</p>}
+      <Button variant="ghost" size="sm" onClick={close}>
+        关闭
+      </Button>
+    </div>
   )
 }

@@ -17,26 +17,11 @@ import {
 export const BashToolRenderer: ToolCallMessagePartComponent = ({ args, result, status }) => {
   const values = isRecord(args) ? args : {}
   const command = getStringValue(values, 'command') ?? ''
-  const output = isRecord(result)
-    ? (getStringValue(result, 'stdout', 'output') ?? formatToolResult(result))
-    : formatToolResult(result)
-  const stderr = isRecord(result) ? getStringValue(result, 'stderr') : undefined
-  const resultDetails = isRecord(result) && isRecord(result.details) ? result.details : {}
   const error =
     status.type === 'incomplete' && status.error !== undefined
       ? stringifyValue(status.error)
       : undefined
-  const errorExitCode = error?.match(/Command exited with code (-?\d+)/i)?.[1]
-  const exitCode = isRecord(result)
-    ? (result.exitCode ??
-      result.exit_code ??
-      result.code ??
-      resultDetails.exitCode ??
-      resultDetails.exit_code ??
-      resultDetails.code ??
-      errorExitCode ??
-      (status.type === 'complete' ? 0 : undefined))
-    : (errorExitCode ?? (status.type === 'complete' ? 0 : undefined))
+  const { output, stderr, exitCode } = readBashResult(result, error, status.type === 'complete')
 
   return (
     <ToolCard toolName="bash" label="Bash" summary={command} status={status}>
@@ -65,4 +50,23 @@ export const BashToolRenderer: ToolCallMessagePartComponent = ({ args, result, s
       )}
     </ToolCard>
   )
+}
+
+function readBashResult(result: unknown, error: string | undefined, complete: boolean) {
+  const values = isRecord(result) ? result : {}
+  const details = isRecord(values.details) ? values.details : {}
+  const exitCode =
+    values.exitCode ??
+    values.exit_code ??
+    values.code ??
+    details.exitCode ??
+    details.exit_code ??
+    details.code ??
+    error?.match(/Command exited with code (-?\d+)/i)?.[1] ??
+    (complete ? 0 : undefined)
+  return {
+    output: getStringValue(values, 'stdout', 'output') ?? formatToolResult(result),
+    stderr: getStringValue(values, 'stderr'),
+    exitCode,
+  }
 }

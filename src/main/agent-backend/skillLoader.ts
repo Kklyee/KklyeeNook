@@ -37,9 +37,12 @@ export class SkillLoader {
       const entries = await readdir(this.directory, { withFileTypes: true, encoding: 'utf8' })
 
       const nextSkills = new Map<string, AgentSkill>()
-      for (const entry of entries) {
-        if (!entry.isDirectory()) continue
-        const skill = await this.loadSkill(join(this.directory, entry.name))
+      const skills = await Promise.all(
+        entries
+          .filter((entry) => entry.isDirectory())
+          .map((entry) => this.loadSkill(join(this.directory, entry.name))),
+      )
+      for (const skill of skills) {
         if (skill) nextSkills.set(skill.id, skill)
       }
 

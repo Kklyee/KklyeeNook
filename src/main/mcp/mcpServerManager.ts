@@ -47,30 +47,35 @@ export class McpServerManager {
   async reconcile(configs: readonly McpServerConfig[]): Promise<void> {
     if (this.closed) return
     const nextConfigs = new Map(configs.map((config) => [config.id, config]))
-    for (const id of this.configs.keys()) {
-      if (nextConfigs.has(id)) continue
-      this.nextGeneration(id)
-      this.configs.delete(id)
-      this.signatures.delete(id)
-      this.states.delete(id)
-      await this.disconnectConnection(id)
-    }
+    await Promise.all(
+      [...this.configs.keys()]
+        .filter((id) => !nextConfigs.has(id))
+        .map(async (id) => {
+          this.nextGeneration(id)
+          this.configs.delete(id)
+          this.signatures.delete(id)
+          this.states.delete(id)
+          await this.disconnectConnection(id)
+        }),
+    )
 
-    for (const config of nextConfigs.values()) {
-      const signature = configSignature(config)
-      const previousSignature = this.signatures.get(config.id)
-      this.configs.set(config.id, config)
-      this.signatures.set(config.id, signature)
-      if (!config.enabled) {
-        this.nextGeneration(config.id)
-        await this.disconnectConnection(config.id)
-        this.setState({ serverId: config.id, status: 'disconnected', toolCount: 0 })
-      } else if (previousSignature !== signature || !this.states.has(config.id)) {
-        this.track(this.startConnection(config, signature))
-      } else {
-        this.syncTools(config.id)
-      }
-    }
+    await Promise.all(
+      [...nextConfigs.values()].map(async (config) => {
+        const signature = configSignature(config)
+        const previousSignature = this.signatures.get(config.id)
+        this.configs.set(config.id, config)
+        this.signatures.set(config.id, signature)
+        if (!config.enabled) {
+          this.nextGeneration(config.id)
+          await this.disconnectConnection(config.id)
+          this.setState({ serverId: config.id, status: 'disconnected', toolCount: 0 })
+        } else if (previousSignature !== signature || !this.states.has(config.id)) {
+          this.track(this.startConnection(config, signature))
+        } else {
+          this.syncTools(config.id)
+        }
+      }),
+    )
   }
 
   listStates(): McpServerState[] {

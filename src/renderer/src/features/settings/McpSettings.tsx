@@ -14,7 +14,7 @@ import type { McpServerConfig, McpServerState } from '@/shared/mcp/mcpServer'
 import { Button } from '@/renderer/src/components/ui/button'
 import { Input } from '@/renderer/src/components/ui/input'
 
-export function McpSettings({
+function useMcpSettings({
   settings,
   onChanged,
 }: {
@@ -32,8 +32,8 @@ export function McpSettings({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [command, setCommand] = useState('')
-  const [args, setArgs] = useState<string[]>([])
-  const [env, setEnv] = useState<Array<[string, string]>>([])
+  const [args, setArgs] = useState<Array<{ id: string; value: string }>>([])
+  const [env, setEnv] = useState<Array<{ id: string; key: string; value: string }>>([])
   const [cwd, setCwd] = useState('')
   const [enabled, setEnabled] = useState(true)
 
@@ -72,8 +72,14 @@ export function McpSettings({
     setEditingId(server.id)
     setName(server.name)
     setCommand(server.command)
-    setArgs([...server.args])
-    setEnv(Object.entries(server.env ?? {}))
+    setArgs(server.args.map((value) => ({ id: crypto.randomUUID(), value })))
+    setEnv(
+      Object.entries(server.env ?? {}).map(([key, value]) => ({
+        id: crypto.randomUUID(),
+        key,
+        value,
+      })),
+    )
     setCwd(server.cwd ?? '')
     setError(null)
     setEnabled(server.enabled)
@@ -89,7 +95,7 @@ export function McpSettings({
   const saveServer = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (saving) return
-    const keys = env.map(([key]) => key.trim())
+    const keys = env.map(({ key }) => key.trim())
     if (
       keys.some((key) => !key || key.includes('=') || key.includes('\0')) ||
       new Set(keys).size !== keys.length
@@ -104,10 +110,10 @@ export function McpSettings({
       enabled,
       transport: 'stdio',
       command: command.trim(),
-      args,
+      args: args.map(({ value }) => value),
       ...(env.length
         ? {
-            env: Object.fromEntries(env.map(([key, value]) => [key.trim(), value])),
+            env: Object.fromEntries(env.map(({ key, value }) => [key.trim(), value])),
           }
         : {}),
       ...(cwd.trim() ? { cwd: cwd.trim() } : {}),
@@ -193,205 +199,295 @@ export function McpSettings({
 
   const stateByServerId = new Map(states.map((state) => [state.serverId, state]))
 
-  if (formOpen) {
-    const fieldClass = 'space-y-3 p-5'
-    return (
-      <section aria-labelledby="mcp-form-title" className="space-y-5">
-        <Button
-          type="button"
-          variant="ghost"
-          className="text-muted-foreground -ml-3"
-          disabled={saving}
-          onClick={() => setFormOpen(false)}
-        >
-          <ArrowLeftIcon />
-          返回
-        </Button>
-        <div className="space-y-2 pb-2">
-          <h2 id="mcp-form-title" className="text-xl font-semibold">
-            {editingId ? '编辑 MCP 服务器' : '连接至自定义 MCP'}
-          </h2>
-          <a
-            href="https://ts.sdk.modelcontextprotocol.io/v2/"
-            target="_blank"
-            rel="noreferrer"
-            className="text-muted-foreground inline-flex items-center gap-1.5 text-sm hover:text-foreground"
-          >
-            文档 <ExternalLinkIcon className="size-3.5" />
-          </a>
-        </div>
-        <form className="space-y-3" onSubmit={(event) => void saveServer(event)}>
-          <fieldset disabled={saving} className="space-y-3">
-            <div className="glass-surface divide-y divide-glass-border-subtle overflow-hidden rounded-2xl">
-              <label className={`block ${fieldClass}`}>
-                <span className="text-sm font-medium">名称</span>
-                <Input
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="MCP server name"
-                  required
-                  className="h-11 rounded-xl"
-                />
-              </label>
-              <div className="flex items-center justify-between px-5 py-4">
-                <span className="text-sm font-medium">类型</span>
-                <span className="bg-surface-raised rounded-lg px-3 py-1.5 text-sm">STDIO</span>
-              </div>
-            </div>
-            <div className="glass-surface divide-y divide-glass-border-subtle overflow-hidden rounded-2xl">
-              <label className={`block ${fieldClass}`}>
-                <span className="text-sm font-medium">启动命令</span>
-                <Input
-                  value={command}
-                  onChange={(event) => setCommand(event.target.value)}
-                  placeholder="npx"
-                  required
-                  className="h-11 rounded-xl"
-                />
-                <p className="text-muted-foreground text-xs">
-                  填写可执行文件名或完整路径，命令参数在下方逐项添加。
-                </p>
-              </label>
-              <div className={fieldClass}>
-                <p className="text-sm font-medium">参数</p>
-                {args.map((arg, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <Input
-                      aria-label={`参数 ${index + 1}`}
-                      value={arg}
-                      onChange={(event) =>
-                        setArgs(args.map((value, i) => (i === index ? event.target.value : value)))
-                      }
-                      className="h-11 rounded-xl"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`删除参数 ${index + 1}`}
-                      onClick={() => setArgs(args.filter((_, i) => i !== index))}
-                    >
-                      <Trash2Icon />
-                    </Button>
-                  </div>
-                ))}
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="w-full rounded-xl"
-                  onClick={() => setArgs([...args, ''])}
-                >
-                  <PlusIcon />
-                  添加参数
-                </Button>
-              </div>
-              <div className={fieldClass}>
-                <p className="text-sm font-medium">
-                  环境变量 <span className="text-muted-foreground font-normal">（可选）</span>
-                </p>
-                {env.map(([key, value], index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <Input
-                      aria-label={`环境变量 ${index + 1} 名称`}
-                      placeholder="键"
-                      value={key}
-                      onChange={(event) =>
-                        setEnv(
-                          env.map((pair, i) =>
-                            i === index ? [event.target.value, pair[1]] : pair,
-                          ),
-                        )
-                      }
-                      className="h-11 min-w-0 rounded-xl"
-                    />
-                    <Input
-                      aria-label={`环境变量 ${index + 1} 值`}
-                      placeholder="值"
-                      type="password"
-                      autoComplete="off"
-                      value={value}
-                      onChange={(event) =>
-                        setEnv(
-                          env.map((pair, i) =>
-                            i === index ? [pair[0], event.target.value] : pair,
-                          ),
-                        )
-                      }
-                      className="h-11 min-w-0 rounded-xl"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`删除环境变量 ${index + 1}`}
-                      onClick={() => setEnv(env.filter((_, i) => i !== index))}
-                    >
-                      <Trash2Icon />
-                    </Button>
-                  </div>
-                ))}
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="w-full rounded-xl"
-                  onClick={() => setEnv([...env, ['', '']])}
-                >
-                  <PlusIcon />
-                  添加环境变量
-                </Button>
-                <p className="text-muted-foreground text-xs">
-                  覆盖服务器进程的变量；默认保留 PATH 等 SDK 基础环境。变量保存在本机配置中。
-                </p>
-              </div>
-              <label className={`block ${fieldClass}`}>
-                <span className="text-sm font-medium">
-                  工作目录 <span className="text-muted-foreground font-normal">（可选）</span>
-                </span>
-                <Input
-                  value={cwd}
-                  onChange={(event) => setCwd(event.target.value)}
-                  placeholder="使用服务器默认工作目录"
-                  className="h-11 rounded-xl"
-                />
-                <p className="text-muted-foreground text-xs">需要指定目录时填写绝对路径。</p>
-              </label>
-            </div>
-            <label className="flex items-center gap-2 px-1 py-2 text-sm">
-              <input
-                type="checkbox"
-                checked={enabled}
-                onChange={(event) => setEnabled(event.target.checked)}
-                className="size-4 accent-brand"
-              />
-              保存后启用
-            </label>
-          </fieldset>
-          {error && (
-            <p role="alert" className="text-destructive text-sm">
-              {error}
-            </p>
-          )}
-          <div className="flex justify-end gap-2 pt-1">
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={saving}
-              onClick={() => setFormOpen(false)}
-            >
-              取消
-            </Button>
-            <Button
-              type="submit"
-              className="rounded-xl"
-              disabled={saving || !name.trim() || !command.trim()}
-            >
-              {saving ? '保存中…' : '保存'}
-            </Button>
-          </div>
-        </form>
-      </section>
-    )
+  return {
+    states,
+    loading,
+    saving,
+    busyServerId,
+    busyToolKey,
+    expandedServers,
+    setExpandedServers,
+    error,
+    formOpen,
+    setFormOpen,
+    editingId,
+    name,
+    setName,
+    command,
+    setCommand,
+    args,
+    setArgs,
+    env,
+    setEnv,
+    cwd,
+    setCwd,
+    enabled,
+    setEnabled,
+    openNewServer,
+    openEditServer,
+    saveServer,
+    toggleServer,
+    toggleTool,
+    removeServer,
+    retryServer,
+    stateByServerId,
   }
+}
+
+export function McpSettings(props: {
+  settings: AgentSettingsSnapshot
+  onChanged: () => Promise<void>
+}) {
+  const model = useMcpSettings(props)
+  if (model.formOpen) return <McpServerForm model={model} />
+  return <McpServerList model={model} settings={props.settings} />
+}
+
+function McpServerForm({ model }: { model: ReturnType<typeof useMcpSettings> }) {
+  const {
+    saving,
+    error,
+    setFormOpen,
+    editingId,
+    name,
+    setName,
+    command,
+    setCommand,
+    args,
+    setArgs,
+    env,
+    setEnv,
+    cwd,
+    setCwd,
+    enabled,
+    setEnabled,
+    saveServer,
+  } = model
+  const fieldClass = 'space-y-3 p-5'
+  return (
+    <section aria-labelledby="mcp-form-title" className="space-y-5">
+      <Button
+        type="button"
+        variant="ghost"
+        className="text-muted-foreground -ml-3"
+        disabled={saving}
+        onClick={() => setFormOpen(false)}
+      >
+        <ArrowLeftIcon />
+        返回
+      </Button>
+      <div className="space-y-2 pb-2">
+        <h2 id="mcp-form-title" className="text-xl font-semibold">
+          {editingId ? '编辑 MCP 服务器' : '连接至自定义 MCP'}
+        </h2>
+        <a
+          href="https://ts.sdk.modelcontextprotocol.io/v2/"
+          target="_blank"
+          rel="noreferrer"
+          className="text-muted-foreground inline-flex items-center gap-1.5 text-sm hover:text-foreground"
+        >
+          文档 <ExternalLinkIcon className="size-3.5" />
+        </a>
+      </div>
+      <form className="space-y-3" onSubmit={(event) => void saveServer(event)}>
+        <fieldset disabled={saving} className="space-y-3">
+          <div className="glass-surface divide-y divide-glass-border-subtle overflow-hidden rounded-2xl">
+            <label className={`block ${fieldClass}`}>
+              <span className="text-sm font-medium">名称</span>
+              <Input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="MCP server name"
+                required
+                className="h-11 rounded-xl"
+              />
+            </label>
+            <div className="flex items-center justify-between px-5 py-4">
+              <span className="text-sm font-medium">类型</span>
+              <span className="bg-surface-raised rounded-lg px-3 py-1.5 text-sm">STDIO</span>
+            </div>
+          </div>
+          <div className="glass-surface divide-y divide-glass-border-subtle overflow-hidden rounded-2xl">
+            <label className={`block ${fieldClass}`}>
+              <span className="text-sm font-medium">启动命令</span>
+              <Input
+                value={command}
+                onChange={(event) => setCommand(event.target.value)}
+                placeholder="npx"
+                required
+                className="h-11 rounded-xl"
+              />
+              <p className="text-muted-foreground text-xs">
+                填写可执行文件名或完整路径，命令参数在下方逐项添加。
+              </p>
+            </label>
+            <div className={fieldClass}>
+              <p className="text-sm font-medium">参数</p>
+              {args.map((arg, index) => (
+                <div key={arg.id} className="flex items-center gap-2">
+                  <Input
+                    aria-label={`参数 ${index + 1}`}
+                    value={arg.value}
+                    onChange={(event) =>
+                      setArgs(
+                        args.map((row) =>
+                          row.id === arg.id ? { ...row, value: event.target.value } : row,
+                        ),
+                      )
+                    }
+                    className="h-11 rounded-xl"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`删除参数 ${index + 1}`}
+                    onClick={() => setArgs(args.filter((row) => row.id !== arg.id))}
+                  >
+                    <Trash2Icon />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full rounded-xl"
+                onClick={() => setArgs([...args, { id: crypto.randomUUID(), value: '' }])}
+              >
+                <PlusIcon />
+                添加参数
+              </Button>
+            </div>
+            <div className={fieldClass}>
+              <p className="text-sm font-medium">
+                环境变量 <span className="text-muted-foreground font-normal">（可选）</span>
+              </p>
+              {env.map((row, index) => (
+                <div key={row.id} className="flex items-center gap-2">
+                  <Input
+                    aria-label={`环境变量 ${index + 1} 名称`}
+                    placeholder="键"
+                    value={row.key}
+                    onChange={(event) =>
+                      setEnv(
+                        env.map((pair) =>
+                          pair.id === row.id ? { ...pair, key: event.target.value } : pair,
+                        ),
+                      )
+                    }
+                    className="h-11 min-w-0 rounded-xl"
+                  />
+                  <Input
+                    aria-label={`环境变量 ${index + 1} 值`}
+                    placeholder="值"
+                    type="password"
+                    autoComplete="off"
+                    value={row.value}
+                    onChange={(event) =>
+                      setEnv(
+                        env.map((pair) =>
+                          pair.id === row.id ? { ...pair, value: event.target.value } : pair,
+                        ),
+                      )
+                    }
+                    className="h-11 min-w-0 rounded-xl"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`删除环境变量 ${index + 1}`}
+                    onClick={() => setEnv(env.filter((pair) => pair.id !== row.id))}
+                  >
+                    <Trash2Icon />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full rounded-xl"
+                onClick={() => setEnv([...env, { id: crypto.randomUUID(), key: '', value: '' }])}
+              >
+                <PlusIcon />
+                添加环境变量
+              </Button>
+              <p className="text-muted-foreground text-xs">
+                覆盖服务器进程的变量；默认保留 PATH 等 SDK 基础环境。变量保存在本机配置中。
+              </p>
+            </div>
+            <label className={`block ${fieldClass}`}>
+              <span className="text-sm font-medium">
+                工作目录 <span className="text-muted-foreground font-normal">（可选）</span>
+              </span>
+              <Input
+                value={cwd}
+                onChange={(event) => setCwd(event.target.value)}
+                placeholder="使用服务器默认工作目录"
+                className="h-11 rounded-xl"
+              />
+              <p className="text-muted-foreground text-xs">需要指定目录时填写绝对路径。</p>
+            </label>
+          </div>
+          <label className="flex items-center gap-2 px-1 py-2 text-sm">
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(event) => setEnabled(event.target.checked)}
+              className="size-4 accent-brand"
+            />
+            保存后启用
+          </label>
+        </fieldset>
+        {error && (
+          <p role="alert" className="text-destructive text-sm">
+            {error}
+          </p>
+        )}
+        <div className="flex justify-end gap-2 pt-1">
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={saving}
+            onClick={() => setFormOpen(false)}
+          >
+            取消
+          </Button>
+          <Button
+            type="submit"
+            className="rounded-xl"
+            disabled={saving || !name.trim() || !command.trim()}
+          >
+            {saving ? '保存中…' : '保存'}
+          </Button>
+        </div>
+      </form>
+    </section>
+  )
+}
+
+function McpServerList({
+  model,
+  settings,
+}: {
+  model: ReturnType<typeof useMcpSettings>
+  settings: AgentSettingsSnapshot
+}) {
+  const {
+    loading,
+    busyServerId,
+    busyToolKey,
+    expandedServers,
+    setExpandedServers,
+    error,
+    openNewServer,
+    openEditServer,
+    toggleServer,
+    toggleTool,
+    removeServer,
+    retryServer,
+    stateByServerId,
+  } = model
 
   return (
     <section aria-labelledby="mcp-servers-title">
@@ -428,7 +524,8 @@ export function McpSettings({
         <div className="space-y-2">
           {(settings.mcpServers ?? []).map((server) => {
             const state = stateByServerId.get(server.id)
-            const status = state?.status ?? (loading && server.enabled ? 'connecting' : 'disconnected')
+            const status =
+              state?.status ?? (loading && server.enabled ? 'connecting' : 'disconnected')
             const statusLabel = stateLabel(status, state?.error)
             const busy = busyServerId === server.id
             const expanded = expandedServers.has(server.id)

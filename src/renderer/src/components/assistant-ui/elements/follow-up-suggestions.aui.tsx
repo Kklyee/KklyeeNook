@@ -49,9 +49,9 @@ const FollowupSuggestionsRow: FC = () => {
       style={{ maskImage, WebkitMaskImage: maskImage }}
     >
       <div className="mx-auto flex min-h-8 w-max items-center gap-2 px-0.5">
-        {suggestions.map((suggestion, idx) => (
+        {suggestions.map((suggestion) => (
           <ThreadPrimitive.Suggestion
-            key={idx}
+            key={suggestion.prompt}
             className="aui-thread-followup-suggestion bg-glass-hover text-text-default hover:bg-interactive-hover-strong active:bg-interactive-pressed border-glass-border hover:border-glass-border-hover rounded-full border px-3 py-1 text-sm whitespace-nowrap transition-colors ease-in"
             prompt={suggestion.prompt}
             method="replace"

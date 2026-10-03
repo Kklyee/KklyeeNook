@@ -95,13 +95,7 @@ function ToolFallbackApproval({
 
   if (!offersInterruptAction(status, approval, interrupt)) return null
 
-  const interruptPayload = interrupt?.payload as { kind?: string; options?: unknown } | undefined
-  const selectOptions =
-    interruptPayload?.kind === 'select' &&
-    Array.isArray(interruptPayload.options) &&
-    interruptPayload.options.every((option) => typeof option === 'string')
-      ? (interruptPayload.options as string[])
-      : undefined
+  const selectOptions = getInterruptSelectOptions(interrupt)
 
   if (selectOptions) {
     return (
@@ -175,53 +169,15 @@ function ToolFallbackApproval({
     confirmingId != null ? declaredOptions?.find((o) => o.id === confirmingId) : undefined
 
   if (confirming) {
-    const confirmMeta = typeof confirming.confirm === 'object' ? confirming.confirm : undefined
-    const confirmDescription = confirmMeta?.description ?? confirming.description
     return (
-      <div
-        data-slot="tool-fallback-approval-confirm"
-        className={cn('aui-tool-fallback-approval-confirm flex flex-col gap-2 pt-1', className)}
+      <ApprovalConfirmation
+        confirming={confirming}
+        submitted={submitted}
+        className={className}
+        respondWithOption={respondWithOption}
+        onBack={() => setConfirmingId(null)}
         {...props}
-      >
-        <p className="aui-tool-fallback-approval-confirm-title font-semibold text-text-strong">
-          {confirmMeta?.title ?? `${approvalOptionLabel(confirming)}?`}
-        </p>
-        {confirmDescription && (
-          <p className="aui-tool-fallback-approval-confirm-description text-text-muted">
-            {confirmDescription}
-          </p>
-        )}
-        {confirming.grants && confirming.grants.length > 0 && (
-          <ul className="aui-tool-fallback-approval-confirm-grants flex flex-col gap-1">
-            {confirming.grants.map((grant) => (
-              <li key={grant}>
-                <code className="aui-tool-fallback-approval-confirm-grant rounded border border-glass-border-subtle bg-surface-subtle px-1.5 py-0.5 text-xs text-text-default">
-                  {grant}
-                </code>
-              </li>
-            ))}
-          </ul>
-        )}
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            className={pressable}
-            onClick={() => respondWithOption(confirming)}
-            disabled={submitted}
-          >
-            Confirm
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className={pressable}
-            onClick={() => setConfirmingId(null)}
-            disabled={submitted}
-          >
-            Back
-          </Button>
-        </div>
-      </div>
+      />
     )
   }
 
@@ -347,3 +303,75 @@ const ToolFallback = memo((props: ToolCallMessagePartProps) => (
 ToolFallback.displayName = 'ToolFallback'
 
 export { ToolFallback }
+
+function getInterruptSelectOptions(interrupt: ToolCallMessagePart['interrupt']) {
+  const interruptPayload = interrupt?.payload as { kind?: string; options?: unknown } | undefined
+  return interruptPayload?.kind === 'select' &&
+    Array.isArray(interruptPayload.options) &&
+    interruptPayload.options.every((option) => typeof option === 'string')
+    ? (interruptPayload.options as string[])
+    : undefined
+}
+
+function ApprovalConfirmation({
+  confirming,
+  submitted,
+  className,
+  respondWithOption,
+  onBack,
+  ...props
+}: React.ComponentProps<'div'> & {
+  confirming: ToolApprovalOption
+  submitted: boolean
+  respondWithOption: (option: ToolApprovalOption) => void
+  onBack: () => void
+}) {
+  const confirmMeta = typeof confirming.confirm === 'object' ? confirming.confirm : undefined
+  const confirmDescription = confirmMeta?.description ?? confirming.description
+  return (
+    <div
+      data-slot="tool-fallback-approval-confirm"
+      className={cn('aui-tool-fallback-approval-confirm flex flex-col gap-2 pt-1', className)}
+      {...props}
+    >
+      <p className="aui-tool-fallback-approval-confirm-title font-semibold text-text-strong">
+        {confirmMeta?.title ?? `${approvalOptionLabel(confirming)}?`}
+      </p>
+      {confirmDescription && (
+        <p className="aui-tool-fallback-approval-confirm-description text-text-muted">
+          {confirmDescription}
+        </p>
+      )}
+      {confirming.grants && confirming.grants.length > 0 && (
+        <ul className="aui-tool-fallback-approval-confirm-grants flex flex-col gap-1">
+          {confirming.grants.map((grant) => (
+            <li key={grant}>
+              <code className="aui-tool-fallback-approval-confirm-grant rounded border border-glass-border-subtle bg-surface-subtle px-1.5 py-0.5 text-xs text-text-default">
+                {grant}
+              </code>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          className={pressable}
+          onClick={() => respondWithOption(confirming)}
+          disabled={submitted}
+        >
+          Confirm
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className={pressable}
+          onClick={onBack}
+          disabled={submitted}
+        >
+          Back
+        </Button>
+      </div>
+    </div>
+  )
+}

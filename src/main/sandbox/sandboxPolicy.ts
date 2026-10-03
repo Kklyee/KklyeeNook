@@ -10,9 +10,9 @@ export class SandboxPolicy {
   async evaluate(request: PermissionRequest): Promise<PermissionDecision> {
     const { mode, resource, workspace } = request
     if (resource.kind === 'path') {
-      const target = await this.paths.resolve(resource.path, workspace?.rootPath)
       if (mode === 'full-access') return { outcome: 'allow' }
       if (!workspace) return { outcome: 'deny', reason: '需要关联一个可用项目，或显式选择完全权限' }
+      const target = await this.paths.resolve(resource.path, workspace.rootPath)
       if (resource.action !== 'read' && mode === 'read-only')
         return {
           outcome: 'ask',

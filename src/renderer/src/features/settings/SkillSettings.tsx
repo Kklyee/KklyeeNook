@@ -6,24 +6,22 @@ import { SettingsCard } from './SettingsComponents'
 
 export function SkillSettings() {
   const [skills, setSkills] = useState<AgentSkill[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loadStatus, setLoadStatus] = useState<'loading' | 'refreshing' | null>('loading')
   const [error, setError] = useState<string | null>(null)
-  const [reloading, setReloading] = useState(false)
+  const loading = loadStatus === 'loading'
+  const reloading = loadStatus === 'refreshing'
 
   const loadSkills = async (reload: boolean) => {
-    if (reload) setReloading(true)
-    else setLoading(true)
+    setLoadStatus(reload ? 'refreshing' : 'loading')
     setError(null)
     try {
-      const nextSkills = reload
-        ? await window.api.reloadAgentSkills()
-        : await window.api.listAgentSkills()
+      const request = reload ? window.api.reloadAgentSkills() : window.api.listAgentSkills()
+      const nextSkills = await request
       setSkills(nextSkills)
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Skills 读取失败，请重试。')
     } finally {
-      if (reload) setReloading(false)
-      else setLoading(false)
+      setLoadStatus(null)
     }
   }
 
@@ -43,7 +41,7 @@ export function SkillSettings() {
           type="button"
           variant="outline"
           size="sm"
-          disabled={reloading}
+          disabled={loading || reloading}
           onClick={() => void loadSkills(true)}
         >
           <RefreshCwIcon className={reloading ? 'animate-spin' : undefined} />

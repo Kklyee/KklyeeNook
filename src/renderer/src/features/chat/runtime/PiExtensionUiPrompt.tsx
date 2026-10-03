@@ -118,7 +118,8 @@ function SelectRequestBar({
 
   return (
     <div
-      role="alertdialog"
+      role="region"
+      aria-live="polite"
       aria-label={request.title}
       className="glass-surface animate-in slide-in-from-bottom-2 fade-in relative z-10 mx-auto grid w-full max-w-(--thread-max-width) grid-cols-1 items-center gap-3 rounded-2xl p-3 duration-200 motion-reduce:animate-none sm:grid-cols-[minmax(0,1fr)_auto]"
     >

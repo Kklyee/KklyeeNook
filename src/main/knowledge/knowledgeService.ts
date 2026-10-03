@@ -1,4 +1,5 @@
 import { WorkspacePathPolicy } from '../sandbox/workspacePathPolicy'
+import { mapConcurrent } from '@/shared/async/mapConcurrent'
 import type { WorkspaceService } from '../workspace/workspaceService'
 import { createHash, randomUUID } from 'node:crypto'
 import { readFile, readdir, realpath, stat } from 'node:fs/promises'
@@ -145,8 +146,11 @@ export class KnowledgeService {
     if (!Number.isInteger(limit) || limit < 1 || limit > 20)
       throw new Error('Knowledge limit must be between 1 and 20')
     if (request.sourceIds?.length === 0) return []
+    const requestedSourceIds = request.sourceIds ? new Set(request.sourceIds) : undefined
     const sources = (await this.repo.listSources()).filter(
-      (source) => (!source.workspaceId || source.workspaceId === request.workspaceId) && (!request.sourceIds || request.sourceIds.includes(source.id)),
+      (source) =>
+        (!source.workspaceId || source.workspaceId === request.workspaceId) &&
+        (!requestedSourceIds || requestedSourceIds.has(source.id)),
     )
     if (
       sources.some(
@@ -255,17 +259,19 @@ export class KnowledgeService {
       paths = []
     }
     const present = new Set(paths)
-    for (const document of documents) {
-      if (!present.has(document.filePath)) {
+    await mapConcurrent(
+      documents.filter((document) => !present.has(document.filePath)),
+      4,
+      async (document) => {
         await this.index.removeDocument(document.id)
         await this.repo.deleteDocument(document.id)
-      }
-    }
-    const errors: string[] = []
+      },
+    )
+    const documentByPath = new Map(documents.map((document) => [document.filePath, document]))
     let changed = documents.some((document) => !present.has(document.filePath))
-    for (const filePath of paths) {
-      if (this.stopped) break
-      const existing = documents.find((document) => document.filePath === filePath)
+    const outcomes = await mapConcurrent(paths, 2, async (filePath) => {
+      if (this.stopped) return
+      const existing = documentByPath.get(filePath)
       try {
         const resolved = await new WorkspacePathPolicy().resolve(filePath, root ?? target.path)
         if (source.kind !== 'file' && !resolved.inside) throw new Error('Knowledge 文件在来源目录外')
@@ -278,7 +284,7 @@ export class KnowledgeService {
           existing?.contentHash === hash &&
           existing.embeddingModel === this.embeddingModel
         )
-          continue
+          return
         changed = true
         await this.repo.updateSource(sourceId, { status: 'indexing', error: null })
         const file = { path: filePath, name: basename(filePath) }
@@ -294,13 +300,10 @@ export class KnowledgeService {
           title: parsed.title,
         })
         const children = chunks.filter((chunk) => chunk.parentId)
-        const vectors: number[][] = []
-        for (let offset = 0; offset < children.length; offset += 32)
-          vectors.push(
-            ...(await this.models.embed(
-              children.slice(offset, offset + 32).map((chunk) => chunk.contextualContent),
-            )),
-          )
+        const batches = Array.from({ length: Math.ceil(children.length / 32) }, (_, index) =>
+          children.slice(index * 32, index * 32 + 32).map((chunk) => chunk.contextualContent),
+        )
+        const vectors = (await mapConcurrent(batches, 1, (batch) => this.models.embed(batch))).flat()
         const afterHash = createHash('sha256')
           .update(await readFile(filePath))
           .digest('hex')
@@ -317,12 +320,12 @@ export class KnowledgeService {
           indexedAt: Date.now(),
           metadata: { ...parsed.metadata, sections: parsed.sections, pages: parsed.pages },
         })
+        return undefined
       } catch (error) {
-        errors.push(
-          `${basename(filePath)}: ${error instanceof Error ? error.message : String(error)}`,
-        )
+        return `${basename(filePath)}: ${error instanceof Error ? error.message : String(error)}`
       }
-    }
+    })
+    const errors = outcomes.filter((error): error is string => error !== undefined)
     const indexed = await this.repo.listDocuments(sourceId)
     await this.repo.updateSource(sourceId, {
       status: errors.length ? 'error' : this.stopped ? 'pending' : 'ready',
@@ -354,14 +357,16 @@ async function collectFiles(path: string, file: boolean): Promise<string[]> {
     return [path]
   }
   const result: string[] = []
+  const directories: string[] = []
   for (const entry of await readdir(path, { withFileTypes: true })) {
     if (entry.isSymbolicLink() || entry.name.startsWith('.env') || entry.name.startsWith('.tmp'))
       continue
     const child = join(path, entry.name)
-    if (entry.isDirectory() && !ignoredDirectories.has(entry.name))
-      result.push(...(await collectFiles(child, false)))
+    if (entry.isDirectory() && !ignoredDirectories.has(entry.name)) directories.push(child)
     else if (entry.isFile() && supportsKnowledgeFile(child)) result.push(child)
   }
+  const nestedFiles = await Promise.all(directories.map((directory) => collectFiles(directory, false)))
+  result.push(...nestedFiles.flat())
   return result.sort()
 }
 

@@ -83,6 +83,9 @@ export function normalizeOfficeAst(
 ): ParsedDocument {
   const blocks: DocumentBlock[] = []
   const pages = new Set<number>()
+  const attachmentByName = new Map(
+    ast.attachments.toReversed().map((attachment) => [attachment.name, attachment]),
+  )
   const walk = (nodes: OfficeContentNode[], page?: number, sheet?: string) => {
     for (const node of nodes) {
       const metadata: Record<string, unknown> = {
@@ -128,9 +131,8 @@ export function normalizeOfficeAst(
       if (node.type === 'table') {
         if (node.children?.length) blocks.push(tableBlock(node, page, metadata))
       } else if (node.type === 'image') {
-        const attachment = ast.attachments.find(
-          (attachment) => attachment.name === node.metadata?.attachmentName,
-        )
+        const attachmentName = node.metadata?.attachmentName
+        const attachment = attachmentName === undefined ? undefined : attachmentByName.get(attachmentName)
         const content = node.text || attachment?.ocrText || node.metadata?.altText
         if (content?.trim())
           blocks.push({

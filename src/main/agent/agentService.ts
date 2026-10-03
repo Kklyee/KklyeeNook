@@ -132,9 +132,14 @@ export class AgentService {
     onStage?.('sessions_restored', records.length)
 
     const runs = await this.runRepo.findAll()
-    for (const run of runs) {
+    const maxSeqs = await Promise.allSettled(
+      runs.map((run) => this.executionRecordRepo.getMaxSeq(run.id)),
+    )
+    for (const [index, run] of runs.entries()) {
       this.sessions.get(run.sessionId)?.restoreRun(run)
-      this.sequencer.restore(run.id, await this.executionRecordRepo.getMaxSeq(run.id))
+      const maxSeq = maxSeqs[index]
+      if (maxSeq.status === 'rejected') throw maxSeq.reason
+      this.sequencer.restore(run.id, maxSeq.value)
     }
     onStage?.('runs_restored', runs.length)
   }

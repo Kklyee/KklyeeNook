@@ -46,14 +46,17 @@ export class ScheduledTaskScheduler {
     if (this.timer) return
 
     const tasks = await this.repo.findEnabled()
-    for (const task of tasks) {
-      if (task.nextRunAt !== undefined) continue
-      await this.repo.save({
-        ...task,
-        nextRunAt: getNextScheduledTaskRunAt(task.schedule, this.now()),
-        updatedAt: this.now(),
-      })
-    }
+    await Promise.all(
+      tasks
+        .filter((task) => task.nextRunAt === undefined)
+        .map((task) =>
+          this.repo.save({
+            ...task,
+            nextRunAt: getNextScheduledTaskRunAt(task.schedule, this.now()),
+            updatedAt: this.now(),
+          }),
+        ),
+    )
 
     this.timer = setInterval(() => {
       void this.runDueTasks().catch((error) => {
@@ -205,11 +208,15 @@ export class ScheduledTaskScheduler {
     if (task.sessionId) return task.sessionId
 
     const session = await this.agentService.createSession(task.title)
-    const current = await this.repo.findById(task.id)
+    return this.attachSession(task.id, session.id)
+  }
+
+  private async attachSession(taskId: string, sessionId: string): Promise<string> {
+    const current = await this.repo.findById(taskId)
     if (current && !current.sessionId) {
-      await this.repo.save({ ...current, sessionId: session.id, updatedAt: this.now() })
+      await this.repo.save({ ...current, sessionId, updatedAt: this.now() })
     }
-    return session.id
+    return sessionId
   }
 
   private async finish(id: string, startedAt: number): Promise<void> {

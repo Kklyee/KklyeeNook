@@ -7,6 +7,7 @@ import { codeScroll, codeSurface, mono } from '@/renderer/src/lib/surfaces'
 export type DiffKind = 'context' | 'added' | 'removed'
 
 export interface DiffLine {
+  id: string
   kind: DiffKind
   text: string
 }
@@ -46,9 +47,9 @@ export function CodeDiff({
       </div>
       <div className={codeScroll}>
         <div className={codeSurface}>
-          {lines.map((line, i) => (
+          {lines.map((line) => (
             <div
-              key={i}
+              key={line.id}
               className={cn(
                 'flex px-4 py-0.5 leading-relaxed whitespace-pre',
                 line.kind === 'context' && 'text-foreground/45',

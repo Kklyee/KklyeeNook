@@ -18,7 +18,10 @@ import {
 import type { AgentSettingsSnapshot } from '@/shared/agent/agentSettings'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
+import { mapConcurrent } from '@/shared/async/mapConcurrent'
 import { KnowledgeCitationLink } from '../knowledge/KnowledgeCitationLink'
+
+const dateFormatter = new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' })
 
 const statuses = { pending: '等待索引', indexing: '正在索引', ready: 'Ready', error: '索引失败' }
 
@@ -82,8 +85,9 @@ export function KnowledgeSettings({
     setDragging(false)
     const files = [...event.dataTransfer.files]
     void act(async () => {
-      for (const file of files)
-        await window.api.knowledge.add(window.api.knowledge.droppedFilePath(file), 'file', workspaceId)
+      await mapConcurrent(files, 4, (file) =>
+        window.api.knowledge.add(window.api.knowledge.droppedFilePath(file), 'file', workspaceId),
+      )
     })
   }
   const search = async () => {
@@ -103,12 +107,36 @@ export function KnowledgeSettings({
 
   return (
     <section aria-label="Knowledge 设置" className="space-y-6">
-      <Select value={scopeId} onValueChange={value => { if (value) { setScopeId(value); setResults(null) } }}>
-        <SelectTrigger>{scopeId === 'global' ? 'Global Knowledge' : workspaces.find(item => item.id === scopeId)?.displayName}</SelectTrigger>
-        <SelectContent><SelectItem value="global">Global Knowledge</SelectItem>{workspaces.filter(item => item.status === 'attached').map(item => <SelectItem key={item.id} value={item.id}>{item.displayName}</SelectItem>)}</SelectContent>
+      <Select
+        value={scopeId}
+        onValueChange={(value) => {
+          if (value) {
+            setScopeId(value)
+            setResults(null)
+          }
+        }}
+      >
+        <SelectTrigger>
+          {scopeId === 'global'
+            ? 'Global Knowledge'
+            : workspaces.find((item) => item.id === scopeId)?.displayName}
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="global">Global Knowledge</SelectItem>
+          {workspaces
+            .filter((item) => item.status === 'attached')
+            .map((item) => (
+              <SelectItem key={item.id} value={item.id}>
+                {item.displayName}
+              </SelectItem>
+            ))}
+        </SelectContent>
       </Select>
       <div className="flex flex-wrap gap-2">
-        <Button disabled={busy} onClick={() => void act(() => window.api.knowledge.pick('file', workspaceId))}>
+        <Button
+          disabled={busy}
+          onClick={() => void act(() => window.api.knowledge.pick('file', workspaceId))}
+        >
           <FilePlusIcon />
           添加文档
         </Button>
@@ -148,92 +176,15 @@ export function KnowledgeSettings({
           {error}
         </p>
       )}
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-xs font-medium">Sources</h2>
-          <span className="text-muted-foreground text-xs">
-            {sources.reduce((sum, source) => sum + source.documentCount, 0)} documents ·{' '}
-            {sources.reduce((sum, source) => sum + source.chunkCount, 0)} chunks
-          </span>
-        </div>
-        {loading ? (
-          <p role="status" className="text-muted-foreground text-sm">
-            正在读取…
-          </p>
-        ) : !sources.length ? (
-          <div className="glass-surface rounded-xl p-5 text-center">
-            <BookOpenIcon className="text-muted-foreground mx-auto size-5" />
-            <p className="mt-2 text-sm">添加知识后，Agent 可以检索文档和代码并引用来源。</p>
-          </div>
-        ) : (
-          <div className="glass-surface divide-y divide-glass-border rounded-xl">
-            {sources.filter(source => (source.workspaceId ?? null) === (workspaceId ?? null)).map((source) => (
-              <div key={source.id} className="p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{source.name}</p>
-                    <p className="text-muted-foreground mt-1 break-all text-xs">{source.path}</p>
-                  </div>
-                  <span
-                    role="status"
-                    className={`shrink-0 rounded-full px-2 py-1 text-xs ${source.status === 'error' ? 'bg-destructive/10 text-destructive' : source.status === 'ready' ? 'bg-success-soft text-success' : 'bg-muted text-muted-foreground'}`}
-                  >
-                    {statuses[source.status]}
-                  </span>
-                </div>
-                <div className="text-muted-foreground mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                  <span>
-                    {source.documentCount} documents · {source.chunkCount} chunks
-                  </span>
-                  <span>
-                    最近索引：
-                    {source.lastIndexed
-                      ? new Intl.DateTimeFormat('zh-CN', {
-                          dateStyle: 'short',
-                          timeStyle: 'short',
-                        }).format(source.lastIndexed)
-                      : '尚未索引'}
-                  </span>
-                </div>
-                <p className="text-muted-foreground mt-1 break-all text-xs">
-                  Embedding：{source.embeddingModel ?? models.embeddingModel}
-                </p>
-                {source.error && (
-                  <p
-                    role="alert"
-                    className="text-destructive mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words text-xs"
-                  >
-                    {source.error}
-                  </p>
-                )}
-                <div className="mt-3 flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={busy || indexing}
-                    onClick={() => void act(() => window.api.knowledge.reindex(source.id))}
-                  >
-                    <RefreshCwIcon />
-                    重新索引
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={busy || indexing}
-                    onClick={() => void act(() => window.api.knowledge.remove(source.id))}
-                  >
-                    <Trash2Icon />
-                    移除
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        <p className="text-muted-foreground mt-2 text-xs">
-          文件变化每 30 秒同步。移除来源仅删除索引，原文件会保留。
-        </p>
-      </div>
+      <KnowledgeSources
+        sources={sources}
+        loading={loading}
+        workspaceId={workspaceId}
+        models={models}
+        busy={busy}
+        indexing={indexing}
+        act={act}
+      />
       <div>
         <h2 className="mb-3 text-xs font-medium">试搜知识</h2>
         <form
@@ -260,7 +211,6 @@ export function KnowledgeSettings({
                 <div key={chunk.id} className="glass-surface rounded-xl p-4">
                   <KnowledgeCitationLink
                     chunkId={chunk.id}
-                    href="#"
                     className="text-primary text-sm font-medium underline underline-offset-2"
                   >
                     {knowledgeCitationLabel(chunk.citation)}
@@ -321,5 +271,111 @@ export function KnowledgeSettings({
         </div>
       </details>
     </section>
+  )
+}
+
+function KnowledgeSources({
+  sources,
+  loading,
+  workspaceId,
+  models,
+  busy,
+  indexing,
+  act,
+}: {
+  sources: KnowledgeSource[]
+  loading: boolean
+  workspaceId?: string
+  models: NonNullable<AgentSettingsSnapshot['knowledge']>
+  busy: boolean
+  indexing: boolean
+  act: (action: () => Promise<unknown>) => Promise<void>
+}) {
+  return (
+    <>
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-xs font-medium">Sources</h2>
+          <span className="text-muted-foreground text-xs">
+            {sources.reduce((sum, source) => sum + source.documentCount, 0)} documents ·{' '}
+            {sources.reduce((sum, source) => sum + source.chunkCount, 0)} chunks
+          </span>
+        </div>
+        {loading ? (
+          <p role="status" className="text-muted-foreground text-sm">
+            正在读取…
+          </p>
+        ) : !sources.length ? (
+          <div className="glass-surface rounded-xl p-5 text-center">
+            <BookOpenIcon className="text-muted-foreground mx-auto size-5" />
+            <p className="mt-2 text-sm">添加知识后，Agent 可以检索文档和代码并引用来源。</p>
+          </div>
+        ) : (
+          <div className="glass-surface divide-y divide-glass-border rounded-xl">
+            {sources
+              .filter((source) => (source.workspaceId ?? null) === (workspaceId ?? null))
+              .map((source) => (
+                <div key={source.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{source.name}</p>
+                      <p className="text-muted-foreground mt-1 break-all text-xs">{source.path}</p>
+                    </div>
+                    <span
+                      role="status"
+                      className={`shrink-0 rounded-full px-2 py-1 text-xs ${source.status === 'error' ? 'bg-destructive/10 text-destructive' : source.status === 'ready' ? 'bg-success-soft text-success' : 'bg-muted text-muted-foreground'}`}
+                    >
+                      {statuses[source.status]}
+                    </span>
+                  </div>
+                  <div className="text-muted-foreground mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                    <span>
+                      {source.documentCount} documents · {source.chunkCount} chunks
+                    </span>
+                    <span>
+                      最近索引：
+                      {source.lastIndexed ? dateFormatter.format(source.lastIndexed) : '尚未索引'}
+                    </span>
+                  </div>
+                  <p className="text-muted-foreground mt-1 break-all text-xs">
+                    Embedding：{source.embeddingModel ?? models.embeddingModel}
+                  </p>
+                  {source.error && (
+                    <p
+                      role="alert"
+                      className="text-destructive mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words text-xs"
+                    >
+                      {source.error}
+                    </p>
+                  )}
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy || indexing}
+                      onClick={() => void act(() => window.api.knowledge.reindex(source.id))}
+                    >
+                      <RefreshCwIcon />
+                      重新索引
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy || indexing}
+                      onClick={() => void act(() => window.api.knowledge.remove(source.id))}
+                    >
+                      <Trash2Icon />
+                      移除
+                    </Button>
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
+        <p className="text-muted-foreground mt-2 text-xs">
+          文件变化每 30 秒同步。移除来源仅删除索引，原文件会保留。
+        </p>
+      </div>
+    </>
   )
 }

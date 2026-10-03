@@ -84,9 +84,9 @@ export class ApprovalPolicy {
     if (!target) return
 
     const key = grantKey(target)
-    for (const grant of grants) {
-      if (grantKey(grant) === key) await this.repo.delete(grant.id)
-    }
+    await Promise.all(
+      grants.filter((grant) => grantKey(grant) === key).map((grant) => this.repo.delete(grant.id)),
+    )
   }
 
   private describe(toolName: string): PermissionDescriptor {

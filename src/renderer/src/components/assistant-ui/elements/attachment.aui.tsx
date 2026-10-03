@@ -132,13 +132,12 @@ const AttachmentUI: FC = () => {
           <AttachmentPreviewDialog>
             <TooltipTrigger
               render={
-                <div
+                <button
+                  type="button"
                   className={cn(
                     'aui-attachment-tile bg-muted hover:after:bg-foreground/10 focus-visible:ring-ring/50 relative size-14 cursor-pointer overflow-hidden rounded-[calc(var(--composer-radius,1.5rem)-var(--composer-padding,8px))] transition-transform outline-none after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:ring-1 after:ring-black/10 after:transition-colors after:ring-inset focus-visible:ring-1 active:scale-[0.96] motion-reduce:transition-none dark:after:ring-white/10',
                     isError && 'after:ring-destructive/60 dark:after:ring-destructive/60',
                   )}
-                  role="button"
-                  tabIndex={0}
                   aria-label={`${typeLabel} attachment${
                     isError ? ', upload failed' : isUploading ? ', uploading' : ''
                   }`}

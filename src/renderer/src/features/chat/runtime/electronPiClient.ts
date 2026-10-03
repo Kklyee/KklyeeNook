@@ -60,11 +60,12 @@ export function createElectronPiClient(
             body: JSON.stringify({ input, contextAttachmentIds: attachmentIds }),
           },
         )
-        if (response.ok) return
-        const body = await response.text().catch(() => '')
-        throw new Error(
-          `Pi HTTP request failed: ${response.status} ${response.statusText}${body ? ` — ${body}` : ''}`,
-        )
+        if (!response.ok) {
+          const body = await response.text().catch(() => '')
+          throw new Error(
+            `Pi HTTP request failed: ${response.status} ${response.statusText}${body ? ` — ${body}` : ''}`,
+          )
+        }
       } catch (error) {
         restorePendingContextAttachmentIds(pendingIds)
         throw error

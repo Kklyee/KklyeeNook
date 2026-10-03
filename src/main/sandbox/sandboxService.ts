@@ -38,8 +38,8 @@ export class SandboxService {
     return request
   }
   async resolveFile(request: PermissionRequest, toolCallId?: string): Promise<string> {
-    const authorized = await this.authorize(request, toolCallId)
     if (request.resource.kind !== 'path') throw new Error('Expected path resource')
+    const authorized = await this.authorize(request, toolCallId)
     const target = await this.paths.resolve(request.resource.path, request.workspace?.rootPath)
     if (authorized.mode !== 'full-access' && !target.inside) throw new ToolExecutionError('PERMISSION_DENIED', '目标在工作区外')
     return target.path

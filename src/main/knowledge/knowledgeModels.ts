@@ -9,6 +9,7 @@ import {
 } from '@huggingface/transformers'
 import type { KnowledgeSettings } from '@/shared/knowledge/knowledge'
 import { knowledgeFetch } from './knowledgeFetch'
+import { mapConcurrent } from '@/shared/async/mapConcurrent'
 
 export interface KnowledgeModels {
   embed(texts: string[], signal?: AbortSignal): Promise<number[][]>
@@ -49,19 +50,21 @@ export class LocalKnowledgeModels implements KnowledgeModels {
       throw error
     })
     const { tokenizer, model } = await this.reranker
-    const scores: number[] = []
-    for (let offset = 0; offset < texts.length; offset += 8) {
+    const batches = Array.from({ length: Math.ceil(texts.length / 8) }, (_, index) =>
+      texts.slice(index * 8, index * 8 + 8),
+    )
+    const scores = await mapConcurrent(batches, 2, async (batch) => {
       signal?.throwIfAborted()
-      const batch = texts.slice(offset, offset + 8)
       const inputs = tokenizer(
         batch.map(() => query),
         { text_pair: batch, padding: true, truncation: true, max_length: 512 },
       )
       const output = await model(inputs)
       const logits = output.logits.tolist() as number[][]
-      scores.push(...logits.map((row) => row[0]))
-    }
-    return scores
+      signal?.throwIfAborted()
+      return logits.map((row) => row[0])
+    })
+    return scores.flat()
   }
 
   async close(): Promise<void> {
@@ -71,20 +74,32 @@ export class LocalKnowledgeModels implements KnowledgeModels {
   }
 
   private async loadReranker() {
-    const tokenizer = await AutoTokenizer.from_pretrained(this.settings.rerankModel)
-    const model = await AutoModelForSequenceClassification.from_pretrained(
+    return loadModel(
       this.settings.rerankModel,
-      { dtype: 'q8', device: 'cpu' },
+      AutoModelForSequenceClassification.from_pretrained(this.settings.rerankModel, {
+        dtype: 'q8',
+        device: 'cpu',
+      }),
     )
-    return { tokenizer, model }
   }
 
   private async loadEmbeddings() {
-    const tokenizer = await AutoTokenizer.from_pretrained(this.settings.embeddingModel)
-    const model = await AutoModel.from_pretrained(this.settings.embeddingModel, {
-      dtype: 'q8',
-      device: 'cpu',
-    })
-    return { tokenizer, model }
+    return loadModel(
+      this.settings.embeddingModel,
+      AutoModel.from_pretrained(this.settings.embeddingModel, { dtype: 'q8', device: 'cpu' }),
+    )
   }
+}
+
+async function loadModel(modelId: string, model: Promise<PreTrainedModel>) {
+  const [tokenizerResult, modelResult] = await Promise.allSettled([
+    AutoTokenizer.from_pretrained(modelId),
+    model,
+  ])
+  if (tokenizerResult.status === 'rejected') {
+    if (modelResult.status === 'fulfilled') await modelResult.value.dispose()
+    throw tokenizerResult.reason
+  }
+  if (modelResult.status === 'rejected') throw modelResult.reason
+  return { tokenizer: tokenizerResult.value, model: modelResult.value }
 }

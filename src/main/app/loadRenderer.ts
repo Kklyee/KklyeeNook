@@ -12,7 +12,8 @@ export function loadRenderer(window: BrowserWindow, windowType: 'pet' | 'chat'):
   })
 
   if (is.dev && process.env.ELECTRON_RENDERER_URL) {
-    const url = new URL(process.env.ELECTRON_RENDERER_URL)
+    const url = URL.parse(process.env.ELECTRON_RENDERER_URL)
+    if (!url) throw new Error('Invalid ELECTRON_RENDERER_URL')
     url.searchParams.set('window', windowType)
     void window.loadURL(url.toString())
     return

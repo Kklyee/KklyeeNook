@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 export function CodeFilePreview({ content }: { content: string }) {
+  return <CodeFileContent key={content} content={content} />
+}
+
+function CodeFileContent({ content }: { content: string }) {
   const lines = useMemo(() => content.split('\n'), [content])
   const container = useRef<HTMLDivElement>(null)
   const [height, setHeight] = useState(600)
@@ -20,10 +24,6 @@ export function CodeFilePreview({ content }: { content: string }) {
     observer.observe(container.current!)
     return () => observer.disconnect()
   }, [])
-  useEffect(() => {
-    container.current!.scrollTop = 0
-    setScrollTop(0)
-  }, [content])
   return (
     <div
       ref={container}

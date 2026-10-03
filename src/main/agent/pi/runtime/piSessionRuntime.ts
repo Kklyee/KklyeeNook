@@ -215,7 +215,9 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
 
   getSystemPrompt(): string {
     const prompt = this.getPiSession().systemPrompt
-    return this.executionContextKey && !JSON.parse(this.executionContextKey).workspace ? prompt.replace(/\nCurrent working directory: [^\n]*\n?/g, '\n') : prompt
+    const executionContextKey = this.executionContextKey
+    if (!executionContextKey || hasWorkspaceContext(executionContextKey)) return prompt
+    return prompt.replace(/\nCurrent working directory: [^\n]*\n?/g, '\n')
   }
 
   getContextUsage(): AgentContextUsage | undefined {
@@ -685,7 +687,8 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
         config.modelID,
         config.input ?? builtinModel.input,
       )
-      const needsInputOverride = resolvedInput.some((input) => !builtinModel.input.includes(input))
+      const builtinInputs = new Set(builtinModel.input)
+      const needsInputOverride = resolvedInput.some((input) => !builtinInputs.has(input))
       const needsModelDefinition =
         needsInputOverride ||
         Boolean(
@@ -992,4 +995,21 @@ function getRuntimeModelConfigs(config: AgentConfig) {
       ? model
       : { ...model, thinkingLevel: saved.thinkingLevel }
   })
+}
+
+function hasWorkspaceContext(value: string): boolean {
+  try {
+    const context: unknown = JSON.parse(value)
+    if (!isRecord(context) || !isRecord(context.workspace)) return false
+    return (
+      typeof context.workspace.id === 'string' &&
+      typeof context.workspace.rootPath === 'string'
+    )
+  } catch {
+    return false
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

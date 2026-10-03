@@ -58,7 +58,13 @@ interface SelectedEvent {
   event: TimelineItem
 }
 
-export function RunHistoryPanel({
+const emptyRuns: AgentRun[] = []
+
+export function RunHistoryPanel(props: { sessionId?: string; focusedRunId?: string }) {
+  return <RunHistoryContent key={props.sessionId ?? 'none'} {...props} />
+}
+
+function RunHistoryContent({
   sessionId,
   focusedRunId,
 }: {
@@ -66,6 +72,7 @@ export function RunHistoryPanel({
   focusedRunId?: string
 }) {
   const [collapsedRunIds, setCollapsedRunIds] = useState<readonly string[]>([])
+  const collapsedRunIdSet = useMemo(() => new Set(collapsedRunIds), [collapsedRunIds])
   const [toolsExpanded, setToolsExpanded] = useState(true)
   const [selectedEvent, setSelectedEvent] = useState<SelectedEvent>()
   const revealedRunId = useRef<string | undefined>(undefined)
@@ -77,7 +84,8 @@ export function RunHistoryPanel({
     enabled: Boolean(sessionId),
     refetchInterval: 1_000,
   })
-  const runs = runsQuery.data ?? []
+  const runs = runsQuery.data ?? emptyRuns
+  const runById = useMemo(() => new Map(runs.map((run) => [run.id, run])), [runs])
   const recordQuery = useQuery({
     queryKey: ['agent-execution-records', sessionId, runs.map((run) => run.id).join(',')],
     queryFn: async () => {
@@ -92,16 +100,7 @@ export function RunHistoryPanel({
   })
 
   useEffect(() => {
-    setCollapsedRunIds([])
-    setToolsExpanded(true)
-    setSelectedEvent(undefined)
-    setSearch('')
-    revealedRunId.current = undefined
-  }, [sessionId])
-
-  useEffect(() => {
     if (!focusedRunId || !runs.length || revealedRunId.current === focusedRunId) return
-    const runById = new Map(runs.map((run) => [run.id, run]))
     const ids: string[] = []
     let current = runById.get(focusedRunId)
     while (current) {
@@ -110,8 +109,9 @@ export function RunHistoryPanel({
     }
     if (!ids.length) return
     revealedRunId.current = focusedRunId
-    setCollapsedRunIds((existing) => existing.filter((id) => !ids.includes(id)))
-  }, [focusedRunId, runs])
+    const revealedRunIds = new Set(ids)
+    setCollapsedRunIds((existing) => existing.filter((id) => !revealedRunIds.has(id)))
+  }, [focusedRunId, runs, runById])
 
   const timelines = useMemo<RunTimeline[]>(() => {
     let ordinal = 0
@@ -130,7 +130,7 @@ export function RunHistoryPanel({
   const selectedSegmentId = selectedEvent
     ? eventSegmentId(selectedEvent.run.id, selectedEvent.event.id)
     : undefined
-  const turnsExpanded = runTree.some((node) => !collapsedRunIds.includes(node.timeline.run.id))
+  const turnsExpanded = runTree.some((node) => !collapsedRunIdSet.has(node.timeline.run.id))
 
   if (!sessionId) {
     return <EmptyState title="选择一个对话" description="该对话的执行轨迹会显示在这里。" />
@@ -196,10 +196,13 @@ export function RunHistoryPanel({
               let parentId = eventSelection.run.parentRunId
               while (parentId) {
                 runIds.push(parentId)
-                parentId = runs.find((run) => run.id === parentId)?.parentRunId
+                parentId = runById.get(parentId)?.parentRunId
               }
               setCollapsedRunIds((current) => current.filter((id) => !runIds.includes(id)))
-              if (eventSelection.event.kind === 'tool' || eventSelection.event.kind === 'approval') {
+              if (
+                eventSelection.event.kind === 'tool' ||
+                eventSelection.event.kind === 'approval'
+              ) {
                 setToolsExpanded(true)
               }
               return
@@ -219,12 +222,12 @@ export function RunHistoryPanel({
               key={node.timeline.run.id}
               node={node}
               depth={0}
-              open={!collapsedRunIds.includes(node.timeline.run.id)}
+              open={!collapsedRunIdSet.has(node.timeline.run.id)}
               query={query}
               selectedEvent={selectedEvent}
               onToggleRun={toggleRun}
               onSelect={(run, event) => setSelectedEvent({ run, event })}
-              collapsedRunIds={collapsedRunIds}
+              collapsedRunIds={collapsedRunIdSet}
               toolsExpanded={toolsExpanded}
               onExpandTools={() => setToolsExpanded(true)}
             />
@@ -263,7 +266,7 @@ function RunGroup({
   open: boolean
   selectedEvent?: SelectedEvent
   query: string
-  collapsedRunIds: readonly string[]
+  collapsedRunIds: ReadonlySet<string>
   toolsExpanded: boolean
   onExpandTools: () => void
   onToggleRun: (runId: string) => void
@@ -271,26 +274,34 @@ function RunGroup({
 }) {
   const { timeline, children } = node
   const { run, ordinal, model } = timeline
-  const childTask = run.parentRunId ? model.items.find((event) => event.kind === 'user')?.summary : undefined
-  const unscopedItems = buildExecutionTimeline(run, timeline.trace.unscopedEvents).items
-    .filter((event) => matchesSearch(event, query))
+  const childTask = run.parentRunId
+    ? model.items.find((event) => event.kind === 'user')?.summary
+    : undefined
+  const unscopedItems = buildExecutionTimeline(run, timeline.trace.unscopedEvents).items.filter(
+    (event) => matchesSearch(event, query),
+  )
+  const recordById = new Map(timeline.records.map((record) => [String(record.id), record]))
   const claimedInputs = new Set(timeline.trace.steps.flatMap((step) => step.acceptedInputIds))
   const toolCount = model.items.filter((event) => event.kind === 'tool').length
   const entries = [
     ...timeline.trace.steps.map((step) => ({ seq: step.startedSeq, step, event: undefined })),
-    ...unscopedItems.filter((event) => event.title !== 'System Prompt').map((event) => ({
-      seq: timeline.records.find((record) => String(record.id) === event.id)!.seq,
-      step: undefined,
-      event,
-    })),
+    ...unscopedItems
+      .filter((event) => event.title !== 'System Prompt')
+      .flatMap((event) => {
+        const record = recordById.get(event.id)
+        return record ? [{ seq: record.seq, step: undefined, event }] : []
+      }),
   ].sort((a, b) => a.seq - b.seq)
   const renderEvent = (event: TimelineItem) => {
-    const input = event.kind === 'user'
-      ? timeline.records.find((record) => String(record.id) === event.id)?.event
-      : undefined
-    const inputLabel = input?.type === 'user_message' && input.inputId
-      ? !claimedInputs.has(input.inputId) ? '未处理' : input.delivery === 'initial' ? undefined : '追加'
-      : undefined
+    const input = event.kind === 'user' ? recordById.get(event.id)?.event : undefined
+    const inputLabel =
+      input?.type === 'user_message' && input.inputId
+        ? !claimedInputs.has(input.inputId)
+          ? '未处理'
+          : input.delivery === 'initial'
+            ? undefined
+            : '追加'
+        : undefined
     return (
       <EventRow
         key={event.id}
@@ -307,7 +318,8 @@ function RunGroup({
     const toolCalls = calls.filter((event) => event.kind === 'tool').length
     const approvals = calls.length - toolCalls
     return items.map((event) => {
-      if (toolsExpanded || (event.kind !== 'tool' && event.kind !== 'approval')) return renderEvent(event)
+      if (toolsExpanded || (event.kind !== 'tool' && event.kind !== 'approval'))
+        return renderEvent(event)
       if (event !== calls[0]) return null
       return (
         <button
@@ -319,9 +331,20 @@ function RunGroup({
           className="flex h-[24px] w-full items-center gap-[8px] border-b border-foreground/[0.035] pl-[36px] pr-[4px] text-left text-[11px] text-foreground/45 transition-colors hover:bg-foreground/[0.035] hover:text-foreground/75 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-blue-400/60"
         >
           <span aria-hidden>…</span>
-          <span>{[toolCalls ? `${toolCalls} 个工具调用` : '', approvals ? `${approvals} 项审批` : ''].filter(Boolean).join(' · ')}</span>
-          {calls.some((call) => call.status === 'failed') && <CircleAlertIcon className="size-3 text-destructive" aria-label="包含失败调用" />}
-          {calls.some((call) => call.status === 'running') && <LoaderCircleIcon className="size-3 animate-spin text-blue-500" aria-label="调用进行中" />}
+          <span>
+            {[toolCalls ? `${toolCalls} 个工具调用` : '', approvals ? `${approvals} 项审批` : '']
+              .filter(Boolean)
+              .join(' · ')}
+          </span>
+          {calls.some((call) => call.status === 'failed') && (
+            <CircleAlertIcon className="size-3 text-destructive" aria-label="包含失败调用" />
+          )}
+          {calls.some((call) => call.status === 'running') && (
+            <LoaderCircleIcon
+              className="size-3 animate-spin text-blue-500"
+              aria-label="调用进行中"
+            />
+          )}
         </button>
       )
     })
@@ -343,7 +366,12 @@ function RunGroup({
         </span>
         <span className="flex min-w-0 items-center gap-1.5 text-[10px] font-medium">
           <StatusDot status={run.status} />
-          {run.parentRunId && <span className="truncate">{run.displayName ?? 'Subagent'}{childTask ? ` · ${childTask}` : ''}</span>}
+          {run.parentRunId && (
+            <span className="truncate">
+              {run.displayName ?? 'Subagent'}
+              {childTask ? ` · ${childTask}` : ''}
+            </span>
+          )}
           <StatusLabel status={run.status} />
         </span>
         <span className={cn(mono, 'ml-auto text-[10px] text-foreground/35 tabular-nums')}>
@@ -359,18 +387,30 @@ function RunGroup({
           {entries.map(({ step, event }, index) => {
             if (event) {
               if (entries[index - 1]?.event) return null
-              const nextStep = entries.findIndex((entry, nextIndex) => nextIndex > index && entry.step)
-              const events = entries.slice(index, nextStep === -1 ? undefined : nextStep).map((entry) => entry.event!)
-              return <div key={`unscoped-${event.id}`} className="pl-[36px]">{renderItems(events)}</div>
+              const nextStep = entries.findIndex(
+                (entry, nextIndex) => nextIndex > index && entry.step,
+              )
+              const events = entries
+                .slice(index, nextStep === -1 ? undefined : nextStep)
+                .map((entry) => entry.event!)
+              return (
+                <div key={`unscoped-${event.id}`} className="pl-[36px]">
+                  {renderItems(events)}
+                </div>
+              )
             }
             if (!step) return null
             const inputRecords = timeline.records.filter(
-              (record) => record.event.type === 'user_message' && step.acceptedInputIds.includes(record.event.inputId),
+              (record) =>
+                record.event.type === 'user_message' &&
+                step.acceptedInputIds.includes(record.event.inputId),
             )
-            const inputItems = buildExecutionTimeline(run, inputRecords).items
-              .filter((event) => matchesSearch(event, query))
-            const items = buildExecutionTimeline(run, step.events).items
-              .filter((event) => matchesSearch(event, query))
+            const inputItems = buildExecutionTimeline(run, inputRecords).items.filter((event) =>
+              matchesSearch(event, query),
+            )
+            const items = buildExecutionTimeline(run, step.events).items.filter((event) =>
+              matchesSearch(event, query),
+            )
             if (query && !inputItems.length && !items.length) return null
             return (
               <StepTrace
@@ -387,8 +427,11 @@ function RunGroup({
           })}
           {!timeline.trace.steps.length && timeline.records.length > 0 && (
             <p className="border-t border-border/35 px-2 py-1 text-[10px] text-foreground/40">
-              {timeline.records.some((record) => record.event.type === 'user_message' && record.event.inputId)
-                ? '未处理输入' : 'Legacy Execution'}
+              {timeline.records.some(
+                (record) => record.event.type === 'user_message' && record.event.inputId,
+              )
+                ? '未处理输入'
+                : 'Legacy Execution'}
             </p>
           )}
           {!model.items.length && (
@@ -399,35 +442,44 @@ function RunGroup({
         </div>
       ) : (
         <div className="pl-[36px]">
-          {model.items.filter((event) => event.kind === 'user' && matchesSearch(event, query)).map(renderEvent)}
+          {model.items
+            .filter((event) => event.kind === 'user' && matchesSearch(event, query))
+            .map(renderEvent)}
           <button
             type="button"
-            aria-label={run.parentRunId ? `展开子 Agent ${run.displayName ?? ''} 的执行明细` : `展开第 ${ordinal} 轮的执行明细`}
+            aria-label={
+              run.parentRunId
+                ? `展开子 Agent ${run.displayName ?? ''} 的执行明细`
+                : `展开第 ${ordinal} 轮的执行明细`
+            }
             aria-expanded={false}
             onClick={() => onToggleRun(run.id)}
             className="flex h-[24px] w-full items-center gap-[8px] pl-[36px] pr-[4px] text-left text-[11px] text-foreground/45 transition-colors hover:bg-foreground/[0.035] hover:text-foreground/75 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-blue-400/60"
           >
             <span aria-hidden>…</span>
-            <span>{timeline.trace.steps.length} 个步骤 · {toolCount} 个工具调用</span>
+            <span>
+              {timeline.trace.steps.length} 个步骤 · {toolCount} 个工具调用
+            </span>
           </button>
           {unscopedItems.filter((event) => event.kind === 'error').map(renderEvent)}
         </div>
       )}
-      {open && children.map((child) => (
-        <RunGroup
-          key={child.timeline.run.id}
-          node={child}
-          depth={depth + 1}
-          open={!collapsedRunIds.includes(child.timeline.run.id)}
-          query={query}
-          selectedEvent={selectedEvent}
-          collapsedRunIds={collapsedRunIds}
-          toolsExpanded={toolsExpanded}
-          onExpandTools={onExpandTools}
-          onToggleRun={onToggleRun}
-          onSelect={onSelect}
-        />
-      ))}
+      {open &&
+        children.map((child) => (
+          <RunGroup
+            key={child.timeline.run.id}
+            node={child}
+            depth={depth + 1}
+            open={!collapsedRunIds.has(child.timeline.run.id)}
+            query={query}
+            selectedEvent={selectedEvent}
+            collapsedRunIds={collapsedRunIds}
+            toolsExpanded={toolsExpanded}
+            onExpandTools={onExpandTools}
+            onToggleRun={onToggleRun}
+            onSelect={onSelect}
+          />
+        ))}
     </div>
   )
 }
@@ -456,7 +508,8 @@ function buildRunTree(timelines: readonly RunTimeline[], query: string): RunTree
 
 function matchesSearch(event: TimelineItem, query: string) {
   return `${EVENT_META[event.kind].label} ${event.title} ${event.summary ?? ''}`
-    .toLocaleLowerCase().includes(query)
+    .toLocaleLowerCase()
+    .includes(query)
 }
 
 function EventRow({
@@ -473,7 +526,6 @@ function EventRow({
   inputLabel?: string
 }) {
   const meta = EVENT_META[event.kind]
-  const summary = eventPreview(event)
 
   return (
     <button
@@ -493,31 +545,21 @@ function EventRow({
       >
         {meta.label}
       </span>
-      <span className={cn('flex min-w-0 items-center gap-[8px] pr-[4px] text-[11px] leading-[16px]', event.kind === 'compaction' && 'flex-col items-start gap-0')}>
-        {event.title === '用户消息' || event.title === 'AI 消息' ? (
-          <>
-            {inputLabel && <span className="shrink-0 text-[10px] text-blue-500 dark:text-blue-300">{inputLabel}</span>}
-            <span className="min-w-0 truncate text-foreground/90">{summary}</span>
-          </>
-        ) : (
-          <>
-            <span className="shrink-0 whitespace-nowrap text-foreground/85">{event.title === 'System Prompt' ? '初始系统提示词' : event.title}</span>
-            {summary && event.title !== 'System Prompt' && (
-              <span className={cn('min-w-0 truncate text-foreground/60', event.kind === 'compaction' && 'whitespace-pre-line', event.kind === 'compaction' && event.status === 'failed' && 'text-destructive')}>{summary}</span>
-            )}
-          </>
+      <span
+        className={cn(
+          'flex min-w-0 items-center gap-[8px] pr-[4px] text-[11px] leading-[16px]',
+          event.kind === 'compaction' && 'flex-col items-start gap-0',
         )}
-        {event.status === 'running' && (
-          <LoaderCircleIcon className="size-3 shrink-0 animate-spin text-blue-500" />
-        )}
-        {event.kind === 'tool' && event.status === 'completed' && (
-          <CheckIcon className="size-3 shrink-0 text-emerald-500" aria-label="执行成功" />
-        )}
-        {event.kind === 'tool' && event.status === 'failed' && (
-          <CircleAlertIcon className="size-3 shrink-0 text-destructive" aria-label="执行失败" />
-        )}
+      >
+        <EventSummary event={event} inputLabel={inputLabel} />
       </span>
-      <span className={cn(mono, 'whitespace-nowrap text-right text-[10px] text-foreground/35 opacity-0 tabular-nums transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100', selected && 'opacity-100')}>
+      <span
+        className={cn(
+          mono,
+          'whitespace-nowrap text-right text-[10px] text-foreground/35 opacity-0 tabular-nums transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100',
+          selected && 'opacity-100',
+        )}
+      >
         +{formatDuration(Math.max(0, event.timestamp - (run.startedAt ?? run.createdAt)))}
       </span>
     </button>
@@ -538,7 +580,6 @@ function EventDetailPanel({ selected, onClose }: { selected: SelectedEvent; onCl
   const { run, event } = selected
   const meta = EVENT_META[event.kind]
   const sections = eventDetailSections(event)
-  const compaction = event.kind === 'compaction' ? event.detail as CompactionTimelineDetail : undefined
   const [activeTab, setActiveTab] = useState<'overview' | 'input' | 'output'>('overview')
   const tabs = [
     { id: 'overview' as const, label: '概览', visible: true },
@@ -586,56 +627,14 @@ function EventDetailPanel({ selected, onClose }: { selected: SelectedEvent; onCl
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {event.kind === 'tool' && <ToolResultRetention key={event.id} result={(event.detail as { result?: ToolExecutionResult })?.result} />}
+        {event.kind === 'tool' && (
+          <ToolResultRetention
+            key={event.id}
+            result={(event.detail as { result?: ToolExecutionResult })?.result}
+          />
+        )}
         {activeTab === 'overview' && (
-          <div className="pb-4">
-            <dl className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-y-0 py-2 text-xs">
-              <DetailRow label="来源" value={meta.label} />
-              <DetailRow
-                label="状态"
-                value={
-                  event.status === 'running'
-                    ? '进行中'
-                    : event.status === 'failed'
-                      ? '失败'
-                      : '已完成'
-                }
-                error={event.status === 'failed'}
-              />
-              <DetailRow label="开始时间" value={formatDateTime(event.timestamp, true)} />
-              <DetailRow
-                label="耗时"
-                value={event.status === 'running' ? '进行中' : formatDuration(event.durationMs)}
-              />
-              <DetailRow label="Run" value={run.id} monoValue />
-              {run.parentRunId && (
-                <DetailRow label="Parent Run" value={run.parentRunId} monoValue />
-              )}
-              {compaction && <DetailRow label="原因" value={`${COMPACTION_REASON_LABELS[compaction.reason]} (${compaction.reason})`} />}
-              {compaction?.tokensBefore !== undefined && <DetailRow label="压缩前" value={compaction.tokensBefore.toLocaleString('en-US')} monoValue />}
-              {compaction?.estimatedTokensAfter !== undefined && <DetailRow label="预计压缩后" value={`~${compaction.estimatedTokensAfter.toLocaleString('en-US')}`} monoValue />}
-              {compaction?.actualTokensAfter !== undefined && <DetailRow label="压缩后实际" value={compaction.actualTokensAfter.toLocaleString('en-US')} monoValue />}
-              {compaction?.contextWindow !== undefined && <DetailRow label="上下文窗口" value={compaction.contextWindow.toLocaleString('en-US')} monoValue />}
-              {compaction?.error && <DetailRow label="错误" value={compaction.error} error />}
-            </dl>
-            {sections.input !== undefined && (
-              <DetailPreview
-                title={event.kind === 'tool' ? '参数' : '内容'}
-                onOpen={() => setActiveTab('input')}
-              >
-                <StructuredValue value={sections.input} preview />
-              </DetailPreview>
-            )}
-            {sections.output !== undefined && (
-              <DetailPreview
-                title="结果"
-                onOpen={() => setActiveTab('output')}
-                error={event.status === 'failed'}
-              >
-                <StructuredValue value={sections.output} preview />
-              </DetailPreview>
-            )}
-          </div>
+          <EventOverview run={run} event={event} onOpen={setActiveTab} />
         )}
         {activeTab === 'input' && sections.input !== undefined && (
           <div className="p-3">
@@ -792,14 +791,26 @@ const EVENT_META: Record<
   { label: string; icon: typeof UserIcon; className: string }
 > = {
   system: { label: '系统', icon: BotIcon, className: 'bg-foreground/10 text-foreground/70' },
-  user: { label: '用户', icon: UserIcon, className: 'bg-blue-500/20 text-blue-600 dark:text-blue-300' },
+  user: {
+    label: '用户',
+    icon: UserIcon,
+    className: 'bg-blue-500/20 text-blue-600 dark:text-blue-300',
+  },
   assistant: {
     label: '助手',
     icon: MessageSquareTextIcon,
     className: 'bg-violet-500/20 text-violet-600 dark:text-violet-300',
   },
-  compaction: { label: '压缩', icon: BotIcon, className: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300' },
-  tool: { label: '工具', icon: WrenchIcon, className: 'bg-amber-500/15 text-amber-600 dark:text-amber-300' },
+  compaction: {
+    label: '压缩',
+    icon: BotIcon,
+    className: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300',
+  },
+  tool: {
+    label: '工具',
+    icon: WrenchIcon,
+    className: 'bg-amber-500/15 text-amber-600 dark:text-amber-300',
+  },
   plan: { label: '计划', icon: BotIcon, className: 'bg-cyan-500/12 text-cyan-500' },
   approval: { label: '审批', icon: KeyRoundIcon, className: 'bg-emerald-500/12 text-emerald-500' },
   error: { label: '错误', icon: CircleAlertIcon, className: 'bg-destructive/10 text-destructive' },
@@ -960,4 +971,144 @@ function executionRecordError(error: unknown) {
 
 function toErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error)
+}
+
+function EventSummary({ event, inputLabel }: { event: TimelineItem; inputLabel?: string }) {
+  const summary = eventPreview(event)
+  return (
+    <>
+      {event.title === '用户消息' || event.title === 'AI 消息' ? (
+        <>
+          {inputLabel && (
+            <span className="shrink-0 text-[10px] text-blue-500 dark:text-blue-300">
+              {inputLabel}
+            </span>
+          )}
+          <span className="min-w-0 truncate text-foreground/90">{summary}</span>
+        </>
+      ) : (
+        <>
+          <span className="shrink-0 whitespace-nowrap text-foreground/85">
+            {event.title === 'System Prompt' ? '初始系统提示词' : event.title}
+          </span>
+          {summary && event.title !== 'System Prompt' && (
+            <span
+              className={cn(
+                'min-w-0 truncate text-foreground/60',
+                event.kind === 'compaction' && 'whitespace-pre-line',
+                event.kind === 'compaction' && event.status === 'failed' && 'text-destructive',
+              )}
+            >
+              {summary}
+            </span>
+          )}
+        </>
+      )}
+      {event.status === 'running' && (
+        <LoaderCircleIcon className="size-3 shrink-0 animate-spin text-blue-500" />
+      )}
+      {event.kind === 'tool' && event.status === 'completed' && (
+        <CheckIcon className="size-3 shrink-0 text-emerald-500" aria-label="执行成功" />
+      )}
+      {event.kind === 'tool' && event.status === 'failed' && (
+        <CircleAlertIcon className="size-3 shrink-0 text-destructive" aria-label="执行失败" />
+      )}
+    </>
+  )
+}
+
+function EventOverview({
+  run,
+  event,
+  onOpen,
+}: {
+  run: AgentRun
+  event: TimelineItem
+  onOpen: (tab: 'input' | 'output') => void
+}) {
+  const meta = EVENT_META[event.kind]
+  const sections = eventDetailSections(event)
+  return (
+    <div className="pb-4">
+      <dl className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-y-0 py-2 text-xs">
+        <DetailRow label="来源" value={meta.label} />
+        <DetailRow
+          label="状态"
+          value={
+            event.status === 'running' ? '进行中' : event.status === 'failed' ? '失败' : '已完成'
+          }
+          error={event.status === 'failed'}
+        />
+        <DetailRow label="开始时间" value={formatDateTime(event.timestamp, true)} />
+        <DetailRow
+          label="耗时"
+          value={event.status === 'running' ? '进行中' : formatDuration(event.durationMs)}
+        />
+        <DetailRow label="Run" value={run.id} monoValue />
+        {run.parentRunId && <DetailRow label="Parent Run" value={run.parentRunId} monoValue />}
+        <CompactionMetadata event={event} />
+      </dl>
+      {sections.input !== undefined && (
+        <DetailPreview
+          title={event.kind === 'tool' ? '参数' : '内容'}
+          onOpen={() => onOpen('input')}
+        >
+          <StructuredValue value={sections.input} preview />
+        </DetailPreview>
+      )}
+      {sections.output !== undefined && (
+        <DetailPreview
+          title="结果"
+          onOpen={() => onOpen('output')}
+          error={event.status === 'failed'}
+        >
+          <StructuredValue value={sections.output} preview />
+        </DetailPreview>
+      )}
+    </div>
+  )
+}
+
+function CompactionMetadata({ event }: { event: TimelineItem }) {
+  if (event.kind !== 'compaction') return null
+  const compaction = event.detail as CompactionTimelineDetail
+  return (
+    <>
+      {compaction && (
+        <DetailRow
+          label="原因"
+          value={`${COMPACTION_REASON_LABELS[compaction.reason]} (${compaction.reason})`}
+        />
+      )}
+      {compaction?.tokensBefore !== undefined && (
+        <DetailRow
+          label="压缩前"
+          value={compaction.tokensBefore.toLocaleString('en-US')}
+          monoValue
+        />
+      )}
+      {compaction?.estimatedTokensAfter !== undefined && (
+        <DetailRow
+          label="预计压缩后"
+          value={`~${compaction.estimatedTokensAfter.toLocaleString('en-US')}`}
+          monoValue
+        />
+      )}
+      {compaction?.actualTokensAfter !== undefined && (
+        <DetailRow
+          label="压缩后实际"
+          value={compaction.actualTokensAfter.toLocaleString('en-US')}
+          monoValue
+        />
+      )}
+      {compaction?.contextWindow !== undefined && (
+        <DetailRow
+          label="上下文窗口"
+          value={compaction.contextWindow.toLocaleString('en-US')}
+          monoValue
+        />
+      )}
+      {compaction?.error && <DetailRow label="错误" value={compaction.error} error />}
+    </>
+  )
 }

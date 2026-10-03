@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ComponentType } from 'react'
 import { ArrowLeftIcon, SearchIcon } from 'lucide-react'
 import type { AgentSettingsSnapshot } from '@/shared/agent/agentSettings'
 import { Button } from '../../components/ui/button'
@@ -102,31 +102,49 @@ export function SettingsPage({
             <p className="text-muted-foreground mt-1.5 text-sm">{activeTab.description}</p>
           </header>
 
-          {error ? (
-            <p role="alert" className="text-destructive text-sm">
-              {error}
-            </p>
-          ) : !settings ? (
-            <p role="status" className="text-muted-foreground text-sm">
-              正在读取配置…
-            </p>
-          ) : tab === 'model' ? (
-            <ModelSettings settings={settings} onChanged={onChanged} />
-          ) : tab === 'context' ? (
-            <ContextSettings settings={settings} onChanged={onChanged} />
-          ) : tab === 'permissions' ? (
-            <PermissionSettings settings={settings} onChanged={onChanged} />
-          ) : tab === 'skills' ? (
-            <SkillSettings />
-          ) : tab === 'memory' ? (
-            <MemorySettings />
-          ) : tab === 'knowledge' ? (
-            <KnowledgeSettings settings={settings} onChanged={onChanged} />
-          ) : (
-            <McpSettings settings={settings} onChanged={onChanged} />
-          )}
+          <SettingsContent settings={settings} error={error} tab={tab} onChanged={onChanged} />
         </div>
       </main>
     </section>
   )
+}
+
+const settingsPanels: Record<
+  SettingsTab,
+  ComponentType<{ settings: AgentSettingsSnapshot; onChanged: () => Promise<void> }>
+> = {
+  model: ModelSettings,
+  context: ContextSettings,
+  permissions: PermissionSettings,
+  skills: SkillSettings,
+  memory: MemorySettings,
+  knowledge: KnowledgeSettings,
+  mcp: McpSettings,
+}
+
+function SettingsContent({
+  settings,
+  error,
+  tab,
+  onChanged,
+}: {
+  settings: AgentSettingsSnapshot | null
+  error: string | null
+  tab: SettingsTab
+  onChanged: () => Promise<void>
+}) {
+  if (error)
+    return (
+      <p role="alert" className="text-destructive text-sm">
+        {error}
+      </p>
+    )
+  if (!settings)
+    return (
+      <p role="status" className="text-muted-foreground text-sm">
+        正在读取配置…
+      </p>
+    )
+  const Panel = settingsPanels[tab]
+  return <Panel settings={settings} onChanged={onChanged} />
 }

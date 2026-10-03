@@ -36,11 +36,120 @@ export function ChatPanel({
   onSettingsChanged?: () => Promise<void>
 }) {
   const [view, setView] = useState<'chat' | 'trace' | 'subagent'>('chat')
-  const [switchingModel, setSwitchingModel] = useState(false)
-  const [modelError, setModelError] = useState<string | null>(null)
   const [focusedRunId, setFocusedRunId] = useState<string>()
   const threadItemId = useAuiState((state) => state.threadListItem.id)
   const sessionId = useAuiState((state) => state.threadListItem.remoteId)
+  const {
+    switchingModel,
+    modelError,
+    session,
+    piRuntime,
+    modelOptions,
+    selectedModel,
+    selectedThinkingLevel,
+    switchModel,
+    switchThinkingLevel,
+  } = useChatModelSelection(settings, onSettingsChanged, sessionId)
+
+  useEffect(() => {
+    setFocusedRunId(undefined)
+    setView('chat')
+  }, [threadItemId, sessionId])
+
+  return (
+    <PreviewProvider key={threadItemId} sessionId={sessionId}>
+      <AgentRunFocusProvider
+        value={{
+          focusRun: (runId) => {
+            setFocusedRunId(runId)
+            setView('subagent')
+          },
+        }}
+      >
+        <ChatWorkspace>
+          {modelError && (
+            <p className="bg-destructive/10 text-destructive px-4 py-2 text-xs" role="alert">
+              {modelError}
+            </p>
+          )}
+          <nav
+            className="border-border/60 flex h-11 shrink-0 items-end gap-1 border-b px-4"
+            aria-label="对话视图"
+          >
+            <ViewTab active={view === 'chat'} onClick={() => setView('chat')}>
+              对话
+            </ViewTab>
+            <ViewTab active={view === 'trace'} onClick={() => setView('trace')}>
+              轨迹
+            </ViewTab>
+            {focusedRunId && (
+              <ViewTab active={view === 'subagent'} onClick={() => setView('subagent')}>
+                子 Agent
+              </ViewTab>
+            )}
+          </nav>
+          {view === 'chat' ? (
+            <div className="relative min-h-0 flex-1">
+              <Thread
+                composerAccessory={<PiExtensionUiPrompt />}
+                contextUsage={toAgentContextUsage(piRuntime.contextUsage)}
+                compactionSettings={settings?.compaction}
+                isCompacting={piRuntime.compaction?.active === true}
+                modelSelector={{
+                  models: modelOptions,
+                  value: selectedModel?.id ?? settings?.activeModelId,
+                  effort: selectedThinkingLevel ?? settings?.thinkingLevel,
+                  disabled: switchingModel || session?.status === 'running',
+                  onValueChange: (id) => void switchModel(id),
+                  onEffortChange: (level) => void switchThinkingLevel(level),
+                }}
+              />
+            </div>
+          ) : view === 'trace' ? (
+            <RunHistoryPanel sessionId={sessionId} focusedRunId={focusedRunId} />
+          ) : focusedRunId && sessionId ? (
+            <SubagentSessionPanel
+              sessionId={sessionId}
+              runId={focusedRunId}
+              onBack={() => {
+                setFocusedRunId(undefined)
+                setView('chat')
+              }}
+            />
+          ) : (
+            <div className="min-h-0 flex-1" />
+          )}
+        </ChatWorkspace>
+      </AgentRunFocusProvider>
+    </PreviewProvider>
+  )
+}
+
+function ViewTab({
+  active,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & { active: boolean }) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        'relative h-10 px-3 text-xs font-medium transition-colors outline-none',
+        active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground/80',
+        active &&
+          'after:bg-foreground after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full',
+      )}
+      {...props}
+    />
+  )
+}
+
+function useChatModelSelection(
+  settings: AgentSettingsSnapshot | null,
+  onSettingsChanged: (() => Promise<void>) | undefined,
+  sessionId: string | undefined,
+) {
+  const [switchingModel, setSwitchingModel] = useState(false)
+  const [modelError, setModelError] = useState<string | null>(null)
   const session = usePiSession()
   const piRuntime = usePiRuntimeExtras()
   const configuredModels = settings?.models ?? []
@@ -53,10 +162,10 @@ export function ChatPanel({
       model.provider === session?.config?.provider && model.modelID === session?.config?.modelId,
   )
   const selectedModel = sessionId
-    ? sessionModel ??
+    ? (sessionModel ??
       configuredModels.find(
         (model) => model.id === (globalSelection?.modelId ?? settings?.activeModelId),
-      )
+      ))
     : configuredModels.find(
         (model) => model.id === (globalSelection?.modelId ?? settings?.activeModelId),
       )
@@ -67,18 +176,12 @@ export function ChatPanel({
     selectedModel?.thinkingLevel ??
     (isThinkingLevel(settings?.thinkingLevel ?? '') ? settings?.thinkingLevel : undefined)
 
-  useEffect(() => {
-    setFocusedRunId(undefined)
-    setView('chat')
-  }, [threadItemId, sessionId])
-
   const modelOptions = configuredModels.map((model) => {
     const catalogModel = settings?.catalog
       .find((provider) => provider.id === model.provider)
       ?.models.find((item) => item.id === model.modelID)
-    const efforts = THINKING_LEVELS.filter((option) =>
-      catalogModel?.availableThinkingLevels.includes(option.id),
-    )
+    const availableThinkingLevels = new Set(catalogModel?.availableThinkingLevels ?? [])
+    const efforts = THINKING_LEVELS.filter((option) => availableThinkingLevels.has(option.id))
 
     return {
       id: model.id,
@@ -136,90 +239,15 @@ export function ChatPanel({
     }
   }
 
-  return (
-    <PreviewProvider key={threadItemId} sessionId={sessionId}>
-    <AgentRunFocusProvider
-      value={{
-        focusRun: (runId) => {
-          setFocusedRunId(runId)
-          setView('subagent')
-        },
-      }}
-    >
-      <ChatWorkspace>
-        {modelError && (
-          <p className="bg-destructive/10 text-destructive px-4 py-2 text-xs" role="alert">
-            {modelError}
-          </p>
-        )}
-        <nav
-          className="border-border/60 flex h-11 shrink-0 items-end gap-1 border-b px-4"
-          aria-label="对话视图"
-        >
-          <ViewTab active={view === 'chat'} onClick={() => setView('chat')}>
-            对话
-          </ViewTab>
-          <ViewTab active={view === 'trace'} onClick={() => setView('trace')}>
-            轨迹
-          </ViewTab>
-          {focusedRunId && (
-            <ViewTab active={view === 'subagent'} onClick={() => setView('subagent')}>
-              子 Agent
-            </ViewTab>
-          )}
-        </nav>
-        {view === 'chat' ? (
-          <div className="relative min-h-0 flex-1">
-            <Thread
-              composerAccessory={<PiExtensionUiPrompt />}
-              contextUsage={toAgentContextUsage(piRuntime.contextUsage)}
-              compactionSettings={settings?.compaction}
-              isCompacting={piRuntime.compaction?.active === true}
-              modelSelector={{
-                models: modelOptions,
-                value: selectedModel?.id ?? settings?.activeModelId,
-                effort:
-                  selectedThinkingLevel ?? settings?.thinkingLevel,
-                disabled: switchingModel || session?.status === 'running',
-                onValueChange: (id) => void switchModel(id),
-                onEffortChange: (level) => void switchThinkingLevel(level),
-              }}
-            />
-          </div>
-        ) : view === 'trace' ? (
-          <RunHistoryPanel sessionId={sessionId} focusedRunId={focusedRunId} />
-        ) : focusedRunId && sessionId ? (
-          <SubagentSessionPanel
-            sessionId={sessionId}
-            runId={focusedRunId}
-            onBack={() => {
-              setFocusedRunId(undefined)
-              setView('chat')
-            }}
-          />
-        ) : (
-          <div className="min-h-0 flex-1" />
-        )}
-      </ChatWorkspace>
-    </AgentRunFocusProvider>
-    </PreviewProvider>
-  )
-}
-
-function ViewTab({
-  active,
-  ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { active: boolean }) {
-  return (
-    <button
-      type="button"
-      className={cn(
-        'relative h-10 px-3 text-xs font-medium transition-colors outline-none',
-        active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground/80',
-        active &&
-          'after:bg-foreground after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full',
-      )}
-      {...props}
-    />
-  )
+  return {
+    switchingModel,
+    modelError,
+    session,
+    piRuntime,
+    modelOptions,
+    selectedModel,
+    selectedThinkingLevel,
+    switchModel,
+    switchThinkingLevel,
+  }
 }

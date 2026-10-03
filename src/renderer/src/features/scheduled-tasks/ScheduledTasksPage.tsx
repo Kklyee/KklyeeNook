@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarClockIcon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react'
 
@@ -156,14 +156,15 @@ export function ScheduledTasksPage({ onClose }: { onClose: () => void }) {
         )}
       </div>
 
-      <ScheduledTaskEditor
+      {editorOpen && <ScheduledTaskEditor
+        key={editingTask?.id ?? "new"}
         task={editingTask}
         open={editorOpen}
         saving={saveMutation.isPending}
         error={mutationError}
         onOpenChange={setEditorOpen}
         onSave={saveTask}
-      />
+      />}
     </section>
   )
 }
@@ -232,15 +233,8 @@ function ScheduledTaskEditor({
   onOpenChange: (open: boolean) => void
   onSave: (input: CreateScheduledTaskInput | UpdateScheduledTaskInput) => Promise<void>
 }) {
-  const [form, setForm] = useState<FormState>(() => createFormState())
+  const [form, setForm] = useState<FormState>(() => createFormState(task))
   const [formError, setFormError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (open) {
-      setForm(createFormState(task))
-      setFormError(null)
-    }
-  }, [open, task])
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((current) => ({ ...current, [key]: value }))
@@ -442,8 +436,10 @@ function formatNextRun(task: ScheduledTask): string {
 }
 
 function formatDate(value: number): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(value)
+  return dateFormatter.format(value)
 }
+
+const dateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
 function sameDate(left: Date, right: Date): boolean {
   return (

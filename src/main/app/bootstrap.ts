@@ -106,7 +106,7 @@ export async function bootstrap(): Promise<AppContext> {
     databaseUrl,
     migrationsPath,
     sessionDir: join(userDataPath, 'pi-sessions'),
-    allowedOrigins: [rendererUrl ? new URL(rendererUrl).origin : 'null'],
+    allowedOrigins: [rendererUrl ? (URL.parse(rendererUrl)?.origin ?? 'null') : 'null'],
   }
   const backendStatus = await backendProcess.start(backendOptions)
   if (backendStatus.state === 'unavailable') console.error('[bootstrap] agent backend unavailable')

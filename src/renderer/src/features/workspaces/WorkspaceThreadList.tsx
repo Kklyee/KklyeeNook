@@ -164,8 +164,7 @@ function WorkspaceThreadGroup({
   const [menuOpen, setMenuOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const workspace = workspaces.find((item) => item.id === workspaceId)
-  const visibleWorkspaceId = (id?: string | null) =>
-    id && workspaces.some((item) => item.id === id) ? id : null
+  const visibleWorkspaceId = (id?: string | null) => getVisibleWorkspaceId(workspaces, id)
   const remoteId = items.find((item) => item.id === mainId)?.remoteId
   const activeWorkspaceId = remoteId
     ? visibleWorkspaceId(conversations.find((item) => item.id === remoteId)?.workspaceId)
@@ -183,18 +182,16 @@ function WorkspaceThreadGroup({
   }
   const search = query.trim().toLocaleLowerCase()
   const matchesGroup = label.toLocaleLowerCase().includes(search)
-  const indices = ids
-    .map((id, index) => ({ index, item: items.find((item) => item.id === id) }))
-    .filter(({ item }) => {
-      const conversation = conversations.find((conversation) => conversation.id === item?.remoteId)
-      return (
-        conversation &&
-        visibleWorkspaceId(conversation.workspaceId) === workspaceId &&
-        (matchesGroup || (item?.title ?? conversation.title ?? '新对话').toLocaleLowerCase().includes(search))
-      )
-    })
+  const indices = workspaceThreadIndices(
+    ids,
+    items,
+    conversations,
+    visibleWorkspaceId,
+    workspaceId,
+    matchesGroup,
+    search,
+  )
   if (search && !matchesGroup && !indices.length) return null
-  const visible = expanded || search ? indices : indices.slice(0, 5)
   return (
     <Collapsible
       open={open || Boolean(search)}
@@ -212,20 +209,11 @@ function WorkspaceThreadGroup({
           title={workspace?.rootPath ?? workspace?.lastKnownPath}
         >
           {workspaceId && (
-            <span className="relative size-4 shrink-0">
-              <FolderIcon
-                className={cn(
-                  'absolute size-4 group-hover/workspace:opacity-0 group-focus-within/workspace:opacity-0',
-                  selected && workspace && 'text-blue-400',
-                )}
-              />
-              <ChevronDownIcon
-                className={cn(
-                  'absolute size-4 opacity-0 group-hover/workspace:opacity-100 group-focus-within/workspace:opacity-100',
-                  !open && !search && '-rotate-90',
-                )}
-              />
-            </span>
+            <WorkspaceGroupIcon
+              selected={Boolean(selected && workspace)}
+              open={open}
+              search={search}
+            />
           )}
           <span className={cn('truncate', selected && 'text-text-strong')}>{label}</span>
         </CollapsibleTrigger>
@@ -244,11 +232,7 @@ function WorkspaceThreadGroup({
               >
                 <MoreHorizontalIcon className="size-3.5" />
               </PopoverTrigger>
-              <PopoverContent
-                side="right"
-                align="start"
-                className="w-40 gap-0.5 p-1.5"
-              >
+              <PopoverContent side="right" align="start" className="w-40 gap-0.5 p-1.5">
                 <Button
                   variant="ghost"
                   className="justify-start text-xs font-normal"
@@ -273,6 +257,80 @@ function WorkspaceThreadGroup({
           </TooltipIconButton>
         </div>
       </div>
+      <WorkspaceThreadItems ids={ids} indices={indices} expanded={expanded} search={search} setExpanded={setExpanded} />
+      {error && (
+        <p role="alert" className="px-2 text-xs text-destructive">
+          {error}
+        </p>
+      )}
+    </Collapsible>
+  )
+}
+
+function workspaceThreadIndices(
+  ids: readonly string[],
+  items: readonly { id: string; remoteId?: string; title?: string }[],
+  conversations: ReturnType<typeof useWorkspaces>['conversations'],
+  visibleWorkspaceId: (id?: string | null) => string | null,
+  workspaceId: string | null,
+  matchesGroup: boolean,
+  search: string,
+) {
+  const itemById = new Map(items.map((item) => [item.id, item]))
+  const conversationById = new Map(conversations.map((item) => [item.id, item]))
+  return ids
+    .map((id, index) => ({ index, item: itemById.get(id) }))
+    .filter(({ item }) => {
+      const conversation = item?.remoteId ? conversationById.get(item.remoteId) : undefined
+      return (
+        conversation &&
+        visibleWorkspaceId(conversation.workspaceId) === workspaceId &&
+        (matchesGroup ||
+          (item?.title ?? conversation.title ?? '新对话').toLocaleLowerCase().includes(search))
+      )
+    })
+}
+
+function getVisibleWorkspaceId(workspaces: readonly { id: string }[], id?: string | null) {
+  return id && workspaces.some((workspace) => workspace.id === id) ? id : null
+}
+
+function WorkspaceGroupIcon({
+  selected,
+  open,
+  search,
+}: {
+  selected: boolean
+  open: boolean
+  search: string
+}) {
+  return (
+    <span className="relative size-4 shrink-0">
+      <FolderIcon
+        className={cn(
+          'absolute size-4 group-hover/workspace:opacity-0 group-focus-within/workspace:opacity-0',
+          selected && 'text-blue-400',
+        )}
+      />
+      <ChevronDownIcon
+        className={cn(
+          'absolute size-4 opacity-0 group-hover/workspace:opacity-100 group-focus-within/workspace:opacity-100',
+          !open && !search && '-rotate-90',
+        )}
+      />
+    </span>
+  )
+}
+
+function WorkspaceThreadItems({ ids, indices, expanded, search, setExpanded }: {
+  ids: readonly string[]
+  indices: readonly { index: number }[]
+  expanded: boolean
+  search: string
+  setExpanded: (expanded: boolean) => void
+}) {
+  const visible = expanded || search ? indices : indices.slice(0, 5)
+  return (
       <CollapsibleContent className="flex flex-col gap-0.5">
         {visible.map(({ index }) => (
           <ThreadListPrimitive.ItemByIndex
@@ -292,11 +350,5 @@ function WorkspaceThreadGroup({
           </Button>
         )}
       </CollapsibleContent>
-      {error && (
-        <p role="alert" className="px-2 text-xs text-destructive">
-          {error}
-        </p>
-      )}
-    </Collapsible>
   )
 }
