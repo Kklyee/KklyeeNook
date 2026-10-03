@@ -20,7 +20,7 @@ import {
   useAui,
   useAuiState,
 } from '@assistant-ui/react'
-import { MoreHorizontalIcon, PlusIcon } from 'lucide-react'
+import { LoaderCircleIcon, MoreHorizontalIcon, PlusIcon } from 'lucide-react'
 import {
   forwardRef,
   useEffect,
@@ -142,7 +142,7 @@ export const ThreadListItem: FC = () => {
         <ThreadListItemPrimitive.Trigger
           ref={triggerRef}
           data-slot="aui_thread-list-item-trigger"
-          className="flex h-full min-w-0 flex-1 items-center rounded-lg pr-2 pl-8 text-start text-[13px] outline-none group-hover:pe-8 group-has-focus-visible:pe-8 group-has-data-[state=open]:pe-8 focus-visible:border-ring focus-visible:ring-0"
+          className="flex h-full min-w-0 flex-1 items-center rounded-lg pe-8 ps-8 text-start text-[13px] outline-none focus-visible:border-ring focus-visible:ring-0"
           onClick={() => {
             const workspaceId = session?.workspaceId
             setActiveWorkspaceId(
@@ -156,7 +156,12 @@ export const ThreadListItem: FC = () => {
             <ThreadListItemPrimitive.Title fallback="新对话" />
           </span>
           {isRunning && (
-            <span className="me-1.5 shrink-0 text-[10px] text-faint-foreground">运行中</span>
+            <LoaderCircleIcon
+              aria-label="运行中"
+              data-slot="aui_thread-list-item-running"
+              className="me-1.5 size-3 shrink-0 animate-spin text-faint-foreground"
+              strokeWidth={1.5}
+            />
           )}
           {isWaiting && (
             <span className="me-1.5 shrink-0 text-[10px] text-faint-foreground">等待</span>
