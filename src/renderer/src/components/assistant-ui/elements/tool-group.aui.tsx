@@ -1,6 +1,15 @@
 'use client'
 
-import { memo, useCallback, useRef, useState, type FC, type PropsWithChildren } from 'react'
+import {
+  Children,
+  memo,
+  useCallback,
+  useId,
+  useRef,
+  useState,
+  type FC,
+  type PropsWithChildren,
+} from 'react'
 import { ChevronDownIcon } from 'lucide-react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { useScrollLock } from '@assistant-ui/react'
@@ -133,6 +142,8 @@ function ToolGroupContent({
   children,
   ...props
 }: React.ComponentProps<typeof CollapsibleContent>) {
+  const anchorScopeId = useId().replace(/[^a-zA-Z0-9_-]/g, '')
+
   return (
     <CollapsibleContent
       data-slot="tool-group-content"
@@ -149,8 +160,9 @@ function ToolGroupContent({
       {...props}
     >
       <div
+        data-slot="aui-tool-group-items"
         className={cn(
-          'mt-1.5 flex flex-col gap-1.5',
+          'aui-tool-group-items mt-1.5 flex flex-col gap-1.5',
           'group-data-[variant=ghost]/tool-group-root:mt-1',
           'group-data-[variant=outline]/tool-group-root:mt-2 group-data-[variant=outline]/tool-group-root:border-t group-data-[variant=outline]/tool-group-root:border-border group-data-[variant=outline]/tool-group-root:px-3 group-data-[variant=outline]/tool-group-root:pt-2',
           'group-data-[variant=muted]/tool-group-root:mt-2 group-data-[variant=muted]/tool-group-root:border-t group-data-[variant=muted]/tool-group-root:border-border group-data-[variant=muted]/tool-group-root:px-3 group-data-[variant=muted]/tool-group-root:pt-2',
@@ -162,7 +174,19 @@ function ToolGroupContent({
           '[&>*:nth-child(n+5)]:[animation-delay:160ms]',
         )}
       >
-        {children}
+        {Children.toArray(children).map((child, index) => (
+          <div
+            key={index}
+            data-slot="aui-tool-group-node"
+            style={{
+              '--tool-call-anchor': `--tool-call-${anchorScopeId}-${index}`,
+              '--tool-call-connector-delay': `${Math.min(index * 40, 160)}ms`,
+            } as React.CSSProperties}
+            className="aui-tool-group-node"
+          >
+            <div className="aui-tool-group-node-content">{child}</div>
+          </div>
+        ))}
       </div>
     </CollapsibleContent>
   )
