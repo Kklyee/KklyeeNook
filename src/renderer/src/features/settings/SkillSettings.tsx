@@ -58,7 +58,7 @@ export function SkillSettings() {
           正在读取 Skills…
         </p>
       ) : skills.length === 0 ? (
-        <div className="glass-surface rounded-xl border-dashed px-5 py-9 text-center">
+        <div className="bg-card border border-border rounded-xl border-dashed px-5 py-9 text-center">
           <SparklesIcon className="text-muted-foreground/60 mx-auto size-5" />
           <p className="mt-3 text-sm font-medium">暂无可用 Skills</p>
           <p className="text-muted-foreground mt-1 text-xs">添加的 Skills 会显示在这里。</p>

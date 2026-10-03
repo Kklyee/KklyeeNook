@@ -163,13 +163,13 @@ function MermaidZoom({ svg, children }: MermaidZoomProps) {
           </div>
           <div
             data-slot="mermaid-zoom-toolbar"
-            className="aui-mermaid-zoom-toolbar glass-surface absolute top-4 right-4 flex items-center gap-1 rounded-lg p-1"
+            className="aui-mermaid-zoom-toolbar frost-raised absolute top-4 right-4 flex items-center gap-1 rounded-lg p-1"
           >
             <button
               type="button"
               aria-label="Zoom in"
               onClick={() => zoomBy(1.25)}
-              className="text-text-muted hover:text-text-strong hover:bg-interactive-hover active:bg-interactive-pressed outline-none focus-visible:ring-1 focus-visible:ring-brand-border transition-colors cursor-pointer rounded-sm p-1.5"
+              className="text-muted-foreground hover:text-foreground hover:bg-hover active:bg-active outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors cursor-pointer rounded-sm p-1.5"
             >
               <Plus className="size-4" />
             </button>
@@ -177,7 +177,7 @@ function MermaidZoom({ svg, children }: MermaidZoomProps) {
               type="button"
               aria-label="Zoom out"
               onClick={() => zoomBy(0.8)}
-              className="text-text-muted hover:text-text-strong hover:bg-interactive-hover active:bg-interactive-pressed outline-none focus-visible:ring-1 focus-visible:ring-brand-border transition-colors cursor-pointer rounded-sm p-1.5"
+              className="text-muted-foreground hover:text-foreground hover:bg-hover active:bg-active outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors cursor-pointer rounded-sm p-1.5"
             >
               <Minus className="size-4" />
             </button>
@@ -185,7 +185,7 @@ function MermaidZoom({ svg, children }: MermaidZoomProps) {
               type="button"
               aria-label="Reset zoom"
               onClick={() => setTransform({ x: 0, y: 0, scale: 1 })}
-              className="text-text-muted hover:text-text-strong hover:bg-interactive-hover active:bg-interactive-pressed outline-none focus-visible:ring-1 focus-visible:ring-brand-border transition-colors cursor-pointer rounded-sm p-1.5"
+              className="text-muted-foreground hover:text-foreground hover:bg-hover active:bg-active outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors cursor-pointer rounded-sm p-1.5"
             >
               <RotateCcw className="size-4" />
             </button>
@@ -194,7 +194,7 @@ function MermaidZoom({ svg, children }: MermaidZoomProps) {
               type="button"
               aria-label="Close"
               onClick={handleClose}
-              className="text-text-muted hover:text-text-strong hover:bg-interactive-hover active:bg-interactive-pressed outline-none focus-visible:ring-1 focus-visible:ring-brand-border transition-colors cursor-pointer rounded-sm p-1.5"
+              className="text-muted-foreground hover:text-foreground hover:bg-hover active:bg-active outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors cursor-pointer rounded-sm p-1.5"
             >
               <X className="size-4" />
             </button>

@@ -38,22 +38,22 @@ export function SubagentProgress({
       disabled={!runId || !onOpen}
       onClick={onOpen}
       className={cn(
-        'group flex w-full max-w-xl items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-interactive-hover disabled:cursor-default disabled:hover:bg-transparent',
+        'group flex w-full max-w-xl items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-hover disabled:cursor-default disabled:hover:bg-transparent',
       )}
       aria-label={`${name}：${task}`}
     >
-      <SubagentAvatar avatar={avatar} className="bg-tool-agent-soft text-tool-agent" />
+      <SubagentAvatar avatar={avatar} className="bg-surface-muted text-muted-foreground" />
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-2">
-          <span className="shrink-0 text-xs font-medium text-text-default">{name}</span>
-          <span className={cn(mono, 'min-w-0 truncate text-text-muted')} title={task}>
+          <span className="shrink-0 text-xs font-medium text-foreground">{name}</span>
+          <span className={cn(mono, 'min-w-0 truncate text-muted-foreground')} title={task}>
             {task}
           </span>
         </span>
       </span>
-      <span className="shrink-0 text-[10px] text-text-faint">{statusLabel}</span>
+      <span className="shrink-0 text-[10px] text-faint-foreground">{statusLabel}</span>
       {runId && (
-        <ChevronRightIcon className="size-3.5 shrink-0 rounded-sm text-text-faint transition-[color,background-color,transform] group-hover:text-text-default hover:bg-interactive-hover group-hover:translate-x-0.5" />
+        <ChevronRightIcon className="size-3.5 shrink-0 rounded-sm text-faint-foreground transition-[color,background-color,transform] group-hover:text-foreground hover:bg-hover group-hover:translate-x-0.5" />
       )}
     </button>
   )

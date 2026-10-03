@@ -104,7 +104,7 @@ export function ContextSettings({
           className="group border-border/70 border-t px-4 py-3.5"
         >
           <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
-            <ChevronRightIcon className="text-text-muted size-4 transition-transform group-open:rotate-90" />
+            <ChevronRightIcon className="text-muted-foreground size-4 transition-transform group-open:rotate-90" />
             高级参数
           </summary>
           <div className="mt-3 grid gap-3">

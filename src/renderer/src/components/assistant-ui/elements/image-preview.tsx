@@ -95,7 +95,7 @@ const copyImagePart = async (part: Pick<ImageMessagePart, 'image'>): Promise<voi
 
 const imageVariants = cva('aui-image-root relative overflow-hidden rounded-lg', {
   variants: {
-    variant: { outline: 'glass-surface', ghost: '', muted: 'bg-glass-hover' },
+    variant: { outline: 'bg-surface border border-border', ghost: '', muted: 'bg-hover' },
     size: { sm: 'max-w-64', default: 'max-w-96', lg: 'max-w-[512px]', full: 'w-full' },
   },
   defaultVariants: { variant: 'outline', size: 'default' },
@@ -225,7 +225,7 @@ function ImageZoom({ src, alt = 'Image preview', children }: ImageZoomProps) {
         </DialogClose>
         <DialogClose
           aria-label="Close zoomed image"
-          className="glass-surface text-text-muted hover:text-text-strong hover:bg-interactive-hover-strong active:bg-interactive-pressed outline-none focus-visible:ring-1 focus-visible:ring-brand-border transition-colors absolute end-4 top-4 cursor-pointer rounded-lg p-2"
+          className="bg-surface-raised border border-border-strong text-muted-foreground hover:text-foreground hover:bg-hover active:bg-active outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors absolute end-4 top-4 cursor-pointer rounded-lg p-2"
         >
           <XIcon className="size-5" />
         </DialogClose>
@@ -289,7 +289,7 @@ function RegenerateButton({ onRegenerate }: { onRegenerate: () => void | Promise
       disabled={isRegenerating}
       data-slot="image-regenerate"
       aria-label="Regenerate image"
-      className="text-text-muted hover:bg-interactive-hover hover:text-text-strong active:bg-interactive-pressed outline-none focus-visible:ring-1 focus-visible:ring-brand-border transition-colors inline-flex size-7 items-center justify-center rounded disabled:opacity-50"
+      className="text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors inline-flex size-7 items-center justify-center rounded disabled:opacity-50"
     >
       <RefreshCwIcon className={cn('size-4', isRegenerating && 'animate-spin')} />
     </button>
@@ -304,7 +304,7 @@ function ImageActions({ part, onRegenerate, className }: ImageActionsProps) {
         onClick={() => downloadImagePart(part)}
         data-slot="image-download"
         aria-label="Download image"
-        className="text-text-muted hover:bg-interactive-hover hover:text-text-strong active:bg-interactive-pressed outline-none focus-visible:ring-1 focus-visible:ring-brand-border transition-colors inline-flex size-7 items-center justify-center rounded"
+        className="text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors inline-flex size-7 items-center justify-center rounded"
       >
         <DownloadIcon className="size-4" />
       </button>
@@ -315,7 +315,7 @@ function ImageActions({ part, onRegenerate, className }: ImageActionsProps) {
         }}
         data-slot="image-copy"
         aria-label="Copy image"
-        className="text-text-muted hover:bg-interactive-hover hover:text-text-strong active:bg-interactive-pressed outline-none focus-visible:ring-1 focus-visible:ring-brand-border transition-colors inline-flex size-7 items-center justify-center rounded"
+        className="text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors inline-flex size-7 items-center justify-center rounded"
       >
         <CopyIcon className="size-4" />
       </button>

@@ -49,15 +49,6 @@ const iconAssets: Partial<Record<ToolIconKind, string>> = {
   write: writeFileIcon,
 }
 
-const iconClassNames: Record<ToolIconKind, string> = {
-  read: 'text-tool-file',
-  bash: 'text-tool-exec',
-  edit: 'text-tool-write',
-  write: 'text-tool-write',
-  agent: 'text-tool-agent',
-  generic: 'text-text-muted',
-}
-
 export function getToolIconKind(toolName: string): ToolIconKind {
   const name = toolName.toLowerCase()
   if (name.includes('read')) return 'read'
@@ -81,7 +72,7 @@ export function getToolDisplayName(toolName: string): string {
 
 function ToolIcon({ kind }: { kind: ToolIconKind }) {
   const icon = iconAssets[kind]
-  const className = cn('size-3.5 shrink-0', iconClassNames[kind])
+  const className = 'size-3.5 shrink-0 text-muted-foreground'
 
   if (icon) {
     return (
@@ -116,14 +107,14 @@ function formatToolDuration(ms: number): string {
 export function ToolDetailSection({ label, children }: { label: string; children: ReactNode }) {
   return (
     <section className="min-w-0 space-y-1.5">
-      <p className="text-[10px] font-medium text-text-faint">{label}</p>
+      <p className="text-[10px] font-medium text-faint-foreground">{label}</p>
       {children}
     </section>
   )
 }
 
 export const toolCodeClassName =
-  'max-h-72 overflow-auto rounded-md border border-glass-border-subtle bg-surface-subtle p-2 font-mono text-[11px] leading-5 whitespace-pre-wrap break-words text-text-default'
+  'max-h-72 overflow-auto rounded-md border border-border bg-surface-muted p-2 font-mono text-[11px] leading-5 whitespace-pre-wrap break-words text-foreground'
 
 export function ToolCard({
   toolName,
@@ -149,7 +140,7 @@ export function ToolCard({
     statusType === 'complete'
       ? 'text-success'
       : status?.type === 'incomplete' && status.reason === 'cancelled'
-        ? 'text-text-faint'
+        ? 'text-faint-foreground'
         : 'text-danger'
 
   const handleOpenChange = useCallback(
@@ -171,22 +162,22 @@ export function ToolCard({
       onOpenChange={handleOpenChange}
       style={{ '--animation-duration': `${ANIMATION_DURATION}ms` } as React.CSSProperties}
       className={cn(
-        'glass-surface relative w-full overflow-hidden rounded-lg transition-[border-color,box-shadow] hover:border-glass-border-strong hover:shadow-[var(--shadow-raised)]',
+        'bg-surface-muted border border-border relative w-full overflow-hidden rounded-lg transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-[var(--ui-shadow-raised)]',
         className,
       )}
     >
-      <CollapsibleTrigger className="group/trigger flex h-8 w-full min-w-0 items-center gap-2 bg-transparent px-2.5 text-left outline-none hover:bg-interactive-hover data-[state=open]:bg-interactive-selected focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-glass-border-hover">
+      <CollapsibleTrigger className="group/trigger flex h-8 w-full min-w-0 items-center gap-2 bg-transparent px-2.5 text-left outline-none hover:bg-hover data-[state=open]:bg-selected focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border-strong">
         <ToolIcon kind={getToolIconKind(toolName)} />
         <ShimmerLabel
           active={isShimmerActive}
-          className="shimmer-speed-100 shimmer-repeat-delay-0 shrink-0 truncate text-[13px] font-medium text-text-default"
+          className="shimmer-speed-100 shimmer-repeat-delay-0 shrink-0 truncate text-[13px] font-medium text-foreground"
           title={label}
         >
           {label}
         </ShimmerLabel>
         <ShimmerLabel
           active={isShimmerActive}
-          className="shimmer-speed-100 shimmer-repeat-delay-0 min-w-0 flex-1 truncate font-mono text-[11px] text-text-muted"
+          className="shimmer-speed-100 shimmer-repeat-delay-0 min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground"
           title={summary}
         >
           {summary}
@@ -195,14 +186,14 @@ export function ToolCard({
           <StatusIcon aria-hidden="true" className={cn('size-3.5 shrink-0', statusClassName)} />
         )}
         {elapsedMs !== undefined && (
-          <span className="shrink-0 font-mono text-[10px] tabular-nums text-text-faint">
+          <span className="shrink-0 font-mono text-[10px] tabular-nums text-faint-foreground">
             {formatToolDuration(elapsedMs)}
           </span>
         )}
-        <ChevronRightIcon className="size-3.5 shrink-0 text-text-faint transition-[color,transform] group-hover/trigger:text-text-default group-data-open/trigger:rotate-90 group-data-panel-open/trigger:rotate-90 motion-reduce:transition-none" />
+        <ChevronRightIcon className="size-3.5 shrink-0 text-faint-foreground transition-[color,transform] group-hover/trigger:text-foreground group-data-open/trigger:rotate-90 group-data-panel-open/trigger:rotate-90 motion-reduce:transition-none" />
       </CollapsibleTrigger>
       <CollapsibleContent className={cn(collapsePanel, 'outline-none')}>
-        <div className="flex min-w-0 flex-col gap-2 border-t border-glass-border-subtle px-2.5 py-2.5 text-xs">
+        <div className="flex min-w-0 flex-col gap-2 border-t border-border px-2.5 py-2.5 text-xs">
           {children}
         </div>
       </CollapsibleContent>

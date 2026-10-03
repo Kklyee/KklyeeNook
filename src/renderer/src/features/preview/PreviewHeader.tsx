@@ -10,7 +10,7 @@ export function PreviewHeader() {
 
   return (
     <header className="border-border/60 flex h-11 shrink-0 items-center justify-between gap-2 border-b px-3">
-      <div className="glass-surface flex min-w-0 items-center gap-2 rounded-md px-2 py-1">
+      <div className="frost flex min-w-0 items-center gap-2 rounded-md px-2 py-1">
         <span className="text-muted-foreground shrink-0 font-mono text-[10px]">{format}</span>
         <span className="truncate text-xs" title={target.path}>
           {filename}

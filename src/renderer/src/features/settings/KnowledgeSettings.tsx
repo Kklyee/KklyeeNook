@@ -163,7 +163,7 @@ export function KnowledgeSettings({
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={busy ? (event) => event.preventDefault() : drop}
-        className={`glass-surface rounded-xl border-dashed px-5 py-8 text-center ${dragging ? 'border-brand-border bg-brand-soft' : ''}`}
+        className={`bg-card border border-border rounded-xl border-dashed px-5 py-8 text-center ${dragging ? 'border-ring bg-brand-muted' : ''}`}
       >
         <UploadIcon className="text-muted-foreground mx-auto size-5" />
         <p className="mt-2 text-sm font-medium">拖入文档即可建立知识索引</p>
@@ -208,7 +208,7 @@ export function KnowledgeSettings({
           <div className="mt-3 space-y-3">
             {results.length ? (
               results.map(({ chunk }) => (
-                <div key={chunk.id} className="glass-surface rounded-xl p-4">
+                <div key={chunk.id} className="bg-card border border-border rounded-xl p-4">
                   <KnowledgeCitationLink
                     chunkId={chunk.id}
                     className="text-primary text-sm font-medium underline underline-offset-2"
@@ -228,7 +228,7 @@ export function KnowledgeSettings({
           </div>
         )}
       </div>
-      <details className="glass-surface rounded-xl p-4">
+      <details className="bg-card border border-border rounded-xl p-4">
         <summary className="cursor-pointer text-sm font-medium">本地检索模型</summary>
         <p className="text-muted-foreground mt-2 text-xs">
           首次使用会下载模型，之后复用本地缓存。更改 Embedding 模型后需要重新索引。
@@ -306,12 +306,12 @@ function KnowledgeSources({
             正在读取…
           </p>
         ) : !sources.length ? (
-          <div className="glass-surface rounded-xl p-5 text-center">
+          <div className="bg-card border border-border rounded-xl p-5 text-center">
             <BookOpenIcon className="text-muted-foreground mx-auto size-5" />
             <p className="mt-2 text-sm">添加知识后，Agent 可以检索文档和代码并引用来源。</p>
           </div>
         ) : (
-          <div className="glass-surface divide-y divide-glass-border rounded-xl">
+          <div className="bg-card border border-border divide-y divide-border rounded-xl">
             {sources
               .filter((source) => (source.workspaceId ?? null) === (workspaceId ?? null))
               .map((source) => (
@@ -323,7 +323,7 @@ function KnowledgeSources({
                     </div>
                     <span
                       role="status"
-                      className={`shrink-0 rounded-full px-2 py-1 text-xs ${source.status === 'error' ? 'bg-destructive/10 text-destructive' : source.status === 'ready' ? 'bg-success-soft text-success' : 'bg-muted text-muted-foreground'}`}
+                      className={`shrink-0 rounded-full px-2 py-1 text-xs ${source.status === 'error' ? 'bg-destructive/10 text-destructive' : source.status === 'ready' ? 'bg-success-muted text-success' : 'bg-muted text-muted-foreground'}`}
                     >
                       {statuses[source.status]}
                     </span>

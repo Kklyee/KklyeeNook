@@ -381,7 +381,7 @@ export function ModelSettings(props: {
               <div key={entry.id} className="flex items-center gap-2 px-3 py-2">
                 <button
                   type="button"
-                  className="flex min-w-0 flex-1 items-center gap-3 rounded-md px-1 py-1 text-left hover:bg-interactive-hover"
+                  className="flex min-w-0 flex-1 items-center gap-3 rounded-md px-1 py-1 text-left hover:bg-hover"
                   aria-label={`编辑 ${entry.name}`}
                   onClick={() => edit(entry)}
                 >
@@ -398,7 +398,7 @@ export function ModelSettings(props: {
                       {entry.hasApiKey ? '密钥已配置' : '需要 API 密钥'} · {modelCount} 个模型
                     </span>
                   </span>
-                  <ChevronRightIcon className="text-text-faint size-4 shrink-0" />
+                  <ChevronRightIcon className="text-faint-foreground size-4 shrink-0" />
                 </button>
                 <Button
                   type="button"
@@ -590,7 +590,7 @@ function ProviderIdentityFields({
               ))}
               {selectableCustomProviders.length > 0 && (
                 <div role="group" aria-label="自定义提供商">
-                  <p className="px-2 py-1.5 text-xs text-text-muted">自定义提供商</p>
+                  <p className="px-2 py-1.5 text-xs text-muted-foreground">自定义提供商</p>
                   {selectableCustomProviders.map((item) => (
                     <SelectItem key={item.id} value={item.id}>
                       {item.name}
@@ -673,7 +673,7 @@ function ProviderModels({
           )}
         </div>
         {customModels.length > 0 ? (
-          <div className="glass-surface grid gap-1 rounded-md p-2">
+          <div className="bg-card border border-border grid gap-1 rounded-md p-2">
             {customModels.map((model) => (
               <div key={model.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-xs">
                 <span className="min-w-0 flex-1 truncate">
@@ -733,7 +733,7 @@ function ProviderModels({
           </Button>
         )}
         {discoveredProvider === provider && discoveredModels.length > 0 && (
-          <div className="glass-surface grid gap-1 rounded-md p-2">
+          <div className="bg-card border border-border grid gap-1 rounded-md p-2">
             {discoveredModels.map((model) => {
               const added = customModels.some((item) => item.id === model.id)
               const builtin = model.builtin === true
@@ -741,7 +741,7 @@ function ProviderModels({
                 <button
                   key={model.id}
                   type="button"
-                  className="hover:bg-interactive-hover active:bg-interactive-pressed focus-visible:ring-1 focus-visible:ring-brand-border outline-none transition-colors flex items-center justify-between rounded px-2 py-1.5 text-left text-xs disabled:cursor-default disabled:opacity-60"
+                  className="hover:bg-hover active:bg-active focus-visible:ring-1 focus-visible:ring-ring outline-none transition-colors flex items-center justify-between rounded px-2 py-1.5 text-left text-xs disabled:cursor-default disabled:opacity-60"
                   disabled={added || builtin}
                   onClick={() => addDiscoveredModel(model)}
                 >

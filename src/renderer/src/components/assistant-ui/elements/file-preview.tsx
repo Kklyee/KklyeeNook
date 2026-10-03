@@ -19,9 +19,9 @@ const fileVariants = cva(
   {
     variants: {
       variant: {
-        outline: 'glass-surface hover:border-glass-border-strong',
-        ghost: 'hover:bg-interactive-hover',
-        muted: 'bg-glass-hover hover:bg-interactive-hover-strong',
+        outline: 'bg-surface border border-border hover:border-border-strong',
+        ghost: 'hover:bg-hover',
+        muted: 'bg-hover hover:bg-hover',
       },
       size: {
         sm: 'px-2.5 py-1.5 text-xs',
@@ -170,7 +170,7 @@ function FileDownload({
       download={filename || 'download'}
       {...(kind === 'url' && { target: '_blank', rel: 'noopener noreferrer' })}
       className={cn(
-        'text-text-muted hover:bg-interactive-hover hover:text-text-strong active:bg-interactive-pressed outline-none focus-visible:ring-1 focus-visible:ring-brand-border shrink-0 rounded-md p-1 transition-colors',
+        'text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active outline-none focus-visible:ring-1 focus-visible:ring-ring shrink-0 rounded-md p-1 transition-colors',
         className,
       )}
       {...props}

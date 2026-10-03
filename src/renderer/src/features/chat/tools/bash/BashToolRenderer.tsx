@@ -46,7 +46,7 @@ export const BashToolRenderer: ToolCallMessagePartComponent = ({ args, result, s
         </ToolDetailSection>
       )}
       {exitCode !== undefined && (
-        <p className="font-mono text-[11px] text-text-faint">exit {String(exitCode)}</p>
+        <p className="font-mono text-[11px] text-faint-foreground">exit {String(exitCode)}</p>
       )}
     </ToolCard>
   )

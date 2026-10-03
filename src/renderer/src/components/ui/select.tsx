@@ -14,7 +14,7 @@ function SelectTrigger({ className, children, ...props }: SelectPrimitive.Trigge
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       className={cn(
-        'flex h-8 w-full items-center justify-between gap-2 rounded-lg border border-glass-border bg-glass-hover px-2.5 text-sm text-text-default outline-none transition-colors hover:border-glass-border-hover hover:bg-interactive-hover active:bg-interactive-pressed focus-visible:border-brand-border focus-visible:ring-2 focus-visible:ring-brand-soft disabled:pointer-events-none disabled:opacity-50 data-popup-open:border-brand-border data-popup-open:bg-interactive-selected data-popup-open:ring-2 data-popup-open:ring-brand-soft',
+        'flex h-8 w-full items-center justify-between gap-2 rounded-lg border border-border bg-hover px-2.5 text-sm text-foreground outline-none transition-colors hover:border-border-strong hover:bg-hover active:bg-active focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 data-popup-open:border-ring data-popup-open:bg-selected data-popup-open:ring-2 data-popup-open:ring-ring',
         className,
       )}
       {...props}
@@ -51,7 +51,7 @@ function SelectContent({
         <SelectPrimitive.Popup
           data-slot="select-content"
           className={cn(
-            'glass-surface min-w-(--anchor-width) overflow-hidden rounded-xl p-1.5 text-sm outline-hidden duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
+            'frost-raised min-w-(--anchor-width) overflow-hidden rounded-xl p-1.5 text-sm outline-hidden duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
             className,
           )}
           {...props}
@@ -70,7 +70,7 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.Item.Prop
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        'relative flex w-full cursor-default items-center rounded-lg py-1.5 pr-8 pl-2 text-sm text-text-default outline-none transition-colors select-none data-highlighted:bg-interactive-hover data-highlighted:text-text-strong data-selected:bg-interactive-selected data-selected:text-text-strong data-selected:data-highlighted:bg-interactive-selected-hover active:bg-interactive-pressed data-disabled:pointer-events-none data-disabled:opacity-50',
+        'relative flex w-full cursor-default items-center rounded-lg py-1.5 pr-8 pl-2 text-sm text-foreground outline-none transition-colors select-none data-highlighted:bg-hover data-highlighted:text-foreground data-selected:bg-selected data-selected:text-foreground data-selected:data-highlighted:bg-selected active:bg-active data-disabled:pointer-events-none data-disabled:opacity-50',
         className,
       )}
       {...props}

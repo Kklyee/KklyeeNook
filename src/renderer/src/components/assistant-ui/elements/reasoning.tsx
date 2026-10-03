@@ -24,9 +24,9 @@ const ReasoningPreviewContext = createContext(false)
 const reasoningVariants = cva('aui-reasoning-root w-full', {
   variants: {
     variant: {
-      outline: 'glass-surface rounded-lg px-3 py-2',
+      outline: 'bg-surface-muted border border-border rounded-lg px-3 py-2',
       ghost: '',
-      muted: 'glass-surface rounded-lg px-3 py-2',
+      muted: 'bg-surface-muted border border-border rounded-lg px-3 py-2',
     },
   },
   defaultVariants: { variant: 'ghost' },

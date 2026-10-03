@@ -49,7 +49,7 @@ export function PermissionSelector() {
         <SelectTrigger
           disabled={running}
           aria-label="权限模式"
-          className="h-7 w-auto gap-1 border-0 text-xs text-text-muted"
+          className="h-7 w-auto gap-1 border-0 text-xs text-muted-foreground"
         >
           <ShieldCheckIcon className="size-3.5" />
           {PERMISSION_LABELS[mode]}

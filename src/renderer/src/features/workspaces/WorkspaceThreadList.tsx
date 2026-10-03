@@ -73,7 +73,7 @@ export function WorkspaceThreadList() {
         </TooltipIconButton>
       ) : (
         <>
-          <div className="flex h-8 items-center gap-1 px-2 text-xs text-text-muted">
+          <div className="flex h-8 items-center gap-1 px-2 text-xs text-muted-foreground">
             <span className="flex-1">工作区</span>
             <TooltipIconButton
               tooltip="搜索会话"
@@ -131,7 +131,7 @@ export function WorkspaceThreadList() {
           <DialogHeader>
             <DialogTitle>发现可能存在旧项目</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-text-muted">选择要关联的旧项目，或将该目录作为新项目添加。</p>
+          <p className="text-sm text-muted-foreground">选择要关联的旧项目，或将该目录作为新项目添加。</p>
           {pending?.candidates?.map((workspace) => (
             <Button key={workspace.id} variant="outline" onClick={() => void attach(workspace.id)}>
               关联旧项目 · {workspace.displayName}
@@ -198,7 +198,7 @@ function WorkspaceThreadGroup({
       onOpenChange={setOpen}
       className="flex flex-col gap-0.5"
     >
-      <div className="group/workspace flex h-9 items-center gap-0.5 rounded-lg pr-1 text-text-muted hover:bg-interactive-hover has-focus-visible:bg-interactive-hover has-data-popup-open:bg-interactive-hover">
+      <div className="group/workspace flex h-9 items-center gap-0.5 rounded-lg pr-1 text-muted-foreground hover:bg-hover has-focus-visible:bg-hover has-data-popup-open:bg-hover">
         <CollapsibleTrigger
           render={
             <Button
@@ -215,7 +215,7 @@ function WorkspaceThreadGroup({
               search={search}
             />
           )}
-          <span className={cn('truncate', selected && 'text-text-strong')}>{label}</span>
+          <span className={cn('truncate', selected && 'text-foreground')}>{label}</span>
         </CollapsibleTrigger>
         <div className="flex shrink-0 items-center opacity-0 group-hover/workspace:opacity-100 group-focus-within/workspace:opacity-100 has-data-popup-open:opacity-100 [@media(hover:none)]:opacity-100">
           {workspace && (
@@ -225,7 +225,7 @@ function WorkspaceThreadGroup({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="size-6 text-text-faint"
+                    className="size-6 text-faint-foreground"
                     aria-label={label + '项目选项'}
                   />
                 }
@@ -343,7 +343,7 @@ function WorkspaceThreadItems({ ids, indices, expanded, search, setExpanded }: {
           <Button
             variant="ghost"
             size="sm"
-            className="justify-start pl-8 text-xs font-normal text-text-faint"
+            className="justify-start pl-8 text-xs font-normal text-faint-foreground"
             onClick={() => setExpanded(!expanded)}
           >
             {expanded ? '收起会话' : '展开其余 ' + (indices.length - 5) + ' 个会话'}

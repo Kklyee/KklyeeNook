@@ -4,16 +4,16 @@ import type { ComponentProps } from 'react'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { cn } from '@/renderer/src/lib/utils'
 
-export const field = 'bg-glass-hover'
+export const field = 'bg-hover'
 
 export const fieldInteractive =
-  'bg-glass-hover transition-colors hover:bg-interactive-hover-strong'
+  'bg-hover transition-colors hover:bg-hover'
 
 export const pressable =
   'transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.96] motion-reduce:transition-none'
 
 export const ghostButton =
-  'flex items-center justify-center rounded-full text-text-muted outline-none transition-[background-color,color,scale] duration-150 hover:bg-interactive-hover hover:text-text-strong active:bg-interactive-pressed active:scale-[0.96] focus-visible:ring-1 focus-visible:ring-brand-border motion-reduce:transition-none'
+  'flex items-center justify-center rounded-full text-muted-foreground outline-none transition-[background-color,color,scale] duration-150 hover:bg-hover hover:text-foreground active:bg-active active:scale-[0.96] focus-visible:ring-1 focus-visible:ring-ring motion-reduce:transition-none'
 
 export const inkButton =
   'bg-foreground text-background transition-[opacity,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:opacity-90 active:scale-[0.96] motion-reduce:transition-none'

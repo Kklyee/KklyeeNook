@@ -200,11 +200,11 @@ export const modelSelectorTriggerVariants = cva(
     variants: {
       variant: {
         outline:
-          'border border-input bg-transparent text-text-default hover:bg-interactive-hover hover:text-text-default active:bg-interactive-pressed data-[popup-open]:border-interactive-border-hover data-[popup-open]:bg-interactive-selected data-[popup-open]:text-text-strong',
+          'border border-input bg-transparent text-foreground hover:bg-hover hover:text-foreground active:bg-active data-[popup-open]:border-border-strong data-[popup-open]:bg-selected data-[popup-open]:text-foreground',
         ghost:
-          'bg-transparent text-text-muted hover:bg-interactive-hover hover:text-text-default active:bg-interactive-pressed data-[popup-open]:bg-interactive-selected data-[popup-open]:text-text-strong',
+          'bg-transparent text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active data-[popup-open]:bg-selected data-[popup-open]:text-foreground',
         muted:
-          'bg-interactive-selected text-text-default hover:bg-interactive-selected-hover active:bg-interactive-pressed data-[popup-open]:bg-interactive-selected-hover data-[popup-open]:text-text-strong',
+          'bg-selected text-foreground hover:bg-selected active:bg-active data-[popup-open]:bg-selected data-[popup-open]:text-foreground',
       },
       size: {
         default: 'h-9 px-3 py-2',
@@ -238,7 +238,7 @@ function ModelSelectorTrigger({
       aria-haspopup="listbox"
       className={cn(
         modelSelectorTriggerVariants({ variant, size }),
-        'hover:bg-interactive-hover',
+        'hover:bg-hover',
         className,
       )}
       onKeyDown={(e) => {
@@ -254,7 +254,7 @@ function ModelSelectorTrigger({
       {...props}
     >
       {children ?? <ModelSelectorValue />}
-      <ChevronDownIcon className="text-text-muted size-4" />
+      <ChevronDownIcon className="text-muted-foreground size-4" />
     </PopoverTrigger>
   )
 }
@@ -287,7 +287,7 @@ function ModelSelectorValue({
 
   if (!selectedModel) {
     return (
-      <span data-slot="model-selector-value" className={cn('text-text-muted', className)}>
+      <span data-slot="model-selector-value" className={cn('text-muted-foreground', className)}>
         {placeholder}
       </span>
     )
@@ -302,9 +302,9 @@ function ModelSelectorValue({
       className={cn('flex min-w-0 items-center gap-2', className)}
     >
       {selectedModel.icon && <ModelIcon>{selectedModel.icon}</ModelIcon>}
-      <span className="text-text-strong truncate font-medium">{selectedModel.name}</span>
+      <span className="text-foreground truncate font-medium">{selectedModel.name}</span>
       {effortName && (
-        <span className="text-text-muted min-w-7.5 truncate text-center">{effortName}</span>
+        <span className="text-muted-foreground min-w-7.5 truncate text-center">{effortName}</span>
       )}
     </span>
   )
@@ -436,7 +436,7 @@ function ModelSelectorSection({
       data-slot="model-selector-section"
       className={cn(
         'overflow-hidden rounded-lg ',
-        // expanded && 'bg-interactive-selected',
+        // expanded && 'bg-selected',
       )}
       {...props}
     >
@@ -446,12 +446,12 @@ function ModelSelectorSection({
         aria-expanded={expanded}
         disabled={disabled}
         onClick={onClick}
-        className="flex h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-xs text-text-default transition-colors outline-none hover:bg-interactive-hover active:bg-interactive-pressed focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 aria-expanded:bg-interactive-selected aria-expanded:hover:bg-interactive-selected-hover"
+        className="flex h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-xs text-foreground transition-colors outline-none hover:bg-hover active:bg-active focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 aria-expanded:bg-selected aria-expanded:hover:bg-selected"
       >
         <span className="min-w-0 flex-1 truncate font-medium">{value}</span>
         <ChevronRightIcon
           className={cn(
-            'text-text-muted size-4 shrink-0 transition-transform',
+            'text-muted-foreground size-4 shrink-0 transition-transform',
             expanded && 'rotate-90',
           )}
         />
@@ -472,9 +472,9 @@ function ModelSelectorSearch({
   return (
     <CommandInput
       data-slot="model-selector-search"
-      className={cn('text-text-default placeholder:text-text-faint text-xs', className)}
+      className={cn('text-foreground placeholder:text-faint-foreground text-xs', className)}
       inputGroupClassName={cn(
-        'border-glass-border-subtle !bg-glass-hover transition-[background-color,border-color,box-shadow] hover:!border-interactive-border-hover hover:!bg-interactive-hover focus-within:!border-brand-border focus-within:!bg-interactive-hover focus-within:!ring-0',
+        'border-border !bg-hover transition-[background-color,border-color,box-shadow] hover:!border-border-strong hover:!bg-hover focus-within:!border-ring focus-within:!bg-hover focus-within:!ring-0',
         inputGroupClassName,
       )}
       placeholder={placeholder}
@@ -560,7 +560,7 @@ function ModelSelectorItem({
       }}
       data-model-selected={isSelected || undefined}
       className={cn(
-        'relative items-start gap-2 rounded-lg bg-transparent py-1.5 ps-3 pe-9 text-text-default text-[11px] leading-4 transition-colors hover:bg-interactive-hover data-selected:bg-interactive-hover data-selected:text-text-strong active:bg-interactive-pressed data-[model-selected=true]:bg-interactive-selected data-[model-selected=true]:text-text-strong data-[model-selected=true]:hover:bg-interactive-selected-hover data-[model-selected=true]:data-selected:bg-interactive-selected-hover [&_svg:not([class*="size-"])]:size-3.5',
+        'relative items-start gap-2 rounded-lg bg-transparent py-1.5 ps-3 pe-9 text-foreground text-[11px] leading-4 transition-colors hover:bg-hover data-selected:bg-hover data-selected:text-foreground active:bg-active data-[model-selected=true]:bg-selected data-[model-selected=true]:text-foreground data-[model-selected=true]:hover:bg-selected data-[model-selected=true]:data-selected:bg-selected [&_svg:not([class*="size-"])]:size-3.5',
         className,
       )}
       {...props}
@@ -571,21 +571,21 @@ function ModelSelectorItem({
           <span className="flex min-w-0 flex-col">
             <span
               className={cn(
-                'text-text-default truncate font-medium',
-                isSelected && 'text-text-strong',
+                'text-foreground truncate font-medium',
+                isSelected && 'text-foreground',
               )}
             >
               {model.name}
             </span>
             {model.description && (
-              <span className="text-text-muted truncate text-[10px]">{model.description}</span>
+              <span className="text-muted-foreground truncate text-[10px]">{model.description}</span>
             )}
           </span>
         </>
       )}
       {isSelected && (
         <span className="absolute end-3 top-2.5 flex size-4 items-center justify-center">
-          <CheckIcon className="text-text-muted size-4" />
+          <CheckIcon className="text-muted-foreground size-4" />
         </span>
       )}
     </CommandItem>
@@ -644,7 +644,7 @@ function ModelSelectorEffort({
       }}
       {...props}
     >
-      <span className="text-text-muted text-[11px]">{label}</span>
+      <span className="text-muted-foreground text-[11px]">{label}</span>
       <RadioGroup
         value={effort ?? ''}
         onValueChange={setEffort}
@@ -656,8 +656,8 @@ function ModelSelectorEffort({
             key={option.id}
             value={option.id}
             className={cn(
-              'focus-visible:ring-ring/50 text-text-muted cursor-pointer rounded-md bg-transparent px-1.5 py-1 text-[11px] transition-colors outline-none hover:bg-interactive-hover hover:text-text-default active:bg-interactive-pressed focus-visible:ring-1',
-              'data-checked:bg-interactive-selected data-checked:text-text-strong data-checked:font-medium data-checked:hover:bg-interactive-selected-hover',
+              'focus-visible:ring-ring/50 text-muted-foreground cursor-pointer rounded-md bg-transparent px-1.5 py-1 text-[11px] transition-colors outline-none hover:bg-hover hover:text-foreground active:bg-active focus-visible:ring-1',
+              'data-checked:bg-selected data-checked:text-foreground data-checked:font-medium data-checked:hover:bg-selected',
             )}
           >
             {option.name}

@@ -17,10 +17,10 @@ const toolGroupVariants = cva('aui-tool-group-root group/tool-group w-full', {
   variants: {
     variant: {
       outline:
-        'glass-surface rounded-lg py-2 transition-[border-color,box-shadow] hover:border-glass-border-strong hover:shadow-[var(--shadow-raised)]',
+        'bg-surface-muted border border-border rounded-lg py-2 transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-[var(--ui-shadow-raised)]',
       ghost: '',
       muted:
-        'glass-surface rounded-lg py-2 transition-[border-color,box-shadow] hover:border-glass-border-strong hover:shadow-[var(--shadow-raised)]',
+        'bg-surface-muted border border-border rounded-lg py-2 transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-[var(--ui-shadow-raised)]',
     },
   },
   defaultVariants: { variant: 'outline' },
@@ -94,7 +94,7 @@ function ToolGroupTrigger({
     <CollapsibleTrigger
       data-slot="tool-group-trigger"
       className={cn(
-        'aui-tool-group-trigger group/trigger flex origin-left items-center gap-2 bg-transparent text-sm text-text-default transition-[color,scale,background-color] hover:bg-interactive-hover data-[state=open]:bg-interactive-selected active:scale-[0.98]',
+        'aui-tool-group-trigger group/trigger flex origin-left items-center gap-2 bg-transparent text-sm text-foreground transition-[color,scale,background-color] hover:bg-hover data-[state=open]:bg-selected active:scale-[0.98]',
         'group-data-[variant=ghost]/tool-group-root:py-1.5',
         'group-data-[variant=outline]/tool-group-root:w-full group-data-[variant=outline]/tool-group-root:px-4',
         'group-data-[variant=muted]/tool-group-root:w-full group-data-[variant=muted]/tool-group-root:px-4',
@@ -105,7 +105,7 @@ function ToolGroupTrigger({
       <span
         data-slot="tool-group-trigger-label"
         className={cn(
-          'aui-tool-group-trigger-label-wrapper inline-block text-start text-xs leading-none font-medium text-text-default',
+          'aui-tool-group-trigger-label-wrapper inline-block text-start text-xs leading-none font-medium text-foreground',
           'group-data-[variant=ghost]/tool-group-root:font-normal',
           'group-data-[variant=outline]/tool-group-root:grow',
           'group-data-[variant=muted]/tool-group-root:grow',
@@ -117,7 +117,7 @@ function ToolGroupTrigger({
       <ChevronDownIcon
         data-slot="tool-group-trigger-chevron"
         className={cn(
-          'aui-tool-group-trigger-chevron size-3 shrink-0 rounded-sm text-text-faint transition-[color,background-color,transform] group-hover/trigger:text-text-default hover:bg-interactive-hover',
+          'aui-tool-group-trigger-chevron size-3 shrink-0 rounded-sm text-faint-foreground transition-[color,background-color,transform] group-hover/trigger:text-foreground hover:bg-hover',
           'duration-(--animation-duration) ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none',
           '-rotate-90',
           'group-data-open/trigger:rotate-0',
@@ -152,8 +152,8 @@ function ToolGroupContent({
         className={cn(
           'mt-1.5 flex flex-col gap-1.5',
           'group-data-[variant=ghost]/tool-group-root:mt-1',
-          'group-data-[variant=outline]/tool-group-root:mt-2 group-data-[variant=outline]/tool-group-root:border-t group-data-[variant=outline]/tool-group-root:border-glass-border-subtle group-data-[variant=outline]/tool-group-root:px-3 group-data-[variant=outline]/tool-group-root:pt-2',
-          'group-data-[variant=muted]/tool-group-root:mt-2 group-data-[variant=muted]/tool-group-root:border-t group-data-[variant=muted]/tool-group-root:border-glass-border-subtle group-data-[variant=muted]/tool-group-root:px-3 group-data-[variant=muted]/tool-group-root:pt-2',
+          'group-data-[variant=outline]/tool-group-root:mt-2 group-data-[variant=outline]/tool-group-root:border-t group-data-[variant=outline]/tool-group-root:border-border group-data-[variant=outline]/tool-group-root:px-3 group-data-[variant=outline]/tool-group-root:pt-2',
+          'group-data-[variant=muted]/tool-group-root:mt-2 group-data-[variant=muted]/tool-group-root:border-t group-data-[variant=muted]/tool-group-root:border-border group-data-[variant=muted]/tool-group-root:px-3 group-data-[variant=muted]/tool-group-root:pt-2',
           '[&>*]:animate-in [&>*]:fade-in-0 [&>*]:blur-in-[2px] [&>*]:slide-in-from-top-1 [&>*]:animation-duration-(--animation-duration) [&>*]:ease-[cubic-bezier(0.32,0.72,0,1)]',
           '[&>*]:motion-reduce:animate-none',
           '[&>*:nth-child(2)]:[animation-delay:40ms]',

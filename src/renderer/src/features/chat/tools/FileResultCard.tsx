@@ -77,37 +77,37 @@ export function FileResultCard({
       data-slot="file-result-card"
       data-operation={operation}
       data-status={status}
-      className="glass-surface flex w-full min-w-0 items-center gap-1 rounded-xl py-3 ps-3 pe-1.5 transition-[border-color,box-shadow] hover:border-glass-border-strong"
+      className="bg-surface-muted border border-border flex w-full min-w-0 items-center gap-1 rounded-xl py-3 ps-3 pe-1.5 transition-[border-color,box-shadow] hover:border-border-strong"
     >
       <button
         type="button"
         onClick={onPreview}
         aria-label={`预览 ${filename}`}
-        className="group/file-result flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-lg text-left outline-none focus-visible:ring-1 focus-visible:ring-brand-border"
+        className="group/file-result flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-lg text-left outline-none focus-visible:ring-1 focus-visible:ring-ring"
       >
         <span
           aria-hidden="true"
           className={cn(
-            'bg-glass-hover flex size-8 shrink-0 items-center justify-center rounded-lg font-mono text-[10px] font-semibold',
-            operation === 'read' ? 'text-tool-file' : 'text-tool-write',
+            'bg-hover flex size-8 shrink-0 items-center justify-center rounded-lg font-mono text-[10px] font-semibold',
+            operation === 'read' ? 'text-muted-foreground' : 'text-muted-foreground',
           )}
         >
           {extensionOf(filename)}
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="text-text-default truncate text-[13px] leading-5 font-medium">
+          <span className="text-foreground truncate text-[13px] leading-5 font-medium">
             {filename}
           </span>
           <span
             className={cn(
               'truncate text-[11px] leading-4',
-              status === 'failed' ? 'text-danger' : 'text-text-muted',
+              status === 'failed' ? 'text-danger' : 'text-muted-foreground',
             )}
           >
             {detail}
           </span>
         </span>
-        <span className="text-text-muted group-hover/file-result:text-text-strong flex shrink-0 items-center gap-0.5 pe-1 text-xs transition-colors">
+        <span className="text-muted-foreground group-hover/file-result:text-foreground flex shrink-0 items-center gap-0.5 pe-1 text-xs transition-colors">
           预览
           <ArrowRightIcon className="size-3.5" />
         </span>
@@ -118,7 +118,7 @@ export function FileResultCard({
             <Button
               variant="ghost"
               size="icon-sm"
-              className="text-text-faint hover:text-text-strong"
+              className="text-faint-foreground hover:text-foreground"
               aria-label="文件操作"
             />
           }

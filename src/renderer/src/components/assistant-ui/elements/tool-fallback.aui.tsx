@@ -37,7 +37,7 @@ function ToolFallbackError({
       {...props}
     >
       <p className="aui-tool-fallback-error-header font-semibold text-danger">{headerText}</p>
-      <p className="aui-tool-fallback-error-reason text-text-muted">{errorText}</p>
+      <p className="aui-tool-fallback-error-reason text-muted-foreground">{errorText}</p>
     </div>
   )
 }
@@ -334,11 +334,11 @@ function ApprovalConfirmation({
       className={cn('aui-tool-fallback-approval-confirm flex flex-col gap-2 pt-1', className)}
       {...props}
     >
-      <p className="aui-tool-fallback-approval-confirm-title font-semibold text-text-strong">
+      <p className="aui-tool-fallback-approval-confirm-title font-semibold text-foreground">
         {confirmMeta?.title ?? `${approvalOptionLabel(confirming)}?`}
       </p>
       {confirmDescription && (
-        <p className="aui-tool-fallback-approval-confirm-description text-text-muted">
+        <p className="aui-tool-fallback-approval-confirm-description text-muted-foreground">
           {confirmDescription}
         </p>
       )}
@@ -346,7 +346,7 @@ function ApprovalConfirmation({
         <ul className="aui-tool-fallback-approval-confirm-grants flex flex-col gap-1">
           {confirming.grants.map((grant) => (
             <li key={grant}>
-              <code className="aui-tool-fallback-approval-confirm-grant rounded border border-glass-border-subtle bg-surface-subtle px-1.5 py-0.5 text-xs text-text-default">
+              <code className="aui-tool-fallback-approval-confirm-grant rounded border border-border bg-surface-muted px-1.5 py-0.5 text-xs text-foreground">
                 {grant}
               </code>
             </li>

@@ -1,7 +1,7 @@
 import type { SubagentAvatar as SubagentAvatarValue } from '@/shared/agent/delegateTask'
 import { cn } from '@/renderer/src/lib/utils'
 
-const avatarTone = 'bg-tool-agent-soft text-tool-agent'
+const avatarTone = 'bg-surface-muted text-muted-foreground'
 
 export function SubagentAvatar({
   avatar = '🦊',

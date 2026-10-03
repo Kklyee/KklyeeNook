@@ -88,7 +88,7 @@ export function PermissionSettings({
                 {error}
               </p>
             )}
-            <p className="mt-3 text-xs text-text-muted">
+            <p className="mt-3 text-xs text-muted-foreground">
               默认权限适用于新会话。未分组会话无法使用工作区内修改；工作区外操作和受限模式下的命令需单次审批。
             </p>
           </div>
@@ -111,7 +111,7 @@ export function PermissionSettings({
           </p>
         )}
         {permissionGrants.length === 0 ? (
-          <div className="glass-surface rounded-xl border-dashed px-5 py-9 text-center">
+          <div className="bg-card border border-border rounded-xl border-dashed px-5 py-9 text-center">
             <ShieldCheckIcon className="text-muted-foreground/60 mx-auto size-5" />
             <p className="mt-3 text-sm font-medium">当前没有临时授权</p>
             <p className="text-muted-foreground mx-auto mt-1 max-w-sm text-xs leading-relaxed">
