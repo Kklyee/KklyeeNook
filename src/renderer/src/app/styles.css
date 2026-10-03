@@ -333,6 +333,8 @@ body,
 .tool-row {
   anchor-name: --tool-call;
   anchor-scope: --tool-call;
+  animation: tool-call-row-appear 220ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  animation-delay: var(--tool-call-connector-delay, 0ms);
 }
 
 .tool-row::before {
@@ -349,7 +351,7 @@ body,
   border-end-start-radius: 4px;
   transform-origin: left bottom;
   pointer-events: none;
-  animation: tool-call-connector-branch-draw 180ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  animation: tool-call-connector-branch-draw 220ms cubic-bezier(0.32, 0.72, 0, 1) both;
   animation-delay: var(--tool-call-connector-delay, 0ms);
 }
 
@@ -359,19 +361,28 @@ body,
   }
 }
 
-@keyframes tool-call-connector-branch-draw {
+@keyframes tool-call-row-appear {
   from {
     opacity: 0;
-    transform: scaleX(0);
   }
 
   to {
     opacity: 1;
+  }
+}
+
+@keyframes tool-call-connector-branch-draw {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
     transform: scaleX(1);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .tool-row,
   .tool-row::before {
     animation: none;
   }
