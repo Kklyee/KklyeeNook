@@ -3,15 +3,17 @@ import { useAuiState, type Toolkit, type ToolCallMessagePartComponent } from '@a
 import { completePlanSteps, parseAgentPlan, type AgentPlanStep } from '@/shared/agent/agentPlan'
 import { AgentPlan } from '../../../components/assistant-ui/elements/agent-plan'
 import { ToolCallRenderer } from './ToolCallRenderer'
+import { GenericToolRenderer } from './generic/GenericToolRenderer'
 
 type UpdatePlanArgs = { steps?: AgentPlanStep[] }
 
-const UpdatePlanToolCall: ToolCallMessagePartComponent<UpdatePlanArgs, unknown> = ({ args }) => {
+const UpdatePlanToolCall: ToolCallMessagePartComponent<UpdatePlanArgs, unknown> = (props) => {
+  const { args } = props
   const isThreadRunning = useAuiState((state) => state.thread.isRunning)
   const isLastMessage = useAuiState((state) => state.message.isLast)
   const messageStatus = useAuiState((state) => state.message.status?.type)
   const plan = parseAgentPlan(args)
-  if (!plan) return null
+  if (!plan) return <GenericToolRenderer {...props} />
   const runCompleted = !isThreadRunning && (!isLastMessage || messageStatus === 'complete')
   const displayPlan = runCompleted ? completePlanSteps(plan) : plan
   return <AgentPlan steps={displayPlan.steps} className="max-w-none" />

@@ -38,7 +38,7 @@ function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
 function SelectContent({
   className,
   children,
-  alignItemWithTrigger = true,
+  alignItemWithTrigger = false,
   ...props
 }: SelectPrimitive.Popup.Props & { alignItemWithTrigger?: boolean }) {
   return (
