@@ -1,5 +1,5 @@
 import { useAuiState } from '@assistant-ui/react'
-import { FolderIcon } from 'lucide-react'
+import { FolderOpenIcon } from 'lucide-react'
 import { useWorkspaces } from './WorkspaceProvider'
 
 export function WorkspaceComposerLabel() {
@@ -15,7 +15,7 @@ export function WorkspaceComposerLabel() {
       className="flex min-w-0 items-center gap-1.5 px-3 text-[11px] leading-5 text-faint-foreground"
       title={workspace.rootPath ?? workspace.lastKnownPath}
     >
-      <FolderIcon className="size-3 shrink-0" />
+      <FolderOpenIcon className="size-3.5 shrink-0" strokeWidth={1.5} />
       <span className="truncate">{workspace.displayName}</span>
     </div>
   )

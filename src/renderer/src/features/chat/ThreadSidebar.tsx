@@ -1,5 +1,11 @@
 import { type ComponentProps } from 'react'
-import { BotIcon, CalendarClockIcon, SettingsIcon } from 'lucide-react'
+import {
+  CalendarClockIcon,
+  PanelLeftCloseIcon,
+  PanelLeftOpenIcon,
+  SettingsIcon,
+  SparklesIcon,
+} from 'lucide-react'
 import { Button } from '@/renderer/src/components/ui/button'
 import { cn } from '@/renderer/src/lib/utils'
 import {
@@ -11,7 +17,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-  SidebarTrigger,
   useSidebar,
 } from '@/renderer/src/components/ui/sidebar'
 import { ThreadList } from '@/renderer/src/components/assistant-ui/elements/thread-list.aui'
@@ -31,21 +36,29 @@ function SidebarBrand({ canCollapse }: { canCollapse: boolean }) {
         title="展开侧边栏"
         onClick={toggleSidebar}
       >
-        <BotIcon className="size-4" />
+        <PanelLeftOpenIcon className="size-3.5" strokeWidth={1.5} />
       </Button>
     )
   }
 
   return (
     <div className="flex h-9 min-w-0 items-center gap-2 px-1.5">
-      <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-brand-muted text-brand">
-        <BotIcon className="size-3.5" />
-      </div>
+      <SparklesIcon className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.5} />
       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
         KklyeeNook
       </span>
       {canCollapse && (
-        <SidebarTrigger className="size-7 shrink-0 rounded-md text-faint-foreground hover:bg-hover hover:text-foreground active:bg-active focus-visible:border-ring focus-visible:ring-0" />
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className="size-7 shrink-0 rounded-md text-faint-foreground hover:bg-hover hover:text-foreground active:bg-active focus-visible:border-ring focus-visible:ring-0"
+          aria-label="收起侧边栏"
+          title="收起侧边栏"
+          onClick={toggleSidebar}
+        >
+          <PanelLeftCloseIcon className="size-3.5" strokeWidth={1.5} />
+        </Button>
       )}
     </div>
   )
@@ -70,10 +83,10 @@ function SidebarGlobalNav({
           onClick={onOpenScheduledTasks}
           className={cn(
             collapsed ? 'mx-auto size-8 justify-center rounded-md p-0!' : 'h-9 rounded-md px-2.5',
-            'text-[13px] text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active focus-visible:border-ring focus-visible:ring-0',
+            'text-[13px] text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active focus-visible:border-ring focus-visible:ring-0 [&_svg]:size-3.5',
           )}
         >
-          <CalendarClockIcon className="size-4" />
+          <CalendarClockIcon className="size-3.5" strokeWidth={1.5} />
           {!collapsed && <span>定时任务</span>}
         </SidebarMenuButton>
       </SidebarMenuItem>
@@ -84,10 +97,10 @@ function SidebarGlobalNav({
           onClick={onOpenSettings}
           className={cn(
             collapsed ? 'mx-auto size-8 justify-center rounded-md p-0!' : 'h-9 rounded-md px-2.5',
-            'text-[13px] text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active focus-visible:border-ring focus-visible:ring-0',
+            'text-[13px] text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active focus-visible:border-ring focus-visible:ring-0 [&_svg]:size-3.5',
           )}
         >
-          <SettingsIcon className="size-4" />
+          <SettingsIcon className="size-3.5" strokeWidth={1.5} />
           {!collapsed && <span>设置</span>}
         </SidebarMenuButton>
       </SidebarMenuItem>

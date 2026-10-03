@@ -13,13 +13,25 @@ import type { Workspace } from '@/shared/workspace/workspace'
 import type { AgentSessionSummary } from '@/shared/agent/agentSession'
 
 export const WORKSPACE_CHANGED = 'nook:workspace-changed'
+const WORKSPACE_DISPLAY_MODE_KEY = 'nook:workspace-display-mode'
+const ACTIVE_WORKSPACE_ID_KEY = 'nook:active-workspace-id'
+
+export type WorkspaceDisplayMode = 'single' | 'multiple'
+
+export interface WorkspaceUiState {
+  displayMode: WorkspaceDisplayMode
+  activeWorkspaceId: string | null
+}
+
 export function notifyWorkspaceChanged(): void {
   window.dispatchEvent(new Event(WORKSPACE_CHANGED))
 }
 
-interface WorkspaceState {
+interface WorkspaceState extends WorkspaceUiState {
   workspaces: Workspace[]
   conversations: AgentSessionSummary[]
+  setDisplayMode(mode: WorkspaceDisplayMode): void
+  setActiveWorkspaceId(id: string | null): void
   draftMode: PermissionMode | null
   defaultMode: PermissionMode
   setDraftMode(mode: PermissionMode): void
@@ -32,6 +44,20 @@ interface WorkspaceState {
 const WorkspaceContext = createContext<WorkspaceState | null>(null)
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
+  const [displayMode, setDisplayModeState] = useState<WorkspaceDisplayMode>(() =>
+    window.localStorage.getItem(WORKSPACE_DISPLAY_MODE_KEY) === 'multiple' ? 'multiple' : 'single',
+  )
+  const setDisplayMode = useCallback((mode: WorkspaceDisplayMode) => {
+    window.localStorage.setItem(WORKSPACE_DISPLAY_MODE_KEY, mode)
+    setDisplayModeState(mode)
+  }, [])
+  const [activeWorkspaceId, setActiveWorkspaceIdState] = useState<string | null>(
+    () => window.localStorage.getItem(ACTIVE_WORKSPACE_ID_KEY) || null,
+  )
+  const activeWorkspaceIdRef = useRef(activeWorkspaceId)
+  const activeWorkspaceSelectionInitialized = useRef(
+    window.localStorage.getItem(ACTIVE_WORKSPACE_ID_KEY) !== null,
+  )
   const [draftMode, setDraftModeState] = useState<PermissionMode | null>(null)
   const [defaultMode, setDefaultMode] = useState<PermissionMode>('workspace-write')
   const modeRef = useRef<PermissionMode | null>(null)
@@ -50,6 +76,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     modeRef.current = null
     setDraftModeState(null)
   }, [])
+  const setActiveWorkspaceId = useCallback(
+    (id: string | null) => {
+      activeWorkspaceIdRef.current = id
+      activeWorkspaceSelectionInitialized.current = true
+      window.localStorage.setItem(ACTIVE_WORKSPACE_ID_KEY, id ?? '')
+      setActiveWorkspaceIdState(id)
+      setDraftWorkspaceId(id)
+    },
+    [setDraftWorkspaceId],
+  )
   const getDraftWorkspaceId = useCallback(() => draftRef.current, [])
   const reload = useCallback(async () => {
     const [projects, sessions, settings] = await Promise.all([
@@ -58,7 +94,21 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       window.api.getAgentSettings(),
     ])
     setDefaultMode(settings.defaultPermissionMode ?? 'workspace-write')
-    setWorkspaces(projects.filter((workspace) => workspace.status === 'attached'))
+    const attachedWorkspaces = projects.filter((workspace) => workspace.status === 'attached')
+    setWorkspaces(attachedWorkspaces)
+    const currentWorkspaceId = activeWorkspaceIdRef.current
+    if (
+      currentWorkspaceId &&
+      !attachedWorkspaces.some((workspace) => workspace.id === currentWorkspaceId)
+    ) {
+      setActiveWorkspaceId(attachedWorkspaces[0]?.id ?? null)
+    } else if (
+      attachedWorkspaces.length &&
+      !currentWorkspaceId &&
+      !activeWorkspaceSelectionInitialized.current
+    ) {
+      setActiveWorkspaceId(attachedWorkspaces[0].id)
+    }
     setConversations(sessions)
   }, [])
   useEffect(() => {
@@ -73,6 +123,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     () => ({
       draftMode,
       defaultMode,
+      displayMode,
+      setDisplayMode,
+      activeWorkspaceId,
+      setActiveWorkspaceId,
       setDraftMode,
       getDraftMode,
       workspaces,
@@ -85,6 +139,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [
       draftMode,
       defaultMode,
+      displayMode,
+      setDisplayMode,
+      activeWorkspaceId,
+      setActiveWorkspaceId,
       setDraftMode,
       getDraftMode,
       workspaces,

@@ -22,7 +22,8 @@ import {
 } from '@assistant-ui/react'
 import {
   ArchiveIcon,
-  Loader2Icon,
+  CircleAlertIcon,
+  LoaderCircleIcon,
   MoreHorizontalIcon,
   PencilIcon,
   PlusIcon,
@@ -90,11 +91,15 @@ export const ThreadListNew = forwardRef<
       }
     >
       {collapsed ? (
-        <PlusIcon data-slot="aui_thread-list-new-icon" className="size-4" />
+        <PlusIcon data-slot="aui_thread-list-new-icon" className="size-3.5" strokeWidth={1.5} />
       ) : (
         (children ?? (
           <>
-            <PlusIcon data-slot="aui_thread-list-new-icon" className="size-4 shrink-0" />
+            <PlusIcon
+              data-slot="aui_thread-list-new-icon"
+              className="size-3.5 shrink-0"
+              strokeWidth={1.5}
+            />
             <span
               data-slot="aui_thread-list-new-label"
               className={cn('whitespace-nowrap', labelClassName)}
@@ -113,8 +118,9 @@ ThreadListNew.displayName = 'ThreadListNew'
 export const ThreadListItem: FC = () => {
   const runtimeIsRunning = useAuiState((s) => s.threadListItem.isRunning)
   const sessionId = useAuiState((s) => s.threadListItem.remoteId)
-  const { conversations } = useWorkspaces()
-  const updatedAt = conversations.find(item => item.id === sessionId)?.updatedAt
+  const { conversations, workspaces, setActiveWorkspaceId } = useWorkspaces()
+  const session = conversations.find((item) => item.id === sessionId)
+  const updatedAt = session?.updatedAt
   const overview = useAgentRunOverview(sessionId)
   const isWaiting = overview?.status === 'waiting'
   const isRunning = overview ? isActiveRunStatus(overview.status) && !isWaiting : runtimeIsRunning
@@ -131,7 +137,7 @@ export const ThreadListItem: FC = () => {
   return (
     <ThreadListItemPrimitive.Root
       data-slot="aui_thread-list-item"
-      className="group relative flex h-9 items-center rounded-lg text-muted-foreground transition-colors hover:bg-hover hover:text-foreground focus-visible:bg-hover active:bg-active active:text-foreground data-active:bg-selected data-active:hover:bg-selected data-active:text-foreground has-focus-visible:bg-hover has-data-[state=open]:bg-selected has-data-[state=open]:text-foreground focus-visible:outline-none"
+      className="group relative flex h-[34px] items-center rounded-lg text-muted-foreground transition-colors hover:bg-hover hover:text-foreground focus-visible:bg-hover active:bg-active active:text-foreground data-active:bg-selected data-active:hover:bg-selected data-active:text-foreground has-focus-visible:bg-hover has-data-[state=open]:bg-selected has-data-[state=open]:text-foreground focus-visible:outline-none"
     >
       {isRenaming ? (
         <ThreadListItemRename
@@ -145,26 +151,42 @@ export const ThreadListItem: FC = () => {
           ref={triggerRef}
           data-slot="aui_thread-list-item-trigger"
           className="flex h-full min-w-0 flex-1 items-center rounded-lg pr-2 pl-8 text-start text-[13px] outline-none group-hover:pe-8 group-has-focus-visible:pe-8 group-has-data-[state=open]:pe-8 focus-visible:border-ring focus-visible:ring-0"
+          onClick={() => {
+            const workspaceId = session?.workspaceId
+            setActiveWorkspaceId(
+              workspaceId && workspaces.some((workspace) => workspace.id === workspaceId)
+                ? workspaceId
+                : null,
+            )
+          }}
         >
           {isWaiting ? (
-            <span
+            <CircleAlertIcon
               aria-hidden
               data-slot="aui_thread-list-item-waiting"
-              className="text-faint-foreground me-1.5 flex size-3.5 shrink-0 items-center justify-center text-xs font-semibold"
-            >
-              !
-            </span>
+              className="text-faint-foreground me-1.5 size-3 shrink-0"
+              strokeWidth={1.5}
+            />
           ) : isRunning ? (
-            <Loader2Icon
+            <LoaderCircleIcon
               aria-hidden
               data-slot="aui_thread-list-item-running"
-              className="text-faint-foreground me-1.5 size-3.5 shrink-0 animate-spin"
+              className="text-faint-foreground me-1.5 size-3 shrink-0 animate-spin"
+              strokeWidth={1.5}
             />
           ) : null}
           <span data-slot="aui_thread-list-item-title" className="min-w-0 flex-1 truncate">
             <ThreadListItemPrimitive.Title fallback="新对话" />
           </span>
-          {updatedAt && <time dateTime={new Date(updatedAt).toISOString()} title={new Date(updatedAt).toLocaleString()} className="ml-2 shrink-0 text-[10px] tabular-nums text-faint-foreground group-hover:hidden group-focus-within:hidden group-has-data-[state=open]:hidden">{formatThreadAge(updatedAt)}</time>}
+          {updatedAt && (
+            <time
+              dateTime={new Date(updatedAt).toISOString()}
+              title={new Date(updatedAt).toLocaleString()}
+              className="ml-2 shrink-0 text-[10px] tabular-nums text-faint-foreground group-hover:hidden group-focus-within:hidden group-has-data-[state=open]:hidden"
+            >
+              {formatThreadAge(updatedAt)}
+            </time>
+          )}
           {isRunning && <span className="sr-only">Running</span>}
           {isWaiting && <span className="sr-only">Waiting for approval</span>}
         </ThreadListItemPrimitive.Trigger>
@@ -249,7 +271,7 @@ const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
           />
         }
       >
-        <MoreHorizontalIcon className="size-3.5" />
+        <MoreHorizontalIcon className="size-3.5" strokeWidth={1.5} />
         <span className="sr-only">More options</span>
       </ThreadListItemMorePrimitive.Trigger>
       <ThreadListItemMorePrimitive.Content
@@ -264,7 +286,7 @@ const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
           className="text-muted-foreground hover:bg-hover hover:text-foreground focus:bg-hover focus:text-foreground active:bg-active data-highlighted:bg-hover data-highlighted:text-foreground transition-colors flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none select-none"
           onSelect={onRename}
         >
-          <PencilIcon className="size-4" />
+          <PencilIcon className="size-3.5" strokeWidth={1.5} />
           Rename
         </ThreadListItemMorePrimitive.Item>
         <ThreadListItemPrimitive.Archive
@@ -275,7 +297,7 @@ const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
             />
           }
         >
-          <ArchiveIcon className="size-4" />
+          <ArchiveIcon className="size-3.5" strokeWidth={1.5} />
           Archive
         </ThreadListItemPrimitive.Archive>
         <ThreadListItemPrimitive.Delete
@@ -286,7 +308,7 @@ const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
             />
           }
         >
-          <TrashIcon className="size-4" />
+          <TrashIcon className="size-3.5" strokeWidth={1.5} />
           Delete
         </ThreadListItemPrimitive.Delete>
       </ThreadListItemMorePrimitive.Content>
@@ -297,9 +319,9 @@ const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
 function formatThreadAge(updatedAt: number): string {
   const minutes = Math.max(0, Math.floor((Date.now() - updatedAt) / 60_000))
   if (minutes < 1) return '刚刚'
-  if (minutes < 60) return minutes + '分钟'
+  if (minutes < 60) return minutes + 'm'
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return hours + '小时'
+  if (hours < 24) return hours + 'h'
   const days = Math.floor(hours / 24)
-  return days < 30 ? days + '天' : Math.floor(days / 30) + '个月'
+  return days < 30 ? days + 'd' : Math.floor(days / 30) + 'mo'
 }
