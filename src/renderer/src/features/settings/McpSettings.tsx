@@ -291,7 +291,7 @@ function McpServerForm({ model }: { model: ReturnType<typeof useMcpSettings> }) 
       </div>
       <form className="space-y-3" onSubmit={(event) => void saveServer(event)}>
         <fieldset disabled={saving} className="space-y-3">
-          <div className="bg-card border border-border divide-y divide-border overflow-hidden rounded-2xl">
+          <div className="material-control divide-y divide-border overflow-hidden rounded-2xl">
             <label className={`block ${fieldClass}`}>
               <span className="text-sm font-medium">名称</span>
               <Input
@@ -307,7 +307,7 @@ function McpServerForm({ model }: { model: ReturnType<typeof useMcpSettings> }) 
               <span className="bg-surface-raised rounded-lg px-3 py-1.5 text-sm">STDIO</span>
             </div>
           </div>
-          <div className="bg-card border border-border divide-y divide-border overflow-hidden rounded-2xl">
+          <div className="material-control divide-y divide-border overflow-hidden rounded-2xl">
             <label className={`block ${fieldClass}`}>
               <span className="text-sm font-medium">启动命令</span>
               <Input
@@ -513,7 +513,7 @@ function McpServerList({
       )}
 
       {(settings.mcpServers ?? []).length === 0 ? (
-        <div className="bg-card border border-border rounded-xl border-dashed p-8 text-center">
+        <div className="material-control rounded-xl border-dashed p-8 text-center">
           <ServerIcon className="text-muted-foreground/60 mx-auto size-5" />
           <p className="mt-3 text-sm font-medium">还没有 MCP Server</p>
           <p className="text-muted-foreground mt-1 text-xs">
@@ -533,7 +533,7 @@ function McpServerList({
             const enabledToolCount = tools.filter((tool) => tool.enabled).length
             const configBusy = busy || busyToolKey !== null
             return (
-              <div key={server.id} className="bg-card border border-border overflow-hidden rounded-xl">
+              <div key={server.id} className="material-control overflow-hidden rounded-xl">
                 <div className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{server.name}</p>

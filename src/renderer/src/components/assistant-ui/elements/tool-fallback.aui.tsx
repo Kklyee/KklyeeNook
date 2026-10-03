@@ -346,7 +346,7 @@ function ApprovalConfirmation({
         <ul className="aui-tool-fallback-approval-confirm-grants flex flex-col gap-1">
           {confirming.grants.map((grant) => (
             <li key={grant}>
-              <code className="aui-tool-fallback-approval-confirm-grant rounded border border-border bg-surface-muted px-1.5 py-0.5 text-xs text-foreground">
+              <code className="aui-tool-fallback-approval-confirm-grant material-control rounded px-1.5 py-0.5 text-xs text-foreground">
                 {grant}
               </code>
             </li>

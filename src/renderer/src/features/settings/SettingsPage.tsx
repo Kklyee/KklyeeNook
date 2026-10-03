@@ -35,10 +35,10 @@ export function SettingsPage({
 
   return (
     <section
-      className="bg-background flex h-full min-h-0 w-full flex-col md:flex-row"
+      className="material-base flex h-full min-h-0 w-full flex-col md:flex-row"
       aria-label="设置"
     >
-      <aside className="bg-sidebar text-sidebar-foreground flex w-full shrink-0 flex-col border-b md:h-full md:w-60 md:border-r md:border-b-0">
+      <aside className="material-panel text-sidebar-foreground flex w-full shrink-0 flex-col border-b md:h-full md:w-60 md:border-r md:border-b-0">
         <div className="px-3 pt-3 pb-2">
           <Button
             variant="ghost"
@@ -59,7 +59,7 @@ export function SettingsPage({
               onChange={(event) => setSearch(event.target.value)}
               placeholder="搜索设置…"
               aria-label="搜索设置"
-              className="bg-foreground/[0.04] h-8 border-transparent pl-8 text-xs shadow-none focus-visible:bg-background"
+              className="h-8 pl-8 text-xs shadow-none"
             />
           </div>
         </div>
@@ -90,7 +90,7 @@ export function SettingsPage({
         </nav>
       </aside>
 
-      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+      <main className="material-panel border-t-0 min-h-0 min-w-0 flex-1 overflow-y-auto md:border-l-0">
         <div
           className={cn(
             'mx-auto w-full px-6 py-10 md:px-10 md:py-14 lg:py-16',

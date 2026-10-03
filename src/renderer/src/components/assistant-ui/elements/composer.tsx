@@ -113,7 +113,7 @@ export function ComposerBar({
       data-slot="composer-bar"
       data-drag-active={dragActive || undefined}
       className={cn(
-        'bg-card border border-border flex w-full flex-col gap-2 rounded-[14px] p-2.5 transition-colors',
+        'material-control flex w-full flex-col gap-2 rounded-[14px] p-2.5 transition-colors',
         dragActive && 'border-ring bg-brand-muted',
         className,
       )}
@@ -133,7 +133,7 @@ export function ComposerMenu({
       data-slot="composer-menu"
       data-open={open || undefined}
       className={cn(
-        'frost-raised',
+        'material-raised',
         'absolute bottom-full z-10 mb-2 flex w-72 flex-col gap-0.5 rounded-2xl p-1.5',
         align === 'start' ? 'start-0 origin-bottom-left' : 'end-0 origin-bottom-right',
         'transition-[opacity,scale] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none',
@@ -447,7 +447,7 @@ export function ComposerContext({
     >
       <div
         className={cn(
-          'frost-raised shadow-lg',
+          'material-raised shadow-lg',
           'absolute end-0 bottom-full z-10 mb-2 flex w-60 origin-bottom-right flex-col gap-3.5 rounded-2xl p-4',
           'transition-[opacity,scale] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none',
           'pointer-events-none scale-[0.97] opacity-0',

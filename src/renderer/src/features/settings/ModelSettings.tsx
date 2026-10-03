@@ -673,7 +673,7 @@ function ProviderModels({
           )}
         </div>
         {customModels.length > 0 ? (
-          <div className="bg-card border border-border grid gap-1 rounded-md p-2">
+          <div className="material-control grid gap-1 rounded-md p-2">
             {customModels.map((model) => (
               <div key={model.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-xs">
                 <span className="min-w-0 flex-1 truncate">
@@ -733,7 +733,7 @@ function ProviderModels({
           </Button>
         )}
         {discoveredProvider === provider && discoveredModels.length > 0 && (
-          <div className="bg-card border border-border grid gap-1 rounded-md p-2">
+          <div className="material-control grid gap-1 rounded-md p-2">
             {discoveredModels.map((model) => {
               const added = customModels.some((item) => item.id === model.id)
               const builtin = model.builtin === true

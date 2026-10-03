@@ -95,7 +95,7 @@ function MemoryList({ workspaceId }: { workspaceId: string }) {
           正在读取 Memory…
         </p>
       ) : memories.length === 0 ? (
-        <div className="bg-card border border-border rounded-xl border-dashed px-5 py-9 text-center">
+        <div className="material-control rounded-xl border-dashed px-5 py-9 text-center">
           <BrainIcon className="text-muted-foreground/60 mx-auto size-5" />
           <p className="mt-3 text-sm font-medium">暂无已保存的 Memory</p>
           <p className="text-muted-foreground mt-1 text-xs">保存的长期记忆会显示在这里。</p>

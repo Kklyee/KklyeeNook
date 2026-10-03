@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 
 export function SettingsCard({ children }: { children: ReactNode }) {
   return (
-    <div className="bg-card border border-border divide-y divide-border overflow-hidden rounded-xl">
+    <div className="material-control divide-y divide-border overflow-hidden rounded-xl">
       {children}
     </div>
   )

@@ -592,7 +592,7 @@ function EventDetailPanel({ selected, onClose }: { selected: SelectedEvent; onCl
   ].filter((tab) => tab.visible)
 
   return (
-    <aside className="border-border/60 flex w-[clamp(20rem,36vw,27.5rem)] max-w-[46%] shrink-0 flex-col border-l bg-background max-md:absolute max-md:inset-y-0 max-md:right-0 max-md:z-20 max-md:max-w-[92%] max-md:shadow-2xl">
+    <aside className="material-panel flex w-[clamp(20rem,36vw,27.5rem)] max-w-[46%] shrink-0 flex-col border-l max-md:absolute max-md:inset-y-0 max-md:right-0 max-md:z-20 max-md:max-w-[92%]">
       <div className="border-border/60 flex h-10 items-center gap-2 border-b px-3">
         <span className={cn('rounded px-1.5 py-0.5 text-[10px]', meta.className)}>
           {meta.label}

@@ -66,7 +66,7 @@ function CommandInput({
     <div data-slot="command-input-wrapper" className="p-1 pb-0">
       <InputGroup
         className={cn(
-          'h-8! rounded-lg! border-border bg-hover text-foreground shadow-none! focus-within:border-ring focus-within:ring-2 focus-within:ring-ring *:data-[slot=input-group-addon]:pl-2!',
+          'h-8! rounded-lg! text-foreground shadow-none! focus-within:border-ring focus-within:ring-2 focus-within:ring-ring *:data-[slot=input-group-addon]:pl-2!',
           inputGroupClassName,
         )}
       >

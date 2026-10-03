@@ -222,7 +222,7 @@ const ThreadRoot: FC<{
 
   return (
     <ThreadPrimitive.Root
-      className="aui-root aui-thread-root bg-background @container flex h-full min-h-0 flex-col"
+      className="aui-root aui-thread-root material-base @container flex h-full min-h-0 flex-col"
       style={{
         ['--thread-max-width' as string]: '44rem',
         ['--composer-bg' as string]: 'var(--color-card)',
@@ -259,7 +259,7 @@ const ThreadRoot: FC<{
           {!readOnly && (
             <ThreadPrimitive.ViewportFooter
               className={cn(
-                'aui-thread-viewport-footer bg-background flex flex-col gap-4 overflow-visible pb-4 md:pb-6',
+                'aui-thread-viewport-footer material-base flex flex-col gap-4 overflow-visible pb-4 md:pb-6',
                 !isEmpty && 'sticky bottom-0 mt-auto rounded-t-(--composer-radius)',
               )}
             >
@@ -368,7 +368,7 @@ const Composer: FC<{
               char="/"
               adapter={slash.adapter}
               className={cn(
-                'frost-raised',
+                'material-raised',
                 'absolute inset-x-0 bottom-full z-20 mb-2 max-h-72 overflow-y-auto rounded-2xl p-1.5',
               )}
               aria-label="Skills"
@@ -715,7 +715,7 @@ const AssistantActionBar: FC = () => {
           side="bottom"
           align="start"
           sideOffset={6}
-          className="aui-action-bar-more-content frost-raised data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:animate-out data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-[8rem] overflow-hidden rounded-xl p-1.5"
+          className="aui-action-bar-more-content material-raised data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:animate-out data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-[8rem] overflow-hidden rounded-xl p-1.5"
         >
           <ActionBarPrimitive.ExportMarkdown
             render={

@@ -95,7 +95,7 @@ const copyImagePart = async (part: Pick<ImageMessagePart, 'image'>): Promise<voi
 
 const imageVariants = cva('aui-image-root relative overflow-hidden rounded-lg', {
   variants: {
-    variant: { outline: 'bg-surface border border-border', ghost: '', muted: 'bg-hover' },
+    variant: { outline: 'material-control', ghost: '', muted: 'bg-hover' },
     size: { sm: 'max-w-64', default: 'max-w-96', lg: 'max-w-[512px]', full: 'w-full' },
   },
   defaultVariants: { variant: 'outline', size: 'default' },

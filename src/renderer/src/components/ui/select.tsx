@@ -14,7 +14,7 @@ function SelectTrigger({ className, children, ...props }: SelectPrimitive.Trigge
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       className={cn(
-        'flex h-8 w-full items-center justify-between gap-2 rounded-lg border border-border bg-hover px-2.5 text-sm text-foreground outline-none transition-colors hover:border-border-strong hover:bg-hover active:bg-active focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 data-popup-open:border-ring data-popup-open:bg-selected data-popup-open:ring-2 data-popup-open:ring-ring',
+        'material-control flex h-8 w-full items-center justify-between gap-2 rounded-lg px-2.5 text-sm text-foreground outline-none transition-colors hover:border-border-strong hover:bg-hover active:bg-active focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 data-popup-open:border-ring data-popup-open:bg-selected data-popup-open:ring-2 data-popup-open:ring-ring',
         className,
       )}
       {...props}
@@ -51,7 +51,7 @@ function SelectContent({
         <SelectPrimitive.Popup
           data-slot="select-content"
           className={cn(
-            'frost-raised min-w-(--anchor-width) overflow-hidden rounded-xl p-1.5 text-sm outline-hidden duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
+            'material-raised min-w-(--anchor-width) overflow-hidden rounded-xl p-1.5 text-sm outline-hidden duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
             className,
           )}
           {...props}

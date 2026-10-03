@@ -77,7 +77,7 @@ export function FileResultCard({
       data-slot="file-result-card"
       data-operation={operation}
       data-status={status}
-      className="bg-surface-muted border border-border flex w-full min-w-0 items-center gap-1 rounded-xl py-3 ps-3 pe-1.5 transition-[border-color,box-shadow] hover:border-border-strong"
+      className="material-control flex w-full min-w-0 items-center gap-1 rounded-xl py-3 ps-3 pe-1.5 transition-[border-color,box-shadow] hover:border-border-strong"
     >
       <button
         type="button"

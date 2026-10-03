@@ -13,8 +13,9 @@
   --ui-fg: oklch(0.24 0.007 250);
 
   --ui-surface: oklch(0.995 0.001 250 / 0.82);
-  --ui-surface-muted: oklch(0.955 0.004 250 / 0.76);
-  --ui-surface-raised: oklch(1 0 0 / 0.96);
+  --ui-surface-muted: oklch(0.955 0.004 250 / 0.72);
+  --ui-control: oklch(0.985 0.002 250 / 0.88);
+  --ui-surface-raised: oklch(1 0 0 / 0.94);
 
   --ui-fg-muted: oklch(0.49 0.009 250);
   --ui-fg-faint: oklch(0.63 0.007 250);
@@ -22,14 +23,14 @@
   --ui-border: oklch(0.24 0.007 250 / 0.085);
   --ui-border-strong: oklch(0.24 0.007 250 / 0.15);
 
-  --ui-brand: oklch(0.60 0.075 255);
+  --ui-brand: oklch(0.6 0.075 255);
   --ui-brand-fg: oklch(0.985 0.002 250);
-  --ui-brand-muted: oklch(0.60 0.075 255 / 0.075);
+  --ui-brand-muted: oklch(0.6 0.075 255 / 0.075);
 
   --ui-hover: oklch(0.24 0.007 250 / 0.03);
   --ui-active: oklch(0.24 0.007 250 / 0.06);
   --ui-selected: oklch(0.24 0.007 250 / 0.05);
-  --ui-focus: oklch(0.60 0.075 255 / 0.28);
+  --ui-focus: oklch(0.6 0.075 255 / 0.28);
 
   --ui-success: oklch(0.56 0.085 155);
   --ui-success-muted: oklch(0.56 0.085 155 / 0.085);
@@ -41,30 +42,27 @@
   --ui-blur: 18px;
   --ui-blur-raised: 28px;
 
-  --ui-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.34),
-    0 6px 20px oklch(0.20 0.008 250 / 0.07);
+  --ui-shadow: inset 0 1px 0 oklch(1 0 0 / 0.34), 0 6px 20px oklch(0.2 0.008 250 / 0.07);
 
-  --ui-shadow-raised:
-    inset 0 1px 0 oklch(1 0 0 / 0.48),
-    0 18px 48px oklch(0.20 0.008 250 / 0.12);
+  --ui-shadow-raised: inset 0 1px 0 oklch(1 0 0 / 0.48), 0 18px 48px oklch(0.2 0.008 250 / 0.12);
 
   --ui-overlay: oklch(0.15 0.006 250 / 0.16);
 }
 
 .dark {
-  --ui-bg: oklch(0.155 0.006 250);
-  --ui-fg: oklch(0.90 0.004 250);
+  --ui-bg: oklch(0.175 0.006 250);
+  --ui-fg: oklch(0.9 0.004 250);
 
-  --ui-surface: oklch(0.185 0.007 250 / 0.86);
-  --ui-surface-muted: oklch(0.215 0.007 250 / 0.60);
-  --ui-surface-raised: oklch(0.225 0.008 250 / 0.95);
+  --ui-surface: oklch(0.205 0.007 250 / 0.86);
+  --ui-surface-muted: oklch(0.225 0.007 250 / 0.6);
+  --ui-control: oklch(0.235 0.007 250 / 0.84);
+  --ui-surface-raised: oklch(0.245 0.008 250 / 0.93);
 
   --ui-fg-muted: oklch(0.65 0.006 250);
   --ui-fg-faint: oklch(0.48 0.006 250);
 
   --ui-border: oklch(1 0 0 / 0.05);
-  --ui-border-strong: oklch(1 0 0 / 0.10);
+  --ui-border-strong: oklch(1 0 0 / 0.1);
 
   --ui-brand: oklch(0.69 0.065 255);
   --ui-brand-fg: oklch(0.985 0.002 250);
@@ -73,22 +71,18 @@
   --ui-hover: oklch(1 0 0 / 0.035);
   --ui-active: oklch(1 0 0 / 0.07);
   --ui-selected: oklch(1 0 0 / 0.055);
-  --ui-focus: oklch(0.69 0.065 255 / 0.30);
+  --ui-focus: oklch(0.69 0.065 255 / 0.3);
 
-  --ui-success: oklch(0.70 0.075 160);
-  --ui-success-muted: oklch(0.70 0.075 160 / 0.085);
+  --ui-success: oklch(0.7 0.075 160);
+  --ui-success-muted: oklch(0.7 0.075 160 / 0.085);
   --ui-warning: oklch(0.75 0.075 80);
   --ui-warning-muted: oklch(0.75 0.075 80 / 0.085);
   --ui-danger: oklch(0.65 0.11 25);
   --ui-danger-muted: oklch(0.65 0.11 25 / 0.085);
 
-  --ui-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.020),
-    0 8px 24px oklch(0 0 0 / 0.14);
+  --ui-shadow: inset 0 1px 0 oklch(1 0 0 / 0.02), 0 8px 24px oklch(0 0 0 / 0.14);
 
-  --ui-shadow-raised:
-    inset 0 1px 0 oklch(1 0 0 / 0.032),
-    0 18px 56px oklch(0 0 0 / 0.26);
+  --ui-shadow-raised: inset 0 1px 0 oklch(1 0 0 / 0.032), 0 18px 56px oklch(0 0 0 / 0.26);
 
   --ui-overlay: oklch(0 0 0 / 0.32);
 }
@@ -247,14 +241,24 @@ body,
 }
 
 @layer components {
-  .frost {
+  .material-base {
+    background: var(--ui-bg);
+  }
+
+  .material-panel {
     background: var(--ui-surface);
     border: 1px solid var(--ui-border);
     backdrop-filter: blur(var(--ui-blur)) saturate(108%);
     -webkit-backdrop-filter: blur(var(--ui-blur)) saturate(108%);
   }
 
-  .frost-raised {
+  .material-control {
+    background: var(--ui-control);
+    border: 1px solid var(--ui-border);
+    box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.025);
+  }
+
+  .material-raised {
     background: var(--ui-surface-raised);
     border: 1px solid var(--ui-border-strong);
     backdrop-filter: blur(var(--ui-blur-raised)) saturate(112%);

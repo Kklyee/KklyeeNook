@@ -10,7 +10,7 @@ export function PreviewPanel() {
     <CanvasSplitDocument
       role="complementary"
       aria-label="预览面板"
-      className="bg-background/40 h-full overflow-hidden"
+      className="material-panel h-full overflow-hidden"
     >
       <PreviewHeader />
       <WorkspaceFilePreview key={target.path} target={target} />

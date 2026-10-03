@@ -31,7 +31,7 @@ export function CodeDiff({
     <div
       data-slot="code-diff"
       className={cn(
-        'frost',
+        'material-control',
         'w-full max-w-md overflow-hidden rounded-2xl font-mono text-xs',
         className,
       )}

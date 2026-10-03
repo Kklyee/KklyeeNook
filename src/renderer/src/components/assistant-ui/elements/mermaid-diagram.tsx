@@ -163,7 +163,7 @@ function MermaidZoom({ svg, children }: MermaidZoomProps) {
           </div>
           <div
             data-slot="mermaid-zoom-toolbar"
-            className="aui-mermaid-zoom-toolbar frost-raised absolute top-4 right-4 flex items-center gap-1 rounded-lg p-1"
+          className="aui-mermaid-zoom-toolbar material-raised absolute top-4 right-4 flex items-center gap-1 rounded-lg p-1"
           >
             <button
               type="button"

@@ -111,7 +111,7 @@ export function PermissionSettings({
           </p>
         )}
         {permissionGrants.length === 0 ? (
-          <div className="bg-card border border-border rounded-xl border-dashed px-5 py-9 text-center">
+          <div className="material-control rounded-xl border-dashed px-5 py-9 text-center">
             <ShieldCheckIcon className="text-muted-foreground/60 mx-auto size-5" />
             <p className="mt-3 text-sm font-medium">当前没有临时授权</p>
             <p className="text-muted-foreground mx-auto mt-1 max-w-sm text-xs leading-relaxed">

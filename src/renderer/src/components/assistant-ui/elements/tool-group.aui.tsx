@@ -17,10 +17,10 @@ const toolGroupVariants = cva('aui-tool-group-root group/tool-group w-full', {
   variants: {
     variant: {
       outline:
-        'bg-surface-muted border border-border rounded-lg py-2 transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-[var(--ui-shadow-raised)]',
+        'material-control rounded-lg py-2 transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-[var(--ui-shadow-raised)]',
       ghost: '',
       muted:
-        'bg-surface-muted border border-border rounded-lg py-2 transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-[var(--ui-shadow-raised)]',
+        'material-control rounded-lg py-2 transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-[var(--ui-shadow-raised)]',
     },
   },
   defaultVariants: { variant: 'outline' },

@@ -128,7 +128,7 @@ export function ScheduledTasksPage({ onClose }: { onClose: () => void }) {
             Loading scheduled tasks…
           </p>
         ) : tasks.length === 0 ? (
-          <div className="bg-card border border-border flex flex-col items-center rounded-xl px-6 py-14 text-center">
+          <div className="material-control flex flex-col items-center rounded-xl px-6 py-14 text-center">
             <CalendarClockIcon className="text-muted-foreground size-8" />
             <p className="mt-4 text-sm font-medium">No scheduled tasks</p>
             <p className="text-muted-foreground mt-1 max-w-sm text-xs">
@@ -139,7 +139,7 @@ export function ScheduledTasksPage({ onClose }: { onClose: () => void }) {
             </Button>
           </div>
         ) : (
-          <div className="bg-card border border-border divide-y divide-border overflow-hidden rounded-xl">
+          <div className="material-control divide-y divide-border overflow-hidden rounded-xl">
             {tasks.map((task) => (
               <ScheduledTaskRow
                 key={task.id}

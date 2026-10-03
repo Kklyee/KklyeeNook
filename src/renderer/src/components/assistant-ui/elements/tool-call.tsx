@@ -114,7 +114,7 @@ export function ToolDetailSection({ label, children }: { label: string; children
 }
 
 export const toolCodeClassName =
-  'max-h-72 overflow-auto rounded-md border border-border bg-surface-muted p-2 font-mono text-[11px] leading-5 whitespace-pre-wrap break-words text-foreground'
+  'material-control max-h-72 overflow-auto rounded-md p-2 font-mono text-[11px] leading-5 whitespace-pre-wrap break-words text-foreground'
 
 export function ToolCard({
   toolName,
@@ -162,7 +162,7 @@ export function ToolCard({
       onOpenChange={handleOpenChange}
       style={{ '--animation-duration': `${ANIMATION_DURATION}ms` } as React.CSSProperties}
       className={cn(
-        'bg-surface-muted border border-border relative w-full overflow-hidden rounded-lg transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-[var(--ui-shadow-raised)]',
+        'material-control relative w-full overflow-hidden rounded-lg transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-[var(--ui-shadow-raised)]',
         className,
       )}
     >

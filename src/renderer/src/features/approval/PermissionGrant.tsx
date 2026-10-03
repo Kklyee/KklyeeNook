@@ -29,7 +29,7 @@ export function PermissionGrant({
     <div
       data-slot="permission-grant"
       className={cn(
-        'bg-surface-muted border border-border',
+        'material-control',
         'flex w-full max-w-sm flex-col gap-3.5 rounded-[20px] p-4',
         className,
       )}

@@ -3,7 +3,7 @@ import { AppShell } from './AppShell'
 
 function App(): React.JSX.Element {
   return (
-    <main className="bg-background text-foreground h-full w-full">
+    <main className="material-base text-foreground h-full w-full">
       <AssistantRuntime>
         <AppShell />
       </AssistantRuntime>
