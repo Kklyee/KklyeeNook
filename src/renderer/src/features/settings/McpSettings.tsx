@@ -304,7 +304,7 @@ function McpServerForm({ model }: { model: ReturnType<typeof useMcpSettings> }) 
             </label>
             <div className="flex items-center justify-between px-5 py-4">
               <span className="text-sm font-medium">类型</span>
-              <span className="bg-surface-raised rounded-lg px-3 py-1.5 text-sm">STDIO</span>
+              <span className="bg-surface-muted rounded-lg px-3 py-1.5 text-sm">STDIO</span>
             </div>
           </div>
           <div className="material-control divide-y divide-border overflow-hidden rounded-2xl">

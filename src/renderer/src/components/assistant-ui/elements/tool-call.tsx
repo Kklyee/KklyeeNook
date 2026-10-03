@@ -107,7 +107,7 @@ function formatToolDuration(ms: number): string {
 export function ToolDetailSection({ label, children }: { label: string; children: ReactNode }) {
   return (
     <section className="min-w-0 space-y-1.5">
-      <p className="text-[10px] font-medium text-faint-foreground">{label}</p>
+      <p className="text-[11px] font-medium text-faint-foreground">{label}</p>
       {children}
     </section>
   )
@@ -162,11 +162,11 @@ export function ToolCard({
       onOpenChange={handleOpenChange}
       style={{ '--animation-duration': `${ANIMATION_DURATION}ms` } as React.CSSProperties}
       className={cn(
-        'material-control relative w-full overflow-hidden rounded-lg transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-[var(--ui-shadow-raised)]',
+        'tool-row w-full overflow-visible transition-colors',
         className,
       )}
     >
-      <CollapsibleTrigger className="group/trigger flex h-8 w-full min-w-0 items-center gap-2 bg-transparent px-2.5 text-left outline-none hover:bg-hover data-[state=open]:bg-selected focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border-strong">
+      <CollapsibleTrigger className="group/trigger flex h-8 w-full min-w-0 items-center gap-2 bg-transparent px-2.5 text-left outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border-strong">
         <ToolIcon kind={getToolIconKind(toolName)} />
         <ShimmerLabel
           active={isShimmerActive}
@@ -177,7 +177,7 @@ export function ToolCard({
         </ShimmerLabel>
         <ShimmerLabel
           active={isShimmerActive}
-          className="shimmer-speed-100 shimmer-repeat-delay-0 min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground"
+          className="shimmer-speed-100 shimmer-repeat-delay-0 min-w-0 flex-1 truncate font-mono text-[11px] text-faint-foreground"
           title={summary}
         >
           {summary}
@@ -186,7 +186,7 @@ export function ToolCard({
           <StatusIcon aria-hidden="true" className={cn('size-3.5 shrink-0', statusClassName)} />
         )}
         {elapsedMs !== undefined && (
-          <span className="shrink-0 font-mono text-[10px] tabular-nums text-faint-foreground">
+          <span className="shrink-0 font-mono text-[11px] tabular-nums text-faint-foreground">
             {formatToolDuration(elapsedMs)}
           </span>
         )}

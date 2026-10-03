@@ -101,7 +101,7 @@ export function FileResultCard({
           <span
             className={cn(
               'truncate text-[11px] leading-4',
-              status === 'failed' ? 'text-danger' : 'text-muted-foreground',
+              status === 'failed' ? 'text-danger' : 'text-faint-foreground',
             )}
           >
             {detail}

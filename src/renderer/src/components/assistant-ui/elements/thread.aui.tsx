@@ -299,7 +299,7 @@ const ThreadScrollToBottom: FC = () => {
         <TooltipIconButton
           tooltip="Scroll to bottom"
           variant="outline"
-          className="aui-thread-scroll-to-bottom bg-surface-raised border border-border-strong shadow-[var(--ui-shadow-raised)] hover:border-border-strong absolute -top-12 z-10 self-center rounded-full p-4 disabled:invisible"
+          className="aui-thread-scroll-to-bottom material-control hover:border-border-strong absolute -top-12 z-10 self-center rounded-full p-4 disabled:invisible"
         />
       }
     >
@@ -344,7 +344,7 @@ const Composer: FC<{
         <ComposerPrimitive.Root className="aui-composer-root  relative  flex w-full flex-col ">
           <ComposerPrimitive.AttachmentDropzone
             render={
-              <ComposerBar data-slot="aui_composer-shell" className="max-w-none" />
+              <ComposerBar data-slot="aui_composer-shell" className="composer max-w-none" />
             }
           >
             <ComposerAttachments />
@@ -571,7 +571,7 @@ const AssistantMessage: FC = () => {
     >
       <div
         data-slot="aui_assistant-message-content"
-        className="text-foreground flex flex-col gap-4 px-2 leading-relaxed wrap-break-word"
+        className="text-foreground flex flex-col gap-4 px-2 text-[15px] leading-relaxed wrap-break-word"
       >
         <MessagePrimitive.GroupedParts
           groupBy={groupPartByType({

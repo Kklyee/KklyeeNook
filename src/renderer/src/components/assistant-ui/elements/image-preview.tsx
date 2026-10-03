@@ -225,7 +225,7 @@ function ImageZoom({ src, alt = 'Image preview', children }: ImageZoomProps) {
         </DialogClose>
         <DialogClose
           aria-label="Close zoomed image"
-          className="bg-surface-raised border border-border-strong text-muted-foreground hover:text-foreground hover:bg-hover active:bg-active outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors absolute end-4 top-4 cursor-pointer rounded-lg p-2"
+          className="material-control text-muted-foreground hover:text-foreground hover:bg-hover active:bg-active outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors absolute end-4 top-4 cursor-pointer rounded-lg p-2"
         >
           <XIcon className="size-5" />
         </DialogClose>
