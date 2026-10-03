@@ -155,6 +155,7 @@ function ToolGroupContent({
   ...props
 }: React.ComponentProps<typeof CollapsibleContent>) {
   const anchorScopeId = useId().replace(/[^a-zA-Z0-9_-]/g, '')
+  const toolGroupChildren = flattenToolGroupChildren(children)
 
   return (
     <CollapsibleContent
@@ -186,7 +187,7 @@ function ToolGroupContent({
           '[&>*:nth-child(n+5)]:[animation-delay:160ms]',
         )}
       >
-        {flattenToolGroupChildren(children).map((child, index) => (
+        {toolGroupChildren.map((child, index) => (
           <div
             key={index}
             data-slot="aui-tool-group-node"

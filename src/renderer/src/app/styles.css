@@ -317,26 +317,8 @@ body,
   anchor-scope: all;
 }
 
-.aui-tool-group-trigger {
-  anchor-name: --tool-group-root;
-}
-
 .aui-tool-group-items {
-  position: relative;
   padding-inline-start: 1.5rem;
-}
-
-.aui-tool-group-items::before {
-  position: absolute;
-  position-anchor: --tool-group-root;
-  inset-block-start: 0;
-  inset-block-end: 0;
-  inset-inline-start: 0.5rem;
-  border-inline-start: 1px solid color-mix(in oklch, var(--ui-fg-muted) 42%, transparent);
-  transform-origin: top;
-  animation: tool-call-connector-draw 220ms cubic-bezier(0.32, 0.72, 0, 1) both;
-  content: '';
-  pointer-events: none;
 }
 
 .aui-tool-group-node {
@@ -351,12 +333,15 @@ body,
 .aui-tool-group-node::before {
   content: '';
   position: absolute;
-  inset-block-start: 50%;
+  inset-block-start: calc(50% - 10px);
   position-anchor: var(--tool-call-anchor);
   inset-inline-start: -1rem;
   inline-size: 1rem;
-  border-block-start: 1px solid color-mix(in oklch, var(--ui-fg-muted) 42%, transparent);
-  transform-origin: left;
+  block-size: 10px;
+  border-inline-start: 1px solid color-mix(in oklch, var(--ui-fg-muted) 42%, transparent);
+  border-block-end: 1px solid color-mix(in oklch, var(--ui-fg-muted) 42%, transparent);
+  border-end-start-radius: 4px;
+  transform-origin: left bottom;
   pointer-events: none;
   animation: tool-call-connector-branch-draw 180ms cubic-bezier(0.32, 0.72, 0, 1) both;
   animation-delay: var(--tool-call-connector-delay, 0ms);
@@ -364,25 +349,7 @@ body,
 
 @supports (inset-block-start: anchor(center)) {
   .aui-tool-group-node::before {
-    inset-block-start: anchor(center, 50%);
-  }
-}
-
-@supports (inset-block-start: anchor(bottom)) {
-  .aui-tool-group-items::before {
-    inset-block-start: anchor(bottom, 0px);
-  }
-}
-
-@keyframes tool-call-connector-draw {
-  from {
-    opacity: 0;
-    transform: scaleY(0);
-  }
-
-  to {
-    opacity: 1;
-    transform: scaleY(1);
+    inset-block-start: calc(anchor(center, 50%) - 10px);
   }
 }
 
@@ -399,7 +366,6 @@ body,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .aui-tool-group-items::before,
   .aui-tool-group-node::before {
     animation: none;
   }
