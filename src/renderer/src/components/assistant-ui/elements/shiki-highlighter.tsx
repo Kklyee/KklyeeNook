@@ -77,6 +77,7 @@ const HighlightedCode: FC<{
   options: Omit<ShikiHighlighterProps, "children" | "language" | "theme">;
 }> = ({ code, language, theme, options }) => {
   const highlighted = useShikiHighlighter(code, language, theme, {
+    engine: "javascript",
     ...options,
     defaultColor: "light-dark()",
   });
