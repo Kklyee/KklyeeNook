@@ -295,8 +295,8 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
       const content = input.content.startsWith('/')
         ? normalizePiSkillCommand(input.content, session.resourceLoader.getSkills().skills)
         : input.content
-      if (input.streamingBehavior === 'followUp') await session.followUp(content, input.attachments)
-      else await session.steer(content, input.attachments)
+      if (input.streamingBehavior === 'steer') await session.steer(content, input.attachments)
+      else await session.followUp(content, input.attachments)
     })()
     this.pendingDeliveries.add(delivery)
     try {
@@ -607,7 +607,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
 
       this.piSession = session
       session.setSteeringMode('all')
-      session.setFollowUpMode('all')
+      session.setFollowUpMode('one-at-a-time')
       const steer = session.agent.steer.bind(session.agent)
       session.agent.steer = (message) => {
         this.inputDeliveries.set(message, 'steer')

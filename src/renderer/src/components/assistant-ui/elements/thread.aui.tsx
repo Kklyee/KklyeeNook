@@ -10,6 +10,7 @@ import {
 } from '@/renderer/src/components/assistant-ui/elements/attachment.aui'
 import { File } from './file-preview'
 import { AgentActivityGroup } from '@/renderer/src/features/chat/activity/AgentActivityGroup'
+import { QueuedMessages } from '@/renderer/src/features/chat/QueuedMessages'
 import { ThreadFollowupSuggestions } from '@/renderer/src/components/assistant-ui/elements/follow-up-suggestions.aui'
 import { Image } from './image-preview'
 import { MarkdownText } from '@/renderer/src/components/assistant-ui/elements/markdown-text'
@@ -317,6 +318,7 @@ const Composer: FC<{
     <div className="flex w-full flex-col gap-1.5">
       <ComposerPrimitive.Unstable_TriggerPopoverRoot>
         <ComposerPrimitive.Root className="aui-composer-root  relative  flex w-full flex-col ">
+          <QueuedMessages />
           <ComposerPrimitive.AttachmentDropzone
             render={
               <ComposerBar data-slot="aui_composer-shell" className="composer max-w-none" />
@@ -482,20 +484,19 @@ const ComposerAction: FC<{
             </ComposerPrimitive.StopDictation>
           </AuiIf>
         </AuiIf>
-        <AuiIf condition={(s) => !s.thread.isRunning}>
-          <ComposerPrimitive.Send
-            render={
-              <ComposerSend
-                streaming={false}
-                idle={canSend}
-                disabled={!canSend}
-                className="aui-composer-send"
-              />
-            }
-          >
-            <ArrowUpIcon className="aui-composer-send-icon size-4" />
-          </ComposerPrimitive.Send>
-        </AuiIf>
+        <ComposerPrimitive.Send
+          render={
+            <ComposerSend
+              streaming={false}
+              idle={canSend}
+              disabled={!canSend}
+              className="aui-composer-send"
+              title="发送；运行时排队，Ctrl/Cmd+Shift+Enter 调整当前任务"
+            />
+          }
+        >
+          <ArrowUpIcon className="aui-composer-send-icon size-4" />
+        </ComposerPrimitive.Send>
         <AuiIf condition={(s) => s.thread.isRunning}>
           <ComposerPrimitive.Cancel
             render={

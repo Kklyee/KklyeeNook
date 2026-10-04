@@ -283,9 +283,9 @@ test('starts a product run for an idle thread and uses Pi queue while running', 
   await running.client.sendMessage('session-1', { content: 'follow up' })
   expect(running.sessionRuntime.sendMessage).toHaveBeenCalledWith({
     content: 'follow up',
-    streamingBehavior: 'steer',
+    streamingBehavior: 'followUp',
   })
-  expect(running.agentService.steerRun).toHaveBeenCalledWith('session-1', 'follow up', 'steer')
+  expect(running.agentService.steerRun).toHaveBeenCalledWith('session-1', 'follow up', 'follow-up')
 })
 
 test('preserves follow-up delivery and releases pending inputs when the Pi queue is cleared', async () => {

@@ -108,11 +108,11 @@ export class PiClientService implements PiClient {
       await this.renameThread(threadId, title)
     }
     if (this.agentService.getSession(threadId)?.toSummary().activeRunId || sessionRuntime.isRunning()) {
-      const inputId = this.agentService.steerRun(threadId, input.content, input.streamingBehavior === 'followUp' ? 'follow-up' : 'steer')
+      const inputId = this.agentService.steerRun(threadId, input.content, input.streamingBehavior === 'steer' ? 'steer' : 'follow-up')
       try {
         await sessionRuntime.sendMessage({
           ...input,
-          streamingBehavior: input.streamingBehavior ?? 'steer',
+          streamingBehavior: input.streamingBehavior ?? 'followUp',
         })
       } catch (error) {
         this.agentService.discardPendingInputs(threadId, inputId)

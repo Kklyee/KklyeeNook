@@ -496,6 +496,8 @@ test('maps real Pi turns, batched duplicate steering and follow-up to execution 
   })
   await Promise.all([0, 1, 2].map(() => sessionRuntime.sendMessage({ content: 'same', streamingBehavior: 'steer' })))
   await sessionRuntime.sendMessage({ content: 'same', streamingBehavior: 'followUp' })
+  await sessionRuntime.sendMessage({ content: 'second follow-up' })
+  expect(session.setFollowUpMode).toHaveBeenCalledWith('one-at-a-time')
   expect(boundaries).toEqual([{ type: 'pi_turn_start', piTurnIndex: 0, deliveries: ['initial'] }])
   session.emit({ type: 'auto_retry_start', attempt: 1, maxAttempts: 3, delayMs: 0, errorMessage: 'retry' })
   session.emit({ type: 'auto_retry_end', attempt: 1, success: true })
@@ -509,19 +511,21 @@ test('maps real Pi turns, batched duplicate steering and follow-up to execution 
     { type: 'pi_turn_end', result: 'committed' },
     { type: 'pi_turn_start', piTurnIndex: 2, deliveries: ['follow-up'] },
     { type: 'pi_turn_end', result: 'committed' },
+    { type: 'pi_turn_start', piTurnIndex: 3, deliveries: ['follow-up'] },
+    { type: 'pi_turn_end', result: 'committed' },
     { type: 'pi_agent_settled' },
   ])
   expect(toolEvents.filter((event) => event.type === 'tool_started')).toHaveLength(3)
   expect(toolEvents.filter((event) => event.type === 'tool_finished').every((event) => event.result.status === 'success')).toBe(true)
   expect(toolEvents.at(-1)?.type).toBe('agent_completed')
   const usageEvents = runtimeEvents.filter((event) => event.type === 'context_usage_updated')
-  expect(usageEvents).toHaveLength(3)
+  expect(usageEvents).toHaveLength(4)
   expect(usageEvents.every((event) => event.source === 'step' && event.usage.tokens === 31_000)).toBe(true)
   for (const event of usageEvents) {
     expect(runtimeEvents[runtimeEvents.indexOf(event) + 1]?.type).toBe('pi_turn_end')
   }
   expect(session.setSteeringMode).toHaveBeenCalledWith('all')
-  expect(session.setFollowUpMode).toHaveBeenCalledWith('all')
+  expect(session.setFollowUpMode).toHaveBeenCalledWith('one-at-a-time')
   await sessionRuntime.sendMessage({ content: 'queued before abort', streamingBehavior: 'steer' })
   expect(agent.hasQueuedMessages()).toBe(true)
   await sessionRuntime.cancel()
