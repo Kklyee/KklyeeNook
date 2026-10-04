@@ -170,7 +170,7 @@ const defaultComponents = memoizeMarkdownComponents({
   a: ({ className, href, ...props }) => {
     const chunkId = href?.match(/^https:\/\/knowledge\.local\/chunks\/([^/?#]+)$/)?.[1]
     const linkClassName = cn(
-        'aui-md-a text-primary hover:text-primary/80 underline underline-offset-2',
+        'aui-md-a text-(--markdown-accent) hover:opacity-80 underline underline-offset-2',
         className,
     )
     return chunkId
@@ -267,7 +267,7 @@ const defaultComponents = memoizeMarkdownComponents({
       <code
         className={cn(
           !isCodeBlock &&
-            'aui-md-inline-code bg-brand-muted text-primary rounded-md px-1.5 py-0.5 font-mono text-[0.85em]',
+            'aui-md-inline-code bg-brand-muted text-(--markdown-accent) rounded-md px-1.5 py-0.5 font-mono text-[0.85em]',
           className,
         )}
         {...props}
