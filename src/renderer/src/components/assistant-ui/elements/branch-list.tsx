@@ -42,7 +42,7 @@ function BranchListItems({ children, className, ...props }: ComponentProps<'div'
       className={cn('aui-branch-list-items', className)}
     >
       {items.map((item, index) => (
-        <div key={index} data-slot="branch-list-item" className="aui-branch-list-item">
+        <div key={isValidElement(item) ? item.key ?? index : index} data-slot="branch-list-item" className="aui-branch-list-item">
           {item}
         </div>
       ))}

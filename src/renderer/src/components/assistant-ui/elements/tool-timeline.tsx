@@ -1,8 +1,7 @@
 'use client'
 
-import { useCallback, useRef, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { ChevronDownIcon } from 'lucide-react'
-import { useScrollLock } from '@assistant-ui/react'
 import {
   Collapsible,
   CollapsibleContent,
@@ -25,28 +24,17 @@ export function ToolTimeline({
   trailing: ReactNode
   children: ReactNode
 }) {
-  const root = useRef<HTMLDivElement>(null)
-  const lockScroll = useScrollLock(root, 200)
-  const changeOpen = useCallback(
-    (next: boolean) => {
-      lockScroll()
-      onOpenChange(next)
-    },
-    [lockScroll, onOpenChange],
-  )
-
   return (
     <BranchList.Root className="w-full">
       <Collapsible
-        ref={root}
         data-slot="tool-timeline"
         open={open}
-        onOpenChange={changeOpen}
-        style={{ '--animation-duration': '200ms' } as React.CSSProperties}
+        onOpenChange={onOpenChange}
+        style={{ '--animation-duration': 'var(--motion-expand)' } as React.CSSProperties}
       >
         <BranchList.Trigger>
-          <CollapsibleTrigger className="group/trigger flex h-8 w-full min-w-0 items-center gap-2 rounded-sm bg-transparent text-left text-[13px] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-border-strong">
-            <span className="flex min-w-0 flex-1 items-center gap-2">
+          <CollapsibleTrigger className="group/trigger flex h-[32px] w-full min-w-0 items-center gap-2 rounded-sm bg-transparent text-left text-[13px] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-border-strong">
+            <span className="flex h-[32px] min-w-0 flex-1 items-center gap-2">
               {label}
               <ChevronDownIcon
                 strokeWidth={1.5}
@@ -56,7 +44,7 @@ export function ToolTimeline({
             {trailing}
           </CollapsibleTrigger>
         </BranchList.Trigger>
-        <CollapsibleContent className={cn(collapsePanel, 'outline-none')}>
+        <CollapsibleContent keepMounted className={cn(collapsePanel, 'activity-panel outline-none')}>
           <BranchList.Items className="mt-1">{children}</BranchList.Items>
         </CollapsibleContent>
       </Collapsible>

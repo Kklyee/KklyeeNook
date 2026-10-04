@@ -1,16 +1,22 @@
 'use client'
 
-import '@assistant-ui/react-markdown/styles/dot.css'
+import 'streamdown/styles.css'
+import { unstable_memoizeMarkdownComponents as memoizeMarkdownComponents } from '@assistant-ui/react-markdown'
 
 import {
   type CodeHeaderProps,
-  MarkdownTextPrimitive,
-  unstable_memoizeMarkdownComponents as memoizeMarkdownComponents,
-  useIsMarkdownCodeBlock,
-} from '@assistant-ui/react-markdown'
+  StreamdownTextPrimitive,
+  type StreamdownTextComponents,
+  useIsStreamdownCodeBlock,
+} from '@assistant-ui/react-streamdown'
 import remarkGfm from 'remark-gfm'
 import { type FC, memo, useMemo } from 'react'
-import { TextMessagePartProvider, type TextMessagePartProps } from '@assistant-ui/react'
+import {
+  TextMessagePartProvider,
+  type TextMessagePartProps,
+  useMessagePartText,
+  useSmooth,
+} from '@assistant-ui/react'
 import { CheckIcon, CopyIcon } from 'lucide-react'
 
 import { TooltipIconButton } from '@/renderer/src/components/assistant-ui/elements/tooltip-icon-button'
@@ -26,23 +32,51 @@ type MarkdownTextProps = Partial<TextMessagePartProps> & {
 }
 
 const remarkPlugins = [remarkGfm]
+const pacing = { drainMs: 220, maxCharIntervalMs: 4, maxCharsPerFrame: 14, minCommitMs: 32 }
+const wordFade = { animation: 'nook-word-fade', sep: 'word' as const, duration: 120, stagger: 0 }
 
 const MarkdownTextImpl: FC<MarkdownTextProps> = ({ components }) => {
-  const markdownComponents = useMemo(() => {
-    if (!components) return defaultComponents
-    return { ...defaultComponents, ...memoizeMarkdownComponents(components) }
-  }, [components])
-
+  const part = useSmooth(useMessagePartText(), pacing)
   return (
-    <MarkdownTextPrimitive
-      remarkPlugins={remarkPlugins}
-      className="aui-md"
-      components={markdownComponents}
-      componentsByLanguage={markdownComponentsByLanguage}
-      defer
+    <PacedMarkdown
+      text={part.text}
+      isRunning={part.status.type === 'running'}
+      components={components}
     />
   )
 }
+
+const PacedMarkdown = memo(function PacedMarkdown({
+  text,
+  isRunning,
+  components,
+}: {
+  text: string
+  isRunning: boolean
+  components?: Parameters<typeof memoizeMarkdownComponents>[0]
+}) {
+  const markdownComponents = useMemo(() => {
+    if (!components) return defaultComponents
+    return { ...defaultComponents, ...components }
+  }, [components])
+
+  return (
+    <TextMessagePartProvider text={text} isRunning={isRunning}>
+      <StreamdownTextPrimitive
+        remarkPlugins={remarkPlugins}
+        className="aui-md"
+        containerClassName="streaming-markdown"
+        components={markdownComponents as StreamdownTextComponents}
+        componentsByLanguage={markdownComponentsByLanguage}
+        mode="streaming"
+        smooth={false}
+        animated={wordFade}
+        controls={false}
+        defer
+      />
+    </TextMessagePartProvider>
+  )
+})
 
 export const MarkdownText = memo(MarkdownTextImpl)
 
@@ -226,7 +260,7 @@ const defaultComponents = memoizeMarkdownComponents({
     />
   ),
   code: function Code({ className, ...props }) {
-    const isCodeBlock = useIsMarkdownCodeBlock()
+    const isCodeBlock = useIsStreamdownCodeBlock()
     return (
       <code
         className={cn(

@@ -4,6 +4,7 @@ import {
   useEffect,
   useEffectEvent,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from 'react'
 import type { AgentEventEnvelope } from '@/shared/agent/agentExecutionRecord'
@@ -17,10 +18,29 @@ export interface ActivityRun {
   activities: readonly AgentActivity[]
 }
 
-const AgentActivityContext = createContext<readonly ActivityRun[]>([])
+function createActivityStore() {
+  let groups: readonly ActivityRun[] = []
+  const listeners = new Set<() => void>()
+  return {
+    getSnapshot: () => groups,
+    subscribe: (listener: () => void) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    },
+    publish: (next: readonly ActivityRun[]) => {
+      groups = next
+      listeners.forEach((listener) => listener())
+    },
+  }
+}
 
-export function useActivityRuns() {
-  return useContext(AgentActivityContext)
+const AgentActivityContext = createContext(createActivityStore())
+
+export function useActivitySelector<T>(selector: (groups: readonly ActivityRun[]) => T): T {
+  const store = useContext(AgentActivityContext)
+  return useSyncExternalStore(store.subscribe, () => selector(store.getSnapshot()))
 }
 
 export function AgentActivityProvider({
@@ -30,12 +50,12 @@ export function AgentActivityProvider({
   sessionId?: string
   children: ReactNode
 }) {
-  const [groups, setGroups] = useState<readonly ActivityRun[]>([])
+  const [store] = useState(createActivityStore)
   const { refreshFile } = usePreview()
   const refreshPreviewFile = useEffectEvent(refreshFile)
 
   useEffect(() => {
-    setGroups([])
+    store.publish([])
     if (!sessionId) return
     let disposed = false
     let runs: AgentRun[] = []
@@ -49,7 +69,7 @@ export function AgentActivityProvider({
     const flush = () => {
       timer = undefined
       if (disposed) return
-      setGroups(
+      store.publish(
         runs.map((run) => {
           const previousGroup = previous.get(run.id)
           if (previousGroup?.run === run && !dirty.has(run.id)) return previousGroup
@@ -134,7 +154,7 @@ export function AgentActivityProvider({
       unsubscribe()
       if (timer) clearTimeout(timer)
     }
-  }, [sessionId])
+  }, [sessionId, store])
 
-  return <AgentActivityContext.Provider value={groups}>{children}</AgentActivityContext.Provider>
+  return <AgentActivityContext.Provider value={store}>{children}</AgentActivityContext.Provider>
 }

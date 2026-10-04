@@ -1,11 +1,16 @@
 @import 'tailwindcss';
 @import 'tw-shimmer';
+@source '../../../../node_modules/streamdown/dist/*.js';
 
 @custom-variant dark (&:is(.dark *));
 @custom-variant data-open (&:where([data-state='open'], [data-open]:not([data-open='false'])));
 @custom-variant data-closed (&:where([data-state='closed'], [data-closed]:not([data-closed='false'])));
 
 :root {
+  --motion-fast: 120ms;
+  --motion-normal: 160ms;
+  --motion-expand: 200ms;
+  --motion-ease: cubic-bezier(0.2, 0, 0, 1);
   --window-titlebar-height: 1.75rem;
   --radius: 8px;
 
@@ -469,7 +474,110 @@ body,
   }
 }
 
+[data-slot='aui_assistant-message-root']:has([data-slot='agent-activity-slot'][data-running='true']),
+[data-slot='aui_assistant-message-root']:has(.streaming-markdown[data-status='running']) {
+  content-visibility: visible;
+  contain-intrinsic-size: none;
+}
+
+@keyframes sd-nook-word-fade {
+  from { opacity: 0.25; }
+  to { opacity: 1; }
+}
+
+.aui-md [data-sd-animate] {
+  animation-timing-function: var(--motion-ease);
+}
+
+.agent-activity-slot {
+  min-height: 32px;
+  animation: activity-entrance var(--motion-normal) var(--motion-ease);
+}
+
+.activity-crossfade {
+  display: grid;
+  min-width: 0;
+}
+
+.activity-crossfade-layer {
+  grid-area: 1 / 1;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.activity-crossfade-in {
+  animation: activity-fade-in var(--motion-fast) var(--motion-ease);
+}
+
+.activity-crossfade-out {
+  pointer-events: none;
+  animation: activity-fade-out var(--motion-fast) var(--motion-ease) both;
+}
+
+.activity-row-entrance {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: grid-template-rows var(--motion-normal) var(--motion-ease),
+    opacity var(--motion-fast) var(--motion-ease),
+    transform var(--motion-normal) var(--motion-ease);
+}
+
+.activity-row-entrance[data-entered='true'] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.activity-row-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.activity-panel {
+  opacity: 1;
+  transition: height var(--motion-expand) var(--motion-ease), opacity var(--motion-normal) var(--motion-ease);
+}
+
+.activity-panel[data-starting-style],
+.activity-panel[data-ending-style] {
+  opacity: 0;
+}
+
+@keyframes activity-entrance {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes activity-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes activity-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .aui-md [data-sd-animate],
+  .aui-md [data-sd-animate-marker],
+  .agent-activity-slot,
+  .activity-crossfade-layer {
+    animation: none !important;
+  }
+
+  .activity-crossfade-out { opacity: 0; }
+
+  .activity-row-entrance,
+  .activity-panel { transition: none; }
+
+  [data-slot='aui_assistant-message-root'] .animate-pulse,
+  [data-slot='aui_assistant-message-root'] .animate-spin { animation: none; }
+
   .aui-branch-list-item,
   .aui-branch-list-item::before {
     animation: none;

@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, type FC } from "react";
-import { useAuiState } from "@assistant-ui/react";
+import { useIsCodeFenceIncomplete } from "streamdown";
 import type { SyntaxHighlighterProps } from "@assistant-ui/react-markdown";
 import {
   MermaidDiagram as MermaidDiagramBase,
@@ -38,9 +38,7 @@ const MermaidDiagramImpl: FC<MermaidDiagramProps> = ({
   components: _components,
   language: _language,
 }) => {
-  const isStreaming = useAuiState(
-    (s) => s.optional.part?.status.type === "running",
-  );
+  const isStreaming = useIsCodeFenceIncomplete();
 
   return (
     <MermaidDiagramBase

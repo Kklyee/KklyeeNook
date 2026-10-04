@@ -13,6 +13,7 @@ import { AgentActivityGroup } from '@/renderer/src/features/chat/activity/AgentA
 import { ThreadFollowupSuggestions } from '@/renderer/src/components/assistant-ui/elements/follow-up-suggestions.aui'
 import { Image } from './image-preview'
 import { MarkdownText } from '@/renderer/src/components/assistant-ui/elements/markdown-text'
+import { ThreadScrollViewport, useScrollFollower } from './thread-scroll-follower'
 import {
   ComposerBar,
   ComposerContext,
@@ -74,6 +75,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  memo,
 } from 'react'
 
 export type ThreadComponents = {
@@ -202,14 +204,10 @@ const ThreadRoot: FC<{
         ['--composer-padding' as string]: '8px',
       }}
     >
-      <ThreadPrimitive.Viewport
+      <ThreadScrollViewport
         turnAnchor="bottom"
-        autoScroll
-        scrollToBottomOnRunStart
-        scrollToBottomOnInitialize
-        scrollToBottomOnThreadSwitch
         data-slot="aui_thread-viewport"
-        className="relative flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="relative flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto [overflow-anchor:none] [scroll-behavior:auto] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         <div
           className={cn(
@@ -248,7 +246,7 @@ const ThreadRoot: FC<{
             </ThreadPrimitive.ViewportFooter>
           )}
         </div>
-      </ThreadPrimitive.Viewport>
+      </ThreadScrollViewport>
     </ThreadPrimitive.Root>
   )
 }
@@ -265,18 +263,17 @@ const ThreadMessage: FC = () => {
 }
 
 const ThreadScrollToBottom: FC = () => {
+  const { following, resume } = useScrollFollower()
   return (
-    <ThreadPrimitive.ScrollToBottom
-      render={
-        <TooltipIconButton
-          tooltip="Scroll to bottom"
-          variant="outline"
-          className="aui-thread-scroll-to-bottom material-control hover:border-border-strong absolute -top-12 z-10 self-center rounded-full p-4 disabled:invisible"
-        />
-      }
+    <TooltipIconButton
+      tooltip="Scroll to bottom"
+      variant="outline"
+      disabled={following}
+      onClick={resume}
+      className="aui-thread-scroll-to-bottom material-control hover:border-border-strong absolute -top-12 z-10 self-center rounded-full p-4 disabled:invisible"
     >
       <ArrowDownIcon />
-    </ThreadPrimitive.ScrollToBottom>
+    </TooltipIconButton>
   )
 }
 
@@ -525,6 +522,7 @@ const MessageError: FC = () => {
 
 const AssistantMessage: FC = () => {
   const { readOnly } = useContext(ThreadComponentsContext)
+  const active = useAuiState((state) => state.message.isLast && state.thread.isRunning)
 
   const ACTION_BAR_PT = 'pt-1.5'
   // Keep the action bar inside the contained root's paint box, then cancel its reserved space in flow.
@@ -534,44 +532,18 @@ const AssistantMessage: FC = () => {
     <MessagePrimitive.Root
       data-slot="aui_assistant-message-root"
       data-role="assistant"
-      className="fade-in slide-in-from-bottom-1 animate-in relative -mb-7.5 pb-7.5 duration-150 [contain-intrinsic-size:auto_200px] [content-visibility:auto]"
+      data-streaming={active || undefined}
+      className={cn(
+        'relative -mb-7.5 pb-7.5',
+        active ? '[content-visibility:visible]' : '[contain-intrinsic-size:auto_200px] [content-visibility:auto]',
+      )}
     >
       <div
         data-slot="aui_assistant-message-content"
         className="text-foreground flex flex-col gap-4 px-2 text-[15px] leading-relaxed wrap-break-word"
       >
         <AgentActivityGroup />
-        <MessagePrimitive.GroupedParts
-          groupBy={() => []}
-        >
-          {({ part }) => {
-            switch (part.type) {
-              case 'text':
-                return <MarkdownText />
-              case 'reasoning':
-              case 'tool-call':
-                return null
-              case 'data':
-                return part.dataRendererUI
-              case 'file':
-                return (
-                  <div data-slot="aui_assistant-message-file" className="py-1">
-                    <File {...part} />
-                  </div>
-                )
-              case 'image':
-                return (
-                  <div data-slot="aui_assistant-message-image" className="py-1">
-                    <Image {...part} />
-                  </div>
-                )
-              case 'indicator':
-                return null
-              default:
-                return null
-            }
-          }}
-        </MessagePrimitive.GroupedParts>
+        <AssistantMessageParts />
         <MessageError />
       </div>
 
@@ -590,6 +562,29 @@ const AssistantMessage: FC = () => {
     </MessagePrimitive.Root>
   )
 }
+
+const ungroupedParts = () => []
+
+const AssistantMessageParts = memo(function AssistantMessageParts() {
+  return (
+    <MessagePrimitive.GroupedParts groupBy={ungroupedParts}>
+      {({ part }) => {
+        switch (part.type) {
+          case 'text':
+            return <MarkdownText />
+          case 'data':
+            return part.dataRendererUI
+          case 'file':
+            return <div data-slot="aui_assistant-message-file" className="py-1"><File {...part} /></div>
+          case 'image':
+            return <div data-slot="aui_assistant-message-image" className="py-1"><Image {...part} /></div>
+          default:
+            return null
+        }
+      }}
+    </MessagePrimitive.GroupedParts>
+  )
+})
 
 const AssistantActionBar: FC = () => {
   return (

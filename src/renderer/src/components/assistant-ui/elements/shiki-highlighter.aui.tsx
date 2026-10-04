@@ -3,6 +3,7 @@
 import type { FC } from "react";
 import type { ShikiHighlighterProps } from "react-shiki";
 import type { SyntaxHighlighterProps as AUIProps } from "@assistant-ui/react-markdown";
+import { useIsCodeFenceIncomplete } from "streamdown";
 import {
   resolveCodeLanguage,
   SyntaxHighlighter as SyntaxHighlighterBase,
@@ -21,6 +22,10 @@ export const SyntaxHighlighter: FC<HighlighterProps> = ({
   components: _components,
   ...props
 }) => {
+  const incomplete = useIsCodeFenceIncomplete();
+  if (incomplete) {
+    return <pre className="aui-md-pre border-border/50 bg-muted/30 overflow-x-auto rounded-b-xl border border-t-0 p-3.5 text-[13px] leading-relaxed"><code>{props.code}</code></pre>;
+  }
   return (
     <SyntaxHighlighterBase
       {...props}

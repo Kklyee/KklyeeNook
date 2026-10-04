@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
 import {
   BotIcon,
   CheckIcon,
@@ -10,7 +10,6 @@ import {
   XCircleIcon,
 } from 'lucide-react'
 import {
-  useScrollLock,
   useToolCallElapsed,
   type ToolCallMessagePartStatus,
 } from '@assistant-ui/react'
@@ -160,9 +159,7 @@ function ToolCardDisclosure({
   defaultOpen = false,
   className,
 }: ToolCardProps) {
-  const cardRef = useRef<HTMLDivElement>(null)
   const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen)
-  const lockScroll = useScrollLock(cardRef, ANIMATION_DURATION)
   const elapsedMs = useToolCallElapsed()
   const isControlled = controlledOpen !== undefined
   const open = isControlled ? controlledOpen : uncontrolledOpen
@@ -183,16 +180,14 @@ function ToolCardDisclosure({
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
-      lockScroll()
       if (!isControlled) setUncontrolledOpen(nextOpen)
       controlledOnOpenChange?.(nextOpen)
     },
-    [controlledOnOpenChange, isControlled, lockScroll],
+    [controlledOnOpenChange, isControlled],
   )
 
   return (
     <Collapsible
-      ref={cardRef}
       data-slot="tool-card"
       data-running={statusType === 'running' ? 'true' : undefined}
       aria-busy={statusType === 'running'}

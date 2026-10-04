@@ -34,6 +34,7 @@ vi.mock('@assistant-ui/react', () => {
       },
     },
     useAuiState: (selector: (value: typeof state) => unknown) => selector(state),
+    useAuiEvent: () => undefined,
   }
 })
 
@@ -50,7 +51,7 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
-test('follows generated chat output while preserving assistant-ui scroll behavior', async () => {
+test('delegates scrolling to the unified follower', async () => {
   const container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
@@ -58,10 +59,10 @@ test('follows generated chat output while preserving assistant-ui scroll behavio
   await act(() => root!.render(createElement(Thread)))
 
   expect(mocks.viewportProps).toMatchObject({
-    autoScroll: true,
+    autoScroll: false,
     turnAnchor: 'bottom',
-    scrollToBottomOnRunStart: true,
-    scrollToBottomOnInitialize: true,
-    scrollToBottomOnThreadSwitch: true,
+    scrollToBottomOnRunStart: false,
+    scrollToBottomOnInitialize: false,
+    scrollToBottomOnThreadSwitch: false,
   })
 })
