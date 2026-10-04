@@ -417,25 +417,30 @@ body,
 }
 
 [data-slot='tool-timeline'] .aui-branch-list-item::before {
-  border-left-color: color-mix(in oklch, var(--ui-fg-muted) 45%, transparent);
+  border-left-color: transparent;
   border-bottom-color: color-mix(in oklch, var(--ui-fg-muted) 45%, transparent);
   display: block;
-  top: -0.375rem;
+  top: 1rem;
   left: -0.75rem;
   right: calc(100% - 1px);
   bottom: auto;
-  height: calc(1rem + 0.375rem);
+  height: 0;
+  border-end-start-radius: 0;
   animation: none;
 }
 
-[data-slot='tool-timeline'] .aui-branch-list-item:not(:last-child)::after {
-  content: '';
-  position: absolute;
-  left: -0.75rem;
-  top: 1rem;
-  bottom: -0.375rem;
-  border-left: 1px solid color-mix(in oklch, var(--ui-fg-muted) 45%, transparent);
-  pointer-events: none;
+[data-slot='tool-timeline'] .aui-branch-list-item:last-child {
+  position: static;
+}
+
+[data-slot='tool-timeline'] .aui-branch-list-item:last-child::before {
+  top: anchor(bottom --branch-list-trigger);
+  left: calc(anchor(left --branch-list-trigger) + 0.75rem);
+  right: calc(anchor(left --branch-list-item) - 1px);
+  bottom: calc(anchor(top --branch-list-item) + 1rem);
+  height: auto;
+  border-left-color: color-mix(in oklch, var(--ui-fg-muted) 45%, transparent);
+  border-end-start-radius: 4px;
 }
 
 [data-slot='tool-timeline'] .tabular-nums {
