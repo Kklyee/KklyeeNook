@@ -8,7 +8,7 @@ import {
   type ComponentProps,
   type ReactNode,
 } from 'react'
-import { ThreadPrimitive, useAuiState } from '@assistant-ui/react'
+import { ThreadPrimitive, useAuiEvent, useAuiState } from '@assistant-ui/react'
 
 const ScrollFollowerContext = createContext({ following: true, resume: () => {}, pause: () => {} })
 
@@ -23,6 +23,7 @@ export function ThreadScrollViewport({
   const viewportRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const followRef = useRef(true)
+  const smoothRef = useRef(false)
   const scheduleRef = useRef(() => {})
   const initializeRef = useRef(() => {})
   const pauseRef = useRef(() => {})
@@ -36,6 +37,10 @@ export function ThreadScrollViewport({
     setFollowing(true)
     scheduleRef.current()
   }, [])
+
+  useAuiEvent('thread.runStart', () => {
+    smoothRef.current = true
+  })
 
   useLayoutEffect(() => {
     const viewport = viewportRef.current
@@ -69,15 +74,23 @@ export function ThreadScrollViewport({
       target = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
       if (followRef.current && !frame) frame = requestAnimationFrame(tick)
     }
-    const initialize = () => {
+    const snapToBottom = () => {
       cancelAnimationFrame(frame)
       frame = 0
-      followRef.current = true
-      setFollowing(true)
       target = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
       viewport.scrollTop = target
       lastTop = viewport.scrollTop
       lastBottom = target
+    }
+    const initialize = () => {
+      followRef.current = true
+      setFollowing(true)
+      snapToBottom()
+    }
+    const resize = () => {
+      if (!followRef.current) return
+      if (smoothRef.current) schedule()
+      else snapToBottom()
     }
     const scroll = () => {
       const top = viewport.scrollTop
@@ -116,7 +129,7 @@ export function ThreadScrollViewport({
     scheduleRef.current = schedule
     initializeRef.current = initialize
     pauseRef.current = pause
-    const observer = new ResizeObserver(schedule)
+    const observer = new ResizeObserver(resize)
     observer.observe(content)
     observer.observe(viewport)
     viewport.addEventListener('scroll', scroll, { passive: true })
@@ -139,6 +152,10 @@ export function ThreadScrollViewport({
       reducedMotion.removeEventListener('change', schedule)
     }
   }, [resume])
+
+  useLayoutEffect(() => {
+    smoothRef.current = false
+  }, [threadId, isLoading])
 
   useLayoutEffect(() => {
     initializeRef.current()
