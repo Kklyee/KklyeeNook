@@ -31,7 +31,8 @@ export function AppearanceSettings() {
       <SettingsCard>
         <SettingsField label="半透明毛玻璃" description="为窗口和侧栏启用半透明材质。关闭后使用实色背景，保留壁纸选择。">
           <Button
-            variant="outline"
+            variant="ghost"
+            className="h-5 w-9 justify-self-end rounded-full border-0 p-0 hover:bg-transparent active:bg-transparent"
             role="switch"
             aria-label="半透明毛玻璃"
             aria-checked={enabled}
@@ -40,7 +41,6 @@ export function AppearanceSettings() {
             <span className={`flex h-5 w-9 items-center rounded-full p-0.5 ${enabled ? 'bg-brand' : 'bg-muted'}`}>
               <span className={`size-4 rounded-full bg-foreground transition-transform ${enabled ? 'translate-x-4' : ''}`} />
             </span>
-            {enabled ? '已开启' : '已关闭'}
           </Button>
         </SettingsField>
       </SettingsCard>
