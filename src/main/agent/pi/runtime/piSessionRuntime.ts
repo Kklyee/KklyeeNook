@@ -59,6 +59,7 @@ import type { AgentConfigStore } from '@/main/settings/agentConfigStore'
 import type { CredentialStore } from '@/main/settings/credentialStore'
 import type { ToolRegistry } from '@/main/tools/toolRegistry'
 import type { AgentEvent } from '@/shared/agent/agentEvent'
+import type { PiQueueMutation, PiQueueSnapshot } from '@/shared/pi/piClient'
 import type { InputDelivery } from '@/shared/agent/agentEvent'
 import type { ExecutionBoundaryEvent } from '@/main/agent/agentRuntime'
 import type { AgentSkill } from '@/shared/agent/agentSkill'
@@ -118,6 +119,7 @@ export interface PiSessionRuntimePort {
   ): Promise<void>
   cancel(): Promise<void>
   clearQueue(): { steering: string[]; followUp: string[] }
+  updateQueuedMessage(input: PiQueueMutation): PiQueueSnapshot
   getAvailableModels(): Promise<PiModelInfo[]>
   applyConfiguredModelSelection(): Promise<void>
   setModel(input: { provider: string; modelId: string }): Promise<void>
@@ -165,6 +167,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
   private readonly productEventListeners = new Set<PiSessionProductEventListener>()
   private readonly executionEventListeners = new Set<PiSessionExecutionEventListener>()
   private readonly pendingDeliveries = new Set<Promise<void>>()
+  private queueGeneration = 0
   private unsubscribeDeliveryBarrier?: () => void
   private pendingPiTurn = false
   private deliveredInputs: InputDelivery[] = []
@@ -289,8 +292,10 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
   }
 
   async sendMessage(input: PiSendMessageInput): Promise<void> {
+    const generation = this.queueGeneration
     const delivery = (async () => {
       await this.initialize()
+      if (generation !== this.queueGeneration) throw new Error('队列已清空，请重新发送')
       const session = this.getPiSession()
       const content = input.content.startsWith('/')
         ? normalizePiSkillCommand(input.content, session.resourceLoader.getSkills().skills)
@@ -383,12 +388,17 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
   }
 
   async cancel(): Promise<void> {
-    this.piSession?.clearQueue()
+    this.clearQueue()
     await this.piSession?.abort()
   }
 
   clearQueue(): { steering: string[]; followUp: string[] } {
+    this.queueGeneration += 1
     return this.piSession?.clearQueue() ?? { steering: [], followUp: [] }
+  }
+
+  updateQueuedMessage(input: PiQueueMutation): PiQueueSnapshot {
+    return this.getPiSession().updateQueuedMessage(input.mode, input.expected, input.index, input.action, 'value' in input ? input.value : undefined)
   }
 
   async getAvailableModels(): Promise<PiModelInfo[]> {

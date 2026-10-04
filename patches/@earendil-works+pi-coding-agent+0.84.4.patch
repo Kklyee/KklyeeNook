@@ -1,0 +1,44 @@
+diff --git a/node_modules/@earendil-works/pi-coding-agent/dist/core/agent-session.d.ts b/node_modules/@earendil-works/pi-coding-agent/dist/core/agent-session.d.ts
+--- a/node_modules/@earendil-works/pi-coding-agent/dist/core/agent-session.d.ts
++++ b/node_modules/@earendil-works/pi-coding-agent/dist/core/agent-session.d.ts
+@@ -436,6 +436,7 @@
+         steering: string[];
+         followUp: string[];
+     };
++    updateQueuedMessage(mode: "steer" | "followUp", expected: readonly string[], index: number, action: "remove" | "edit" | "move" | "steer", value?: string | number): { steering: string[]; followUp: string[] };
+     /** Number of pending messages (includes both steering and follow-up) */
+     get pendingMessageCount(): number;
+     /** Get pending steering messages (read-only) */
+diff --git a/node_modules/@earendil-works/pi-coding-agent/dist/core/agent-session.js b/node_modules/@earendil-works/pi-coding-agent/dist/core/agent-session.js
+index fd82b71..b5b35d7 100644
+--- a/node_modules/@earendil-works/pi-coding-agent/dist/core/agent-session.js
++++ b/node_modules/@earendil-works/pi-coding-agent/dist/core/agent-session.js
+@@ -1201,6 +1201,28 @@ export class AgentSession {
+         this._emitQueueUpdate();
+         return { steering, followUp };
+     }
++    updateQueuedMessage(mode, expected, index, action, value) {
++        const messages = mode === "steer" ? this._steeringMessages : this._followUpMessages;
++        if (messages.length !== expected.length || messages.some((text, i) => text !== expected[i]) || !Number.isInteger(index) || index < 0 || index >= messages.length) {
++            throw new Error("Queue changed; refresh and try again");
++        }
++        if (action === "edit") {
++            if (typeof value !== "string" || !value.trim()) throw new Error("Queued message cannot be empty");
++            if (value.startsWith("/")) this._throwIfExtensionCommand(value);
++            value = expandPromptTemplate(this._expandSkillCommand(value), [...this.promptTemplates]);
++        } else if (action === "move" && (!Number.isInteger(value) || value < 0 || value >= messages.length)) {
++            throw new Error("Invalid queue position");
++        } else if (action !== "remove" && action !== "move" && !(action === "steer" && mode === "followUp")) {
++            throw new Error("Invalid queue action");
++        }
++        this.agent.updateQueuedMessage(mode, expected, index, action, value);
++        if (action === "steer") this._steeringMessages.push(messages.splice(index, 1)[0]);
++        else if (action === "remove") messages.splice(index, 1);
++        else if (action === "edit") messages[index] = value;
++        else messages.splice(value, 0, messages.splice(index, 1)[0]);
++        this._emitQueueUpdate();
++        return { steering: [...this._steeringMessages], followUp: [...this._followUpMessages] };
++    }
+     /** Number of pending messages (includes both steering and follow-up) */
+     get pendingMessageCount() {
+         return this._steeringMessages.length + this._followUpMessages.length;

@@ -46,6 +46,7 @@ function setup(running = false) {
     runMessage: vi.fn(),
     cancel: vi.fn(),
     clearQueue: vi.fn(() => ({ steering: [], followUp: [] })),
+    updateQueuedMessage: vi.fn(() => ({ steering: [], followUp: [] })),
     getAvailableModels: vi.fn(() => Promise.resolve([])),
     applyConfiguredModelSelection: vi.fn(),
     setModel: vi.fn(),
@@ -295,6 +296,19 @@ test('preserves follow-up delivery and releases pending inputs when the Pi queue
   expect(running.sessionRuntime.sendMessage).toHaveBeenCalledWith({ content: 'later', streamingBehavior: 'followUp' })
   await running.client.clearQueue('session-1')
   expect(running.agentService.discardPendingInputs).toHaveBeenCalledWith('session-1')
+})
+
+test('rebuilds pending input correlation from the native queue after a mutation', async () => {
+  const running = setup(true)
+  await running.client.sendMessage('session-1', { content: 'first' })
+  vi.mocked(running.sessionRuntime.updateQueuedMessage).mockReturnValue({ steering: ['now'], followUp: ['edited', 'last'] })
+  const input = { mode: 'followUp' as const, expected: ['first', 'last'], index: 0, action: 'edit' as const, value: 'edited' }
+  expect(await running.client.updateQueuedMessage('session-1', input)).toEqual({ steering: ['now'], followUp: ['edited', 'last'] })
+  expect(running.sessionRuntime.updateQueuedMessage).toHaveBeenCalledWith(input)
+  expect(running.agentService.discardPendingInputs).toHaveBeenCalledWith('session-1')
+  expect(vi.mocked(running.agentService.steerRun).mock.calls.slice(-3)).toEqual([
+    ['session-1', 'now', 'steer'], ['session-1', 'edited', 'follow-up'], ['session-1', 'last', 'follow-up'],
+  ])
 })
 
 test('resolves staged file context before starting an idle product run', async () => {

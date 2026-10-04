@@ -37,6 +37,7 @@ function makeClient(getSnapshot: () => PiThreadSnapshot = () => snapshot) {
     sendMessage: vi.fn(async () => undefined),
     cancelRun: vi.fn(async () => undefined),
     clearQueue: vi.fn(async () => ({ steering: ['one'], followUp: ['two'] })),
+    updateQueuedMessage: vi.fn(async () => ({ steering: [], followUp: ['edited'] })),
     getAvailableModels: vi.fn(async () => []),
     setModel: vi.fn(async () => undefined),
     setThinkingLevel: vi.fn(async () => undefined),
@@ -78,6 +79,35 @@ test('serves the installed Pi HTTP contract through a random loopback endpoint',
   await piClient.sendMessage('thread-1', { content: 'hello' })
   await piClient.cancelRun('thread-1')
   expect(await piClient.clearQueue('thread-1')).toEqual({ steering: ['one'], followUp: ['two'] })
+  const mutation = { mode: 'followUp', expected: ['first'], index: 0, action: 'edit', value: 'edited' }
+  const queueResponse = await fetch(`${server.baseUrl}/threads/thread-1/queue/item`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(mutation),
+  })
+  expect(queueResponse.status).toBe(200)
+  expect(await queueResponse.json()).toEqual({ steering: [], followUp: ['edited'] })
+  expect(client.updateQueuedMessage).toHaveBeenCalledWith('thread-1', mutation)
+  for (const action of ['remove', 'steer']) {
+    const input = { mode: 'followUp', expected: ['first'], index: 0, action }
+    const response = await fetch(`${server.baseUrl}/threads/thread-1/queue/item`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
+    })
+    expect(response.status).toBe(200)
+    expect(client.updateQueuedMessage).toHaveBeenCalledWith('thread-1', input)
+  }
+  const invalidSteerResponse = await fetch(`${server.baseUrl}/threads/thread-1/queue/item`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ mode: 'steer', expected: ['first'], index: 0, action: 'steer' }),
+  })
+  expect(invalidSteerResponse.status).toBe(400)
+  const invalidQueueResponse = await fetch(`${server.baseUrl}/threads/thread-1/queue/item`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...mutation, value: ' ' }),
+  })
+  expect(invalidQueueResponse.status).toBe(400)
+  vi.mocked(client.updateQueuedMessage).mockRejectedValueOnce(new Error('Queue changed'))
+  const staleQueueResponse = await fetch(`${server.baseUrl}/threads/thread-1/queue/item`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(mutation),
+  })
+  expect(staleQueueResponse.status).toBe(409)
   expect(await piClient.getAvailableModels({ workspacePath: 'C:/workspace' })).toEqual([])
   await piClient.setModel('thread-1', { provider: 'test', modelId: 'model' })
   await piClient.setThinkingLevel('thread-1', 'high')

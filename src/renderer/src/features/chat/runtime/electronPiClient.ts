@@ -3,6 +3,7 @@ import { notifyWorkspaceChanged } from '../../workspaces/WorkspaceProvider'
 import type { PiClient, PiSendMessageInput } from '@assistant-ui/react-pi'
 import { createPiHttpClient } from '@assistant-ui/react-pi'
 import type { ContextAwarePiClient } from '@/shared/pi/piClient'
+import type { PiQueueMutation, PiQueueSnapshot } from '@/shared/pi/piClient'
 import {
   restorePendingContextAttachmentIds,
   takePendingContextAttachmentIds,
@@ -20,6 +21,7 @@ export function createElectronPiClient(
   const endpoint = baseUrl.replace(/\/+$/, '')
   const attachmentAwareClient: ContextAwarePiClient = {
     ...httpClient,
+    updateQueuedMessage: (threadId, input) => updateQueuedMessageAt(endpoint, threadId, input),
     subscribe(threadId, listener, options) {
       return httpClient.subscribe(threadId, listener, options)
     },
@@ -80,4 +82,27 @@ export function createElectronPiClient(
   }
 
   return attachmentAwareClient
+}
+
+async function updateQueuedMessageAt(
+  endpoint: string,
+  threadId: string,
+  input: PiQueueMutation,
+): Promise<PiQueueSnapshot> {
+  const response = await fetch(`${endpoint}/threads/${encodeURIComponent(threadId)}/queue/item`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  if (!response.ok) throw new Error('队列已变化或操作失败，请重试')
+  return response.json()
+}
+
+export async function updateQueuedMessage(
+  threadId: string,
+  input: PiQueueMutation,
+): Promise<PiQueueSnapshot> {
+  const status = await window.api.agentBackend.getStatus()
+  if (status.state !== 'ready') throw new Error('Agent backend unavailable')
+  return updateQueuedMessageAt(status.info.baseUrl.replace(/\/+$/, ''), threadId, input)
 }

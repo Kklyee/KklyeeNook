@@ -1,0 +1,44 @@
+diff --git a/node_modules/@earendil-works/pi-agent-core/dist/agent.d.ts b/node_modules/@earendil-works/pi-agent-core/dist/agent.d.ts
+index 42e1eab..0bad03e 100644
+--- a/node_modules/@earendil-works/pi-agent-core/dist/agent.d.ts
++++ b/node_modules/@earendil-works/pi-agent-core/dist/agent.d.ts
+@@ -84,6 +84,7 @@ export declare class Agent {
+     steer(message: AgentMessage): void;
+     /** Queue a message to run only after the agent would otherwise stop. */
+     followUp(message: AgentMessage): void;
++    updateQueuedMessage(mode: "steer" | "followUp", expected: readonly string[], index: number, action: "remove" | "edit" | "move" | "steer", value?: string | number): void;
+     /** Remove all queued steering messages. */
+     clearSteeringQueue(): void;
+     /** Remove all queued follow-up messages. */
+diff --git a/node_modules/@earendil-works/pi-agent-core/dist/agent.js b/node_modules/@earendil-works/pi-agent-core/dist/agent.js
+index ee4f225..e5f66fe 100644
+--- a/node_modules/@earendil-works/pi-agent-core/dist/agent.js
++++ b/node_modules/@earendil-works/pi-agent-core/dist/agent.js
+@@ -177,6 +177,27 @@ export class Agent {
+     followUp(message) {
+         this.followUpQueue.enqueue(message);
+     }
++    updateQueuedMessage(mode, expected, index, action, value) {
++        const queue = mode === "steer" ? this.steeringQueue : this.followUpQueue;
++        const users = queue.messages.map((message, position) => ({ message, position })).filter(({ message }) => message.role === "user");
++        const texts = users.map(({ message }) => typeof message.content === "string" ? message.content : message.content.filter((part) => part.type === "text").map((part) => part.text).join(""));
++        if (texts.length !== expected.length || texts.some((text, i) => text !== expected[i]) || !users[index]) {
++            throw new Error("Queue changed; refresh and try again");
++        }
++        if (action === "steer" && mode !== "followUp") throw new Error("Invalid queue action");
++        const item = users[index];
++        if (action === "steer") {
++            queue.messages.splice(item.position, 1);
++            this.steer(item.message);
++        }
++        else if (action === "remove") queue.messages.splice(item.position, 1);
++        else if (action === "edit") {
++            item.message.content = [{ type: "text", text: value }, ...(Array.isArray(item.message.content) ? item.message.content.filter((part) => part.type !== "text") : [])];
++        } else if (action === "move") {
++            queue.messages.splice(item.position, 1);
++            queue.messages.splice(users[value].position, 0, item.message);
++        }
++    }
+     /** Remove all queued steering messages. */
+     clearSteeringQueue() {
+         this.steeringQueue.clear();

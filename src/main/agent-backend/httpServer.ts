@@ -15,6 +15,7 @@ import type {
 } from '@assistant-ui/react-pi/node'
 
 import type { ContextAwarePiClient } from '@/shared/pi/piClient'
+import type { PiQueueMutation } from '@/shared/pi/piClient'
 
 const HOST = '127.0.0.1'
 const MAX_BODY_BYTES = 4 * 1024 * 1024
@@ -171,6 +172,38 @@ async function handleRequest(
     context.req.method === 'POST'
   ) {
     return context.json(await client.clearQueue(threadId))
+  }
+  if (
+    action.length === 2 &&
+    action[0] === 'queue' &&
+    action[1] === 'item' &&
+    context.req.method === 'POST'
+  ) {
+    const body = await readJsonBody(context)
+    if (
+      !isRecord(body) ||
+      !['steer', 'followUp'].includes(String(body.mode)) ||
+      !Array.isArray(body.expected) ||
+      !body.expected.every((text) => typeof text === 'string') ||
+      !Number.isInteger(body.index) ||
+      !(
+        body.action === 'remove' ||
+        (body.action === 'steer' && body.mode === 'followUp') ||
+        (body.action === 'edit' && typeof body.value === 'string' && body.value.trim()) ||
+        (body.action === 'move' && Number.isInteger(body.value))
+      )
+    ) {
+      throw new HttpError(400, 'bad_request', 'Invalid queue operation.')
+    }
+    try {
+      return context.json(await client.updateQueuedMessage(threadId, body as PiQueueMutation))
+    } catch (error) {
+      throw new HttpError(
+        409,
+        'queue_changed',
+        error instanceof Error ? error.message : 'Queue changed; refresh and try again',
+      )
+    }
   }
   if (action.length === 1 && action[0] === 'model' && context.req.method === 'POST') {
     const body = await readJsonBody(context)

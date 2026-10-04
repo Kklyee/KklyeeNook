@@ -11,6 +11,7 @@ import type {
 } from '@assistant-ui/react-pi/node'
 
 import type { AgentSessionSummary } from '@/shared/agent/agentSession'
+import type { PiQueueMutation, PiQueueSnapshot } from '@/shared/pi/piClient'
 import type { AgentConfigStore } from '@/main/settings/agentConfigStore'
 import {
   getModelCatalog,
@@ -139,6 +140,16 @@ export class PiClientService implements PiClient {
   async clearQueue(threadId: string): Promise<{ steering: string[]; followUp: string[] }> {
     const queue = this.sessionRuntimeManager.get(threadId)?.clearQueue() ?? { steering: [], followUp: [] }
     this.agentService.discardPendingInputs(threadId)
+    return queue
+  }
+
+  async updateQueuedMessage(threadId: string, input: PiQueueMutation): Promise<PiQueueSnapshot> {
+    const runtime = this.sessionRuntimeManager.get(threadId)
+    if (!runtime) throw new Error('队列已变化，请重试')
+    const queue = runtime.updateQueuedMessage(input)
+    this.agentService.discardPendingInputs(threadId)
+    for (const text of queue.steering) this.agentService.steerRun(threadId, text, 'steer')
+    for (const text of queue.followUp) this.agentService.steerRun(threadId, text, 'follow-up')
     return queue
   }
 

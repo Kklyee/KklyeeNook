@@ -30,6 +30,7 @@ export function createPiNodeClientAdapter(
     sendMessage: (...args) => appClient.sendMessage(...args),
     cancelRun: (...args) => appClient.cancelRun(...args),
     clearQueue: (...args) => appClient.clearQueue(...args),
+    updateQueuedMessage: (...args) => appClient.updateQueuedMessage(...args),
     getAvailableModels: async (...args) => {
       const appModels = await appClient.getAvailableModels(...args)
       if (appModels.length > 0) return appModels

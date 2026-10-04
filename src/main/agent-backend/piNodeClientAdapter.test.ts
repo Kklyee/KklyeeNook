@@ -31,6 +31,7 @@ function makeAppClient(models: Awaited<ReturnType<PiClient['getAvailableModels']
     sendMessage: vi.fn(async () => undefined),
     cancelRun: vi.fn(async () => undefined),
     clearQueue: vi.fn(async () => ({ steering: [], followUp: [] })),
+    updateQueuedMessage: vi.fn(async () => ({ steering: [], followUp: [] })),
     getAvailableModels: vi.fn(async () => models),
     setModel: vi.fn(async () => undefined),
     setThinkingLevel: vi.fn(async () => undefined),
