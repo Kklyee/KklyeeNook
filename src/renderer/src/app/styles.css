@@ -417,30 +417,31 @@ body,
 }
 
 [data-slot='tool-timeline'] .aui-branch-list-item::before {
-  border-left-color: transparent;
+  border-left-color: color-mix(in oklch, var(--ui-fg-muted) 45%, transparent);
   border-bottom-color: color-mix(in oklch, var(--ui-fg-muted) 45%, transparent);
   display: block;
-  top: 1rem;
+  top: 0;
   left: -0.75rem;
   right: calc(100% - 1px);
   bottom: auto;
-  height: 0;
-  border-end-start-radius: 0;
+  height: 1rem;
+  border-end-start-radius: 4px;
   animation: none;
 }
 
-[data-slot='tool-timeline'] .aui-branch-list-item:last-child {
-  position: static;
+[data-slot='tool-timeline'] .aui-branch-list-item:first-child::before {
+  top: -0.25rem;
+  height: 1.25rem;
 }
 
-[data-slot='tool-timeline'] .aui-branch-list-item:last-child::before {
-  top: anchor(bottom --branch-list-trigger);
-  left: calc(anchor(left --branch-list-trigger) + 0.75rem);
-  right: calc(anchor(left --branch-list-item) - 1px);
-  bottom: calc(anchor(top --branch-list-item) + 1rem);
-  height: auto;
-  border-left-color: color-mix(in oklch, var(--ui-fg-muted) 45%, transparent);
-  border-end-start-radius: 4px;
+[data-slot='tool-timeline'] .aui-branch-list-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: -0.75rem;
+  top: 0;
+  bottom: -0.375rem;
+  border-left: 1px solid color-mix(in oklch, var(--ui-fg-muted) 45%, transparent);
+  pointer-events: none;
 }
 
 [data-slot='tool-timeline'] .tabular-nums {
