@@ -15,6 +15,8 @@ import { CheckIcon, CopyIcon } from 'lucide-react'
 
 import { TooltipIconButton } from '@/renderer/src/components/assistant-ui/elements/tooltip-icon-button'
 import { MermaidDiagram } from '@/renderer/src/components/assistant-ui/elements/mermaid-diagram.aui'
+import { SyntaxHighlighter } from '@/renderer/src/components/assistant-ui/elements/shiki-highlighter.aui'
+import { resolveCodeLanguage } from '@/renderer/src/components/assistant-ui/elements/shiki-highlighter'
 import { useCopyToClipboard } from '@/renderer/src/hooks/use-copy-to-clipboard'
 import { cn } from '@/renderer/src/lib/utils'
 import { KnowledgeCitationLink } from '@/renderer/src/features/knowledge/KnowledgeCitationLink'
@@ -66,7 +68,7 @@ const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
   return (
     <div className="aui-code-header-root border-border/50 bg-muted/50 mt-3 flex items-center justify-between rounded-t-xl border border-b-0 px-3.5 py-1.5 text-xs">
       <span className="aui-code-header-language text-muted-foreground font-medium lowercase">
-        {language}
+        {resolveCodeLanguage(language, code)}
       </span>
       <TooltipIconButton tooltip="Copy" onClick={onCopy}>
         {!isCopied && <CopyIcon className="animate-in zoom-in-75 fade-in duration-150" />}
@@ -77,6 +79,7 @@ const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
 }
 
 const defaultComponents = memoizeMarkdownComponents({
+  SyntaxHighlighter,
   h1: ({ className, ...props }) => (
     <h1
       className={cn(
