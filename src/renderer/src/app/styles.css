@@ -483,9 +483,19 @@ body,
   }
 
   ::selection {
-    background: var(--ui-brand-muted);
-    color: var(--ui-fg);
+    background: var(--ui-selection-bg);
+    color: var(--ui-selection-fg);
   }
+}
+
+:root {
+  --ui-selection-bg: oklch(0.87 0.06 255);
+  --ui-selection-fg: oklch(0.25 0.04 255);
+}
+
+.dark {
+  --ui-selection-bg: oklch(0.42 0.08 255);
+  --ui-selection-fg: oklch(0.97 0.01 255);
 }
 
 @keyframes collapsible-down {
