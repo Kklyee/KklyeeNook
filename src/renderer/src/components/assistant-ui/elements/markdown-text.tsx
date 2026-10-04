@@ -67,7 +67,7 @@ const PacedMarkdown = memo(function PacedMarkdown({
     <TextMessagePartProvider text={text} isRunning={isRunning}>
       <StreamdownTextPrimitive
         remarkPlugins={remarkPlugins}
-        className="aui-md"
+        className="aui-md [&>.aui-code-header-root+*]:mt-0!"
         containerClassName="streaming-markdown"
         components={markdownComponents as StreamdownTextComponents}
         componentsByLanguage={markdownComponentsByLanguage}
@@ -102,7 +102,7 @@ const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
   }
 
   return (
-    <div className="aui-code-header-root border-border/50 bg-muted/50 mt-3 flex items-center justify-between rounded-t-xl border border-b-0 px-3.5 py-1.5 text-xs">
+    <div className="aui-code-header-root border-border/50 bg-muted/50 mt-3 mb-0! flex items-center justify-between rounded-t-xl border border-b-0 px-3.5 py-1.5 text-xs">
       <span className="aui-code-header-language text-muted-foreground font-medium lowercase">
         {resolveCodeLanguage(language, code)}
       </span>

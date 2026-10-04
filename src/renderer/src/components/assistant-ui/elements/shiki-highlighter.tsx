@@ -76,9 +76,19 @@ const HighlightedCode: FC<{
   theme: NonNullable<SyntaxHighlighterProps["theme"]>;
   options: Omit<ShikiHighlighterProps, "children" | "language" | "theme">;
 }> = ({ code, language, theme, options }) => {
+  const isCssDeclaration = language === "css" && /^\s*(?:--[\w-]+|[\w-]+)\s*:/.test(code) && !code.includes("{");
+  const transformers = useMemo(() => isCssDeclaration ? [
+    {
+      name: "assistant-ui:css-declarations",
+      preprocess(source: string) { return `:root {\n${source}\n}`; },
+      code(node: { children: unknown[] }) { node.children = node.children.slice(2, -2); },
+    },
+    ...(options.transformers ?? []),
+  ] : options.transformers, [isCssDeclaration, options.transformers]);
   const highlighted = useShikiHighlighter(code, language, theme, {
     engine: "javascript",
     ...options,
+    transformers,
     defaultColor: "light-dark()",
   });
   return <>{highlighted ?? <PlainCode code={code} />}</>;

@@ -365,6 +365,30 @@ body,
   }
 }
 
+.aui-md pre::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.aui-md pre::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.aui-md pre::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--ui-fg-faint);
+  background-clip: padding-box;
+}
+
+.aui-md pre::-webkit-scrollbar-thumb:hover {
+  background-color: var(--ui-fg-muted);
+}
+
+.aui-md pre::-webkit-scrollbar-button {
+  display: none;
+}
+
 .aui-branch-list-root {
   position: relative;
   anchor-scope: --branch-list-trigger;
