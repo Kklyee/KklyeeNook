@@ -3,7 +3,6 @@ import {
   CheckIcon,
   ChevronRightIcon,
   CircleAlertIcon,
-  CircleDashedIcon,
   WrenchIcon,
 } from 'lucide-react'
 import type { ToolCallMessagePartComponent, ToolCallMessagePartProps } from '@assistant-ui/react'
@@ -25,7 +24,6 @@ import { usePreview } from '../../preview/PreviewProvider'
 export function ActivityIcon({ activity }: { activity: Activity }) {
   if (
     activity.status !== 'failed' &&
-    activity.type !== 'thinking' &&
     activity.type !== 'approval' &&
     activity.type !== 'tool'
   )
@@ -42,9 +40,7 @@ export function ActivityIcon({ activity }: { activity: Activity }) {
   const Icon =
     activity.status === 'failed' || activity.type === 'approval'
       ? CircleAlertIcon
-      : activity.type === 'thinking'
-        ? CircleDashedIcon
-        : WrenchIcon
+      : WrenchIcon
   return (
     <Icon
       aria-hidden="true"

@@ -16,6 +16,7 @@ import {
 } from '@assistant-ui/react'
 
 import bashIcon from '@/renderer/src/assets/icon/bash.svg'
+import thinkingIcon from '@/renderer/src/assets/icon/thinking.svg'
 import editFileIcon from '@/renderer/src/assets/icon/edit-file.svg'
 import readFileIcon from '@/renderer/src/assets/icon/read-file.svg'
 import searchIcon from '@/renderer/src/assets/icon/tool-search.svg'
@@ -38,6 +39,7 @@ export function ToolDetailProvider({ children }: { children: ReactNode }) {
 }
 
 export type ToolIconKind =
+  | 'thinking'
   | 'read'
   | 'bash'
   | 'edit'
@@ -61,6 +63,7 @@ export interface ToolCardProps {
 }
 
 const iconAssets: Partial<Record<ToolIconKind, string>> = {
+  thinking: thinkingIcon,
   read: readFileIcon,
   bash: bashIcon,
   edit: editFileIcon,
