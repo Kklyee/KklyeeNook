@@ -22,6 +22,7 @@ export function ConversationMapAui() {
             .trim()
           return {
             id: message.id,
+            createdAt: message.createdAt,
             title:
               text.slice(0, 72) ||
               message.attachments?.map((file) => file.name).join('、') ||
@@ -77,7 +78,10 @@ export function ConversationMapAui() {
 
   return (
     <div className="pointer-events-none sticky top-0 z-20 h-0 w-full">
-      <div className="pointer-events-auto absolute right-0 top-0 py-10 pr-2" style={{ height }}>
+      <div
+        className="pointer-events-auto absolute top-0 py-10"
+        style={{ height, right: 'max(1.5rem, calc((100% - var(--thread-max-width)) / 2 - 2rem))' }}
+      >
         <ConversationMap
           aria-label="定位用户消息"
           entries={entries}

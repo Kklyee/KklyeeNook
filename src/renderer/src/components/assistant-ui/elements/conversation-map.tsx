@@ -3,6 +3,8 @@
 import { useCallback, useRef, useState, type ComponentProps, type KeyboardEvent } from 'react'
 import { PreviewCard } from '@base-ui/react/preview-card'
 import { cn } from '@/renderer/src/lib/utils'
+import { Clock3Icon, MessageSquareIcon } from 'lucide-react'
+import { formatMessageTimestamp, formatMessageTimestampFull } from '@/shared/formatMessageTimestamp'
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
@@ -10,6 +12,7 @@ export interface ConversationMapEntry {
   id: string
   title: string
   preview?: string
+  createdAt: Date
 }
 
 const TICK = '[data-slot="conversation-map-tick"]'
@@ -87,7 +90,7 @@ export function ConversationMap({
             data-slot="conversation-map-tick"
             data-active={current ? '' : undefined}
             data-in-view={onScreen ? '' : undefined}
-            aria-label={entry.title}
+            aria-label={`第 ${index + 1} 条消息，${formatMessageTimestampFull(entry.createdAt.getTime())}，${entry.title}`}
             aria-current={current ? 'true' : undefined}
             tabIndex={index === tabbableIndex ? 0 : -1}
             onFocus={() => setFocusedIndex(index)}
@@ -125,6 +128,23 @@ export function ConversationMap({
                   'data-[ending-style]:scale-[0.97] data-[ending-style]:opacity-0',
                 )}
               >
+                {payload && (
+                  <div className="text-muted-foreground mb-2.5 flex items-center justify-between gap-3 text-[11px]">
+                    <span className="flex items-center gap-1.5">
+                      <MessageSquareIcon className="size-3" />
+                      消息 {entries.findIndex((entry) => entry.id === payload.id) + 1} /{' '}
+                      {entries.length}
+                    </span>
+                    <time
+                      className="flex items-center gap-1.5 tabular-nums"
+                      dateTime={payload.createdAt.toISOString()}
+                      title={formatMessageTimestampFull(payload.createdAt.getTime())}
+                    >
+                      <Clock3Icon className="size-3" />
+                      {formatMessageTimestamp(payload.createdAt.getTime())}
+                    </time>
+                  </div>
+                )}
                 <p className="line-clamp-2 text-[13px] leading-snug font-medium">
                   {payload?.title}
                 </p>
