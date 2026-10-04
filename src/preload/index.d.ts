@@ -36,6 +36,11 @@ import type {
 } from '../shared/scheduler/scheduledTask'
 
 interface API {
+  wallpaper: {
+    get(): Promise<string | null>
+    choose(): Promise<string | null>
+    clear(): Promise<null>
+  }
   getSystemMaterial(): SystemMaterial
   onSystemMaterialChanged(listener: (material: SystemMaterial) => void): () => void
   preview: {

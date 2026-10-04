@@ -48,6 +48,17 @@ const context = {
 }
 
 const api = {
+  wallpaper: {
+    get(): Promise<string | null> {
+      return ipcRenderer.invoke(IPC_CHANNELS.WALLPAPER_GET)
+    },
+    choose(): Promise<string | null> {
+      return ipcRenderer.invoke(IPC_CHANNELS.WALLPAPER_CHOOSE)
+    },
+    clear(): Promise<null> {
+      return ipcRenderer.invoke(IPC_CHANNELS.WALLPAPER_CLEAR)
+    },
+  },
   getSystemMaterial(): SystemMaterial {
     return ipcRenderer.sendSync(IPC_CHANNELS.WINDOW_SYSTEM_MATERIAL)
   },

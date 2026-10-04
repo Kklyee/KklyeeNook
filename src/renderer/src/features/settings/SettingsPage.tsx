@@ -12,6 +12,7 @@ import { ModelSettings } from './ModelSettings'
 import { PermissionSettings } from './PermissionSettings'
 import { SkillSettings } from './SkillSettings'
 import { settingsNavigation, type SettingsTab } from './settingsNavigation'
+import { AppearanceSettings } from './AppearanceSettings'
 
 export function SettingsPage({
   settings,
@@ -110,7 +111,7 @@ export function SettingsPage({
 }
 
 const settingsPanels: Record<
-  SettingsTab,
+  Exclude<SettingsTab, 'appearance'>,
   ComponentType<{ settings: AgentSettingsSnapshot; onChanged: () => Promise<void> }>
 > = {
   model: ModelSettings,
@@ -133,6 +134,7 @@ function SettingsContent({
   tab: SettingsTab
   onChanged: () => Promise<void>
 }) {
+  if (tab === 'appearance') return <AppearanceSettings />
   if (error)
     return (
       <p role="alert" className="text-destructive text-sm">

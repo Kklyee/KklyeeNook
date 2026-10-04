@@ -2,6 +2,7 @@ import { IPC_CHANNELS } from '@/shared/ipc/channels'
 import { ipcMain, BrowserWindow, Menu } from 'electron'
 import type { WindowMenu, WindowMenuAction } from '@/shared/ipc/channels'
 import { getSystemMaterial } from './chatWindow'
+import { chooseWallpaper, clearWallpaper, getWallpaper } from './wallpaper'
 
 export function registerWindowIpc(window: BrowserWindow): () => void {
   const getSenderWindow = (event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) => {
@@ -74,6 +75,18 @@ export function registerWindowIpc(window: BrowserWindow): () => void {
   }
 
   ipcMain.on(IPC_CHANNELS.WINDOW_MINIMIZE, handleMinimize)
+  for (const [channel, handler] of [
+    [IPC_CHANNELS.WALLPAPER_GET, getWallpaper],
+    [IPC_CHANNELS.WALLPAPER_CHOOSE, () => chooseWallpaper(window)],
+    [IPC_CHANNELS.WALLPAPER_CLEAR, clearWallpaper],
+  ] as const) {
+    ipcMain.handle(channel, (event) => {
+      if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) {
+        throw new Error('Untrusted wallpaper IPC sender')
+      }
+      return handler()
+    })
+  }
   ipcMain.on(IPC_CHANNELS.WINDOW_SYSTEM_MATERIAL, handleSystemMaterial)
   ipcMain.on(IPC_CHANNELS.WINDOW_TOGGLE_MAXIMIZE, handleToggleMaximize)
   ipcMain.handle(IPC_CHANNELS.WINDOW_IS_MAXIMIZED, handleIsMaximized)
@@ -83,6 +96,9 @@ export function registerWindowIpc(window: BrowserWindow): () => void {
   window.on('unmaximize', sendMaximizedState)
 
   return () => {
+    ipcMain.removeHandler(IPC_CHANNELS.WALLPAPER_GET)
+    ipcMain.removeHandler(IPC_CHANNELS.WALLPAPER_CHOOSE)
+    ipcMain.removeHandler(IPC_CHANNELS.WALLPAPER_CLEAR)
     ipcMain.removeListener(IPC_CHANNELS.WINDOW_MINIMIZE, handleMinimize)
     ipcMain.removeListener(IPC_CHANNELS.WINDOW_SYSTEM_MATERIAL, handleSystemMaterial)
     ipcMain.removeListener(IPC_CHANNELS.WINDOW_TOGGLE_MAXIMIZE, handleToggleMaximize)

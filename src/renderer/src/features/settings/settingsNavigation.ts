@@ -3,6 +3,7 @@ import {
   BookOpenIcon,
   BotIcon,
   BrainIcon,
+  ImageIcon,
   ServerIcon,
   ShieldCheckIcon,
   SparklesIcon,
@@ -10,6 +11,7 @@ import {
 } from 'lucide-react'
 
 export type SettingsTab =
+  | 'appearance'
   | 'model'
   | 'context'
   | 'permissions'
@@ -28,6 +30,13 @@ export type SettingsNavigationItem = {
 }
 
 export const settingsNavigation: SettingsNavigationItem[] = [
+  {
+    id: 'appearance',
+    label: '外观',
+    description: '更换应用壁纸，设置窗口的毛玻璃质感。',
+    icon: ImageIcon,
+    layout: 'preferences',
+  },
   {
     id: 'model',
     label: '模型',

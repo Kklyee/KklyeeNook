@@ -99,6 +99,90 @@
   --ui-titlebar: var(--ui-bg-solid);
 }
 
+:root.system-material,
+:root.has-wallpaper {
+  --ui-bg: oklch(0.955 0.003 250 / 0.56);
+  --ui-surface: oklch(0.98 0.002 250 / 0.64);
+  --ui-surface-muted: oklch(0.945 0.003 250 / 0.58);
+  --ui-titlebar: oklch(0.94 0.003 250 / 0.48);
+}
+
+:root.dark.system-material,
+:root.dark.has-wallpaper {
+  --ui-bg: oklch(0.20 0.003 250 / 0.48);
+  --ui-surface: oklch(0.235 0.004 250 / 0.58);
+  --ui-surface-muted: oklch(0.26 0.004 250 / 0.54);
+  --ui-titlebar: oklch(0.18 0.003 250 / 0.42);
+}
+
+:root.has-wallpaper:not(.dark) {
+  --ui-bg: oklch(0.955 0.003 250 / 0.68);
+  --ui-fg-muted: oklch(0.33 0.007 250);
+}
+
+:root.dark.has-wallpaper {
+  --ui-fg-muted: oklch(0.84 0.004 250);
+  --ui-fg-faint: oklch(0.72 0.004 250);
+}
+
+.app-window {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.has-wallpaper .app-window {
+  background: transparent;
+}
+
+.window-wallpaper {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--ui-bg-solid);
+}
+
+.window-wallpaper-image {
+  position: absolute;
+  top: -48px;
+  left: -48px;
+  width: calc(100% + 96px);
+  height: calc(100% + 96px);
+  max-width: none;
+  object-fit: cover;
+  filter: blur(18px);
+}
+
+.dark .window-wallpaper-image {
+  filter: blur(18px) brightness(0.5);
+}
+
+.window-wallpaper::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-color: var(--ui-bg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='.045'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+  :root.has-wallpaper,
+  :root.dark.has-wallpaper {
+    --ui-bg: var(--ui-bg-solid);
+    --ui-titlebar: var(--ui-bg-solid);
+  }
+
+  .has-wallpaper .app-window {
+    background: var(--ui-bg-solid);
+  }
+
+  .window-wallpaper {
+    display: none;
+  }
+}
+
 :root,
 .dark {
   --background: var(--ui-bg);
