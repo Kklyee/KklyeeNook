@@ -353,55 +353,55 @@ body,
   }
 }
 
-.aui-tool-group-root {
+.aui-branch-list-root {
   position: relative;
-  anchor-scope: --tool-group-trigger;
+  anchor-scope: --branch-list-trigger;
 }
 
-.aui-tool-group-trigger {
-  anchor-name: --tool-group-trigger;
+.aui-branch-list-trigger {
+  display: flex;
+  width: 100%;
+  anchor-name: --branch-list-trigger;
 }
 
-.aui-tool-group-items {
+.aui-branch-list-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
   padding-inline-start: 1.5rem;
 }
 
-.aui-tool-group-node {
+.aui-branch-list-item {
   min-width: 0;
+  anchor-name: --branch-list-item;
+  anchor-scope: --branch-list-item;
+  animation: branch-list-row-appear 220ms cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 
-.tool-row {
-  anchor-name: --tool-call;
-  anchor-scope: --tool-call;
-  animation: tool-call-row-appear 220ms cubic-bezier(0.32, 0.72, 0, 1) both;
-  animation-delay: var(--tool-call-connector-delay, 0ms);
-}
-
-.tool-row::before {
+.aui-branch-list-item::before {
   content: '';
   display: none;
   position: absolute;
-  top: anchor(bottom --tool-group-trigger);
-  left: calc(anchor(left --tool-group-trigger) + 0.75rem);
-  right: calc(anchor(left --tool-call) - 1px);
-  bottom: anchor(center --tool-call);
+  top: anchor(bottom --branch-list-trigger);
+  left: calc(anchor(left --branch-list-trigger) + 0.75rem);
+  right: calc(anchor(left --branch-list-item) - 1px);
+  bottom: anchor(center --branch-list-item);
   border: 1px solid transparent;
-  border-left-color: color-mix(in oklch, var(--ui-fg-muted) 42%, var(--ui-bg));
-  border-bottom-color: color-mix(in oklch, var(--ui-fg-muted) 42%, var(--ui-bg));
+  border-left-color: var(--ui-border);
+  border-bottom-color: var(--ui-border);
   border-end-start-radius: 4px;
   transform-origin: left bottom;
   pointer-events: none;
-  animation: tool-call-connector-branch-draw 220ms cubic-bezier(0.32, 0.72, 0, 1) both;
-  animation-delay: var(--tool-call-connector-delay, 0ms);
+  animation: branch-list-branch-draw 220ms cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 
-@supports (anchor-scope: --tool-call) and (top: anchor(bottom --tool-group-trigger)) {
-  .tool-row::before {
+@supports (anchor-scope: --branch-list-item) and (top: anchor(bottom --branch-list-trigger)) {
+  .aui-branch-list-item::before {
     display: block;
   }
 }
 
-@keyframes tool-call-row-appear {
+@keyframes branch-list-row-appear {
   from {
     opacity: 0;
   }
@@ -411,7 +411,36 @@ body,
   }
 }
 
-@keyframes tool-call-connector-branch-draw {
+[data-slot='tool-timeline'] .aui-branch-list-item {
+  position: relative;
+  animation: none;
+}
+
+[data-slot='tool-timeline'] .aui-branch-list-item::before {
+  display: block;
+  top: -0.375rem;
+  left: -0.75rem;
+  right: calc(100% - 1px);
+  bottom: auto;
+  height: calc(1rem + 0.375rem);
+  animation: none;
+}
+
+[data-slot='tool-timeline'] .aui-branch-list-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: -0.75rem;
+  top: 1rem;
+  bottom: -0.375rem;
+  border-left: 1px solid var(--ui-border);
+  pointer-events: none;
+}
+
+[data-slot='tool-timeline'] .tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes branch-list-branch-draw {
   from {
     transform: scaleX(0);
   }
@@ -422,8 +451,8 @@ body,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tool-row,
-  .tool-row::before {
+  .aui-branch-list-item,
+  .aui-branch-list-item::before {
     animation: none;
   }
 }

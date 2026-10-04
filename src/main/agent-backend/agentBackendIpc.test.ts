@@ -124,3 +124,21 @@ test('forwards an unexpected backend exit to the active renderer', async () => {
     message: 'Agent backend stopped unexpectedly.',
   })
 })
+
+test('forwards activity events in order and unsubscribes when the renderer closes', async () => {
+  const child = new FakeUtilityProcess()
+  activeBackend = new AgentBackendProcess('/agent-backend-entry.mjs', () => child)
+  const window = makeWindow()
+  registerAgentBackendIpc(window.window, activeBackend)
+  await activeBackend.start(options)
+  const envelope = { sessionId: 'session', runId: 'run', seq: 1, timestamp: 100, event: { type: 'inference_started' } }
+  child.emit('message', { type: 'activity-event', envelope })
+  expect(window.webContents.send).toHaveBeenLastCalledWith(IPC_CHANNELS.AGENT_ACTIVITY_EVENT, envelope)
+  const next = { ...envelope, seq: 2, event: { type: 'thinking_delta', text: 'Inspect the runtime' } }
+  child.emit('message', { type: 'activity-event', envelope: next })
+  expect(window.webContents.send).toHaveBeenLastCalledWith(IPC_CHANNELS.AGENT_ACTIVITY_EVENT, next)
+  window.close()
+  const count = window.webContents.send.mock.calls.length
+  child.emit('message', { type: 'activity-event', envelope: next })
+  expect(window.webContents.send.mock.calls).toHaveLength(count)
+})

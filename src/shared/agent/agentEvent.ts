@@ -11,6 +11,8 @@ export type AgentEvent =
   | { type: 'step_ended'; stepId: string; result: StepResult }
   | { type: 'system_prompt'; text: string }
   | { type: 'agent_started' }
+  | { type: 'inference_started' }
+  | { type: 'inference_finished'; failed: boolean }
   | { type: 'thinking_delta'; text: string }
   | { type: 'text_delta'; text: string }
   | { type: 'tool_started'; call: ToolCall }

@@ -16,6 +16,7 @@ import type { DeletePermissionGrantRequest } from '@/shared/approval/approvalTyp
 import type { AgentRun, AgentRunOverview, LoadAgentRunsRequest } from '../shared/agent/agentRun'
 import type {
   AgentExecutionRecord,
+  AgentEventEnvelope,
   LoadAgentExecutionRecordsRequest,
 } from '../shared/agent/agentExecutionRecord'
 import type {
@@ -99,6 +100,7 @@ interface API {
   deleteMemory(request: DeleteAgentMemoryRequest): Promise<void>
   deletePermissionGrant(request: DeletePermissionGrantRequest): Promise<void>
   listAgentRuns(request: LoadAgentRunsRequest): Promise<AgentRun[]>
+  onAgentActivityEvent(listener: (envelope: AgentEventEnvelope) => void): () => void
   listAgentRunOverviews(): Promise<AgentRunOverview[]>
   readToolResult(resultRef: string): Promise<import('@/shared/tool/tool').ToolExecutionResult>
   listAgentExecutionRecords(

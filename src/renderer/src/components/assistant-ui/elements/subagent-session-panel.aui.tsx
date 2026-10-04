@@ -221,6 +221,7 @@ function buildThreadMessages(
     messages.push({
       id: `subagent-assistant-${run?.id ?? 'run'}`,
       role: 'assistant',
+      metadata: { custom: { runId: run?.id } },
       content: parts as unknown as ThreadMessageLike['content'],
       createdAt: new Date((ordered[0]?.timestamp ?? Date.now()) + 1),
       status: toMessageStatus(run),

@@ -22,6 +22,7 @@ import type { McpServerState } from '@/shared/mcp/mcpServer'
 import type { AgentRun, AgentRunOverview, LoadAgentRunsRequest } from '@/shared/agent/agentRun'
 import type {
   AgentExecutionRecord,
+  AgentEventEnvelope,
   LoadAgentExecutionRecordsRequest,
 } from '@/shared/agent/agentExecutionRecord'
 import type {
@@ -204,6 +205,12 @@ const api = {
     request: LoadAgentExecutionRecordsRequest,
   ): Promise<AgentExecutionRecord[]> {
     return ipcRenderer.invoke(IPC_CHANNELS.AGENT_EXECUTION_RECORD_LIST, request)
+  },
+
+  onAgentActivityEvent(listener: (envelope: AgentEventEnvelope) => void): () => void {
+    const handle = (_event: Electron.IpcRendererEvent, envelope: AgentEventEnvelope) => listener(envelope)
+    ipcRenderer.on(IPC_CHANNELS.AGENT_ACTIVITY_EVENT, handle)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.AGENT_ACTIVITY_EVENT, handle)
   },
 
 }

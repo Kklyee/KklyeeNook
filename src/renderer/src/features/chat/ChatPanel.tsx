@@ -17,6 +17,7 @@ import { PiExtensionUiPrompt } from './runtime/PiExtensionUiPrompt'
 import { SubagentSessionPanel } from '../../components/assistant-ui/elements/subagent-session-panel.aui'
 import { PreviewProvider } from '../preview/PreviewProvider'
 import { ChatWorkspace } from '../preview/ChatWorkspace'
+import { AgentActivityProvider } from './activity/AgentActivityProvider'
 
 const THINKING_LEVELS = [
   { id: 'off', name: '关闭' },
@@ -64,69 +65,71 @@ export function ChatPanel({
 
   return (
     <PreviewProvider key={threadItemId} sessionId={sessionId}>
-      <AgentRunFocusProvider
-        value={{
-          focusRun: (runId) => {
-            setFocusedRunId(runId)
-            setView('subagent')
-          },
-        }}
-      >
-        <ChatWorkspace>
-          {modelError && (
-            <p className="bg-destructive/10 text-destructive px-4 py-2 text-xs" role="alert">
-              {modelError}
-            </p>
-          )}
-          <nav
-            className="border-border/60 flex h-11 shrink-0 items-end gap-1 border-b px-4"
-            aria-label="对话视图"
-          >
-            <ViewTab active={view === 'chat'} onClick={() => setView('chat')}>
-              对话
-            </ViewTab>
-            <ViewTab active={view === 'trace'} onClick={() => setView('trace')}>
-              轨迹
-            </ViewTab>
-            {focusedRunId && (
-              <ViewTab active={view === 'subagent'} onClick={() => setView('subagent')}>
-                子 Agent
-              </ViewTab>
+      <AgentActivityProvider sessionId={sessionId}>
+        <AgentRunFocusProvider
+          value={{
+            focusRun: (runId) => {
+              setFocusedRunId(runId)
+              setView('subagent')
+            },
+          }}
+        >
+          <ChatWorkspace>
+            {modelError && (
+              <p className="bg-destructive/10 text-destructive px-4 py-2 text-xs" role="alert">
+                {modelError}
+              </p>
             )}
-          </nav>
-          {view === 'chat' ? (
-            <div className="relative min-h-0 flex-1">
-              <Thread
-                composerAccessory={<PiExtensionUiPrompt />}
-                contextUsage={toAgentContextUsage(contextUsage)}
-                compactionSettings={settings?.compaction}
-                isCompacting={isCompacting}
-                modelSelector={{
-                  models: modelOptions,
-                  value: selectedModel?.id ?? settings?.activeModelId,
-                  effort: selectedThinkingLevel ?? settings?.thinkingLevel,
-                  disabled: switchingModel || session?.status === 'running',
-                  onValueChange: (id) => void switchModel(id),
-                  onEffortChange: (level) => void switchThinkingLevel(level),
+            <nav
+              className="border-border/60 flex h-11 shrink-0 items-end gap-1 border-b px-4"
+              aria-label="对话视图"
+            >
+              <ViewTab active={view === 'chat'} onClick={() => setView('chat')}>
+                对话
+              </ViewTab>
+              <ViewTab active={view === 'trace'} onClick={() => setView('trace')}>
+                轨迹
+              </ViewTab>
+              {focusedRunId && (
+                <ViewTab active={view === 'subagent'} onClick={() => setView('subagent')}>
+                  子 Agent
+                </ViewTab>
+              )}
+            </nav>
+            {view === 'chat' ? (
+              <div className="relative min-h-0 flex-1">
+                <Thread
+                  composerAccessory={<PiExtensionUiPrompt />}
+                  contextUsage={toAgentContextUsage(contextUsage)}
+                  compactionSettings={settings?.compaction}
+                  isCompacting={isCompacting}
+                  modelSelector={{
+                    models: modelOptions,
+                    value: selectedModel?.id ?? settings?.activeModelId,
+                    effort: selectedThinkingLevel ?? settings?.thinkingLevel,
+                    disabled: switchingModel || session?.status === 'running',
+                    onValueChange: (id) => void switchModel(id),
+                    onEffortChange: (level) => void switchThinkingLevel(level),
+                  }}
+                />
+              </div>
+            ) : view === 'trace' ? (
+              <RunHistoryPanel sessionId={sessionId} focusedRunId={focusedRunId} />
+            ) : focusedRunId && sessionId ? (
+              <SubagentSessionPanel
+                sessionId={sessionId}
+                runId={focusedRunId}
+                onBack={() => {
+                  setFocusedRunId(undefined)
+                  setView('chat')
                 }}
               />
-            </div>
-          ) : view === 'trace' ? (
-            <RunHistoryPanel sessionId={sessionId} focusedRunId={focusedRunId} />
-          ) : focusedRunId && sessionId ? (
-            <SubagentSessionPanel
-              sessionId={sessionId}
-              runId={focusedRunId}
-              onBack={() => {
-                setFocusedRunId(undefined)
-                setView('chat')
-              }}
-            />
-          ) : (
-            <div className="min-h-0 flex-1" />
-          )}
-        </ChatWorkspace>
-      </AgentRunFocusProvider>
+            ) : (
+              <div className="min-h-0 flex-1" />
+            )}
+          </ChatWorkspace>
+        </AgentRunFocusProvider>
+      </AgentActivityProvider>
     </PreviewProvider>
   )
 }

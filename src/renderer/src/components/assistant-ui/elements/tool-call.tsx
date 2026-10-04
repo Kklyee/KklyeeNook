@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react'
 import {
   BotIcon,
   CheckIcon,
@@ -30,6 +30,12 @@ import { cn } from '@/renderer/src/lib/utils'
 import { collapsePanel, ShimmerLabel } from '@/renderer/src/lib/surfaces'
 
 const ANIMATION_DURATION = 200
+
+const ToolDetailContext = createContext(false)
+
+export function ToolDetailProvider({ children }: { children: ReactNode }) {
+  return <ToolDetailContext.Provider value>{children}</ToolDetailContext.Provider>
+}
 
 export type ToolIconKind =
   | 'read'
@@ -134,7 +140,12 @@ export function ToolDetailSection({ label, children }: { label: string; children
 export const toolCodeClassName =
   'material-control max-h-72 overflow-auto rounded-md p-2 font-mono text-[11px] leading-5 whitespace-pre-wrap break-words text-foreground'
 
-export function ToolCard({
+export function ToolCard(props: ToolCardProps) {
+  const detailOnly = useContext(ToolDetailContext)
+  return detailOnly ? <>{props.children}</> : <ToolCardDisclosure {...props} />
+}
+
+function ToolCardDisclosure({
   toolName,
   label,
   summary,

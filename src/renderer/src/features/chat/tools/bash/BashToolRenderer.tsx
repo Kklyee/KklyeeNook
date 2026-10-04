@@ -10,7 +10,6 @@ import {
   formatToolResult,
   getStringValue,
   isRecord,
-  previewText,
   stringifyValue,
 } from '../toolUtils'
 
@@ -31,19 +30,19 @@ export const ShellToolRenderer: ToolCallMessagePartComponent = ({ args, result, 
           <pre className={toolCodeClassName}>{command}</pre>
         </ToolDetailSection>
       )}
-      {!error && output && (
+      {output && (
         <ToolDetailSection label="stdout">
-          <pre className={toolCodeClassName}>{previewText(output, 24, 2400)}</pre>
+          <pre className={toolCodeClassName}>{output}</pre>
         </ToolDetailSection>
       )}
-      {!error && stderr && (
+      {stderr && (
         <ToolDetailSection label="stderr">
-          <pre className={toolCodeClassName}>{previewText(stderr, 16, 1200)}</pre>
+          <pre className={toolCodeClassName}>{stderr}</pre>
         </ToolDetailSection>
       )}
       {error && (
         <ToolDetailSection label="Error">
-          <pre className={cn(toolCodeClassName, 'text-danger')}>{previewText(error, 24, 2400)}</pre>
+          <pre className={cn(toolCodeClassName, 'text-danger')}>{error}</pre>
         </ToolDetailSection>
       )}
       {exitCode !== undefined && (

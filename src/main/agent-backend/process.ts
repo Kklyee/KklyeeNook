@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import type { AgentEventEnvelope } from '@/shared/agent/agentExecutionRecord'
 
 import type {
   AgentBackendInfo,
@@ -36,6 +37,7 @@ export class AgentBackendProcess {
   private status: AgentBackendStatus = { state: 'starting' }
   private readonly statusListeners = new Set<(status: AgentBackendStatus) => void>()
   private readonly notificationListeners = new Set<(notification: AgentBackendNotification) => void>()
+  private readonly activityListeners = new Set<(envelope: AgentEventEnvelope) => void>()
   private readonly pendingRequests = new Map<string, PendingRequest>()
   private resolveStart: ((status: AgentBackendStatus) => void) | undefined
   private startTimer: ReturnType<typeof setTimeout> | undefined
@@ -61,6 +63,11 @@ export class AgentBackendProcess {
   onNotification(listener: (notification: AgentBackendNotification) => void): () => void {
     this.notificationListeners.add(listener)
     return () => this.notificationListeners.delete(listener)
+  }
+
+  onActivityEvent(listener: (envelope: AgentEventEnvelope) => void): () => void {
+    this.activityListeners.add(listener)
+    return () => this.activityListeners.delete(listener)
   }
 
   async start(
@@ -201,6 +208,10 @@ export class AgentBackendProcess {
     }
     if (message.type === 'notification') {
       for (const listener of this.notificationListeners) listener(message.notification)
+      return
+    }
+    if (message.type === 'activity-event') {
+      for (const listener of this.activityListeners) listener(message.envelope)
       return
     }
     if (message.type === 'response') this.handleResponse(message)

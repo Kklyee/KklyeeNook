@@ -19,11 +19,15 @@ export function registerAgentBackendIpc(
   const unsubscribe = backend.onStatusChange((status) => {
     if (!window.isDestroyed()) window.webContents.send(IPC_CHANNELS.AGENT_BACKEND_STATUS, status)
   })
+  const unsubscribeActivity = backend.onActivityEvent((envelope) => {
+    if (!window.isDestroyed()) window.webContents.send(IPC_CHANNELS.AGENT_ACTIVITY_EVENT, envelope)
+  })
 
   ipcMain.handle(IPC_CHANNELS.AGENT_BACKEND_GET_STATUS, getStatus)
   const dispose = () => {
     ipcMain.removeHandler(IPC_CHANNELS.AGENT_BACKEND_GET_STATUS)
     unsubscribe()
+    unsubscribeActivity()
   }
   window.once('closed', dispose)
   return dispose

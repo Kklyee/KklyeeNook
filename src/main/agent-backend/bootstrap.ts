@@ -47,6 +47,7 @@ import { DEFAULT_KNOWLEDGE_SETTINGS } from '@/shared/knowledge/knowledge'
 import { registerPiKnowledgeTools } from '@/main/agent/pi/adapters/piKnowledgeToolAdapter'
 import { registerPiToolResultTool } from '@/main/agent/pi/adapters/piToolResultAdapter'
 import { ToolResultStore } from '@/main/tools/toolResultStore'
+import type { AgentEventEnvelope } from '@/shared/agent/agentExecutionRecord'
 
 export interface AgentBackendRuntime {
   baseUrl: string
@@ -66,6 +67,7 @@ export async function createAgentBackend(
   options: AgentBackendInitOptions,
   reportStartupStage: StartupStageReporter = () => undefined,
   notify: (notification: AgentBackendNotification) => void = () => undefined,
+  publishActivity: (envelope: AgentEventEnvelope) => void = () => undefined,
 ): Promise<AgentBackendRuntime> {
   const configStore = new AgentConfigStore(options.config)
   let credentialStore = createCredentialStore(options.apiKeys)
@@ -141,6 +143,7 @@ export async function createAgentBackend(
     )
 
     await agentService.initialize((stage, count) => reportStartupStage(stage, String(count)))
+    const unsubscribeActivity = agentService.subscribe(publishActivity)
     const messageProjection = new MessageProjectionService(new DrizzleAgentMessageRepo(db))
     const piClientService = new PiClientService(
       agentService,
@@ -298,6 +301,7 @@ export async function createAgentBackend(
         return piClient.subscribe(request.threadId, listener, request.options)
       },
       async close() {
+        unsubscribeActivity()
         scheduledTaskScheduler?.stop()
         await knowledge?.close()
         await mcpServerManager?.close()

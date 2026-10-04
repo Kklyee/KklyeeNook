@@ -25,6 +25,7 @@ async function handleMessage(message: MainToAgentBackendMessage): Promise<void> 
           postStartupStage(stage, detail)
         },
         (notification) => parentPort?.postMessage({ type: 'notification', notification }),
+        (envelope) => parentPort?.postMessage({ type: 'activity-event', envelope }),
       )
       postStartupStage('ready')
       parentPort?.postMessage({

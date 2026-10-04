@@ -19,6 +19,14 @@ export function convertPiEvent(event: PIAgentEvent): AgentEvent | undefined {
     case 'agent_start':
       return { type: 'agent_started' }
 
+    case 'message_start':
+      return event.message.role === 'assistant' ? { type: 'inference_started' } : undefined
+
+    case 'message_end':
+      return event.message.role === 'assistant'
+        ? { type: 'inference_finished', failed: ['error', 'aborted'].includes(event.message.stopReason) }
+        : undefined
+
     case 'message_update': {
       const update = event.assistantMessageEvent
 

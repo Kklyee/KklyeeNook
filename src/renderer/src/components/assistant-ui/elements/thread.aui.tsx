@@ -9,7 +9,7 @@ import {
   UserMessageAttachments,
 } from '@/renderer/src/components/assistant-ui/elements/attachment.aui'
 import { File } from './file-preview'
-import { FileChangeCards } from '@/renderer/src/features/chat/tools/FileChangeCards'
+import { AgentActivityGroup } from '@/renderer/src/features/chat/activity/AgentActivityGroup'
 import { ThreadFollowupSuggestions } from '@/renderer/src/components/assistant-ui/elements/follow-up-suggestions.aui'
 import { Image } from './image-preview'
 import { MarkdownText } from '@/renderer/src/components/assistant-ui/elements/markdown-text'
@@ -28,19 +28,6 @@ import {
   ModelSelectorValue,
   type ModelOption,
 } from '@/renderer/src/components/assistant-ui/elements/model-selector'
-import {
-  Reasoning,
-  ReasoningContent,
-  ReasoningRoot,
-  ReasoningText,
-  ReasoningTrigger,
-} from '@/renderer/src/components/assistant-ui/elements/reasoning.aui'
-import { ToolFallback } from '@/renderer/src/components/assistant-ui/elements/tool-fallback.aui'
-import {
-  ToolGroupContent,
-  ToolGroupRoot,
-  ToolGroupTrigger,
-} from '@/renderer/src/components/assistant-ui/elements/tool-group.aui'
 import { TooltipIconButton } from '@/renderer/src/components/assistant-ui/elements/tooltip-icon-button'
 import { Button } from '@/renderer/src/components/ui/button'
 import { Skeleton } from '@/renderer/src/components/ui/skeleton'
@@ -55,13 +42,11 @@ import {
   BranchPickerPrimitive,
   ComposerPrimitive,
   ErrorPrimitive,
-  groupPartByType,
   MessagePrimitive,
   ThreadPrimitive,
   type Unstable_DirectiveFormatter,
   type FileMessagePartComponent,
   type ImageMessagePartComponent,
-  type ToolCallMessagePartComponent,
   unstable_useSlashCommandAdapter,
   useAuiState,
 } from '@assistant-ui/react'
@@ -85,28 +70,15 @@ import {
   useContext,
   type ComponentType,
   type FC,
-  type PropsWithChildren,
   type ReactNode,
   useEffect,
   useMemo,
   useState,
 } from 'react'
 
-export type ThreadGroupPart = MessagePrimitive.GroupedParts.GroupPart
-
-/**
- * Optional component overrides for the thread. `AssistantMessage` and
- * `Welcome` replace whole sections; the remaining slots override how the
- * assistant message renders tool calls and part groups. Tool UIs registered
- * by name (toolkit `render`, `useAssistantDataUI`) take precedence over
- * `ToolFallback`.
- */
 export type ThreadComponents = {
   AssistantMessage?: ComponentType | undefined
   Welcome?: ComponentType | undefined
-  ToolFallback?: ToolCallMessagePartComponent | undefined
-  ToolGroup?: ComponentType<PropsWithChildren<{ group: ThreadGroupPart }>> | undefined
-  ReasoningGroup?: ComponentType<PropsWithChildren<{ group: ThreadGroupPart }>> | undefined
   readOnly?: boolean | undefined
 }
 
@@ -552,12 +524,7 @@ const MessageError: FC = () => {
 }
 
 const AssistantMessage: FC = () => {
-  const {
-    ToolFallback: ToolFallbackComponent = ToolFallback,
-    ToolGroup,
-    ReasoningGroup,
-    readOnly,
-  } = useContext(ThreadComponentsContext)
+  const { readOnly } = useContext(ThreadComponentsContext)
 
   const ACTION_BAR_PT = 'pt-1.5'
   // Keep the action bar inside the contained root's paint box, then cancel its reserved space in flow.
@@ -573,46 +540,17 @@ const AssistantMessage: FC = () => {
         data-slot="aui_assistant-message-content"
         className="text-foreground flex flex-col gap-4 px-2 text-[15px] leading-relaxed wrap-break-word"
       >
+        <AgentActivityGroup />
         <MessagePrimitive.GroupedParts
-          groupBy={groupPartByType({
-            reasoning: ['group-chainOfThought', 'group-reasoning'],
-            'tool-call': ['group-chainOfThought', 'group-tool'],
-            'standalone-tool-call': [],
-          })}
+          groupBy={() => []}
         >
-          {({ part, children }) => {
+          {({ part }) => {
             switch (part.type) {
-              case 'group-chainOfThought':
-                return (
-                  <div data-slot="aui_chain-of-thought" className="flex flex-col gap-4">
-                    {children}
-                  </div>
-                )
-              case 'group-tool':
-                if (ToolGroup) {
-                  return <ToolGroup group={part}>{children}</ToolGroup>
-                }
-                return <PendingToolGroup group={part}>{children}</PendingToolGroup>
-              case 'group-reasoning': {
-                if (ReasoningGroup) {
-                  return <ReasoningGroup group={part}>{children}</ReasoningGroup>
-                }
-                const running = part.status.type === 'running'
-                return (
-                  <ReasoningRoot streaming={running}>
-                    <ReasoningTrigger active={running} />
-                    <ReasoningContent aria-busy={running}>
-                      <ReasoningText>{children}</ReasoningText>
-                    </ReasoningContent>
-                  </ReasoningRoot>
-                )
-              }
               case 'text':
                 return <MarkdownText />
               case 'reasoning':
-                return <Reasoning {...part} />
               case 'tool-call':
-                return part.toolUI ?? <ToolFallbackComponent {...part} />
+                return null
               case 'data':
                 return part.dataRendererUI
               case 'file':
@@ -628,21 +566,12 @@ const AssistantMessage: FC = () => {
                   </div>
                 )
               case 'indicator':
-                return (
-                  <span
-                    data-slot="aui_assistant-message-indicator"
-                    className="animate-pulse font-sans"
-                    aria-label="Assistant is working"
-                  >
-                    {'●'}
-                  </span>
-                )
+                return null
               default:
                 return null
             }
           }}
         </MessagePrimitive.GroupedParts>
-        <FileChangeCards />
         <MessageError />
       </div>
 
@@ -659,32 +588,6 @@ const AssistantMessage: FC = () => {
         </div>
       )}
     </MessagePrimitive.Root>
-  )
-}
-
-const PendingToolGroup: FC<PropsWithChildren<{ group: ThreadGroupPart }>> = ({
-  children,
-  group,
-}) => {
-  const requiresAction = group.status.type === 'requires-action'
-  const [state, setState] = useState({ requiresAction, open: true })
-
-  if (state.requiresAction !== requiresAction) {
-    setState({ requiresAction, open: requiresAction || state.open })
-  }
-
-  return (
-    <ToolGroupRoot
-      variant="ghost"
-      open={state.open}
-      onOpenChange={(open) => setState({ requiresAction, open })}
-    >
-      <ToolGroupTrigger
-        count={group.indices.length}
-        active={group.status.type === 'running' || requiresAction}
-      />
-      <ToolGroupContent>{children}</ToolGroupContent>
-    </ToolGroupRoot>
   )
 }
 

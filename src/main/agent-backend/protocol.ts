@@ -1,6 +1,6 @@
 import type { PermissionMode } from '@/shared/approval/permission'
 import type { AgentConfig } from '@/shared/agent/agentConfig'
-import type { LoadAgentExecutionRecordsRequest } from '@/shared/agent/agentExecutionRecord'
+import type { AgentEventEnvelope, LoadAgentExecutionRecordsRequest } from '@/shared/agent/agentExecutionRecord'
 import type { LoadAgentRunsRequest } from '@/shared/agent/agentRun'
 import type { AgentBackendInfo, AgentBackendNotification } from '@/shared/agentBackend'
 import type { ResolvedContextAttachment } from '@/main/context/contextAttachmentService'
@@ -78,5 +78,6 @@ export type AgentBackendToMainMessage =
   | { type: 'ready'; info: AgentBackendInfo }
   | { type: 'failed'; message: string }
   | { type: 'notification'; notification: AgentBackendNotification }
+  | { type: 'activity-event'; envelope: AgentEventEnvelope }
   | { type: 'response'; id: string; ok: true; value?: unknown }
   | { type: 'response'; id: string; ok: false; message: string }
