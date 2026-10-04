@@ -7,6 +7,7 @@ import { ToolIcon } from '@/renderer/src/components/assistant-ui/elements/tool-c
 import { currentActivity } from '@/shared/agent/agentActivityTiming'
 import { formatActivityLabel } from '@/shared/agent/agentActivityFormatter'
 import { summarizeAgentActivities } from '@/shared/agent/agentActivitySummary'
+import { ShimmerLabel } from '@/renderer/src/lib/surfaces'
 import {
   ActivityCrossfade,
   ActivityDuration,
@@ -112,6 +113,7 @@ function ActivityHeader({ runId }: { runId?: string }) {
     summarizeAgentActivities(groups.find((group) => group.run.id === runId)?.activities ?? []),
   )
   const completed = run?.status === 'completed'
+  const running = !run || ['created', 'running', 'waiting'].includes(run.status)
   const label = completed ? summary : current ? formatActivityLabel(current) : '思考中…'
   const transitionKey = completed
     ? 'completed'
@@ -127,9 +129,14 @@ function ActivityHeader({ runId }: { runId?: string }) {
       ) : (
         <ToolIcon kind="thinking" />
       )}
-      <span data-slot="agent-activity-summary" className="min-w-0 truncate" title={label}>
+      <ShimmerLabel
+        active={running}
+        data-slot="agent-activity-summary"
+        className="shimmer-speed-100 shimmer-repeat-delay-0 min-w-0 truncate"
+        title={label}
+      >
         {label}
-      </span>
+      </ShimmerLabel>
     </ActivityCrossfade>
   )
 }

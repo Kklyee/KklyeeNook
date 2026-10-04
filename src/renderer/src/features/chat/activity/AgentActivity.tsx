@@ -23,7 +23,7 @@ import {
 import { ToolCallRenderer } from '../tools/ToolCallRenderer'
 import { assistantToolkit } from '../tools/AssistantToolkit'
 import { cn } from '@/renderer/src/lib/utils'
-import { collapsePanel } from '@/renderer/src/lib/surfaces'
+import { collapsePanel, ShimmerLabel } from '@/renderer/src/lib/surfaces'
 import { usePreview } from '../../preview/PreviewProvider'
 
 export function ActivityIcon({ activity }: { activity: Activity }) {
@@ -150,9 +150,13 @@ export const AgentActivityRow = memo(function AgentActivityRow({
             <ActivityCrossfade transitionKey={`${activity.type}:${activity.status}`}>
               <ActivityIcon activity={activity} />
             </ActivityCrossfade>
-            <span className="min-w-0 flex-1 truncate" title={label}>
+            <ShimmerLabel
+              active={activity.status === 'running' || activity.status === 'waiting'}
+              className="shimmer-speed-100 shimmer-repeat-delay-0 min-w-0 flex-1 truncate"
+              title={label}
+            >
               {label}
-            </span>
+            </ShimmerLabel>
             {(activity.type === 'edit' || activity.type === 'write') &&
               activity.additions !== undefined && (
                 <span className="shrink-0 text-[11px] tabular-nums text-faint-foreground">
