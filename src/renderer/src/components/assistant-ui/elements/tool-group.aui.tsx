@@ -1,17 +1,6 @@
 'use client'
 
-import {
-  Children,
-  Fragment,
-  isValidElement,
-  memo,
-  useCallback,
-  useRef,
-  useState,
-  type FC,
-  type PropsWithChildren,
-  type ReactNode,
-} from 'react'
+import { memo, useCallback, useRef, useState, type FC, type PropsWithChildren } from 'react'
 import { ChevronDownIcon } from 'lucide-react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { useScrollLock } from '@assistant-ui/react'
@@ -20,18 +9,10 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/renderer/src/components/ui/collapsible'
+import { BranchList } from '@/renderer/src/components/assistant-ui/elements/branch-list'
 import { cn } from '@/renderer/src/lib/utils'
 
 const ANIMATION_DURATION = 200
-
-function flattenToolGroupChildren(children: ReactNode): ReactNode[] {
-  return Children.toArray(children).flatMap((child) => {
-    if (isValidElement<{ children?: ReactNode }>(child) && child.type === Fragment) {
-      return flattenToolGroupChildren(child.props.children)
-    }
-    return [child]
-  })
-}
 
 const toolGroupVariants = cva('aui-tool-group-root group/tool-group w-full', {
   variants: {
@@ -85,21 +66,23 @@ function ToolGroupRoot({
   )
 
   return (
-    <Collapsible
-      ref={collapsibleRef}
-      data-slot="tool-group-root"
-      data-variant={variant ?? 'outline'}
-      open={isOpen}
-      onOpenChange={handleOpenChange}
-      className={cn(toolGroupVariants({ variant }), 'group/tool-group-root', className)}
-      style={{
-        ...style,
-        '--animation-duration': `${ANIMATION_DURATION}ms`,
-      } as React.CSSProperties}
-      {...props}
-    >
-      {children}
-    </Collapsible>
+    <BranchList.Root className="w-full">
+      <Collapsible
+        ref={collapsibleRef}
+        data-slot="tool-group-root"
+        data-variant={variant ?? 'outline'}
+        open={isOpen}
+        onOpenChange={handleOpenChange}
+        className={cn(toolGroupVariants({ variant }), 'group/tool-group-root', className)}
+        style={{
+          ...style,
+          '--animation-duration': `${ANIMATION_DURATION}ms`,
+        } as React.CSSProperties}
+        {...props}
+      >
+        {children}
+      </Collapsible>
+    </BranchList.Root>
   )
 }
 
@@ -115,40 +98,42 @@ function ToolGroupTrigger({
   const label = `${count} tool ${count === 1 ? 'call' : 'calls'}`
 
   return (
-    <CollapsibleTrigger
-      data-slot="tool-group-trigger"
-      className={cn(
-        'aui-tool-group-trigger group/trigger flex origin-left items-center gap-2 bg-transparent text-sm text-foreground transition-[color,scale,background-color] hover:bg-hover data-[state=open]:bg-selected active:scale-[0.98]',
-        'group-data-[variant=ghost]/tool-group-root:py-1.5',
-        'group-data-[variant=outline]/tool-group-root:w-full group-data-[variant=outline]/tool-group-root:px-4',
-        'group-data-[variant=muted]/tool-group-root:w-full group-data-[variant=muted]/tool-group-root:px-4',
-        className,
-      )}
-      {...props}
-    >
-      <span
-        data-slot="tool-group-trigger-label"
+    <BranchList.Trigger>
+      <CollapsibleTrigger
+        data-slot="tool-group-trigger"
         className={cn(
-          'aui-tool-group-trigger-label-wrapper inline-block text-start text-xs leading-none font-medium text-muted-foreground',
-          'group-data-[variant=ghost]/tool-group-root:font-normal',
-          'group-data-[variant=outline]/tool-group-root:grow',
-          'group-data-[variant=muted]/tool-group-root:grow',
-          active && 'shimmer motion-reduce:animate-none',
+          'aui-tool-group-trigger group/trigger flex origin-left items-center gap-2 bg-transparent text-sm text-foreground transition-[color,scale,background-color] hover:bg-hover data-[state=open]:bg-selected active:scale-[0.98]',
+          'group-data-[variant=ghost]/tool-group-root:py-1.5',
+          'group-data-[variant=outline]/tool-group-root:w-full group-data-[variant=outline]/tool-group-root:px-4',
+          'group-data-[variant=muted]/tool-group-root:w-full group-data-[variant=muted]/tool-group-root:px-4',
+          className,
         )}
+        {...props}
       >
-        {label}
-      </span>
-      <ChevronDownIcon
-        data-slot="tool-group-trigger-chevron"
-        className={cn(
-          'aui-tool-group-trigger-chevron size-3 shrink-0 rounded-sm text-faint-foreground transition-[color,background-color,transform] group-hover/trigger:text-foreground hover:bg-hover',
-          'duration-(--animation-duration) ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none',
-          '-rotate-90',
-          'group-data-open/trigger:rotate-0',
-          'group-data-panel-open/trigger:rotate-0',
-        )}
-      />
-    </CollapsibleTrigger>
+        <span
+          data-slot="tool-group-trigger-label"
+          className={cn(
+            'aui-tool-group-trigger-label-wrapper inline-block text-start text-xs leading-none font-medium text-muted-foreground',
+            'group-data-[variant=ghost]/tool-group-root:font-normal',
+            'group-data-[variant=outline]/tool-group-root:grow',
+            'group-data-[variant=muted]/tool-group-root:grow',
+            active && 'shimmer motion-reduce:animate-none',
+          )}
+        >
+          {label}
+        </span>
+        <ChevronDownIcon
+          data-slot="tool-group-trigger-chevron"
+          className={cn(
+            'aui-tool-group-trigger-chevron size-3 shrink-0 rounded-sm text-faint-foreground transition-[color,background-color,transform] group-hover/trigger:text-foreground hover:bg-hover',
+            'duration-(--animation-duration) ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none',
+            '-rotate-90',
+            'group-data-open/trigger:rotate-0',
+            'group-data-panel-open/trigger:rotate-0',
+          )}
+        />
+      </CollapsibleTrigger>
+    </BranchList.Trigger>
   )
 }
 
@@ -157,8 +142,6 @@ function ToolGroupContent({
   children,
   ...props
 }: React.ComponentProps<typeof CollapsibleContent>) {
-  const toolGroupChildren = flattenToolGroupChildren(children)
-
   return (
     <CollapsibleContent
       data-slot="tool-group-content"
@@ -174,28 +157,16 @@ function ToolGroupContent({
       )}
       {...props}
     >
-      <div
-        data-slot="aui-tool-group-items"
+      <BranchList.Items
         className={cn(
-          'aui-tool-group-items mt-1.5 flex flex-col gap-1.5',
+          'aui-tool-group-items mt-1.5',
           'group-data-[variant=ghost]/tool-group-root:mt-1',
           'group-data-[variant=outline]/tool-group-root:mt-2 group-data-[variant=outline]/tool-group-root:border-t group-data-[variant=outline]/tool-group-root:border-border group-data-[variant=outline]/tool-group-root:px-3 group-data-[variant=outline]/tool-group-root:pt-2',
           'group-data-[variant=muted]/tool-group-root:mt-2 group-data-[variant=muted]/tool-group-root:border-t group-data-[variant=muted]/tool-group-root:border-border group-data-[variant=muted]/tool-group-root:px-3 group-data-[variant=muted]/tool-group-root:pt-2',
         )}
       >
-        {toolGroupChildren.map((child, index) => (
-          <div
-            key={index}
-            data-slot="aui-tool-group-node"
-            style={{
-              '--tool-call-connector-delay': `${index * 100}ms`,
-            } as React.CSSProperties}
-            className="aui-tool-group-node"
-          >
-            {child}
-          </div>
-        ))}
-      </div>
+        {children}
+      </BranchList.Items>
     </CollapsibleContent>
   )
 }
