@@ -53,6 +53,7 @@ import {
   type FileMessagePartComponent,
   type ImageMessagePartComponent,
   unstable_useSlashCommandAdapter,
+  useAui,
   useAuiState,
 } from '@assistant-ui/react'
 import {
@@ -301,6 +302,7 @@ const Composer: FC<{
   compactionSettings: AgentCompactionSettings
   isCompacting: boolean
 }> = ({ autoFocus, modelSelector, contextUsage, compactionSettings, isCompacting }) => {
+  const aui = useAui()
   const skills = useAvailableSkills()
   const commands = useMemo(
     () =>
@@ -317,7 +319,13 @@ const Composer: FC<{
   return (
     <div className="flex w-full flex-col gap-1.5">
       <ComposerPrimitive.Unstable_TriggerPopoverRoot>
-        <ComposerPrimitive.Root className="aui-composer-root  relative  flex w-full flex-col ">
+        <ComposerPrimitive.Root
+          className="aui-composer-root  relative  flex w-full flex-col "
+          onSubmit={(event) => {
+            event.preventDefault()
+            aui.composer.send({ steer: false })
+          }}
+        >
           <QueuedMessages />
           <ComposerPrimitive.AttachmentDropzone
             render={
@@ -414,6 +422,7 @@ const ComposerAction: FC<{
   isCompacting: boolean
 }> = ({ modelSelector, contextUsage, compactionSettings, isCompacting }) => {
   const canSend = useAuiState((s) => s.composer.canSend)
+  const aui = useAui()
   const budget = calculateAgentContextBudget(contextUsage, compactionSettings, { compacting: isCompacting })
 
   return (
@@ -484,20 +493,26 @@ const ComposerAction: FC<{
             </ComposerPrimitive.StopDictation>
           </AuiIf>
         </AuiIf>
-        <ComposerPrimitive.Send
-          render={
-            <ComposerSend
-              streaming={false}
-              idle={canSend}
-              disabled={!canSend}
-              className="aui-composer-send"
-              title="发送；运行时排队，Ctrl/Cmd+Shift+Enter 调整当前任务"
-            />
-          }
-        >
-          <ArrowUpIcon className="aui-composer-send-icon size-4" />
-        </ComposerPrimitive.Send>
-        <AuiIf condition={(s) => s.thread.isRunning}>
+        <AuiIf condition={(s) => !s.thread.isRunning || s.composer.canSend}>
+          <ComposerPrimitive.Send
+            onClick={(event) => {
+              event.preventDefault()
+              aui.composer.send({ steer: false })
+            }}
+            render={
+              <ComposerSend
+                streaming={false}
+                idle={canSend}
+                disabled={!canSend}
+                className="aui-composer-send"
+                title="发送；运行时排队，Ctrl/Cmd+Shift+Enter 调整当前任务"
+              />
+            }
+          >
+            <ArrowUpIcon className="aui-composer-send-icon size-4" />
+          </ComposerPrimitive.Send>
+        </AuiIf>
+        <AuiIf condition={(s) => s.thread.isRunning && !s.composer.canSend}>
           <ComposerPrimitive.Cancel
             render={
               <Button
