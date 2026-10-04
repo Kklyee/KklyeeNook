@@ -1,5 +1,6 @@
 import type { PermissionMode } from '@/shared/approval/permission'
 import type { SystemMaterial } from '@/shared/platform/systemMaterial'
+import type { ThemeMode } from '@/shared/platform/theme'
 import type { PreviewWorkspaceFileRequest, WorkspaceFilePreview } from '@/shared/preview/workspacePreview'
 import type { AgentSessionSummary } from '@/shared/agent/agentSession'
 import type { Workspace, WorkspaceAttachResult } from '@/shared/workspace/workspace'
@@ -95,6 +96,9 @@ const api = {
     droppedFilePath(file: File): string { return webUtils.getPathForFile(file) },
   },
   window: {
+    setTheme(theme: ThemeMode): boolean {
+      return ipcRenderer.sendSync(IPC_CHANNELS.WINDOW_THEME, theme)
+    },
     minimize(): void {
       ipcRenderer.send(IPC_CHANNELS.WINDOW_MINIMIZE)
     },

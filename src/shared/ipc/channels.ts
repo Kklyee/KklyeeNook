@@ -33,6 +33,7 @@ export const IPC_CHANNELS = {
   MEMORY_DELETE: 'memory:delete',
   PERMISSION_GRANT_DELETE: 'permission-grant:delete',
   WINDOW_MINIMIZE: 'window:minimize',
+  WINDOW_THEME: 'window:theme',
   WINDOW_SYSTEM_MATERIAL: 'window:system-material',
   WINDOW_SYSTEM_MATERIAL_CHANGED: 'window:system-material-changed',
   WINDOW_TOGGLE_MAXIMIZE: 'window:toggle-maximize',

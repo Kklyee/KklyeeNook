@@ -1,5 +1,6 @@
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
-import { ipcMain, BrowserWindow, Menu } from 'electron'
+import { ipcMain, BrowserWindow, Menu, nativeTheme } from 'electron'
+import type { ThemeMode } from '@/shared/platform/theme'
 import type { WindowMenu, WindowMenuAction } from '@/shared/ipc/channels'
 import { getSystemMaterial } from './chatWindow'
 import { chooseWallpaper, clearWallpaper, getWallpaper } from './wallpaper'
@@ -18,6 +19,13 @@ export function registerWindowIpc(window: BrowserWindow): () => void {
   }
   const handleSystemMaterial = (event: Electron.IpcMainEvent) => {
     event.returnValue = getSenderWindow(event) ? getSystemMaterial(window) : 'solid'
+  }
+  const handleTheme = (event: Electron.IpcMainEvent, theme: ThemeMode) => {
+    if (getSenderWindow(event) && event.senderFrame === window.webContents.mainFrame &&
+      (theme === 'light' || theme === 'dark' || theme === 'system')) {
+      nativeTheme.themeSource = theme
+    }
+    event.returnValue = nativeTheme.shouldUseDarkColors
   }
   const handleToggleMaximize = (event: Electron.IpcMainEvent) => {
     const senderWindow = getSenderWindow(event)
@@ -75,6 +83,7 @@ export function registerWindowIpc(window: BrowserWindow): () => void {
   }
 
   ipcMain.on(IPC_CHANNELS.WINDOW_MINIMIZE, handleMinimize)
+  ipcMain.on(IPC_CHANNELS.WINDOW_THEME, handleTheme)
   for (const [channel, handler] of [
     [IPC_CHANNELS.WALLPAPER_GET, getWallpaper],
     [IPC_CHANNELS.WALLPAPER_CHOOSE, () => chooseWallpaper(window)],
@@ -96,6 +105,7 @@ export function registerWindowIpc(window: BrowserWindow): () => void {
   window.on('unmaximize', sendMaximizedState)
 
   return () => {
+    ipcMain.removeListener(IPC_CHANNELS.WINDOW_THEME, handleTheme)
     ipcMain.removeHandler(IPC_CHANNELS.WALLPAPER_GET)
     ipcMain.removeHandler(IPC_CHANNELS.WALLPAPER_CHOOSE)
     ipcMain.removeHandler(IPC_CHANNELS.WALLPAPER_CLEAR)

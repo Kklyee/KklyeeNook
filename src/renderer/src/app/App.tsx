@@ -2,8 +2,10 @@ import { AssistantRuntime } from '../features/chat/runtime/AssistantRuntimeProvi
 import { AppShell } from './AppShell'
 import { useEffect } from 'react'
 import { useWallpaper } from '../features/settings/useWallpaper'
+import { watchSystemTheme } from '../features/settings/useTheme'
 
 function App(): React.JSX.Element {
+  useEffect(watchSystemTheme, [])
   const image = useWallpaper((state) => state.image)
   const loadWallpaper = useWallpaper((state) => state.load)
   useEffect(() => {
