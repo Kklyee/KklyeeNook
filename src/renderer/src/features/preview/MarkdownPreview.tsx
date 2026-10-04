@@ -32,7 +32,7 @@ export function MarkdownPreview({ content, focusLine }: { content: string; focus
         </Button>
       </nav>
       {source ? (
-        <CodeFilePreview content={content} focusLine={focusLine} />
+        <CodeFilePreview content={content} focusLine={focusLine} language="markdown" />
       ) : (
         <div className="min-h-0 flex-1 overflow-auto p-5 text-sm">
           <MarkdownContent content={content} />

@@ -4,6 +4,9 @@ import { useMemo, type FC } from "react";
 import { useShikiHighlighter, type ShikiHighlighterProps } from "react-shiki";
 import { cn } from "@/renderer/src/lib/utils";
 
+export const codeHighlightTheme = { dark: "github-dark-default", light: "github-light-default" };
+export const codeHighlightOptions = { engine: "javascript", defaultColor: "light-dark()" } as const;
+
 export type SyntaxHighlighterProps = Omit<
   ShikiHighlighterProps,
   "children" | "theme"
@@ -86,7 +89,7 @@ const HighlightedCode: FC<{
     ...(options.transformers ?? []),
   ] : options.transformers, [isCssDeclaration, options.transformers]);
   const highlighted = useShikiHighlighter(code, language, theme, {
-    engine: "javascript",
+    ...codeHighlightOptions,
     ...options,
     transformers,
     defaultColor: "light-dark()",
@@ -97,7 +100,7 @@ const HighlightedCode: FC<{
 export const SyntaxHighlighter: FC<SyntaxHighlighterProps> = ({
   code,
   language,
-  theme = { dark: "github-dark-default", light: "github-light-default" },
+  theme = codeHighlightTheme,
   className,
   style,
   addDefaultStyles: _addDefaultStyles,

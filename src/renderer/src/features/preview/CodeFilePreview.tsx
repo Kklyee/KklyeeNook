@@ -1,11 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useShikiHighlighter } from 'react-shiki'
+import { codeHighlightOptions, codeHighlightTheme } from '@/renderer/src/components/assistant-ui/elements/shiki-highlighter'
 
-export function CodeFilePreview({ content, focusLine }: { content: string; focusLine?: number }) {
-  return <CodeFileContent key={content} content={content} focusLine={focusLine} />
+type CodeFilePreviewProps = { content: string; focusLine?: number; language?: string }
+
+export function CodeFilePreview({ content, focusLine, language = 'text' }: CodeFilePreviewProps) {
+  return <CodeFileContent key={content} content={content} focusLine={focusLine} language={language} />
 }
 
-function CodeFileContent({ content, focusLine }: { content: string; focusLine?: number }) {
+function CodeFileContent({ content, focusLine, language = 'text' }: CodeFilePreviewProps) {
   const lines = useMemo(() => content.split('\n'), [content])
+  const highlighted = useShikiHighlighter(content, language, codeHighlightTheme, {
+    ...codeHighlightOptions,
+    outputFormat: 'tokens',
+  })
   const container = useRef<HTMLDivElement>(null)
   const [height, setHeight] = useState(600)
   const [scrollTop, setScrollTop] = useState(0)
@@ -62,7 +70,9 @@ function CodeFileContent({ content, focusLine }: { content: string; focusLine?: 
               {start + index + 1}
             </span>
             <span className="px-3 whitespace-pre" style={{ tabSize: 4 }}>
-              {line || ' '}
+              {highlighted?.tokens[start + index]?.map((token, tokenIndex) => (
+                <span key={tokenIndex} style={token.htmlStyle}>{token.content}</span>
+              )) ?? (line || ' ')}
             </span>
           </div>
         ))}

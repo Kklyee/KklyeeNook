@@ -95,7 +95,7 @@ function WorkspaceFileContent({
     return /\.(md|markdown)$/i.test(file.filename) ? (
       <MarkdownPreview content={file.content} focusLine={target.line} />
     ) : (
-      <CodeFilePreview content={file.content} focusLine={target.line} />
+      <CodeFilePreview content={file.content} focusLine={target.line} language={file.filename.split('.').pop()?.toLowerCase()} />
     )
   } else if (file?.kind === 'image') {
     return <ImageFilePreview {...file} />
