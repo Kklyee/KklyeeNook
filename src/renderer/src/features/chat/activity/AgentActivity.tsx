@@ -115,7 +115,7 @@ export const AgentActivityRow = memo(function AgentActivityRow({
           <div className="ml-5 min-w-0 border-l border-border px-3 py-2 text-xs text-muted-foreground">
             {activity.type === 'thinking' ? (
               <div className="whitespace-pre-wrap break-words text-[13px] leading-relaxed">
-                {activity.content || '模型未返回 reasoning 内容。'}
+                {activity.content}
               </div>
             ) : (
               <ActivityToolDetail activity={activity} />

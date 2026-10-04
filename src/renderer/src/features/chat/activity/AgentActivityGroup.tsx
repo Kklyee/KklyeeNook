@@ -60,11 +60,14 @@ const ActivityTimeline = memo(function ActivityTimeline({ group }: { group: Acti
   const [open, setOpen] = useState(false)
   const [now, setNow] = useState(Date.now)
   const { activities, run } = group
-  const current = currentActivity(activities)
+  const visibleActivities = activities.filter(
+    (activity) => activity.type !== 'thinking' || activity.content.trim().length > 0,
+  )
   const active = activities.some(
     (activity) => activity.status === 'running' || activity.status === 'waiting',
   )
   const running = active || ['created', 'running', 'waiting'].includes(run.status)
+  const current = currentActivity(running ? activities : visibleActivities)
   useEffect(() => {
     if (!running) return
     const timer = setInterval(() => setNow(Date.now()), 200)
@@ -99,7 +102,7 @@ const ActivityTimeline = memo(function ActivityTimeline({ group }: { group: Acti
         )
       }
     >
-      {activities.map((activity) => (
+      {visibleActivities.map((activity) => (
         <AgentActivityRow key={activity.id} activity={activity} now={activity.endedAt ?? now} />
       ))}
     </ToolTimeline>
