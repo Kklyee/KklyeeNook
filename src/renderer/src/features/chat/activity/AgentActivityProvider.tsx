@@ -11,11 +11,13 @@ import type { AgentEventEnvelope } from '@/shared/agent/agentExecutionRecord'
 import type { AgentRun } from '@/shared/agent/agentRun'
 import type { AgentActivity } from '@/shared/agent/agentActivity'
 import { deriveAgentActivities } from '@/shared/agent/deriveAgentActivities'
+import { groupAgentActivities, type ActivitySegment } from '@/shared/agent/groupAgentActivities'
 import { usePreview } from '../../preview/PreviewProvider'
 
 export interface ActivityRun {
   run: AgentRun
   activities: readonly AgentActivity[]
+  segments: readonly ActivitySegment[]
 }
 
 function createActivityStore() {
@@ -76,16 +78,14 @@ export function AgentActivityProvider({
           const existing = new Map(
             previousGroup?.activities.map((activity) => [activity.id, activity]),
           )
-          const activities = deriveAgentActivities(
-            [...(records.get(run.id)?.values() ?? [])],
-            run,
-          ).map((activity) => {
+          const events = [...(records.get(run.id)?.values() ?? [])]
+          const activities = deriveAgentActivities(events, run).map((activity) => {
             const old = existing.get(activity.id)
             return old && Object.keys(activity).every((key) => activity[key] === old[key])
               ? old
               : activity
           })
-          const group = { run, activities }
+          const group = { run, activities, segments: groupAgentActivities(events, activities) }
           previous.set(run.id, group)
           dirty.delete(run.id)
           return group

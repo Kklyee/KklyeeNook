@@ -13,12 +13,15 @@ export function createElectronPiClient(
   getWorkspaceId: () => string | null = () => null,
   getMode: () => PermissionMode | null = () => null,
 ): PiClient {
-  const httpClient = createPiHttpClient({ baseUrl })
+  const httpClient = createPiHttpClient({
+    baseUrl,
+    onStreamError: (error) => console.error('[PiStream] event stream failed:', error),
+  })
   const endpoint = baseUrl.replace(/\/+$/, '')
   const attachmentAwareClient: ContextAwarePiClient = {
     ...httpClient,
-    subscribe(threadId, listener) {
-      return httpClient.subscribe(threadId, listener, { includeSnapshot: true })
+    subscribe(threadId, listener, options) {
+      return httpClient.subscribe(threadId, listener, options)
     },
     async createThread(input) {
       const session = await window.api.conversations.create({

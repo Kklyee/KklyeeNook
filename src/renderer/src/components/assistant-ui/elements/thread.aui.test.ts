@@ -35,6 +35,7 @@ vi.mock('@assistant-ui/react', () => {
     },
     useAuiState: (selector: (value: typeof state) => unknown) => selector(state),
     useAuiEvent: () => undefined,
+    useAui: () => ({}),
   }
 })
 

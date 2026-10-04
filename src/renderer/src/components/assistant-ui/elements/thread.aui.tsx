@@ -13,6 +13,7 @@ import { AgentActivityGroup } from '@/renderer/src/features/chat/activity/AgentA
 import { ThreadFollowupSuggestions } from '@/renderer/src/components/assistant-ui/elements/follow-up-suggestions.aui'
 import { Image } from './image-preview'
 import { MarkdownText } from '@/renderer/src/components/assistant-ui/elements/markdown-text'
+import { StreamingMessage, StreamingText, StreamingThread } from './streaming-message'
 import { ThreadScrollViewport, useScrollFollower } from './thread-scroll-follower'
 import {
   ComposerBar,
@@ -44,6 +45,7 @@ import {
   ComposerPrimitive,
   ErrorPrimitive,
   MessagePrimitive,
+  groupPartByType,
   ThreadPrimitive,
   type Unstable_DirectiveFormatter,
   type FileMessagePartComponent,
@@ -158,18 +160,20 @@ export const Thread: FC<ThreadProps> = ({
   const contextValue = useMemo(() => ({ ...components, readOnly }), [components, readOnly])
 
   return (
-    <ThreadComponentsContext.Provider value={contextValue}>
-      <ThreadRoot
-        isEmpty={isEmpty}
-        autoFocus={autoFocus}
-        readOnly={readOnly}
-        modelSelector={modelSelector}
-        contextUsage={contextUsage}
-        compactionSettings={compactionSettings}
-        isCompacting={isCompacting}
-        composerAccessory={composerAccessory}
-      />
-    </ThreadComponentsContext.Provider>
+    <StreamingThread>
+      <ThreadComponentsContext.Provider value={contextValue}>
+        <ThreadRoot
+          isEmpty={isEmpty}
+          autoFocus={autoFocus}
+          readOnly={readOnly}
+          modelSelector={modelSelector}
+          contextUsage={contextUsage}
+          compactionSettings={compactionSettings}
+          isCompacting={isCompacting}
+          composerAccessory={composerAccessory}
+        />
+      </ThreadComponentsContext.Provider>
+    </StreamingThread>
   )
 }
 
@@ -523,6 +527,9 @@ const MessageError: FC = () => {
 const AssistantMessage: FC = () => {
   const { readOnly } = useContext(ThreadComponentsContext)
   const active = useAuiState((state) => state.message.isLast && state.thread.isRunning)
+  const latest = useAuiState((state) =>
+    state.thread.messages.findLast((message) => message.role === 'assistant')?.id === state.message.id,
+  )
 
   const ACTION_BAR_PT = 'pt-1.5'
   // Keep the action bar inside the contained root's paint box, then cancel its reserved space in flow.
@@ -535,15 +542,17 @@ const AssistantMessage: FC = () => {
       data-streaming={active || undefined}
       className={cn(
         'relative -mb-7.5 pb-7.5',
-        active ? '[content-visibility:visible]' : '[contain-intrinsic-size:auto_200px] [content-visibility:auto]',
+        latest ? '[content-visibility:visible]' : '[contain-intrinsic-size:auto_200px] [content-visibility:auto]',
       )}
     >
       <div
         data-slot="aui_assistant-message-content"
         className="text-foreground flex flex-col gap-4 px-2 text-[15px] leading-relaxed wrap-break-word"
       >
-        <AgentActivityGroup />
-        <AssistantMessageParts />
+        <StreamingMessage>
+          <AgentActivityGroup />
+          <AssistantMessageParts />
+        </StreamingMessage>
         <MessageError />
       </div>
 
@@ -563,13 +572,20 @@ const AssistantMessage: FC = () => {
   )
 }
 
-const ungroupedParts = () => []
+const bodyParts = groupPartByType({ text: ['group-text'] })
 
 const AssistantMessageParts = memo(function AssistantMessageParts() {
   return (
-    <MessagePrimitive.GroupedParts groupBy={ungroupedParts}>
-      {({ part }) => {
+    <MessagePrimitive.GroupedParts groupBy={bodyParts} indicator="never">
+      {({ part, children }) => {
         switch (part.type) {
+          case 'group-text':
+            return (
+              <>
+                <StreamingText indices={part.indices}>{children}</StreamingText>
+                <AgentActivityGroup afterPartIndex={part.indices.at(-1)} />
+              </>
+            )
           case 'text':
             return <MarkdownText />
           case 'data':

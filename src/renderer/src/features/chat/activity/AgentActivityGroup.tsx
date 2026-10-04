@@ -2,6 +2,7 @@ import { memo, useMemo, useState } from 'react'
 import { useAui, useAuiState, type ThreadMessage } from '@assistant-ui/react'
 import type { PiRuntimeExtras } from '@assistant-ui/react-pi'
 import { CheckIcon } from 'lucide-react'
+import type { AgentActivity } from '@/shared/agent/agentActivity'
 import { ToolTimeline } from '@/renderer/src/components/assistant-ui/elements/tool-timeline'
 import { ToolIcon } from '@/renderer/src/components/assistant-ui/elements/tool-call'
 import { currentActivity } from '@/shared/agent/agentActivityTiming'
@@ -16,14 +17,49 @@ import {
 } from './AgentActivity'
 import { useActivitySelector, type ActivityRun } from './AgentActivityProvider'
 
-export function AgentActivityGroup() {
+interface ActivityScope {
+  runId?: string
+  textOffset: number
+  startedAt: number
+  fallback: boolean
+}
+
+const hasContent = (activity: AgentActivity) =>
+  activity.type !== 'thinking' || !!activity.content.trim()
+
+const findSegment = (groups: readonly ActivityRun[], scope: ActivityScope) =>
+  groups
+    .find((group) => group.run.id === scope.runId)
+    ?.segments.find((segment) => segment.textOffset === scope.textOffset)
+
+function isRunning(groups: readonly ActivityRun[], scope: ActivityScope) {
+  const group = groups.find((entry) => entry.run.id === scope.runId)
+  const segment = findSegment(groups, scope)
+  if (!group || !segment) return scope.fallback
+  return (
+    ['created', 'running', 'waiting'].includes(group.run.status) &&
+    (segment.endedAt === undefined ||
+      segment.activities.some(
+        (activity) => activity.status === 'running' || activity.status === 'waiting',
+      ))
+  )
+}
+
+export function AgentActivityGroup({ afterPartIndex }: { afterPartIndex?: number }) {
   const id = useAuiState((state) => state.message.id)
   const isLast = useAuiState((state) => state.message.isLast)
   const status = useAuiState((state) => state.message.status?.type)
   const messageCount = useAuiState((state) => state.thread.messages.length)
+  const textOffset = useAuiState((state) =>
+    afterPartIndex === undefined
+      ? 0
+      : state.message.content
+          .slice(0, afterPartIndex + 1)
+          .reduce((offset, part) => offset + (part.type === 'text' ? part.text.length : 0), 0),
+  )
   const aui = useAui()
   const running = isLast && (status === 'running' || status === 'requires-action')
-  const runId = useActivitySelector((groups) => {
+  const boundary = useActivitySelector((groups) => {
     const thread = aui.thread.getState()
     const transcript = (thread.extras as PiRuntimeExtras | undefined)?.state?.messages
     const match = (message: ThreadMessage): ActivityRun | undefined => {
@@ -56,64 +92,90 @@ export function AgentActivityGroup() {
           : undefined)
       )
     }
-    const group = match(aui.message.getState())
+    const message = aui.message.getState()
+    const group = match(message)
     if (!group) return undefined
-    const owner = thread.messages
-      .slice(0, messageCount)
-      .find((message) => message.role === 'assistant' && match(message)?.run.id === group.run.id)
-    return owner && owner.id !== id ? null : group.run.id
+    const index = thread.messages.slice(0, messageCount).findIndex((entry) => entry.id === id)
+    const previousText = thread.messages
+      .slice(0, index)
+      .reduce(
+        (offset, entry) =>
+          entry.role === 'assistant' && match(entry)?.run.id === group.run.id
+            ? offset +
+              entry.content.reduce(
+                (total, part) => total + (part.type === 'text' ? part.text.length : 0),
+                0,
+              )
+            : offset,
+        0,
+      )
+    if (
+      afterPartIndex !== undefined &&
+      !message.content.slice(afterPartIndex + 1).some((part) => part.type === 'text') &&
+      thread.messages
+        .slice(index + 1)
+        .some((entry) => entry.role === 'assistant' && match(entry)?.run.id === group.run.id)
+    )
+      return null
+    return `${group.run.id}\n${previousText + textOffset}`
   })
   const startedAt = useAuiState((state) => state.message.createdAt.getTime())
-  if (runId === null || (!runId && !running)) return null
-  return <ActivityTimeline runId={runId} startedAt={startedAt} />
+  const scope = useMemo<ActivityScope>(() => {
+    const [runId, offset] = boundary?.split('\n') ?? []
+    return {
+      runId,
+      textOffset: Number(offset ?? textOffset),
+      startedAt,
+      fallback: running && afterPartIndex === undefined,
+    }
+  }, [boundary, textOffset, startedAt, running, afterPartIndex])
+  if (boundary === null || (!boundary && !scope.fallback)) return null
+  return <ActivityTimeline scope={scope} />
 }
 
-const ActivityTimeline = memo(function ActivityTimeline({
-  runId,
-  startedAt,
-}: {
-  runId?: string
-  startedAt: number
-}) {
+const ActivityTimeline = memo(function ActivityTimeline({ scope }: { scope: ActivityScope }) {
   const [open, setOpen] = useState(false)
   const activityIds = useActivitySelector(
     (groups) =>
-      groups
-        .find((group) => group.run.id === runId)
-        ?.activities.map((activity) => activity.id)
+      findSegment(groups, scope)
+        ?.activities.filter(hasContent)
+        .map((activity) => activity.id)
         .join('\n') ?? '',
   )
   const ids = useMemo(() => (activityIds ? activityIds.split('\n') : []), [activityIds])
-  const running = useActivitySelector((groups) => {
-    const run = groups.find((group) => group.run.id === runId)?.run
-    return !run || ['created', 'running', 'waiting'].includes(run.status)
-  })
+  const running = useActivitySelector((groups) => isRunning(groups, scope))
+  const exists = useActivitySelector((groups) => !!findSegment(groups, scope))
+  if ((!exists && !scope.fallback) || (exists && !ids.length && !running)) return null
   return (
-    <div data-slot="agent-activity-slot" data-running={running} className="agent-activity-slot">
+    <div
+      data-slot="agent-activity-slot"
+      data-text-offset={scope.textOffset}
+      data-running={running}
+      className="agent-activity-slot"
+    >
       <ToolTimeline
         open={open}
         onOpenChange={setOpen}
-        label={<ActivityHeader runId={runId} />}
-        trailing={<ActivityHeaderDuration runId={runId} startedAt={startedAt} />}
+        label={<ActivityHeader scope={scope} />}
+        trailing={<ActivityHeaderDuration scope={scope} />}
       >
         {ids.map((id) => (
-          <AgentActivityRow key={id} runId={runId!} activityId={id} />
+          <AgentActivityRow key={id} runId={scope.runId!} activityId={id} />
         ))}
       </ToolTimeline>
     </div>
   )
 })
 
-function ActivityHeader({ runId }: { runId?: string }) {
-  const run = useActivitySelector((groups) => groups.find((group) => group.run.id === runId)?.run)
+function ActivityHeader({ scope }: { scope: ActivityScope }) {
   const current = useActivitySelector((groups) =>
-    currentActivity(groups.find((group) => group.run.id === runId)?.activities ?? []),
+    currentActivity(findSegment(groups, scope)?.activities ?? []),
   )
   const summary = useActivitySelector((groups) =>
-    summarizeAgentActivities(groups.find((group) => group.run.id === runId)?.activities ?? []),
+    summarizeAgentActivities(findSegment(groups, scope)?.activities.filter(hasContent) ?? []),
   )
-  const completed = run?.status === 'completed'
-  const running = !run || ['created', 'running', 'waiting'].includes(run.status)
+  const running = useActivitySelector((groups) => isRunning(groups, scope))
+  const completed = !running && current?.status !== 'failed'
   const label = completed ? summary : current ? formatActivityLabel(current) : '思考中…'
   const transitionKey = completed
     ? 'completed'
@@ -141,16 +203,23 @@ function ActivityHeader({ runId }: { runId?: string }) {
   )
 }
 
-function ActivityHeaderDuration({ runId, startedAt }: { runId?: string; startedAt: number }) {
-  const run = useActivitySelector((groups) => groups.find((group) => group.run.id === runId)?.run)
-  const current = useActivitySelector((groups) =>
-    currentActivity(groups.find((group) => group.run.id === runId)?.activities ?? []),
-  )
-  const completed = run && !['created', 'running', 'waiting'].includes(run.status)
-  return (
-    <ActivityDuration
-      startedAt={completed ? (run.startedAt ?? run.createdAt) : (current?.startedAt ?? startedAt)}
-      endedAt={completed ? run.completedAt : current?.endedAt}
-    />
-  )
+function ActivityHeaderDuration({ scope }: { scope: ActivityScope }) {
+  const startedAt = useActivitySelector((groups) => {
+    const segment = findSegment(groups, scope)
+    return isRunning(groups, scope)
+      ? (currentActivity(segment?.activities ?? [])?.startedAt ?? scope.startedAt)
+      : (segment?.activities[0]?.startedAt ?? scope.startedAt)
+  })
+  const endedAt = useActivitySelector((groups) => {
+    if (isRunning(groups, scope)) return undefined
+    const group = groups.find((entry) => entry.run.id === scope.runId)
+    const segment = findSegment(groups, scope)
+    return segment
+      ? Math.max(
+          segment.endedAt ?? 0,
+          ...segment.activities.map((activity) => activity.endedAt ?? activity.startedAt ?? 0),
+        )
+      : group?.run.completedAt
+  })
+  return <ActivityDuration startedAt={startedAt} endedAt={endedAt} />
 }

@@ -26,21 +26,24 @@ import { resolveCodeLanguage } from '@/renderer/src/components/assistant-ui/elem
 import { useCopyToClipboard } from '@/renderer/src/hooks/use-copy-to-clipboard'
 import { cn } from '@/renderer/src/lib/utils'
 import { KnowledgeCitationLink } from '@/renderer/src/features/knowledge/KnowledgeCitationLink'
+import { useStreamingMessage } from './streaming-message'
 
 type MarkdownTextProps = Partial<TextMessagePartProps> & {
   components?: Parameters<typeof memoizeMarkdownComponents>[0]
 }
 
 const remarkPlugins = [remarkGfm]
-const pacing = { drainMs: 220, maxCharIntervalMs: 4, maxCharsPerFrame: 14, minCommitMs: 32 }
+const pacing = { drainMs: Infinity, maxCharIntervalMs: 4, maxCharsPerFrame: 4, minCommitMs: 16 }
 const wordFade = { animation: 'nook-word-fade', sep: 'word' as const, duration: 120, stagger: 0 }
 
 const MarkdownTextImpl: FC<MarkdownTextProps> = ({ components }) => {
-  const part = useSmooth(useMessagePartText(), pacing)
+  const raw = useMessagePartText()
+  const live = useStreamingMessage()
+  const part = useSmooth(live ? { ...raw, status: { type: 'running' } } : raw, pacing)
   return (
     <PacedMarkdown
       text={part.text}
-      isRunning={part.status.type === 'running'}
+      isRunning={raw.status.type === 'running' || part.text !== raw.text}
       components={components}
     />
   )
@@ -72,7 +75,6 @@ const PacedMarkdown = memo(function PacedMarkdown({
         smooth={false}
         animated={wordFade}
         controls={false}
-        defer
       />
     </TextMessagePartProvider>
   )

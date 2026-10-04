@@ -75,7 +75,7 @@ test('keeps reasoning per inference, ends thinking at tool start, and retains to
   expect(activities[0]).toMatchObject({
     status: 'completed',
     startedAt: 100,
-    endedAt: 150,
+    endedAt: 140,
     content: 'Inspect the renderer.\nThen check the runtime.',
   })
   expect(activities[2]).toMatchObject({
@@ -112,7 +112,7 @@ test('derives live reasoning without ending it between stream chunks', () => {
   expect(groupDuration(activities, 450)).toBe(350)
 })
 
-test('keeps interleaved reasoning in one inference and separates the next inference without tools', () => {
+test('ends reasoning before text and separates interleaved reasoning and the next inference', () => {
   const activities = deriveAgentActivities(
     events([
       [100, { type: 'inference_started' }],
@@ -126,7 +126,8 @@ test('keeps interleaved reasoning in one inference and separates the next infere
     ]),
   )
   expect(activities).toMatchObject([
-    { type: 'thinking', content: 'First thought. More detail.', startedAt: 100, endedAt: 300 },
+    { type: 'thinking', content: 'First thought.', startedAt: 100, endedAt: 160 },
+    { type: 'thinking', content: ' More detail.', startedAt: 170, endedAt: 200 },
     { type: 'thinking', content: 'Second cycle.', startedAt: 300, endedAt: 400 },
   ])
 })

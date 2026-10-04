@@ -46,7 +46,10 @@ export function deriveAgentActivities(
         thinking!.content += event.text
         break
       case 'inference_finished':
-        if (event.failed) endThinking(timestamp, true)
+        endThinking(timestamp, event.failed)
+        break
+      case 'text_delta':
+        if (event.text) endThinking(timestamp)
         break
       case 'tool_started':
         endThinking(timestamp)
