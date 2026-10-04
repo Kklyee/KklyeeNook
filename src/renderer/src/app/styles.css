@@ -434,6 +434,13 @@ body,
   height: 1.25rem;
 }
 
+[data-slot='tool-timeline'] .aui-branch-list-item:not(:last-child)::before {
+  top: 1rem;
+  height: 0;
+  border-left-color: transparent;
+  border-end-start-radius: 0;
+}
+
 [data-slot='tool-timeline'] .aui-branch-list-item:not(:last-child)::after {
   content: '';
   position: absolute;
@@ -442,6 +449,10 @@ body,
   bottom: -0.375rem;
   border-left: 1px solid color-mix(in oklch, var(--ui-fg-muted) 45%, transparent);
   pointer-events: none;
+}
+
+[data-slot='tool-timeline'] .aui-branch-list-item:first-child::after {
+  top: -0.25rem;
 }
 
 [data-slot='tool-timeline'] .tabular-nums {
