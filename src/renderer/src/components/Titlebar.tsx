@@ -41,14 +41,14 @@ export function Titlebar({
   }
 
   return (
-    <header className="titlebar-drag-region flex h-7 shrink-0 items-center border-b border-white/[0.06] bg-[#1b1b1b] text-white/75">
+    <header className="titlebar-drag-region flex h-7 shrink-0 items-center border-b border-border bg-(--ui-titlebar) text-foreground">
       <div className="titlebar-no-drag-region flex h-full min-w-0 flex-1 items-center">
         <Button
           type="button"
           variant="ghost"
           aria-label={view === 'chat' ? '折叠或展开侧边栏' : '返回对话'}
           title={view === 'chat' ? '折叠或展开侧边栏' : '返回对话'}
-          className="h-full w-9 rounded-none px-0 text-white/60 hover:bg-white/[0.08] hover:text-white"
+          className="h-full w-9 rounded-none px-0 text-muted-foreground hover:bg-hover hover:text-foreground"
           onClick={() => (view === 'chat' ? toggleSidebar() : onNavigate('chat'))}
         >
           <PanelLeftIcon className="size-3.5" />
@@ -57,7 +57,7 @@ export function Titlebar({
           type="button"
           variant="ghost"
           aria-haspopup="menu"
-          className="h-full rounded-none px-2.5 text-[11px] font-normal text-white/65 hover:bg-white/[0.08] hover:text-white"
+          className="h-full rounded-none px-2.5 text-[11px] font-normal text-muted-foreground hover:bg-hover hover:text-foreground"
           onClick={(event) => openMenu('application', event)}
         >
           应用
@@ -66,7 +66,7 @@ export function Titlebar({
           type="button"
           variant="ghost"
           aria-haspopup="menu"
-          className="h-full rounded-none px-2.5 text-[11px] font-normal text-white/65 hover:bg-white/[0.08] hover:text-white"
+          className="h-full rounded-none px-2.5 text-[11px] font-normal text-muted-foreground hover:bg-hover hover:text-foreground"
           onClick={(event) => openMenu('edit', event)}
         >
           编辑
@@ -111,7 +111,7 @@ function WindowButton({
       variant="ghost"
       aria-label={label}
       title={label}
-      className={`h-full w-11 rounded-none px-0 text-white/65 hover:bg-white/[0.09] hover:text-white ${className ?? ''}`}
+      className={`h-full w-11 rounded-none px-0 text-muted-foreground hover:bg-hover hover:text-foreground ${className ?? ''}`}
       onClick={onClick}
     >
       <span className="[&_svg]:size-3.5">{children}</span>

@@ -1,4 +1,5 @@
 import type { PermissionMode } from '@/shared/approval/permission'
+import type { SystemMaterial } from '@/shared/platform/systemMaterial'
 import type { PreviewWorkspaceFileRequest, WorkspaceFilePreview } from '@/shared/preview/workspacePreview'
 import type { AgentSessionSummary } from '@/shared/agent/agentSession'
 import type { Workspace, WorkspaceAttachResult } from '@/shared/workspace/workspace'
@@ -47,6 +48,14 @@ const context = {
 }
 
 const api = {
+  getSystemMaterial(): SystemMaterial {
+    return ipcRenderer.sendSync(IPC_CHANNELS.WINDOW_SYSTEM_MATERIAL)
+  },
+  onSystemMaterialChanged(listener: (material: SystemMaterial) => void): () => void {
+    const handler = (_event: Electron.IpcRendererEvent, material: SystemMaterial) => listener(material)
+    ipcRenderer.on(IPC_CHANNELS.WINDOW_SYSTEM_MATERIAL_CHANGED, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.WINDOW_SYSTEM_MATERIAL_CHANGED, handler)
+  },
   preview: {
     readWorkspaceFile(request: PreviewWorkspaceFileRequest): Promise<WorkspaceFilePreview> {
       return ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_WORKSPACE_FILE, request)

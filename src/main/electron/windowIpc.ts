@@ -1,6 +1,7 @@
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
 import { ipcMain, BrowserWindow, Menu } from 'electron'
 import type { WindowMenu, WindowMenuAction } from '@/shared/ipc/channels'
+import { getSystemMaterial } from './chatWindow'
 
 export function registerWindowIpc(window: BrowserWindow): () => void {
   const getSenderWindow = (event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) => {
@@ -13,6 +14,9 @@ export function registerWindowIpc(window: BrowserWindow): () => void {
   }
   const handleMinimize = (event: Electron.IpcMainEvent) => {
     getSenderWindow(event)?.minimize()
+  }
+  const handleSystemMaterial = (event: Electron.IpcMainEvent) => {
+    event.returnValue = getSenderWindow(event) ? getSystemMaterial(window) : 'solid'
   }
   const handleToggleMaximize = (event: Electron.IpcMainEvent) => {
     const senderWindow = getSenderWindow(event)
@@ -70,6 +74,7 @@ export function registerWindowIpc(window: BrowserWindow): () => void {
   }
 
   ipcMain.on(IPC_CHANNELS.WINDOW_MINIMIZE, handleMinimize)
+  ipcMain.on(IPC_CHANNELS.WINDOW_SYSTEM_MATERIAL, handleSystemMaterial)
   ipcMain.on(IPC_CHANNELS.WINDOW_TOGGLE_MAXIMIZE, handleToggleMaximize)
   ipcMain.handle(IPC_CHANNELS.WINDOW_IS_MAXIMIZED, handleIsMaximized)
   ipcMain.on(IPC_CHANNELS.WINDOW_CLOSE, handleClose)
@@ -79,6 +84,7 @@ export function registerWindowIpc(window: BrowserWindow): () => void {
 
   return () => {
     ipcMain.removeListener(IPC_CHANNELS.WINDOW_MINIMIZE, handleMinimize)
+    ipcMain.removeListener(IPC_CHANNELS.WINDOW_SYSTEM_MATERIAL, handleSystemMaterial)
     ipcMain.removeListener(IPC_CHANNELS.WINDOW_TOGGLE_MAXIMIZE, handleToggleMaximize)
     ipcMain.removeHandler(IPC_CHANNELS.WINDOW_IS_MAXIMIZED)
     ipcMain.removeListener(IPC_CHANNELS.WINDOW_CLOSE, handleClose)

@@ -1,4 +1,5 @@
 import type { PermissionMode } from '@/shared/approval/permission'
+import type { SystemMaterial } from '@/shared/platform/systemMaterial'
 import type { PreviewWorkspaceFileRequest, WorkspaceFilePreview } from '@/shared/preview/workspacePreview'
 import type { AgentSessionSummary } from '@/shared/agent/agentSession'
 import type { Workspace, WorkspaceAttachResult } from '@/shared/workspace/workspace'
@@ -35,6 +36,8 @@ import type {
 } from '../shared/scheduler/scheduledTask'
 
 interface API {
+  getSystemMaterial(): SystemMaterial
+  onSystemMaterialChanged(listener: (material: SystemMaterial) => void): () => void
   preview: {
     readWorkspaceFile(request: PreviewWorkspaceFileRequest): Promise<WorkspaceFilePreview>
   }
