@@ -348,7 +348,7 @@ body,
 
 :root.dark.has-wallpaper .composer,
 :root.dark.has-wallpaper .aui-edit-composer-root {
-  background: oklch(0.27 0.018 280);
+  background: oklch(0.32 0.012 280);
 }
 
 @layer components {
