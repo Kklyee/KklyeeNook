@@ -82,19 +82,21 @@ const ActivityTimeline = memo(function ActivityTimeline({ group }: { group: Acti
           {showCurrent && <ActivityIcon activity={current} />}
           <span
             data-slot="agent-activity-summary"
-            className="min-w-0 flex-1 truncate"
+            className="min-w-0 truncate"
             title={showCurrent ? formatActivityLabel(current) : summary}
           >
             {showCurrent ? formatActivityLabel(current) : summary}
           </span>
-          {showCurrent ? (
-            <ActivityDuration activity={current} now={now} />
-          ) : (
-            <span className="shrink-0 text-[11px] tabular-nums text-faint-foreground">
-              {formatDuration(groupDuration(activities, now))}
-            </span>
-          )}
         </>
+      }
+      trailing={
+        showCurrent ? (
+          <ActivityDuration activity={current} now={now} />
+        ) : (
+          <span className="shrink-0 text-[11px] tabular-nums text-faint-foreground">
+            {formatDuration(groupDuration(activities, now))}
+          </span>
+        )
       }
     >
       {activities.map((activity) => (

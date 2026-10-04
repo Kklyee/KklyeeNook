@@ -4,11 +4,6 @@ import {
   ChevronRightIcon,
   CircleAlertIcon,
   CircleDashedIcon,
-  FilePlusIcon,
-  FileTextIcon,
-  PencilIcon,
-  SearchIcon,
-  TerminalIcon,
   WrenchIcon,
 } from 'lucide-react'
 import type { ToolCallMessagePartComponent, ToolCallMessagePartProps } from '@assistant-ui/react'
@@ -20,39 +15,36 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/renderer/src/components/ui/collapsible'
-import { ToolDetailProvider } from '@/renderer/src/components/assistant-ui/elements/tool-call'
+import { ToolDetailProvider, ToolIcon } from '@/renderer/src/components/assistant-ui/elements/tool-call'
 import { ToolCallRenderer } from '../tools/ToolCallRenderer'
 import { assistantToolkit } from '../tools/AssistantToolkit'
 import { cn } from '@/renderer/src/lib/utils'
 import { collapsePanel } from '@/renderer/src/lib/surfaces'
-import globIcon from '@/renderer/src/assets/icon/tool-glob.svg'
 import { usePreview } from '../../preview/PreviewProvider'
 
 export function ActivityIcon({ activity }: { activity: Activity }) {
-  const icons = {
-    thinking: CircleDashedIcon,
-    read: FileTextIcon,
-    search: SearchIcon,
-    edit: PencilIcon,
-    write: FilePlusIcon,
-    shell: TerminalIcon,
-    approval: CircleAlertIcon,
-    tool: WrenchIcon,
-  }
-  if (activity.type === 'glob' && activity.status !== 'failed')
+  if (
+    activity.status !== 'failed' &&
+    activity.type !== 'thinking' &&
+    activity.type !== 'approval' &&
+    activity.type !== 'tool'
+  )
     return (
       <span
-        aria-hidden="true"
-        className="size-3.5 shrink-0 bg-current text-muted-foreground"
-        style={{ mask: `url("${globIcon}") center / contain no-repeat` }}
-      />
+        className={cn(
+          'flex shrink-0',
+          activity.status === 'running' && 'animate-pulse motion-reduce:animate-none',
+        )}
+      >
+        <ToolIcon kind={activity.type === 'shell' ? 'bash' : activity.type} />
+      </span>
     )
   const Icon =
-    activity.status === 'failed'
+    activity.status === 'failed' || activity.type === 'approval'
       ? CircleAlertIcon
-      : activity.type === 'glob'
-        ? SearchIcon
-        : icons[activity.type]
+      : activity.type === 'thinking'
+        ? CircleDashedIcon
+        : WrenchIcon
   return (
     <Icon
       aria-hidden="true"

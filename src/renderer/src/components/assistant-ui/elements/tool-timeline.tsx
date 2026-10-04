@@ -16,11 +16,13 @@ export function ToolTimeline({
   open,
   onOpenChange,
   label,
+  trailing,
   children,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   label: ReactNode
+  trailing: ReactNode
   children: ReactNode
 }) {
   const root = useRef<HTMLDivElement>(null)
@@ -44,11 +46,14 @@ export function ToolTimeline({
       >
         <BranchList.Trigger>
           <CollapsibleTrigger className="group/trigger flex h-8 w-full min-w-0 items-center gap-2 rounded-sm bg-transparent text-left text-[13px] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-border-strong">
-            {label}
-            <ChevronDownIcon
-              strokeWidth={1.5}
-              className="size-3.5 shrink-0 -rotate-90 text-faint-foreground transition-transform duration-200 group-data-open/trigger:rotate-0 group-data-panel-open/trigger:rotate-0 motion-reduce:transition-none"
-            />
+            <span className="flex min-w-0 flex-1 items-center gap-2">
+              {label}
+              <ChevronDownIcon
+                strokeWidth={1.5}
+                className="size-3.5 shrink-0 -rotate-90 text-faint-foreground opacity-0 transition-[opacity,transform] duration-200 group-hover/trigger:opacity-100 group-focus-visible/trigger:opacity-100 group-data-open/trigger:rotate-0 group-data-panel-open/trigger:rotate-0 motion-reduce:transition-none"
+              />
+            </span>
+            {trailing}
           </CollapsibleTrigger>
         </BranchList.Trigger>
         <CollapsibleContent className={cn(collapsePanel, 'outline-none')}>

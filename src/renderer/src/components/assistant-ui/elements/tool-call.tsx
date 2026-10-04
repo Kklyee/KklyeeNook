@@ -94,7 +94,7 @@ export function getToolDisplayName(toolName: string): string {
   return labels[toolName] ?? toolName
 }
 
-function ToolIcon({ kind }: { kind: ToolIconKind }) {
+export function ToolIcon({ kind }: { kind: ToolIconKind }) {
   const icon = iconAssets[kind]
   const className = 'size-3.5 shrink-0 text-muted-foreground'
 

@@ -20,11 +20,10 @@ export const ShellToolRenderer: ToolCallMessagePartComponent = ({ args, result, 
     status.type === 'incomplete' && status.error !== undefined
       ? stringifyValue(status.error)
       : undefined
-  const { output, stderr, exitCode, error, shell } = readShellResult(result, statusError)
+  const { output, stderr, exitCode, error } = readShellResult(result, statusError)
 
   return (
     <ToolCard toolName="bash" label="Shell" summary={command} status={status}>
-      {shell && <p className="font-mono text-[11px] text-faint-foreground">{shell}</p>}
       {command && (
         <ToolDetailSection label="Command">
           <pre className={toolCodeClassName}>{command}</pre>
@@ -77,6 +76,5 @@ function readShellResult(result: unknown, statusError: string | undefined) {
     stderr,
     exitCode,
     error: failureText === undefined ? undefined : failureText.replace(/\n?Command exited with code -?\d+\s*$/i, '').trim() || 'Command failed',
-    shell: getStringValue(details, 'shell'),
   }
 }

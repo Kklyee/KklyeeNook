@@ -417,6 +417,8 @@ body,
 }
 
 [data-slot='tool-timeline'] .aui-branch-list-item::before {
+  border-left-color: color-mix(in oklch, var(--ui-fg-muted) 45%, transparent);
+  border-bottom-color: color-mix(in oklch, var(--ui-fg-muted) 45%, transparent);
   display: block;
   top: -0.375rem;
   left: -0.75rem;
@@ -432,7 +434,7 @@ body,
   left: -0.75rem;
   top: 1rem;
   bottom: -0.375rem;
-  border-left: 1px solid var(--ui-border);
+  border-left: 1px solid color-mix(in oklch, var(--ui-fg-muted) 45%, transparent);
   pointer-events: none;
 }
 
