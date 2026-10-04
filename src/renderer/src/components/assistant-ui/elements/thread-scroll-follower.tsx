@@ -10,7 +10,7 @@ import {
 } from 'react'
 import { ThreadPrimitive, useAuiEvent } from '@assistant-ui/react'
 
-const ScrollFollowerContext = createContext({ following: true, resume: () => {} })
+const ScrollFollowerContext = createContext({ following: true, resume: () => {}, pause: () => {} })
 
 export function useScrollFollower() {
   return useContext(ScrollFollowerContext)
@@ -24,6 +24,8 @@ export function ThreadScrollViewport({
   const contentRef = useRef<HTMLDivElement>(null)
   const followRef = useRef(true)
   const scheduleRef = useRef(() => {})
+  const pauseRef = useRef(() => {})
+  const pause = useCallback(() => pauseRef.current(), [])
   const [following, setFollowing] = useState(true)
   const resume = useCallback(() => {
     followRef.current = true
@@ -101,6 +103,7 @@ export function ThreadScrollViewport({
         pause()
     }
     scheduleRef.current = schedule
+    pauseRef.current = pause
     const observer = new ResizeObserver(schedule)
     observer.observe(content)
     observer.observe(viewport)
@@ -115,6 +118,7 @@ export function ThreadScrollViewport({
       observer.disconnect()
       cancelAnimationFrame(frame)
       scheduleRef.current = () => {}
+      pauseRef.current = () => {}
       viewport.removeEventListener('scroll', scroll)
       viewport.removeEventListener('wheel', wheel)
       viewport.removeEventListener('touchstart', touchStart)
@@ -125,7 +129,7 @@ export function ThreadScrollViewport({
   }, [resume])
 
   return (
-    <ScrollFollowerContext.Provider value={{ following, resume }}>
+    <ScrollFollowerContext.Provider value={{ following, resume, pause }}>
       <ThreadPrimitive.Viewport
         {...props}
         ref={viewportRef}
