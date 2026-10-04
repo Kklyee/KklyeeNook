@@ -107,49 +107,32 @@ function CompletedFileChangeCards({ content }: { content: ThreadMessage['content
     const label = file.operation === 'created' ? '已新增' : '已编辑'
 
     return (
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <section
-                data-slot="file-change-cards"
-                className="material-control flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2"
-              />
-            }
-          >
-            <button
-              type="button"
-              aria-label={`预览 ${displayPath(file.target.path, rootPath)}`}
-              onClick={() => open(file.target)}
-              className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              <span className="bg-hover flex size-10 shrink-0 items-center justify-center rounded-lg">
-                <SquarePlusIcon aria-hidden="true" className="size-5 text-muted-foreground" />
-              </span>
-              <span className="flex min-w-0 flex-col gap-0.5">
-                <span className="truncate text-[13px] font-semibold text-foreground">
-                  {label} {filename}
+      <section data-slot="file-change-cards" className="material-control w-full rounded-xl">
+        <button
+          type="button"
+          aria-label={`预览 ${displayPath(file.target.path, rootPath)}`}
+          onClick={() => open(file.target)}
+          className="group flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          <span className="bg-hover flex size-10 shrink-0 items-center justify-center rounded-lg">
+            <SquarePlusIcon aria-hidden="true" className="size-5 text-muted-foreground" />
+          </span>
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <span className="truncate text-[13px] font-semibold text-foreground">
+              {label} {filename}
+            </span>
+            <span className="flex h-4 items-center gap-2 text-xs">
+              {hasStats && (
+                <span className="flex gap-2 font-mono tabular-nums group-hover:hidden">
+                  <span className="text-success">+{additions}</span>
+                  <span className="text-danger">-{deletions}</span>
                 </span>
-                {hasStats && (
-                  <span className="flex gap-2 font-mono text-xs tabular-nums">
-                    <span className="text-success">+{additions}</span>
-                    <span className="text-danger">-{deletions}</span>
-                  </span>
-                )}
-              </span>
-            </button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="shrink-0"
-              onClick={() => open(file.target)}
-            >
-              查看变更
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top">查看</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+              )}
+              <span className="hidden font-medium text-foreground group-hover:inline">查看变更</span>
+            </span>
+          </span>
+        </button>
+      </section>
     )
   }
 
