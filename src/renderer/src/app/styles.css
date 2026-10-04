@@ -336,6 +336,21 @@ body,
   box-sizing: border-box;
 }
 
+.composer,
+.aui-edit-composer-root {
+  background: oklch(from var(--ui-control) l c h / 1);
+}
+
+:root.has-wallpaper .composer,
+:root.has-wallpaper .aui-edit-composer-root {
+  background: oklch(0.975 0.008 280);
+}
+
+:root.dark.has-wallpaper .composer,
+:root.dark.has-wallpaper .aui-edit-composer-root {
+  background: oklch(0.27 0.018 280);
+}
+
 @layer components {
   .material-base {
     background: var(--ui-bg);
