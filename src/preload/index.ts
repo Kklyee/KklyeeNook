@@ -96,6 +96,9 @@ const api = {
     droppedFilePath(file: File): string { return webUtils.getPathForFile(file) },
   },
   window: {
+    setMaterialEnabled(enabled: boolean): SystemMaterial {
+      return ipcRenderer.sendSync(IPC_CHANNELS.WINDOW_MATERIAL_ENABLED, enabled)
+    },
     setTheme(theme: ThemeMode): boolean {
       return ipcRenderer.sendSync(IPC_CHANNELS.WINDOW_THEME, theme)
     },

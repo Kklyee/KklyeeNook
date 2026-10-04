@@ -3,9 +3,11 @@ import { Button } from '../../components/ui/button'
 import { SettingsCard, SettingsField } from './SettingsComponents'
 import { useWallpaper } from './useWallpaper'
 import { useTheme } from './useTheme'
+import { useGlass } from './useGlass'
 
 export function AppearanceSettings() {
   const { theme, setTheme } = useTheme()
+  const { enabled, setEnabled } = useGlass()
   const { image, loading, error, choose, clear } = useWallpaper()
   return (
     <div className="space-y-4">
@@ -24,6 +26,22 @@ export function AppearanceSettings() {
               </Button>
             ))}
           </div>
+        </SettingsField>
+      </SettingsCard>
+      <SettingsCard>
+        <SettingsField label="半透明毛玻璃" description="为窗口和侧栏启用半透明材质。关闭后使用实色背景，保留壁纸选择。">
+          <Button
+            variant="outline"
+            role="switch"
+            aria-label="半透明毛玻璃"
+            aria-checked={enabled}
+            onClick={() => setEnabled(!enabled)}
+          >
+            <span className={`flex h-5 w-9 items-center rounded-full p-0.5 ${enabled ? 'bg-brand' : 'bg-muted'}`}>
+              <span className={`size-4 rounded-full bg-foreground transition-transform ${enabled ? 'translate-x-4' : ''}`} />
+            </span>
+            {enabled ? '已开启' : '已关闭'}
+          </Button>
         </SettingsField>
       </SettingsCard>
       <SettingsCard>

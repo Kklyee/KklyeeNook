@@ -70,6 +70,7 @@ interface API {
     droppedFilePath(file: File): string
   }
   window: {
+    setMaterialEnabled(enabled: boolean): SystemMaterial
     setTheme(theme: ThemeMode): boolean
     minimize(): void
     toggleMaximize(): void

@@ -9,9 +9,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const preloadPath = path.join(__dirname, '../preload/index.js')
 const materials = new WeakMap<BrowserWindow, SystemMaterial>()
+const materialSwitches = new WeakMap<BrowserWindow, (enabled: boolean) => SystemMaterial>()
 
 export function getSystemMaterial(window: BrowserWindow): SystemMaterial {
   return materials.get(window) ?? 'solid'
+}
+
+export function setSystemMaterialEnabled(window: BrowserWindow, enabled: boolean): SystemMaterial {
+  return materialSwitches.get(window)?.(enabled) ?? 'solid'
 }
 
 function resolveSystemMaterial(): SystemMaterial {
@@ -75,8 +80,9 @@ export function createChatWindow(): BrowserWindow {
   materials.set(window, material)
   console.debug(`system-material: ${material} enabled`)
 
+  let enabled = true
   const updateMaterial = () => {
-    let next = resolveSystemMaterial()
+    let next = enabled ? resolveSystemMaterial() : 'solid'
     try {
       if (process.platform === 'win32' && typeof window.setBackgroundMaterial === 'function') {
         window.setBackgroundMaterial(next === 'acrylic' ? 'acrylic' : 'none')
@@ -91,7 +97,12 @@ export function createChatWindow(): BrowserWindow {
     window.setBackgroundColor(next === 'solid' ? solidBackground() : '#00000000')
     materials.set(window, next)
     window.webContents.send(IPC_CHANNELS.WINDOW_SYSTEM_MATERIAL_CHANGED, next)
+    return next
   }
+  materialSwitches.set(window, (value) => {
+    enabled = value
+    return updateMaterial()
+  })
   nativeTheme.on('updated', updateMaterial)
   window.once('closed', () => nativeTheme.removeListener('updated', updateMaterial))
   return window

@@ -2,7 +2,7 @@ import { IPC_CHANNELS } from '@/shared/ipc/channels'
 import { ipcMain, BrowserWindow, Menu, nativeTheme } from 'electron'
 import type { ThemeMode } from '@/shared/platform/theme'
 import type { WindowMenu, WindowMenuAction } from '@/shared/ipc/channels'
-import { getSystemMaterial } from './chatWindow'
+import { getSystemMaterial, setSystemMaterialEnabled } from './chatWindow'
 import { chooseWallpaper, clearWallpaper, getWallpaper } from './wallpaper'
 
 export function registerWindowIpc(window: BrowserWindow): () => void {
@@ -19,6 +19,10 @@ export function registerWindowIpc(window: BrowserWindow): () => void {
   }
   const handleSystemMaterial = (event: Electron.IpcMainEvent) => {
     event.returnValue = getSenderWindow(event) ? getSystemMaterial(window) : 'solid'
+  }
+  const handleMaterialEnabled = (event: Electron.IpcMainEvent, enabled: boolean) => {
+    event.returnValue = getSenderWindow(event) && event.senderFrame === window.webContents.mainFrame &&
+      typeof enabled === 'boolean' ? setSystemMaterialEnabled(window, enabled) : getSystemMaterial(window)
   }
   const handleTheme = (event: Electron.IpcMainEvent, theme: ThemeMode) => {
     if (getSenderWindow(event) && event.senderFrame === window.webContents.mainFrame &&
@@ -84,6 +88,7 @@ export function registerWindowIpc(window: BrowserWindow): () => void {
 
   ipcMain.on(IPC_CHANNELS.WINDOW_MINIMIZE, handleMinimize)
   ipcMain.on(IPC_CHANNELS.WINDOW_THEME, handleTheme)
+  ipcMain.on(IPC_CHANNELS.WINDOW_MATERIAL_ENABLED, handleMaterialEnabled)
   for (const [channel, handler] of [
     [IPC_CHANNELS.WALLPAPER_GET, getWallpaper],
     [IPC_CHANNELS.WALLPAPER_CHOOSE, () => chooseWallpaper(window)],
@@ -106,6 +111,7 @@ export function registerWindowIpc(window: BrowserWindow): () => void {
 
   return () => {
     ipcMain.removeListener(IPC_CHANNELS.WINDOW_THEME, handleTheme)
+    ipcMain.removeListener(IPC_CHANNELS.WINDOW_MATERIAL_ENABLED, handleMaterialEnabled)
     ipcMain.removeHandler(IPC_CHANNELS.WALLPAPER_GET)
     ipcMain.removeHandler(IPC_CHANNELS.WALLPAPER_CHOOSE)
     ipcMain.removeHandler(IPC_CHANNELS.WALLPAPER_CLEAR)

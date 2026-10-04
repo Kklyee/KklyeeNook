@@ -36,7 +36,7 @@ vi.mock('electron', async () => {
 })
 
 import { BrowserWindow, nativeTheme } from 'electron'
-import { createChatWindow, getSystemMaterial } from './chatWindow'
+import { createChatWindow, getSystemMaterial, setSystemMaterialEnabled } from './chatWindow'
 
 describe('system material window', () => {
   beforeEach(() => {
@@ -60,6 +60,23 @@ describe('system material window', () => {
       backgroundMaterial: 'acrylic', backgroundColor: '#00000000',
     }))
     expect(mocks.constructor.mock.calls[0][0]).not.toHaveProperty('transparent')
+  })
+
+  it('keeps material disabled through system theme changes and restores it on demand', () => {
+    const window = createChatWindow()
+    expect(setSystemMaterialEnabled(window, false)).toBe('solid')
+    expect(mocks.backgroundMaterial).toHaveBeenLastCalledWith('none')
+    nativeTheme.emit('updated')
+    expect(getSystemMaterial(window)).toBe('solid')
+    expect(setSystemMaterialEnabled(window, true)).toBe('acrylic')
+    expect(mocks.backgroundMaterial).toHaveBeenLastCalledWith('acrylic')
+  })
+
+  it('keeps reduced transparency respected when re-enabling material', () => {
+    const window = createChatWindow()
+    setSystemMaterialEnabled(window, false)
+    Object.assign(nativeTheme, { prefersReducedTransparency: true })
+    expect(setSystemMaterialEnabled(window, true)).toBe('solid')
   })
 
   it('uses solid on Windows before 22H2', () => {

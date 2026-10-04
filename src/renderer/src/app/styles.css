@@ -167,6 +167,40 @@
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='.045'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
+:root:is(.system-material, .has-wallpaper):not(.glass-disabled) .app-sidebar [data-slot='sidebar-inner'] {
+  background: oklch(0.98 0.002 250 / 0.32);
+}
+
+:root.dark:is(.system-material, .has-wallpaper):not(.glass-disabled) .app-sidebar [data-slot='sidebar-inner'] {
+  background: oklch(0.235 0.004 250 / 0.30);
+}
+
+:root.glass-disabled:not(.dark) {
+  --ui-bg: var(--ui-bg-solid);
+  --ui-titlebar: var(--ui-bg-solid);
+  --ui-surface: oklch(0.98 0.002 250);
+  --ui-surface-muted: oklch(0.945 0.003 250);
+  --ui-control: oklch(0.985 0.002 250);
+  --ui-surface-raised: oklch(0.995 0.001 250);
+}
+
+:root.dark.glass-disabled {
+  --ui-bg: var(--ui-bg-solid);
+  --ui-titlebar: var(--ui-bg-solid);
+  --ui-surface: oklch(0.235 0.004 250);
+  --ui-surface-muted: oklch(0.26 0.004 250);
+  --ui-control: oklch(0.285 0.004 250);
+  --ui-surface-raised: oklch(0.30 0.004 250);
+}
+
+.glass-disabled .app-window {
+  background: var(--ui-bg-solid);
+}
+
+.glass-disabled .window-wallpaper {
+  display: none;
+}
+
 @media (prefers-reduced-transparency: reduce), (forced-colors: active) {
   :root.has-wallpaper,
   :root.dark.has-wallpaper {
