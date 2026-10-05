@@ -1,10 +1,9 @@
 import { memo, useMemo, useState } from 'react'
 import { useAui, useAuiState, type ThreadMessage } from '@assistant-ui/react'
 import type { PiRuntimeExtras } from '@assistant-ui/react-pi'
-import { CheckIcon } from 'lucide-react'
+import { CheckIcon, LoaderCircleIcon } from 'lucide-react'
 import type { AgentActivity } from '@/shared/agent/agentActivity'
 import { ToolTimeline } from '@/renderer/src/components/assistant-ui/elements/tool-timeline'
-import { ToolIcon } from '@/renderer/src/components/assistant-ui/elements/tool-call'
 import { currentActivity } from '@/shared/agent/agentActivityTiming'
 import { formatActivityLabel } from '@/shared/agent/agentActivityFormatter'
 import { summarizeAgentActivities } from '@/shared/agent/agentActivitySummary'
@@ -59,6 +58,9 @@ export function AgentActivityGroup({ afterPartIndex }: { afterPartIndex?: number
   )
   const aui = useAui()
   const running = isLast && (status === 'running' || status === 'requires-action')
+  const answered = useAuiState((state) =>
+    state.message.content.some((part) => part.type === 'text' && part.text.trim() !== ''),
+  )
   const boundary = useActivitySelector((groups) => {
     const thread = aui.thread.getState()
     const transcript = (thread.extras as PiRuntimeExtras | undefined)?.state?.messages
@@ -126,9 +128,9 @@ export function AgentActivityGroup({ afterPartIndex }: { afterPartIndex?: number
       runId,
       textOffset: Number(offset ?? textOffset),
       startedAt,
-      fallback: running && afterPartIndex === undefined,
+      fallback: running && afterPartIndex === undefined && !answered,
     }
-  }, [boundary, textOffset, startedAt, running, afterPartIndex])
+  }, [boundary, textOffset, startedAt, running, afterPartIndex, answered])
   if (boundary === null || (!boundary && !scope.fallback)) return null
   return <ActivityTimeline scope={scope} />
 }
@@ -145,6 +147,9 @@ const ActivityTimeline = memo(function ActivityTimeline({ scope }: { scope: Acti
   const ids = useMemo(() => (activityIds ? activityIds.split('\n') : []), [activityIds])
   const running = useActivitySelector((groups) => isRunning(groups, scope))
   const exists = useActivitySelector((groups) => !!findSegment(groups, scope))
+  const current = useActivitySelector((groups) =>
+    currentActivity(findSegment(groups, scope)?.activities ?? []),
+  )
   if ((!exists && !scope.fallback) || (exists && !ids.length && !running)) return null
   return (
     <div
@@ -156,8 +161,8 @@ const ActivityTimeline = memo(function ActivityTimeline({ scope }: { scope: Acti
       <ToolTimeline
         open={open}
         onOpenChange={setOpen}
-        label={<ActivityHeader scope={scope} />}
-        trailing={<ActivityHeaderDuration scope={scope} />}
+        label={<ActivityHeader scope={scope} current={current} />}
+        trailing={current ? <ActivityHeaderDuration scope={scope} /> : null}
       >
         {ids.map((id) => (
           <AgentActivityRow key={id} runId={scope.runId!} activityId={id} />
@@ -167,38 +172,46 @@ const ActivityTimeline = memo(function ActivityTimeline({ scope }: { scope: Acti
   )
 })
 
-function ActivityHeader({ scope }: { scope: ActivityScope }) {
-  const current = useActivitySelector((groups) =>
-    currentActivity(findSegment(groups, scope)?.activities ?? []),
-  )
+function ActivityHeader({
+  scope,
+  current,
+}: {
+  scope: ActivityScope
+  current?: AgentActivity
+}) {
   const summary = useActivitySelector((groups) =>
     summarizeAgentActivities(findSegment(groups, scope)?.activities.filter(hasContent) ?? []),
   )
   const running = useActivitySelector((groups) => isRunning(groups, scope))
   const completed = !running && current?.status !== 'failed'
-  const label = completed ? summary : current ? formatActivityLabel(current) : '思考中…'
-  const transitionKey = completed
-    ? 'completed'
-    : current
-      ? `${current.id}:${current.status}`
-      : 'thinking'
+  const label = !current ? undefined : completed ? summary : formatActivityLabel(current)
+  const transitionKey = !current
+    ? 'waiting'
+    : completed
+      ? 'completed'
+      : `${current.id}:${current.status}`
   return (
     <ActivityCrossfade transitionKey={transitionKey}>
-      {completed ? (
+      {!current ? (
+        <LoaderCircleIcon
+          aria-hidden="true"
+          className="size-3.5 shrink-0 animate-spin text-faint-foreground"
+        />
+      ) : completed ? (
         <CheckIcon aria-hidden="true" className="size-3.5 shrink-0" />
-      ) : current ? (
-        <ActivityIcon activity={current} />
       ) : (
-        <ToolIcon kind="thinking" />
+        <ActivityIcon activity={current} />
       )}
-      <ShimmerLabel
-        active={running}
-        data-slot="agent-activity-summary"
-        className="shimmer-speed-100 shimmer-repeat-delay-0 min-w-0 truncate"
-        title={label}
-      >
-        {label}
-      </ShimmerLabel>
+      {label !== undefined && (
+        <ShimmerLabel
+          active={running}
+          data-slot="agent-activity-summary"
+          className="shimmer-speed-100 shimmer-repeat-delay-0 min-w-0 truncate"
+          title={label}
+        >
+          {label}
+        </ShimmerLabel>
+      )}
     </ActivityCrossfade>
   )
 }
