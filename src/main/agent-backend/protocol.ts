@@ -24,6 +24,8 @@ export interface AgentBackendInitOptions {
 
 export type AgentBackendStartupStage =
   | 'process_spawned'
+  | 'entry_loaded'
+  | 'modules_loaded'
   | 'database_connected'
   | 'sessions_restored'
   | 'runs_restored'

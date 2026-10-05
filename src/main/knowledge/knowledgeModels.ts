@@ -1,12 +1,4 @@
-import {
-  AutoModel,
-  AutoModelForSequenceClassification,
-  AutoTokenizer,
-  env,
-  mean_pooling,
-  type PreTrainedModel,
-  type PreTrainedTokenizer,
-} from '@huggingface/transformers'
+import type { PreTrainedModel, PreTrainedTokenizer } from '@huggingface/transformers'
 import type { KnowledgeSettings } from '@/shared/knowledge/knowledge'
 import { knowledgeFetch } from './knowledgeFetch'
 import { mapConcurrent } from '@/shared/async/mapConcurrent'
@@ -19,15 +11,12 @@ export interface KnowledgeModels {
 export class LocalKnowledgeModels implements KnowledgeModels {
   private embeddings?: Promise<{ tokenizer: PreTrainedTokenizer; model: PreTrainedModel }>
   private reranker?: Promise<{ tokenizer: PreTrainedTokenizer; model: PreTrainedModel }>
+  private transformers?: Promise<typeof import('@huggingface/transformers')>
 
   constructor(
     private readonly settings: KnowledgeSettings,
-    cacheDirectory: string,
-  ) {
-    env.cacheDir = cacheDirectory
-    env.allowLocalModels = false
-    env.fetch = knowledgeFetch
-  }
+    private readonly cacheDirectory: string,
+  ) {}
 
   async embed(texts: string[], signal?: AbortSignal): Promise<number[][]> {
     signal?.throwIfAborted()
@@ -36,6 +25,7 @@ export class LocalKnowledgeModels implements KnowledgeModels {
       throw error
     })
     const { tokenizer, model } = await this.embeddings
+    const { mean_pooling } = await this.loadTransformers()
     signal?.throwIfAborted()
     const inputs = tokenizer(texts, { padding: true, truncation: true, max_length: 512 })
     const output = await model(inputs)
@@ -74,8 +64,9 @@ export class LocalKnowledgeModels implements KnowledgeModels {
   }
 
   private async loadReranker() {
+    const { AutoTokenizer, AutoModelForSequenceClassification } = await this.loadTransformers()
     return loadModel(
-      this.settings.rerankModel,
+      AutoTokenizer.from_pretrained(this.settings.rerankModel),
       AutoModelForSequenceClassification.from_pretrained(this.settings.rerankModel, {
         dtype: 'q8',
         device: 'cpu',
@@ -84,16 +75,26 @@ export class LocalKnowledgeModels implements KnowledgeModels {
   }
 
   private async loadEmbeddings() {
+    const { AutoTokenizer, AutoModel } = await this.loadTransformers()
     return loadModel(
-      this.settings.embeddingModel,
+      AutoTokenizer.from_pretrained(this.settings.embeddingModel),
       AutoModel.from_pretrained(this.settings.embeddingModel, { dtype: 'q8', device: 'cpu' }),
     )
   }
+
+  private loadTransformers() {
+    return (this.transformers ??= import('@huggingface/transformers').then((transformers) => {
+      transformers.env.cacheDir = this.cacheDirectory
+      transformers.env.allowLocalModels = false
+      transformers.env.fetch = knowledgeFetch
+      return transformers
+    }))
+  }
 }
 
-async function loadModel(modelId: string, model: Promise<PreTrainedModel>) {
+async function loadModel(tokenizer: Promise<PreTrainedTokenizer>, model: Promise<PreTrainedModel>) {
   const [tokenizerResult, modelResult] = await Promise.allSettled([
-    AutoTokenizer.from_pretrained(modelId),
+    tokenizer,
     model,
   ])
   if (tokenizerResult.status === 'rejected') {

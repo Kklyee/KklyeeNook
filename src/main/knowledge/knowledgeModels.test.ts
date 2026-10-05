@@ -1,10 +1,11 @@
 import { beforeEach, expect, test, vi } from 'vitest'
 import { LocalKnowledgeModels } from './knowledgeModels'
 
-const { loadTokenizer, loadEmbeddingModel, loadReranker } = vi.hoisted(() => ({
+const { loadTokenizer, loadEmbeddingModel, loadReranker, meanPooling } = vi.hoisted(() => ({
   loadTokenizer: vi.fn(),
   loadEmbeddingModel: vi.fn(),
   loadReranker: vi.fn(),
+  meanPooling: vi.fn(),
 }))
 
 vi.mock('@huggingface/transformers', () => ({
@@ -12,12 +13,29 @@ vi.mock('@huggingface/transformers', () => ({
   AutoModel: { from_pretrained: loadEmbeddingModel },
   AutoModelForSequenceClassification: { from_pretrained: loadReranker },
   env: {},
-  mean_pooling: vi.fn(),
+  mean_pooling: meanPooling,
 }))
 
 const settings = { embeddingModel: 'embedding', rerankModel: 'reranker' }
 
 beforeEach(() => vi.resetAllMocks())
+
+test('embeds with the lazily loaded tokenizer, model and pooling function', async () => {
+  const inputs = { attention_mask: 'mask' }
+  const tokenizer = vi.fn(() => inputs)
+  const model = Object.assign(vi.fn(async () => ({ last_hidden_state: 'hidden' })), {
+    dispose: vi.fn(async () => {}),
+  })
+  loadTokenizer.mockResolvedValue(tokenizer)
+  loadEmbeddingModel.mockResolvedValue(model)
+  meanPooling.mockReturnValue({ normalize: () => ({ tolist: () => [[1, 0]] }) })
+  const models = new LocalKnowledgeModels(settings, 'cache')
+  await expect(models.embed(['text'])).resolves.toEqual([[1, 0]])
+  expect(tokenizer).toHaveBeenCalledWith(['text'], { padding: true, truncation: true, max_length: 512 })
+  expect(meanPooling).toHaveBeenCalledWith('hidden', 'mask')
+  await models.close()
+  expect(model.dispose).toHaveBeenCalledOnce()
+})
 
 test('loads tokenizer and model together and disposes a model when tokenizer loading fails', async () => {
   const dispose = vi.fn(async () => {})
@@ -31,7 +49,7 @@ test('loads tokenizer and model together and disposes a model when tokenizer loa
   const models = new LocalKnowledgeModels(settings, 'cache')
   const result = models.rerank('query', [])
   const checked = expect(result).rejects.toThrow('tokenizer failed')
-  expect(loadTokenizer).toHaveBeenCalledWith('reranker')
+  await vi.waitFor(() => expect(loadTokenizer).toHaveBeenCalledWith('reranker'))
   expect(loadReranker).toHaveBeenCalled()
   rejectTokenizer(new Error('tokenizer failed'))
   await checked

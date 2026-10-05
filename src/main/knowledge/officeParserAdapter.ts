@@ -1,7 +1,7 @@
 import { extname, join } from 'node:path'
 import { access, mkdir, rename, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
-import { OfficeParser, type OfficeContentNode, type OfficeParserAST } from 'officeparser'
+import type { OfficeContentNode, OfficeParserAST } from 'officeparser'
 import type { DocumentBlock, KnowledgeFile, ParsedDocument } from '@/shared/knowledge/knowledge'
 import { parsedDocument, type DocumentParser } from './documentParser'
 import { knowledgeFetch } from './knowledgeFetch'
@@ -11,6 +11,7 @@ const require = createRequire(import.meta.url)
 export class OfficeParserAdapter implements DocumentParser {
   private readonly controller = new AbortController()
   private ocrData?: Promise<void>
+  private parser?: Promise<typeof import('officeparser')>
 
   constructor(private readonly ocrDirectory?: string) {}
 
@@ -21,6 +22,7 @@ export class OfficeParserAdapter implements DocumentParser {
   }
 
   async parse(file: KnowledgeFile): Promise<ParsedDocument> {
+    const { OfficeParser } = await (this.parser ??= import('officeparser'))
     const needsOcr = !['.html', '.htm'].includes(extname(file.path).toLowerCase())
     if (needsOcr && this.ocrDirectory) {
       this.ocrData ??= this.downloadOcrData().catch((error) => {
@@ -54,7 +56,7 @@ export class OfficeParserAdapter implements DocumentParser {
 
   async close(): Promise<void> {
     this.controller.abort()
-    await OfficeParser.terminateOcr()
+    if (this.parser) await (await this.parser).OfficeParser.terminateOcr()
   }
 
   private async downloadOcrData(): Promise<void> {

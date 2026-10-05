@@ -39,6 +39,7 @@ export interface AppContext {
 }
 
 export async function bootstrap(): Promise<AppContext> {
+  const startedAt = performance.now()
   const userDataPath = app.getPath('userData')
   const defaultConfig: AgentConfig = {
     model: {
@@ -115,9 +116,6 @@ export async function bootstrap(): Promise<AppContext> {
     sessionDir: join(userDataPath, 'pi-sessions'),
     allowedOrigins: [rendererUrl ? (URL.parse(rendererUrl)?.origin ?? 'null') : 'null'],
   }
-  const backendStatus = await backendProcess.start(backendOptions)
-  if (backendStatus.state === 'unavailable') console.error('[bootstrap] agent backend unavailable')
-
   const chatWindow = createChatWindow()
   const disposePreviewIpc = registerPreviewIpc(chatWindow, new WorkspacePreviewService(sessionId => executionContexts.resolve(sessionId)))
   const disposeWorkspaceIpc = registerWorkspaceIpc(chatWindow, backendProcess)
@@ -157,8 +155,14 @@ export async function bootstrap(): Promise<AppContext> {
   const disposeAgentSkillIpc = registerAgentSkillIpc(backendProcess)
   const disposeScheduledTaskIpc = registerScheduledTaskIpc(backendProcess)
 
+  chatWindow.once('ready-to-show', () => {
+    console.info(`[bootstrap] window ready in ${Math.round(performance.now() - startedAt)}ms`)
+    chatWindow.show()
+  })
   loadRenderer(chatWindow, 'chat')
-  chatWindow.on('ready-to-show', () => chatWindow.show())
+  void backendProcess.start(backendOptions).then((status) => {
+    if (status.state === 'unavailable') console.error('[bootstrap] agent backend unavailable')
+  })
   let mainDatabaseClosed = false
   const closeMainDatabase = () => {
     if (mainDatabaseClosed) return

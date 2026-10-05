@@ -58,7 +58,7 @@ export interface AgentBackendRuntime {
 
 type AgentBackendInitializationStage = Exclude<
   AgentBackendStartupStage,
-  'process_spawned' | 'ready'
+  'process_spawned' | 'entry_loaded' | 'modules_loaded' | 'ready'
 >
 
 type StartupStageReporter = (stage: AgentBackendInitializationStage, detail?: string) => void

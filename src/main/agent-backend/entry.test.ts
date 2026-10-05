@@ -17,8 +17,12 @@ const { handleRequest, createAgentBackend } = vi.hoisted(() => {
 vi.mock('./bootstrap', () => ({ createAgentBackend }))
 
 class LoopbackUtilityProcess extends EventEmitter implements UtilityProcessLike {
+  readonly messages: Array<{ type: string; stage?: string }> = []
   readonly port = Object.assign(new EventEmitter(), {
-    postMessage: (message: unknown) => this.emit('message', message),
+    postMessage: (message: unknown) => {
+      this.messages.push(message as { type: string; stage?: string })
+      this.emit('message', message)
+    },
   })
   postMessage(message: unknown): void {
     this.port.emit('message', { data: message })
@@ -52,6 +56,11 @@ afterEach(() => {
   if (originalParentPort) Object.defineProperty(process, 'parentPort', originalParentPort)
   else Reflect.deleteProperty(process, 'parentPort')
   vi.restoreAllMocks()
+})
+
+test('reports entry and module loading before the backend is ready', () => {
+  expect(child.messages.filter((message) => message.type === 'startup-stage').map((message) => message.stage))
+    .toEqual(['entry_loaded', 'modules_loaded', 'ready'])
 })
 
 test('permission requests keep the conversation id and return through the utility entry', async () => {

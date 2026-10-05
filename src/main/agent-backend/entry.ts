@@ -1,4 +1,4 @@
-import { createAgentBackend, type AgentBackendRuntime } from './bootstrap'
+import type { AgentBackendRuntime } from './bootstrap'
 import type {
   AgentBackendRequest,
   AgentBackendStartupStage,
@@ -11,6 +11,8 @@ let backend: AgentBackendRuntime | undefined
 
 if (!parentPort) throw new Error('Agent backend must run as an Electron utility process')
 
+postStartupStage('entry_loaded')
+
 parentPort.on('message', (event) => {
   void handleMessage(event.data as MainToAgentBackendMessage)
 })
@@ -19,6 +21,8 @@ async function handleMessage(message: MainToAgentBackendMessage): Promise<void> 
   if (message.type === 'initialize') {
     if (backend) return
     try {
+      const { createAgentBackend } = await import('./bootstrap')
+      postStartupStage('modules_loaded')
       backend = await createAgentBackend(
         message.options,
         (stage, detail) => {

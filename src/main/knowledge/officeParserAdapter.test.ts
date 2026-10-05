@@ -24,7 +24,7 @@ test.each(['architecture.pdf', 'requirements.docx'])('parses the real %s fixture
   } finally {
     await parser.close()
   }
-})
+}, 15_000)
 
 test('normalizes AST reading order, merged cells, lists and image OCR with page geometry', () => {
   const document = normalizeOfficeAst(
