@@ -11,9 +11,11 @@ import type {
   AgentSettingsSnapshot,
   DiscoverModelsRequest,
   ModelCatalogModel,
+  TestWebSearchConnectionRequest,
   UpdateAgentModelSelectionRequest,
   UpdateAgentSettingsRequest,
 } from '@/shared/agent/agentSettings'
+import type { WebSearchConnectionTestResult } from '../shared/web-search/webSearch'
 import type { DeletePermissionGrantRequest } from '@/shared/approval/approvalTypes'
 import type { AgentRun, AgentRunOverview, LoadAgentRunsRequest } from '../shared/agent/agentRun'
 import type {
@@ -103,6 +105,9 @@ interface API {
     request: UpdateAgentModelSelectionRequest,
   ): Promise<AgentSettingsSnapshot>
   discoverModels(request: DiscoverModelsRequest): Promise<ModelCatalogModel[]>
+  testWebSearchConnection(
+    request: TestWebSearchConnectionRequest,
+  ): Promise<WebSearchConnectionTestResult>
   listMcpServers(): Promise<McpServerState[]>
   connectMcpServer(serverId: string): Promise<McpServerState>
   disconnectMcpServer(serverId: string): Promise<void>

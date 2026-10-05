@@ -46,6 +46,7 @@ import {
   type ThinkingLevel,
 } from '@/shared/agent/agentConfig'
 import { resolveModelInput } from '@/shared/agent/modelCapabilities'
+import { webSearchCredentialId } from '@/shared/web-search/webSearch'
 import {
   getConfiguredModelConfigs,
   getModelCatalog,
@@ -527,6 +528,17 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
     return this.piSession
   }
 
+  /**
+   * Tools the app grants automatically from settings instead of the user-toggled tool list.
+   * web_search stays invisible to the model until a provider and its key are configured.
+   */
+  private collectAutomaticTools(config: AgentConfig): string[] {
+    const provider = config.webSearch?.provider ?? 'disabled'
+    const available =
+      provider !== 'disabled' && this.credentialStore.hasApiKey(webSearchCredentialId(provider))
+    return available && this.toolRegistry.get('web_search') ? ['web_search'] : []
+  }
+
   private getModelRuntime(): ModelRuntime {
     if (!this.modelRuntime) throw new Error('Model runtime is not initialized')
     return this.modelRuntime
@@ -559,9 +571,13 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
       const model = modelRuntime.getModel(provider, modelID)
       if (!model) throw new Error(`找不到模型: ${provider}/${modelID}`)
 
+      const automaticTools = this.collectAutomaticTools(config)
       const enabledTools = [
         ...new Set([
-          ...config.tools.enabled.filter((name) => !name.startsWith('mcp__') && this.toolRegistry.get(name)),
+          ...config.tools.enabled.filter(
+            (name) => name !== 'web_search' && !name.startsWith('mcp__') && this.toolRegistry.get(name),
+          ),
+          ...automaticTools,
           ...this.toolRegistry
             .list()
             .filter((definition) => definition.origin?.kind === 'mcp' || definition.name === 'read_tool_result')

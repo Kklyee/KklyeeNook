@@ -1,5 +1,10 @@
 import { diffLines } from 'diff'
 import type { ToolCall, ToolExecutionResult } from '../tool/tool'
+import {
+  WEB_SEARCH_ERROR_CODES,
+  type WebSearchErrorCode,
+  type WebSearchSource,
+} from '../web-search/webSearch'
 import type { AgentActivity, ActivityStatus, ActivityTiming } from './agentActivity'
 
 const toolTypes: Record<string, AgentActivity['type']> = {
@@ -17,6 +22,7 @@ const toolTypes: Record<string, AgentActivity['type']> = {
   shell: 'shell',
   bash: 'shell',
   approval: 'approval',
+  web_search: 'web_search',
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -86,6 +92,16 @@ export function mapToolCallToActivity(
       }
       return { ...base, type, path, additions, deletions }
     }
+    case 'web_search': {
+      const count = details.resultCount
+      return {
+        ...base,
+        type,
+        query: string(args, 'query'),
+        resultCount: typeof count === 'number' ? count : undefined,
+        errorCode: webSearchErrorCode(result?.error?.message),
+      }
+    }
     case 'shell': {
       const code = details.exitCode ?? details.exit_code
       return {
@@ -100,4 +116,13 @@ export function mapToolCallToActivity(
     default:
       return { ...base, type: 'tool', toolName: call.toolName }
   }
+}
+
+function webSearchErrorCode(message: string | undefined): WebSearchErrorCode | undefined {
+  return WEB_SEARCH_ERROR_CODES.find((code) => message?.includes(code))
+}
+
+export function webSearchSources(result?: ToolExecutionResult): WebSearchSource[] {
+  const sources = record(result?.details).sources
+  return Array.isArray(sources) ? (sources as WebSearchSource[]) : []
 }

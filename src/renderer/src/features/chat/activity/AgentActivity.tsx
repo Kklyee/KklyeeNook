@@ -8,6 +8,7 @@ import {
   type ToolCallMessagePartProps,
 } from '@assistant-ui/react'
 import type { AgentActivity as Activity } from '@/shared/agent/agentActivity'
+import { webSearchSources } from '@/shared/agent/agentActivityMapper'
 import { formatActivityLabel } from '@/shared/agent/agentActivityFormatter'
 import { activityDuration, formatDuration } from '@/shared/agent/agentActivityTiming'
 import { useActivitySelector } from './AgentActivityProvider'
@@ -163,10 +164,17 @@ export const AgentActivityRow = memo(function AgentActivityRow({
                   +{activity.additions} −{activity.deletions ?? 0}
                 </span>
               )}
-            {(activity.type === 'search' || activity.type === 'glob') &&
+            {(activity.type === 'search' ||
+              activity.type === 'glob' ||
+              activity.type === 'web_search') &&
               activity.resultCount !== undefined && (
                 <span className="shrink-0 text-[11px] tabular-nums text-faint-foreground">
-                  {activity.resultCount} {activity.type === 'glob' ? 'files' : 'matches'}
+                  {activity.resultCount}{' '}
+                  {activity.type === 'glob'
+                    ? 'files'
+                    : activity.type === 'web_search'
+                      ? '个结果'
+                      : 'matches'}
                 </span>
               )}
             {activity.type !== 'thinking' && (
@@ -218,6 +226,7 @@ function ThinkingContent() {
 
 function ActivityToolDetail({ activity }: { activity: Exclude<Activity, { type: 'thinking' }> }) {
   const { open } = usePreview()
+  if (activity.type === 'web_search') return <WebSearchSources activity={activity} />
   const Renderer: ToolCallMessagePartComponent =
     assistantToolkit[activity.call.toolName]?.render ?? ToolCallRenderer
   const props: ToolCallMessagePartProps = {
@@ -267,4 +276,40 @@ function ActivityToolDetail({ activity }: { activity: Exclude<Activity, { type: 
       <Renderer {...props} />
     </ToolDetailProvider>
   )
+}
+
+function WebSearchSources({ activity }: { activity: Extract<Activity, { type: 'web_search' }> }) {
+  const sources = webSearchSources(activity.result)
+  if (!sources.length) {
+    return <p className="whitespace-pre-wrap break-words">{formatActivityLabel(activity)}</p>
+  }
+  return (
+    <ul className="grid gap-2.5">
+      {sources.map((source) => (
+        <li key={source.url} className="min-w-0">
+          <a
+            href={source.url}
+            target="_blank"
+            rel="noreferrer"
+            className="block truncate text-foreground hover:underline"
+            title={source.title}
+          >
+            {source.title}
+          </a>
+          <p className="text-[11px] text-faint-foreground">{sourceDomain(source.url)}</p>
+          {source.snippet && (
+            <p className="mt-0.5 line-clamp-3 break-words">{source.snippet}</p>
+          )}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function sourceDomain(url: string): string {
+  try {
+    return new URL(url).hostname
+  } catch {
+    return url
+  }
 }

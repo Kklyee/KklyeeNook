@@ -1,3 +1,4 @@
+import { WEB_SEARCH_ERROR_LABELS } from '../web-search/webSearch'
 import type { AgentActivity, ActivityStatus } from './agentActivity'
 
 export function getThinkingPreview(content: string): string {
@@ -15,6 +16,15 @@ export function formatActivityLabel(
   }
   if (activity.type === 'approval') {
     return mode === 'waiting' ? '等待你的确认…' : mode === 'failed' ? '确认未通过' : '已确认'
+  }
+  if (activity.type === 'web_search') {
+    const target =
+      mode === 'failed'
+        ? (activity.errorCode ? WEB_SEARCH_ERROR_LABELS[activity.errorCode] : activity.query)
+        : activity.query
+    const label =
+      mode === 'running' ? '正在搜索网页' : mode === 'failed' ? '网页搜索失败' : '搜索网页'
+    return `${label}${target ? ` · ${target}` : ''}`
   }
   const verbs = {
     read: '读取',

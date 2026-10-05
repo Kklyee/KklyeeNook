@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'vitest'
+import type { AgentActivity } from './agentActivity'
 import type { AgentEvent } from './agentEvent'
 import type { AgentEventEnvelope } from './agentExecutionRecord'
 import { deriveAgentActivities } from './deriveAgentActivities'
-import { mapToolCallToActivity } from './agentActivityMapper'
+import { mapToolCallToActivity, webSearchSources } from './agentActivityMapper'
 import { currentActivity, groupDuration } from './agentActivityTiming'
 import { summarizeAgentActivities } from './agentActivitySummary'
+import { formatActivityLabel } from './agentActivityFormatter'
 
 function events(entries: [number, AgentEvent][]): AgentEventEnvelope[] {
   return entries.map(([timestamp, event], seq) => ({
@@ -238,11 +240,91 @@ describe('central tool mapping', () => {
     ['bash', 'shell'],
     ['Approval', 'approval'],
     ['delegate_task', 'tool'],
+    ['web_search', 'web_search'],
   ])('%s maps to %s', (toolName, type) => {
     expect(
       mapToolCallToActivity({ id: 'tool', toolName, args: {} }, 'running', { startedAt: 100 }).type,
     ).toBe(type)
   })
+  test('keeps web search separate from local search and exposes its sources', () => {
+    const webSearchActivity = (activity: AgentActivity) => {
+      if (activity.type !== 'web_search') {
+        throw new Error(`expected a web_search activity, got ${activity.type}`)
+      }
+      return activity
+    }
+    const result = {
+      status: 'success' as const,
+      content: [{ type: 'text' as const, text: 'Web search results for: electron acrylic' }],
+      details: {
+        provider: 'tavily',
+        query: 'electron acrylic',
+        resultCount: 2,
+        sources: [
+          { title: 'BrowserWindow', url: 'https://www.electronjs.org/docs' },
+          { title: 'Issue 1', url: 'https://github.com/electron/electron/issues/1' },
+        ],
+      },
+    }
+    const search = mapToolCallToActivity(
+      { id: 'web', toolName: 'web_search', args: { query: 'electron acrylic' } },
+      'running',
+      { startedAt: 100 },
+    )
+    expect(search).toMatchObject({ type: 'web_search', query: 'electron acrylic' })
+    expect(formatActivityLabel(search)).toBe('正在搜索网页 · electron acrylic')
+
+    const completed = webSearchActivity(
+      mapToolCallToActivity(
+        { id: 'web', toolName: 'web_search', args: { query: 'electron acrylic' } },
+        'completed',
+        { startedAt: 100, endedAt: 1500 },
+        result,
+      ),
+    )
+    expect(completed).toMatchObject({ type: 'web_search', resultCount: 2 })
+    expect(completed.errorCode).toBeUndefined()
+    expect(formatActivityLabel(completed)).toBe('搜索网页 · electron acrylic')
+    expect(webSearchSources(completed.result)).toEqual(result.details.sources)
+
+    const failed = webSearchActivity(
+      mapToolCallToActivity(
+        { id: 'web', toolName: 'web_search', args: { query: 'electron acrylic' } },
+        'failed',
+        { startedAt: 100, endedAt: 200 },
+        {
+          status: 'error',
+          content: [
+            {
+              type: 'text',
+              text: 'Web search failed with web_search_invalid_api_key: the configured API key was rejected.',
+            },
+          ],
+          error: {
+            code: 'EXECUTION_ERROR',
+            message:
+              'Web search failed with web_search_invalid_api_key: the configured API key was rejected.',
+          },
+        },
+      ),
+    )
+    expect(failed).toMatchObject({ type: 'web_search', errorCode: 'web_search_invalid_api_key' })
+    expect(failed).toMatchObject({ resultCount: undefined })
+    expect(formatActivityLabel(failed)).toBe('网页搜索失败 · API Key 无效')
+    expect(webSearchSources(failed.result)).toEqual([])
+
+    expect(
+      summarizeAgentActivities([
+        completed,
+        mapToolCallToActivity(
+          { id: 'shell', toolName: 'bash', args: {} },
+          'completed',
+          { startedAt: 0, endedAt: 1 },
+        ),
+      ]),
+    ).toBe('运行了 1 个命令 · 搜索了 1 次网页')
+  })
+
   test('derives line stats and summarizes successful unique files without thinking counts', () => {
     const result = { status: 'success' as const, content: [] }
     const edit = mapToolCallToActivity(

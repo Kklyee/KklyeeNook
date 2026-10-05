@@ -8,6 +8,7 @@ import {
   modelConfigId,
   type AgentConfig,
 } from '@/shared/agent/agentConfig'
+import { isWebSearchProviderId } from '@/shared/web-search/webSearch'
 
 const DEFAULT_CONFIG: AgentConfig = {
   model: { provider: 'anthropic', modelID: '...', thinkingLevel: 'medium' },
@@ -28,6 +29,7 @@ const DEFAULT_CONFIG: AgentConfig = {
     ],
   },
   compaction: DEFAULT_AGENT_COMPACTION_SETTINGS,
+  webSearch: { provider: 'disabled' },
 }
 
 export class AgentConfigStore {
@@ -84,6 +86,7 @@ function mergeConfig(config?: Partial<AgentConfig>): AgentConfig {
     model: { ...DEFAULT_CONFIG.model, ...config?.model },
     tools: { ...DEFAULT_CONFIG.tools, ...config?.tools },
     compaction: { ...DEFAULT_AGENT_COMPACTION_SETTINGS, ...config?.compaction },
+    webSearch: { provider: config?.webSearch?.provider ?? 'disabled' },
   }
   delete merged.cwd
   merged.models = getSavedModels(merged)
@@ -129,6 +132,10 @@ function isAgentConfig(value: unknown): value is AgentConfig {
     (config.compaction === undefined || isCompactionConfig(config.compaction)) &&
     (config.mcpServers === undefined ||
       (Array.isArray(config.mcpServers) && config.mcpServers.every(isMcpServerConfig))) &&
+    (config.webSearch === undefined ||
+      (typeof config.webSearch === 'object' &&
+        config.webSearch !== null &&
+        isWebSearchProviderId(config.webSearch.provider))) &&
     (config.cwd === undefined || typeof config.cwd === 'string'),
   )
 }

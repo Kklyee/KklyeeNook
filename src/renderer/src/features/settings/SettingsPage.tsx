@@ -11,6 +11,7 @@ import { MemorySettings } from './MemorySettings'
 import { ModelSettings } from './ModelSettings'
 import { PermissionSettings } from './PermissionSettings'
 import { SkillSettings } from './SkillSettings'
+import { WebSearchSettings } from './WebSearchSettings'
 import { settingsNavigation, type SettingsTab } from './settingsNavigation'
 import { AppearanceSettings } from './AppearanceSettings'
 
@@ -115,6 +116,7 @@ const settingsPanels: Record<
   ComponentType<{ settings: AgentSettingsSnapshot; onChanged: () => Promise<void> }>
 > = {
   model: ModelSettings,
+  'web-search': WebSearchSettings,
   context: ContextSettings,
   permissions: PermissionSettings,
   skills: SkillSettings,

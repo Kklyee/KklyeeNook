@@ -3,6 +3,7 @@ import {
   BookOpenIcon,
   BotIcon,
   BrainIcon,
+  GlobeIcon,
   ImageIcon,
   ServerIcon,
   ShieldCheckIcon,
@@ -13,6 +14,7 @@ import {
 export type SettingsTab =
   | 'appearance'
   | 'model'
+  | 'web-search'
   | 'context'
   | 'permissions'
   | 'skills'
@@ -43,6 +45,13 @@ export const settingsNavigation: SettingsNavigationItem[] = [
     description: '配置模型提供商和可用模型。',
     icon: BotIcon,
     layout: 'manager',
+  },
+  {
+    id: 'web-search',
+    label: 'Web Search',
+    description: '让 Agent 搜索最新的网络信息。',
+    icon: GlobeIcon,
+    layout: 'preferences',
   },
   {
     id: 'context',

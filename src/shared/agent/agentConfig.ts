@@ -1,6 +1,7 @@
 import type { PermissionMode } from '../approval/permission'
 import type { McpServerConfig } from '../mcp/mcpServer'
 import type { KnowledgeSettings } from '../knowledge/knowledge'
+import type { WebSearchSettings } from '../web-search/webSearch'
 
 export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
@@ -71,6 +72,7 @@ export type AgentConfig = {
   defaultPermissionMode?: PermissionMode
   mcpServers?: McpServerConfig[]
   knowledge?: KnowledgeSettings
+  webSearch?: WebSearchSettings
 }
 
 export function getAgentCompactionSettings(config: AgentConfig): AgentCompactionSettings {

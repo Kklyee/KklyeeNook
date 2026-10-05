@@ -24,6 +24,18 @@ test('persists only encrypted API keys', () => {
   expect(new PersistentCredentialStore(path, encryption).getApiKey('test')).toBe('secret-value')
 })
 
+test('keeps namespaced web search credentials isolated', () => {
+  const store = new PersistentCredentialStore(join(directory, 'namespaced.json'), encryption)
+  store.setApiKey('tavily', 'model-provider-key')
+  store.setApiKey('web-search:tavily', 'tavily-search-key')
+  store.setApiKey('web-search:exa', 'exa-search-key')
+
+  store.deleteApiKey('web-search:tavily')
+  expect(store.hasApiKey('web-search:tavily')).toBe(false)
+  expect(store.getApiKey('web-search:exa')).toBe('exa-search-key')
+  expect(store.getApiKey('tavily')).toBe('model-provider-key')
+})
+
 test('keeps credentials in memory when operating-system encryption is unavailable', () => {
   const path = join(directory, 'volatile.json')
   const store = new PersistentCredentialStore(path, {

@@ -28,6 +28,10 @@ import { ApprovalPolicy } from '../approval/approvalPolicy'
 import { AgentConfigStore } from '../settings/agentConfigStore'
 import { registerMcpIpc } from '@/main/mcp/mcpIpc'
 import { PersistentCredentialStore, type CredentialStore } from '../settings/credentialStore'
+import {
+  WEB_SEARCH_PROVIDER_NAMES,
+  webSearchCredentialId,
+} from '@/shared/web-search/webSearch'
 import { registerSettingsIpc } from '../settings/settingsIpc'
 import { registerMemoryIpc } from '../memory/memoryIpc'
 import { loadRenderer } from './loadRenderer'
@@ -110,7 +114,7 @@ export async function bootstrap(): Promise<AppContext> {
   const rendererUrl = is.dev ? process.env.ELECTRON_RENDERER_URL : undefined
   const backendOptions: AgentBackendInitOptions = {
     config: configStore.get(),
-    apiKeys: collectApiKeys(configStore.get(), credentialStore),
+    apiKeys: collectRuntimeCredentials(configStore.get(), credentialStore),
     databaseUrl,
     migrationsPath,
     sessionDir: join(userDataPath, 'pi-sessions'),
@@ -141,7 +145,7 @@ export async function bootstrap(): Promise<AppContext> {
       await backendProcess.request({
         action: 'settings:commit',
         config,
-        apiKeys: collectApiKeys(config, credentialStore),
+        apiKeys: collectRuntimeCredentials(config, credentialStore),
       })
     },
     cancel: async () => {
@@ -192,12 +196,19 @@ export async function bootstrap(): Promise<AppContext> {
   }
 }
 
-function collectApiKeys(config: AgentConfig, credentials: CredentialStore): Record<string, string> {
+function collectRuntimeCredentials(
+  config: AgentConfig,
+  credentials: CredentialStore,
+): Record<string, string> {
   const providers = new Set([config.model.provider, ...(config.models ?? []).map((model) => model.provider)])
   const apiKeys: Record<string, string> = {}
   for (const provider of providers) {
     const apiKey = credentials.getApiKey(provider)
     if (apiKey) apiKeys[provider] = apiKey
+  }
+  for (const provider of WEB_SEARCH_PROVIDER_NAMES) {
+    const apiKey = credentials.getApiKey(webSearchCredentialId(provider))
+    if (apiKey) apiKeys[webSearchCredentialId(provider)] = apiKey
   }
   return apiKeys
 }

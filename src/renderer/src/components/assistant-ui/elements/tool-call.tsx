@@ -5,6 +5,7 @@ import {
   BotIcon,
   CheckIcon,
   ChevronRightIcon,
+  GlobeIcon,
   LoaderCircleIcon,
   WrenchIcon,
   XCircleIcon,
@@ -45,6 +46,7 @@ export type ToolIconKind =
   | 'write'
   | 'search'
   | 'glob'
+  | 'web_search'
   | 'agent'
   | 'generic'
 
@@ -119,8 +121,8 @@ export function ToolIcon({ kind }: { kind: ToolIconKind }) {
     )
   }
 
-  const Icon = kind === 'agent' ? BotIcon : WrenchIcon
-  return <Icon aria-hidden="true" className={className} />
+  const Icon = kind === 'agent' ? BotIcon : kind === 'web_search' ? GlobeIcon : WrenchIcon
+  return <Icon aria-hidden="true" strokeWidth={1.5} className={className} />
 }
 
 function formatToolDuration(ms: number): string {

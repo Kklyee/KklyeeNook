@@ -45,6 +45,9 @@ import { join } from 'node:path'
 import { createKnowledgeRuntime, type KnowledgeRuntime } from '@/main/knowledge/knowledgeRuntime'
 import { DEFAULT_KNOWLEDGE_SETTINGS } from '@/shared/knowledge/knowledge'
 import { registerPiKnowledgeTools } from '@/main/agent/pi/adapters/piKnowledgeToolAdapter'
+import { registerPiWebSearchTool } from '@/main/agent/pi/adapters/piWebSearchToolAdapter'
+import { WebSearchService } from '@/main/web-search/webSearchService'
+import { DEFAULT_WEB_SEARCH_SETTINGS } from '@/shared/web-search/webSearch'
 import { registerPiToolResultTool } from '@/main/agent/pi/adapters/piToolResultAdapter'
 import { ToolResultStore } from '@/main/tools/toolResultStore'
 import type { AgentEventEnvelope } from '@/shared/agent/agentExecutionRecord'
@@ -100,6 +103,11 @@ export async function createAgentBackend(
     registerPiPlanTool(toolRegistry)
     knowledge = await createKnowledgeRuntime(db, options.databaseUrl, join(options.sessionDir, '..', 'knowledge-cache'), configStore.get().knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS, workspaceService)
     registerPiKnowledgeTools(toolRegistry, () => knowledge!.service)
+    const webSearchService = new WebSearchService(
+      () => configStore.get().webSearch ?? DEFAULT_WEB_SEARCH_SETTINGS,
+      () => credentialStore,
+    )
+    registerPiWebSearchTool(toolRegistry, () => webSearchService)
 
     const sessionRuntimeManager = new PiSessionRuntimeManager(
       (sessionId, runtimeOptions) =>

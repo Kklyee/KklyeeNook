@@ -4,8 +4,10 @@ import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import type {
   AgentSettingsSnapshot,
   DiscoverModelsRequest,
+  TestWebSearchConnectionRequest,
   UpdateAgentModelSelectionRequest,
   UpdateAgentSettingsRequest,
+  UpdateWebSearchCredentialRequest,
 } from '@/shared/agent/agentSettings'
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
 import type { ApprovalPolicy } from '../approval/approvalPolicy'
@@ -39,7 +41,18 @@ import {
   updateAgentModelSelectionFromCatalog,
 } from './modelCatalog'
 import { discoverRemoteModels } from './modelDiscovery'
+import { webSearchErrorCode } from '../web-search/webSearchErrors'
+import { WebSearchService } from '../web-search/webSearchService'
 import { DEFAULT_KNOWLEDGE_SETTINGS } from '@/shared/knowledge/knowledge'
+import {
+  DEFAULT_WEB_SEARCH_SETTINGS,
+  WEB_SEARCH_PROVIDER_LABELS,
+  WEB_SEARCH_PROVIDER_NAMES,
+  isWebSearchProviderId,
+  isWebSearchProviderName,
+  webSearchCredentialId,
+  type WebSearchSettings,
+} from '@/shared/web-search/webSearch'
 
 export interface AgentSettingsChangeHooks {
   prepare(): void | Promise<void>
@@ -60,6 +73,11 @@ export function registerSettingsIpc(
       throw new Error('不允许读取配置')
     }
   }
+
+  const webSearch = new WebSearchService(
+    () => configStore.get().webSearch ?? DEFAULT_WEB_SEARCH_SETTINGS,
+    () => credentials,
+  )
 
   const snapshot = async (): Promise<AgentSettingsSnapshot> => {
     const config = configStore.get()
@@ -117,6 +135,14 @@ export function registerSettingsIpc(
       compaction: getAgentCompactionSettings(config),
       mcpServers: config.mcpServers ?? [],
       knowledge: config.knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS,
+      webSearch: {
+        provider: config.webSearch?.provider ?? 'disabled',
+        providers: WEB_SEARCH_PROVIDER_NAMES.map((id) => ({
+          id,
+          name: WEB_SEARCH_PROVIDER_LABELS[id],
+          hasApiKey: credentials.hasApiKey(webSearchCredentialId(id)),
+        })),
+      },
     }
   }
 
@@ -134,7 +160,10 @@ export function registerSettingsIpc(
           !Array.isArray(request.models) &&
           request.compaction === undefined &&
           request.mcpServers === undefined &&
-          request.knowledge === undefined && request.defaultPermissionMode === undefined) ||
+          request.knowledge === undefined &&
+          request.defaultPermissionMode === undefined &&
+          request.webSearch === undefined &&
+          request.webSearchCredential === undefined) ||
         (request.mcpServers !== undefined && !Array.isArray(request.mcpServers))
       ) {
         throw new Error('Agent 设置格式无效')
@@ -213,6 +242,7 @@ export function registerSettingsIpc(
         ...(mcpServers ? { mcpServers } : {}),
         ...(providerUpdate ? { providers } : {}),
         ...(request.knowledge ? { knowledge: request.knowledge } : {}),
+        ...(request.webSearch ? { webSearch: validateWebSearchSettings(request.webSearch) } : {}),
         compaction:
           request.compaction === undefined
             ? getAgentCompactionSettings(current)
@@ -221,6 +251,13 @@ export function registerSettingsIpc(
       const credentialProvider = request.credential?.provider
       const previousApiKey = credentialProvider
         ? credentials.getApiKey(credentialProvider)
+        : undefined
+      const webSearchCredential =
+        request.webSearchCredential === undefined
+          ? undefined
+          : validateWebSearchCredential(request.webSearchCredential)
+      const previousWebSearchApiKey = webSearchCredential
+        ? credentials.getApiKey(webSearchCredentialId(webSearchCredential.provider))
         : undefined
 
       await settingsChange.prepare()
@@ -231,12 +268,22 @@ export function registerSettingsIpc(
         } else if (request.credential?.apiKey?.trim()) {
           credentials.setApiKey(request.credential.provider, request.credential.apiKey.trim())
         }
+        if (webSearchCredential) {
+          const credentialId = webSearchCredentialId(webSearchCredential.provider)
+          if (webSearchCredential.deleteApiKey) credentials.deleteApiKey(credentialId)
+          else if (webSearchCredential.apiKey) credentials.setApiKey(credentialId, webSearchCredential.apiKey)
+        }
         await settingsChange.commit()
       } catch (error) {
         configStore.set(current)
         if (credentialProvider) {
           if (previousApiKey) credentials.setApiKey(credentialProvider, previousApiKey)
           else credentials.deleteApiKey(credentialProvider)
+        }
+        if (webSearchCredential) {
+          const credentialId = webSearchCredentialId(webSearchCredential.provider)
+          if (previousWebSearchApiKey) credentials.setApiKey(credentialId, previousWebSearchApiKey)
+          else credentials.deleteApiKey(credentialId)
         }
         await Promise.resolve(settingsChange.cancel()).catch(() => undefined)
         throw error
@@ -294,6 +341,21 @@ export function registerSettingsIpc(
     },
   )
   ipcMain.handle(
+    IPC_CHANNELS.SETTINGS_TEST_WEB_SEARCH,
+    async (event, request: TestWebSearchConnectionRequest) => {
+      assertTrustedSender(event)
+      if (!request || !isWebSearchProviderName(request.provider)) {
+        throw new Error('Web Search 提供商无效')
+      }
+      try {
+        await webSearch.testConnection(request.provider, request.apiKey)
+        return { ok: true as const }
+      } catch (error) {
+        return { ok: false as const, code: webSearchErrorCode(error) }
+      }
+    },
+  )
+  ipcMain.handle(
     IPC_CHANNELS.PERMISSION_GRANT_DELETE,
     async (event, request: DeletePermissionGrantRequest): Promise<void> => {
       assertTrustedSender(event)
@@ -305,8 +367,29 @@ export function registerSettingsIpc(
     ipcMain.removeHandler(IPC_CHANNELS.SETTINGS_UPDATE)
     ipcMain.removeHandler(IPC_CHANNELS.SETTINGS_UPDATE_MODEL_SELECTION)
     ipcMain.removeHandler(IPC_CHANNELS.SETTINGS_DISCOVER_MODELS)
+    ipcMain.removeHandler(IPC_CHANNELS.SETTINGS_TEST_WEB_SEARCH)
     ipcMain.removeHandler(IPC_CHANNELS.PERMISSION_GRANT_DELETE)
   })
+}
+
+function validateWebSearchSettings(settings: WebSearchSettings): WebSearchSettings {
+  if (!isWebSearchProviderId(settings.provider)) throw new Error('Web Search 提供商无效')
+  return { provider: settings.provider }
+}
+
+function validateWebSearchCredential(
+  request: UpdateWebSearchCredentialRequest,
+): UpdateWebSearchCredentialRequest {
+  if (!request || !isWebSearchProviderName(request.provider)) {
+    throw new Error('Web Search 提供商无效')
+  }
+  const apiKey = request.apiKey?.trim()
+  if (!request.deleteApiKey && !apiKey) throw new Error('API Key 不能为空')
+  return {
+    provider: request.provider,
+    ...(request.deleteApiKey ? { deleteApiKey: true } : {}),
+    ...(apiKey ? { apiKey } : {}),
+  }
 }
 
 function validateModelSelection(

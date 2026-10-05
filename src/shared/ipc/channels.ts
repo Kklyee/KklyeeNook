@@ -25,6 +25,7 @@ export const IPC_CHANNELS = {
   SETTINGS_UPDATE: 'settings:update',
   SETTINGS_UPDATE_MODEL_SELECTION: 'settings:update-model-selection',
   SETTINGS_DISCOVER_MODELS: 'settings:discover-models',
+  SETTINGS_TEST_WEB_SEARCH: 'settings:test-web-search',
   MCP_LIST: 'mcp:list',
   MCP_CONNECT: 'mcp:connect',
   MCP_DISCONNECT: 'mcp:disconnect',

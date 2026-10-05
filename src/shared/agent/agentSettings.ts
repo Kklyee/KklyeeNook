@@ -10,6 +10,11 @@ import type {
 import type { ModelInput } from './agentConfig'
 import type { McpServerConfig } from '../mcp/mcpServer'
 import type { KnowledgeSettings } from '../knowledge/knowledge'
+import type {
+  WebSearchProviderId,
+  WebSearchProviderName,
+  WebSearchSettings,
+} from '../web-search/webSearch'
 
 export interface ModelCatalogProvider {
   id: string
@@ -43,6 +48,18 @@ export interface SavedProviderSettings extends ProviderConfig {
   hasApiKey: boolean
 }
 
+export interface WebSearchProviderSettings {
+  id: WebSearchProviderName
+  name: string
+  hasApiKey: boolean
+}
+
+// Only public configuration crosses IPC. API keys stay in the main process.
+export interface WebSearchSettingsSnapshot {
+  provider: WebSearchProviderId
+  providers: WebSearchProviderSettings[]
+}
+
 // Only public configuration crosses IPC. API keys stay in the main process.
 export interface AgentSettingsSnapshot {
   provider: string
@@ -64,6 +81,13 @@ export interface AgentSettingsSnapshot {
   compaction: AgentCompactionSettings
   mcpServers: McpServerConfig[]
   knowledge?: KnowledgeSettings
+  webSearch: WebSearchSettingsSnapshot
+}
+
+export interface UpdateWebSearchCredentialRequest {
+  provider: WebSearchProviderName
+  apiKey?: string
+  deleteApiKey?: boolean
 }
 
 export interface UpdateAgentSettingsRequest {
@@ -76,6 +100,13 @@ export interface UpdateAgentSettingsRequest {
   compaction?: AgentCompactionSettings
   mcpServers?: McpServerConfig[]
   knowledge?: KnowledgeSettings
+  webSearch?: WebSearchSettings
+  webSearchCredential?: UpdateWebSearchCredentialRequest
+}
+
+export interface TestWebSearchConnectionRequest {
+  provider: WebSearchProviderName
+  apiKey?: string
 }
 
 export interface DiscoverModelsRequest {

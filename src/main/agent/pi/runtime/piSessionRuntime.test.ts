@@ -171,6 +171,72 @@ test.each([
   runtime.dispose()
 })
 
+test('grants web_search only when a provider and its namespaced key are configured', async () => {
+  vi.mocked(ModelRuntime.create).mockResolvedValue({
+    registerProvider: vi.fn(),
+    unregisterProvider: vi.fn(),
+    setRuntimeApiKey: vi.fn(),
+    getModel: () => ({ provider: 'custom', id: 'model-1' }),
+    getModels: () => [],
+  } as never)
+  vi.mocked(SessionManager.create).mockReturnValue(fakeSessionManager() as never)
+  vi.mocked(createAgentSession).mockImplementation(
+    (async () => ({ session: fakeSession() })) as never,
+  )
+
+  const toolRegistry = new ToolRegistry()
+  toolRegistry.register({
+    definition: {
+      name: 'web_search',
+      label: 'Web Search',
+      description: 'Search the web',
+      inputSchema: { type: 'object' },
+    },
+    adapter: { runtime: 'pi', create: () => ({ name: 'web_search' }) },
+  })
+  const keys = new Map<string, string>()
+  const credentials = {
+    getApiKey: (provider: string) => keys.get(provider),
+    hasApiKey: (provider: string) => keys.has(provider),
+  } as unknown as CredentialStore
+  const sessionRuntime = (provider: 'disabled' | 'tavily' | 'exa') =>
+    new PiSessionRuntime(
+      'session-1',
+      new AgentConfigStore({
+        model: { provider: 'custom', modelID: 'model-1', baseUrl: 'https://example.test/v1', thinkingLevel: 'off' },
+        tools: { enabled: ['web_search'] },
+        webSearch: { provider },
+      }),
+      credentials,
+      { findBySessionId: vi.fn(), save: vi.fn() } as unknown as AgentRuntimeStateRepo,
+      toolRegistry,
+      'sessions',
+    )
+
+  keys.clear()
+  const disabled = sessionRuntime('disabled')
+  await disabled.initialize()
+  expect(vi.mocked(createAgentSession).mock.calls.at(-1)?.[0]?.tools).toEqual([])
+
+  const withoutKey = sessionRuntime('tavily')
+  await withoutKey.initialize()
+  expect(vi.mocked(createAgentSession).mock.calls.at(-1)?.[0]?.tools).toEqual([])
+
+  keys.set('web-search:exa', 'exa-key')
+  const wrongProvider = sessionRuntime('tavily')
+  await wrongProvider.initialize()
+  expect(vi.mocked(createAgentSession).mock.calls.at(-1)?.[0]?.tools).toEqual([])
+
+  keys.set('web-search:tavily', 'tavily-key')
+  const configured = sessionRuntime('tavily')
+  await configured.initialize()
+  expect(vi.mocked(createAgentSession).mock.calls.at(-1)?.[0]?.tools).toEqual(['web_search'])
+  disabled.dispose()
+  withoutKey.dispose()
+  wrongProvider.dispose()
+  configured.dispose()
+})
+
 test('uses configured custom-provider limits and keeps client subscriptions across reloads', async () => {
   const model = { provider: 'custom', id: 'model-1' }
   let registered = false

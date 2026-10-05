@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, expect, test } from 'vitest'
@@ -14,6 +14,38 @@ test('defaults to workspace tools and the supported agent helpers', () => {
 
 const directory = mkdtempSync(join(tmpdir(), 'kklyeenook-config-'))
 afterAll(() => rmSync(directory, { recursive: true }))
+
+test('defaults web search to disabled and persists a selected provider', () => {
+  expect(new AgentConfigStore().get().webSearch).toEqual({ provider: 'disabled' })
+
+  const path = join(directory, 'web-search.json')
+  const store = new AgentConfigStore(
+    {
+      model: { provider: 'test', modelID: 'first', thinkingLevel: 'off' },
+      tools: { enabled: [] },
+      webSearch: { provider: 'exa' },
+    },
+    path,
+  )
+  store.set(store.get())
+  expect(store.get().webSearch).toEqual({ provider: 'exa' })
+  expect(new AgentConfigStore(undefined, path).get().webSearch).toEqual({ provider: 'exa' })
+})
+
+test('falls back to disabled when a persisted config carries an unknown web search provider', () => {
+  const path = join(directory, 'unknown-web-search.json')
+  writeFileSync(
+    path,
+    JSON.stringify({
+      model: { provider: 'test', modelID: 'first', thinkingLevel: 'off' },
+      tools: { enabled: ['read'] },
+      webSearch: { provider: 'serpapi' },
+    }),
+  )
+
+  const store = new AgentConfigStore(undefined, path)
+  expect(store.get().webSearch).toEqual({ provider: 'disabled' })
+})
 
 test('persists agent settings without exposing mutable store state', () => {
   const path = join(directory, 'settings.json')

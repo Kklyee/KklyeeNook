@@ -1,4 +1,5 @@
 import type { ToolCall, ToolExecutionResult } from '../tool/tool'
+import type { WebSearchErrorCode } from '../web-search/webSearch'
 
 export type ActivityStatus = 'running' | 'completed' | 'failed' | 'waiting'
 
@@ -15,6 +16,12 @@ export type AgentActivity = ActivityBase &
     | { type: 'thinking'; content: string }
     | (ToolActivity & { type: 'read'; path?: string })
     | (ToolActivity & { type: 'search'; query?: string; resultCount?: number })
+    | (ToolActivity & {
+        type: 'web_search'
+        query?: string
+        resultCount?: number
+        errorCode?: WebSearchErrorCode
+      })
     | (ToolActivity & { type: 'glob'; pattern?: string; resultCount?: number })
     | (ToolActivity & {
         type: 'edit' | 'write'

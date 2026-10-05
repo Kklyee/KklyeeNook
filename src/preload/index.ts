@@ -16,9 +16,11 @@ import { DeletePermissionGrantRequest } from '@/shared/approval/approvalTypes'
 import type {
   AgentSettingsSnapshot,
   DiscoverModelsRequest,
+  TestWebSearchConnectionRequest,
   UpdateAgentModelSelectionRequest,
   UpdateAgentSettingsRequest,
 } from '@/shared/agent/agentSettings'
+import type { WebSearchConnectionTestResult } from '@/shared/web-search/webSearch'
 import type { ModelCatalogModel } from '@/shared/agent/agentSettings'
 import type { McpServerState } from '@/shared/mcp/mcpServer'
 import type { AgentRun, AgentRunOverview, LoadAgentRunsRequest } from '@/shared/agent/agentRun'
@@ -186,6 +188,12 @@ const api = {
 
   discoverModels(request: DiscoverModelsRequest): Promise<ModelCatalogModel[]> {
     return ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_DISCOVER_MODELS, request)
+  },
+
+  testWebSearchConnection(
+    request: TestWebSearchConnectionRequest,
+  ): Promise<WebSearchConnectionTestResult> {
+    return ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_TEST_WEB_SEARCH, request)
   },
 
   listMcpServers(): Promise<McpServerState[]> {

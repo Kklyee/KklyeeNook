@@ -15,40 +15,39 @@
   --radius: 8px;
 
   --ui-bg: oklch(0.955 0.003 250 / 0.72);
-    --ui-fg: oklch(0.24 0.006 250);
-  
-    --ui-surface: oklch(0.98 0.002 250 / 0.76);
-    --ui-surface-muted: oklch(0.945 0.003 250 / 0.70);
-    --ui-control: oklch(0.985 0.002 250 / 0.84);
-    --ui-surface-raised: oklch(0.995 0.001 250 / 0.92);
-  
-    --ui-fg-muted: oklch(0.49 0.007 250);
-    --ui-fg-faint: oklch(0.63 0.005 250);
-  
-    --ui-border: oklch(0.24 0.006 250 / 0.08);
-    --ui-border-strong: oklch(0.24 0.006 250 / 0.14);
-  
-    /* Brand — calm steel blue */
-    --ui-brand: oklch(0.55 0.045 255);
-    --ui-brand-fg: oklch(0.985 0.002 250);
-    --ui-brand-muted: oklch(0.55 0.045 255 / 0.065);
-    --ui-focus: oklch(0.55 0.045 255 / 0.22);
-  
-    /* Interaction — neutral, not blue */
-    --ui-hover: oklch(0.24 0.006 250 / 0.03);
-    --ui-active: oklch(0.24 0.006 250 / 0.06);
-    --ui-selected: oklch(0.24 0.006 250 / 0.05);
-  
-    /* Status — muted */
-    --ui-success: oklch(0.52 0.065 155);
-    --ui-success-muted: oklch(0.52 0.065 155 / 0.075);
-  
-    --ui-warning: oklch(0.60 0.070 78);
-    --ui-warning-muted: oklch(0.60 0.070 78 / 0.075);
-  
-    --ui-danger: oklch(0.55 0.095 25);
-    --ui-danger-muted: oklch(0.55 0.095 25 / 0.075);
+  --ui-fg: oklch(0.24 0.006 250);
 
+  --ui-surface: oklch(0.98 0.002 250 / 0.76);
+  --ui-surface-muted: oklch(0.945 0.003 250 / 0.7);
+  --ui-control: oklch(0.985 0.002 250 / 0.84);
+  --ui-surface-raised: oklch(0.995 0.001 250 / 0.92);
+
+  --ui-fg-muted: oklch(0.49 0.007 250);
+  --ui-fg-faint: oklch(0.63 0.005 250);
+
+  --ui-border: oklch(0.24 0.006 250 / 0.08);
+  --ui-border-strong: oklch(0.24 0.006 250 / 0.14);
+
+  /* Brand — calm steel blue */
+  --ui-brand: oklch(0.55 0.045 255);
+  --ui-brand-fg: oklch(0.985 0.002 250);
+  --ui-brand-muted: oklch(0.55 0.045 255 / 0.065);
+  --ui-focus: oklch(0.55 0.045 255 / 0.22);
+
+  /* Interaction — neutral, not blue */
+  --ui-hover: oklch(0.24 0.006 250 / 0.03);
+  --ui-active: oklch(0.24 0.006 250 / 0.06);
+  --ui-selected: oklch(0.24 0.006 250 / 0.05);
+
+  /* Status — muted */
+  --ui-success: oklch(0.52 0.065 155);
+  --ui-success-muted: oklch(0.52 0.065 155 / 0.075);
+
+  --ui-warning: oklch(0.6 0.07 78);
+  --ui-warning-muted: oklch(0.6 0.07 78 / 0.075);
+
+  --ui-danger: oklch(0.55 0.095 25);
+  --ui-danger-muted: oklch(0.55 0.095 25 / 0.075);
 
   --ui-shadow: inset 0 1px 0 oklch(1 0 0 / 0.34), 0 6px 20px oklch(0.2 0.008 250 / 0.07);
 
@@ -60,40 +59,40 @@
 }
 
 .dark {
-  --ui-bg: oklch(0.20 0.003 250 / 0.68);
-    --ui-fg: oklch(0.91 0.003 250);
-  
-    --ui-surface: oklch(0.235 0.004 250 / 0.72);
-    --ui-surface-muted: oklch(0.26 0.004 250 / 0.64);
-    --ui-control: oklch(0.285 0.004 250 / 0.78);
-    --ui-surface-raised: oklch(0.30 0.004 250 / 0.90);
-  
-    --ui-fg-muted: oklch(0.69 0.004 250);
-    --ui-fg-faint: oklch(0.52 0.004 250);
-  
-    --ui-border: oklch(1 0 0 / 0.055);
-    --ui-border-strong: oklch(1 0 0 / 0.10);
-  
-    /* Brand — darker, grayer, less electric */
-    --ui-brand: oklch(0.61 0.035 255);
-    --ui-brand-fg: oklch(0.985 0.002 250);
-    --ui-brand-muted: oklch(0.61 0.035 255 / 0.07);
-    --ui-focus: oklch(0.61 0.035 255 / 0.20);
-  
-    /* Interaction */
-    --ui-hover: oklch(1 0 0 / 0.035);
-    --ui-active: oklch(1 0 0 / 0.065);
-    --ui-selected: oklch(1 0 0 / 0.05);
-  
-    /* Status — visible but never neon */
-    --ui-success: oklch(0.64 0.055 160);
-    --ui-success-muted: oklch(0.64 0.055 160 / 0.075);
-  
-    --ui-warning: oklch(0.69 0.060 80);
-    --ui-warning-muted: oklch(0.69 0.060 80 / 0.075);
-  
-    --ui-danger: oklch(0.63 0.080 25);
-    --ui-danger-muted: oklch(0.63 0.080 25 / 0.075);
+  --ui-bg: oklch(0.2 0.003 250 / 0.68);
+  --ui-fg: oklch(0.91 0.003 250);
+
+  --ui-surface: oklch(0.235 0.004 250 / 0.72);
+  --ui-surface-muted: oklch(0.26 0.004 250 / 0.64);
+  --ui-control: oklch(0.285 0.004 250 / 0.78);
+  --ui-surface-raised: oklch(0.3 0.004 250 / 0.9);
+
+  --ui-fg-muted: oklch(0.69 0.004 250);
+  --ui-fg-faint: oklch(0.52 0.004 250);
+
+  --ui-border: oklch(1 0 0 / 0.055);
+  --ui-border-strong: oklch(1 0 0 / 0.1);
+
+  /* Brand — darker, grayer, less electric */
+  --ui-brand: oklch(0.61 0.035 255);
+  --ui-brand-fg: oklch(0.985 0.002 250);
+  --ui-brand-muted: oklch(0.61 0.035 255 / 0.07);
+  --ui-focus: oklch(0.61 0.035 255 / 0.2);
+
+  /* Interaction */
+  --ui-hover: oklch(1 0 0 / 0.035);
+  --ui-active: oklch(1 0 0 / 0.065);
+  --ui-selected: oklch(1 0 0 / 0.05);
+
+  /* Status — visible but never neon */
+  --ui-success: oklch(0.64 0.055 160);
+  --ui-success-muted: oklch(0.64 0.055 160 / 0.075);
+
+  --ui-warning: oklch(0.69 0.06 80);
+  --ui-warning-muted: oklch(0.69 0.06 80 / 0.075);
+
+  --ui-danger: oklch(0.63 0.08 25);
+  --ui-danger-muted: oklch(0.63 0.08 25 / 0.075);
 
   --ui-shadow: inset 0 1px 0 oklch(1 0 0 / 0.02), 0 8px 24px oklch(0 0 0 / 0.14);
 
@@ -119,7 +118,7 @@
 
 :root.dark.system-material,
 :root.dark.has-wallpaper {
-  --ui-bg: oklch(0.20 0.003 250 / 0.48);
+  --ui-bg: oklch(0.2 0.003 250 / 0.48);
   --ui-surface: oklch(0.235 0.004 250 / 0.58);
   --ui-surface-muted: oklch(0.26 0.004 250 / 0.54);
   --ui-titlebar: oklch(0.18 0.003 250 / 0.42);
@@ -177,12 +176,16 @@
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='.045'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-:root:is(.system-material, .has-wallpaper):not(.glass-disabled) .app-sidebar [data-slot='sidebar-inner'] {
+:root:is(.system-material, .has-wallpaper):not(.glass-disabled)
+  .app-sidebar
+  [data-slot='sidebar-inner'] {
   background: oklch(0.98 0.002 250 / 0.32);
 }
 
-:root.dark:is(.system-material, .has-wallpaper):not(.glass-disabled) .app-sidebar [data-slot='sidebar-inner'] {
-  background: oklch(0.235 0.004 250 / 0.30);
+:root.dark:is(.system-material, .has-wallpaper):not(.glass-disabled)
+  .app-sidebar
+  [data-slot='sidebar-inner'] {
+  background: oklch(0.235 0.004 250 / 0.3);
 }
 
 :root.glass-disabled:not(.dark) {
@@ -200,7 +203,7 @@
   --ui-surface: oklch(0.235 0.004 250);
   --ui-surface-muted: oklch(0.26 0.004 250);
   --ui-control: oklch(0.285 0.004 250);
-  --ui-surface-raised: oklch(0.30 0.004 250);
+  --ui-surface-raised: oklch(0.3 0.004 250);
 }
 
 .glass-disabled .app-window {
@@ -519,11 +522,11 @@ body,
 }
 
 .aui-md {
-  --markdown-accent: oklch(0.50 0.12 255);
+  --markdown-accent: oklch(0.5 0.12 255);
 }
 
 .dark .aui-md {
-  --markdown-accent: oklch(0.80 0.09 255);
+  --markdown-accent: oklch(0.8 0.09 255);
 }
 
 .aui-md pre::-webkit-scrollbar {
@@ -666,15 +669,21 @@ body,
   }
 }
 
-[data-slot='aui_assistant-message-root']:has([data-slot='agent-activity-slot'][data-running='true']),
+[data-slot='aui_assistant-message-root']:has(
+  [data-slot='agent-activity-slot'][data-running='true']
+),
 [data-slot='aui_assistant-message-root']:has(.streaming-markdown[data-status='running']) {
   content-visibility: visible;
   contain-intrinsic-size: none;
 }
 
 @keyframes sd-nook-word-fade {
-  from { opacity: 0.25; }
-  to { opacity: 1; }
+  from {
+    opacity: 0.25;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .aui-md [data-sd-animate] {
@@ -713,7 +722,8 @@ body,
   grid-template-rows: 0fr;
   opacity: 0;
   transform: translateY(2px);
-  transition: grid-template-rows var(--motion-normal) var(--motion-ease),
+  transition:
+    grid-template-rows var(--motion-normal) var(--motion-ease),
     opacity var(--motion-fast) var(--motion-ease),
     transform var(--motion-normal) var(--motion-ease);
 }
@@ -731,7 +741,9 @@ body,
 
 .activity-panel {
   opacity: 1;
-  transition: height var(--motion-expand) var(--motion-ease), opacity var(--motion-normal) var(--motion-ease);
+  transition:
+    height var(--motion-expand) var(--motion-ease),
+    opacity var(--motion-normal) var(--motion-ease);
 }
 
 .activity-panel[data-starting-style],
@@ -740,18 +752,32 @@ body,
 }
 
 @keyframes activity-entrance {
-  from { opacity: 0; transform: translateY(2px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes activity-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes activity-fade-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -762,13 +788,19 @@ body,
     animation: none !important;
   }
 
-  .activity-crossfade-out { opacity: 0; }
+  .activity-crossfade-out {
+    opacity: 0;
+  }
 
   .activity-row-entrance,
-  .activity-panel { transition: none; }
+  .activity-panel {
+    transition: none;
+  }
 
   [data-slot='aui_assistant-message-root'] .animate-pulse,
-  [data-slot='aui_assistant-message-root'] .animate-spin { animation: none; }
+  [data-slot='aui_assistant-message-root'] .animate-spin {
+    animation: none;
+  }
 
   .aui-branch-list-item,
   .aui-branch-list-item::before {
