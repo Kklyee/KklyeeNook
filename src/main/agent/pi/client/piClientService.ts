@@ -339,6 +339,16 @@ export class PiClientService implements PiClient {
     const event = { ...body, threadId, seq: relay.seq } as PiClientEvent
     for (const listener of relay.listeners) this.notify(listener, event)
 
+    if (body.type === 'compaction_end') {
+      const session = this.agentService.getSession(threadId)
+      if (session) {
+        this.publishEvent(threadId, relay, {
+          type: 'snapshot',
+          snapshot: relay.sessionRuntime.getSnapshot(this.metadataOf(session.toSummary())),
+        })
+      }
+    }
+
     if (
       body.type === 'message_end' &&
       (body.message.role === 'user' || body.message.role === 'assistant')

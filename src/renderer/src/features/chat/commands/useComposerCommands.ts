@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAui, useAuiEvent, useAuiState } from '@assistant-ui/react'
-import { usePiRuntimeExtras } from '@assistant-ui/react-pi'
+import { usePiRuntimeExtras, type PiThreadControllerLike } from '@assistant-ui/react-pi'
 import type { AgentSkill } from '@/shared/agent/agentSkill'
 import { effectivePermissionMode, PERMISSION_LABELS } from '@/shared/approval/permission'
 import { useWorkspaces } from '../../workspaces/WorkspaceProvider'
@@ -49,8 +49,7 @@ export function useComposerCommands() {
     [skills, running, pi.compaction.active, executing],
   )
 
-  const submit = async (steer = false) => {
-    const text = aui.composer.getState().text
+  const submit = async (steer = false, text = aui.composer.getState().text) => {
     const command = parseSystemCommand(text)
     const version = ++resultVersion.current
     setResult(undefined)
@@ -68,12 +67,21 @@ export function useComposerCommands() {
     executingRef.current = true
     setExecuting(true)
     aui.composer.setText('')
+    if (command.definition.id === 'compact') setResult({ title: 'Compacting' })
     try {
       const nextResult = await executeCommand(command, {
         compact: async (instructions) => {
           if (!sessionId) throw new Error('当前会话暂无可整理的上下文')
-          await window.api.conversations.compact(sessionId, instructions)
-          await pi.refresh()
+          const { controller } = aui.thread.getState().extras as {
+            controller: PiThreadControllerLike
+          }
+          const disconnect = controller.connect()
+          try {
+            await window.api.conversations.compact(sessionId, instructions)
+            await controller.refresh()
+          } finally {
+            disconnect()
+          }
         },
         reload: async () => {
           setSkills(await window.api.reloadAgentSkills())
@@ -81,11 +89,9 @@ export function useComposerCommands() {
         newConversation: async () => {
           workspaces.setDraftWorkspaceId(workspaces.activeWorkspaceId)
           await aui.threads.switchToNewThread()
-          await aui.threads.item('main').initialize()
-          await workspaces.reload()
         },
         rename: async (title) => {
-          await aui.threadListItem.initialize()
+          if (!sessionId) throw new Error('发送第一条消息后再重命名会话')
           await aui.threadListItem.rename(title)
           await workspaces.reload()
         },

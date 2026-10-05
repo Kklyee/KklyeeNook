@@ -144,6 +144,39 @@ test('receives live events while the session subscription is still initializing'
   client.dispose()
 })
 
+test('publishes the native summary snapshot after compaction without adding a user message', async () => {
+  const { client, sessionRuntime, emit, projection } = setup()
+  const events: PiClientEvent[] = []
+  const unsubscribe = client.subscribe('session-1', (event) => events.push(event))
+  await vi.waitFor(() => expect(events).toHaveLength(1))
+  const summary = {
+    role: 'compactionSummary' as const,
+    summary: 'Preserved decisions',
+    tokensBefore: 42000,
+    timestamp: 3,
+  }
+  vi.mocked(sessionRuntime.getSnapshot).mockImplementation((metadata) => ({
+    metadata,
+    messages: [summary],
+  }))
+
+  emit({ type: 'compaction_start', reason: 'manual' })
+  emit({ type: 'compaction_end', aborted: false, willRetry: false })
+
+  expect(events.map((event) => event.type)).toEqual([
+    'snapshot',
+    'compaction_start',
+    'compaction_end',
+    'snapshot',
+  ])
+  expect(events.at(-1)).toMatchObject({ type: 'snapshot', snapshot: { messages: [summary] } })
+  expect(events.map((event) => event.seq)).toEqual([0, 1, 2, 3])
+  expect(sessionRuntime.sendMessage).not.toHaveBeenCalled()
+  expect(projection.project).not.toHaveBeenCalled()
+  unsubscribe()
+  client.dispose()
+})
+
 test('returns snapshots without rewriting the persisted transcript', async () => {
   const { client, projection } = setup()
   const snapshot = await client.getThread('session-1')

@@ -5,7 +5,7 @@ import type { CommandResult as Result } from '@/renderer/src/features/chat/comma
 export function CommandResult({ result, onClose }: { result?: Result; onClose(): void }) {
   if (!result) return null
   return (
-    <div role="status" className="material-raised rounded-2xl px-3.5 py-3 text-xs">
+    <div role="status" className="material-panel rounded-2xl px-3.5 py-3 text-xs">
       <div className="mb-2 flex items-center justify-between">
         <span className="font-medium">{result.title}</span>
         <Button
@@ -19,12 +19,12 @@ export function CommandResult({ result, onClose }: { result?: Result; onClose():
           <XIcon className="size-3.5 text-foreground/35" />
         </Button>
       </div>
-      {result.message && <p className="text-foreground/60">{result.message}</p>}
+      {result.message && <p className="text-muted-foreground">{result.message}</p>}
       {result.rows && (
         <dl className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-1.5">
           {result.rows.map(([label, value]) => (
             <div key={label} className="contents">
-              <dt className="text-foreground/45">{label}</dt>
+              <dt className="text-muted-foreground">{label}</dt>
               <dd>{value}</dd>
             </div>
           ))}

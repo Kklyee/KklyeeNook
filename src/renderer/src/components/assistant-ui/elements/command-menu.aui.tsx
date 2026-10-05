@@ -62,7 +62,7 @@ export function CommandMenu({ commands }: { commands: CommandDefinition[] }) {
               if (!visible.length) return null
               return (
                 <div key={kind}>
-                  <div className="px-2.5 py-1.5 text-[10px] font-medium tracking-wider text-foreground/40">
+                  <div className="px-2.5 py-1.5 text-[10px] font-medium tracking-wider text-muted-foreground">
                     {kind === 'system' ? 'COMMANDS' : 'SKILLS'}
                   </div>
                   {visible.map((command) => {
@@ -71,7 +71,7 @@ export function CommandMenu({ commands }: { commands: CommandDefinition[] }) {
                         <CommandIcon id={command.id} skill={kind === 'skill'} />
                         <div className="min-w-0 flex-1">
                           <div className="text-[13px] font-medium">{command.label}</div>
-                          <div className="truncate text-xs text-foreground/45">
+                          <div className="truncate text-xs text-muted-foreground">
                             {command.disabledReason ?? command.description}
                           </div>
                         </div>
@@ -98,6 +98,8 @@ export function CommandMenu({ commands }: { commands: CommandDefinition[] }) {
                         key={command.id}
                         item={items[index]!}
                         index={index}
+                        data-command-id={command.id}
+                        data-command-kind={command.kind}
                         className={className}
                       >
                         {content}

@@ -23,7 +23,10 @@ import {
   ComposerSend,
 } from '@/renderer/src/components/assistant-ui/elements/composer'
 import type { AgentContextUsage } from '@/shared/agent/agentContextUsage'
-import { DEFAULT_AGENT_COMPACTION_SETTINGS, type AgentCompactionSettings } from '@/shared/agent/agentConfig'
+import {
+  DEFAULT_AGENT_COMPACTION_SETTINGS,
+  type AgentCompactionSettings,
+} from '@/shared/agent/agentConfig'
 import { calculateAgentContextBudget } from '@/shared/agent/agentContextBudget'
 import {
   ModelSelectorContent,
@@ -38,6 +41,7 @@ import { Skeleton } from '@/renderer/src/components/ui/skeleton'
 import { cn } from '@/renderer/src/lib/utils'
 import { CommandMenu } from './command-menu.aui'
 import { CommandResult } from './command-result.aui'
+import { ContextCompactionProgress, ContextCompactionSummary } from './context-compaction.aui'
 import { useComposerCommands } from '@/renderer/src/features/chat/commands/useComposerCommands'
 import { parseSystemCommand } from '@/renderer/src/features/chat/commands/commandParser'
 import { formatMessageTimestamp, formatMessageTimestampFull } from '@/shared/formatMessageTimestamp'
@@ -74,6 +78,7 @@ import {
   createContext,
   useContext,
   type ComponentType,
+  type ComponentProps,
   type FC,
   type ReactNode,
   useMemo,
@@ -153,11 +158,12 @@ export const Thread: FC<ThreadProps> = ({
 }) => {
   const isEmpty = useAuiState((state) => !readOnly && isNewChatView(state))
   const contextValue = useMemo(() => ({ ...components, readOnly }), [components, readOnly])
+  const Root = readOnly ? ThreadRoot : ThreadWithCommands
 
   return (
     <StreamingThread>
       <ThreadComponentsContext.Provider value={contextValue}>
-        <ThreadRoot
+        <Root
           isEmpty={isEmpty}
           autoFocus={autoFocus}
           readOnly={readOnly}
@@ -181,6 +187,7 @@ const ThreadRoot: FC<{
   compactionSettings: AgentCompactionSettings
   isCompacting: boolean
   composerAccessory?: ReactNode
+  commandSurface?: ReturnType<typeof useComposerCommands>
 }> = ({
   isEmpty,
   autoFocus,
@@ -190,6 +197,7 @@ const ThreadRoot: FC<{
   compactionSettings,
   isCompacting,
   composerAccessory,
+  commandSurface,
 }) => {
   const { Welcome = ThreadWelcome } = useContext(ThreadComponentsContext)
 
@@ -224,6 +232,15 @@ const ThreadRoot: FC<{
 
           <div data-slot="aui_message-group" className="mb-14 flex flex-col gap-y-6 empty:hidden">
             <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
+            {(isCompacting || commandSurface?.result?.title === 'Compacting') && (
+              <ContextCompactionProgress />
+            )}
+            {commandSurface?.result?.title === '/compact' && (
+              <CommandResult
+                result={{ ...commandSurface.result, title: '上下文整理失败' }}
+                onClose={commandSurface.closeResult}
+              />
+            )}
           </div>
 
           {!readOnly && (
@@ -237,6 +254,7 @@ const ThreadRoot: FC<{
               <ThreadFollowupSuggestions />
               {composerAccessory}
               <Composer
+                commandSurface={commandSurface!}
                 autoFocus={autoFocus}
                 modelSelector={modelSelector}
                 contextUsage={contextUsage}
@@ -251,12 +269,21 @@ const ThreadRoot: FC<{
   )
 }
 
+const ThreadWithCommands: FC<ComponentProps<typeof ThreadRoot>> = (props) => {
+  const commandSurface = useComposerCommands()
+  return <ThreadRoot {...props} commandSurface={commandSurface} />
+}
+
 const ThreadMessage: FC = () => {
   const { AssistantMessage: AssistantMessageComponent = AssistantMessage, readOnly } =
     useContext(ThreadComponentsContext)
   const role = useAuiState((s) => s.message.role)
   const isEditing = useAuiState((s) => s.message.composer.isEditing)
+  const isCompactionSummary = useAuiState((s) =>
+    s.message.content.some((part) => part.type === 'data' && part.name === 'pi-compaction-summary'),
+  )
 
+  if (isCompactionSummary) return <ContextCompactionSummary />
   if (isEditing && !readOnly) return <EditComposer />
   if (role === 'user') return <UserMessage />
   return <AssistantMessageComponent />
@@ -288,17 +315,28 @@ const ThreadWelcome: FC = () => {
 }
 
 const Composer: FC<{
+  commandSurface: ReturnType<typeof useComposerCommands>
   autoFocus: boolean
   modelSelector?: ThreadProps['modelSelector']
   contextUsage?: AgentContextUsage
   compactionSettings: AgentCompactionSettings
   isCompacting: boolean
-}> = ({ autoFocus, modelSelector, contextUsage, compactionSettings, isCompacting }) => {
-  const { commands, result, closeResult, submit } = useComposerCommands()
+}> = ({
+  commandSurface,
+  autoFocus,
+  modelSelector,
+  contextUsage,
+  compactionSettings,
+  isCompacting,
+}) => {
+  const { commands, result, closeResult, submit } = commandSurface
 
   return (
     <div className="flex w-full flex-col gap-1.5">
-      <CommandResult result={result} onClose={closeResult} />
+      <CommandResult
+        result={result && ['Compacting', '/compact'].includes(result.title) ? undefined : result}
+        onClose={closeResult}
+      />
       <ComposerPrimitive.Unstable_TriggerPopoverRoot>
         <ComposerPrimitive.Root
           className="aui-composer-root  relative  flex w-full flex-col "
@@ -309,9 +347,7 @@ const Composer: FC<{
         >
           <QueuedMessages />
           <ComposerPrimitive.AttachmentDropzone
-            render={
-              <ComposerBar data-slot="aui_composer-shell" className="composer max-w-none" />
-            }
+            render={<ComposerBar data-slot="aui_composer-shell" className="composer max-w-none" />}
           >
             <ComposerAttachments />
             <ComposerPrimitive.Input
@@ -323,6 +359,15 @@ const Composer: FC<{
               aria-label="Message input"
               onKeyDown={(event) => {
                 if (event.nativeEvent.isComposing) return
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  const highlightedId = event.currentTarget.getAttribute('aria-activedescendant')
+                  const highlighted = highlightedId ? document.getElementById(highlightedId) : null
+                  if (highlighted?.dataset.commandKind === 'system') {
+                    event.preventDefault()
+                    void submit(false, `/${highlighted.dataset.commandId}`)
+                    return
+                  }
+                }
                 if (
                   event.key === 'Enter' &&
                   event.shiftKey &&
@@ -358,7 +403,9 @@ const ComposerAction: FC<{
   isCompacting: boolean
 }> = ({ onSend, modelSelector, contextUsage, compactionSettings, isCompacting }) => {
   const canSend = useAuiState((s) => s.composer.canSend)
-  const budget = calculateAgentContextBudget(contextUsage, compactionSettings, { compacting: isCompacting })
+  const budget = calculateAgentContextBudget(contextUsage, compactionSettings, {
+    compacting: isCompacting,
+  })
 
   return (
     <div className="aui-composer-action-wrapper relative flex items-center justify-between">
@@ -389,7 +436,9 @@ const ComposerAction: FC<{
           >
             正在整理上下文…
           </span>
-        ) : budget.tokens !== undefined && budget.contextWindow !== undefined && budget.contextWindow > 0 ? (
+        ) : budget.tokens !== undefined &&
+          budget.contextWindow !== undefined &&
+          budget.contextWindow > 0 ? (
           <ComposerContext budget={budget} />
         ) : null}
         <AuiIf condition={(s) => s.thread.capabilities.dictation}>
@@ -480,8 +529,10 @@ const MessageError: FC = () => {
 const AssistantMessage: FC = () => {
   const { readOnly } = useContext(ThreadComponentsContext)
   const active = useAuiState((state) => state.message.isLast && state.thread.isRunning)
-  const latest = useAuiState((state) =>
-    state.thread.messages.findLast((message) => message.role === 'assistant')?.id === state.message.id,
+  const latest = useAuiState(
+    (state) =>
+      state.thread.messages.findLast((message) => message.role === 'assistant')?.id ===
+      state.message.id,
   )
 
   const ACTION_BAR_PT = 'pt-1.5'
@@ -495,7 +546,9 @@ const AssistantMessage: FC = () => {
       data-streaming={active || undefined}
       className={cn(
         'relative -mb-7.5 pb-7.5',
-        latest ? '[content-visibility:visible]' : '[contain-intrinsic-size:auto_200px] [content-visibility:auto]',
+        latest
+          ? '[content-visibility:visible]'
+          : '[contain-intrinsic-size:auto_200px] [content-visibility:auto]',
       )}
     >
       <div
@@ -544,9 +597,17 @@ const AssistantMessageParts = memo(function AssistantMessageParts() {
           case 'data':
             return part.dataRendererUI
           case 'file':
-            return <div data-slot="aui_assistant-message-file" className="py-1"><File {...part} /></div>
+            return (
+              <div data-slot="aui_assistant-message-file" className="py-1">
+                <File {...part} />
+              </div>
+            )
           case 'image':
-            return <div data-slot="aui_assistant-message-image" className="py-1"><Image {...part} /></div>
+            return (
+              <div data-slot="aui_assistant-message-image" className="py-1">
+                <Image {...part} />
+              </div>
+            )
           default:
             return null
         }

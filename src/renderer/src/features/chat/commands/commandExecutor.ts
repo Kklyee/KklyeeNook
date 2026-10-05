@@ -17,7 +17,7 @@ export async function executeCommand(
   switch (command.definition.id) {
     case 'compact':
       await actions.compact(command.arguments)
-      return { title: 'Compact', message: '上下文已整理' }
+      return undefined
     case 'reload':
       await actions.reload()
       return { title: 'Reload', message: 'Skills 和 Agent resources 已重新加载' }

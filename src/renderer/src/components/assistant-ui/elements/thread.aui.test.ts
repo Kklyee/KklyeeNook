@@ -39,6 +39,10 @@ vi.mock('@assistant-ui/react', () => {
   }
 })
 
+vi.mock('@/renderer/src/features/chat/commands/useComposerCommands', () => ({
+  useComposerCommands: () => ({}),
+}))
+
 import { Thread } from './thread.aui'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true

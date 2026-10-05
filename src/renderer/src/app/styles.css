@@ -20,7 +20,7 @@
   --ui-surface: oklch(0.98 0.002 250 / 0.76);
   --ui-surface-muted: oklch(0.945 0.003 250 / 0.7);
   --ui-control: oklch(0.985 0.002 250 / 0.84);
-  --ui-surface-raised: oklch(0.995 0.001 250 / 0.92);
+  --ui-surface-raised: oklch(0.995 0.001 250 / 0.97);
 
   --ui-fg-muted: oklch(0.49 0.007 250);
   --ui-fg-faint: oklch(0.63 0.005 250);
@@ -65,7 +65,7 @@
   --ui-surface: oklch(0.235 0.004 250 / 0.72);
   --ui-surface-muted: oklch(0.26 0.004 250 / 0.64);
   --ui-control: oklch(0.285 0.004 250 / 0.78);
-  --ui-surface-raised: oklch(0.3 0.004 250 / 0.9);
+  --ui-surface-raised: oklch(0.3 0.004 250 / 0.96);
 
   --ui-fg-muted: oklch(0.69 0.004 250);
   --ui-fg-faint: oklch(0.52 0.004 250);
@@ -444,6 +444,11 @@ body,
     background: var(--ui-surface-raised);
     border: 1px solid var(--ui-border-strong);
     box-shadow: var(--ui-shadow-raised);
+    backdrop-filter: blur(20px) saturate(110%);
+  }
+
+  .glass-disabled .material-raised {
+    backdrop-filter: none;
   }
 
   .sidebar-accessory {
