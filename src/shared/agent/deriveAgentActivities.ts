@@ -12,6 +12,7 @@ export function deriveAgentActivities(
   const approvals = new Map<string, number>()
   let thinking: Extract<AgentActivity, { type: 'thinking' }> | undefined
   let pendingInference = false
+  let stepReasoning = true
 
   const endThinking = (timestamp: number, failed = false) => {
     if (!thinking) return
@@ -34,11 +35,12 @@ export function deriveAgentActivities(
     const { event, timestamp } = record
     switch (event.type) {
       case 'inference_started':
-        if (!pendingInference || !thinking) startThinking(record)
+        if (stepReasoning && (!pendingInference || !thinking)) startThinking(record)
         pendingInference = false
         break
       case 'step_started':
-        startThinking(record)
+        stepReasoning = event.reasoning !== false
+        if (stepReasoning) startThinking(record)
         pendingInference = true
         break
       case 'thinking_delta':

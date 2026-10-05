@@ -32,7 +32,7 @@ export class ExecutionBoundaryTracker {
       : this.pendingInputs.filter((input) => input.delivery === 'initial')
   }
 
-  onPiTurnStart(piTurnIndex: number, deliveries: readonly InputDelivery[]): void {
+  onPiTurnStart(piTurnIndex: number, deliveries: readonly InputDelivery[], reasoning?: boolean): void {
     if (this.activeStep) throw new Error('A Step is already active')
     const pending = [...this.pendingInputs]
     const inputs = deliveries.map((delivery) => {
@@ -54,6 +54,7 @@ export class ExecutionBoundaryTracker {
       ordinal: step.ordinal,
       piTurnIndex,
       acceptedInputIds: step.acceptedInputIds,
+      reasoning,
     })
   }
 

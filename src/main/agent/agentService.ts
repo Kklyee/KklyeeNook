@@ -664,7 +664,7 @@ export class AgentService {
     const boundary = this.boundaries.get(runId)!
     switch (event.type) {
       case 'pi_turn_start':
-        boundary.onPiTurnStart(event.piTurnIndex, event.deliveries)
+        boundary.onPiTurnStart(event.piTurnIndex, event.deliveries, event.reasoning)
         return
       case 'pi_turn_end':
         boundary.onPiTurnEnd(event.result)

@@ -599,20 +599,20 @@ test('maps real Pi turns, batched duplicate steering and follow-up to execution 
   await sessionRuntime.sendMessage({ content: 'same', streamingBehavior: 'followUp' })
   await sessionRuntime.sendMessage({ content: 'second follow-up' })
   expect(session.setFollowUpMode).toHaveBeenCalledWith('one-at-a-time')
-  expect(boundaries).toEqual([{ type: 'pi_turn_start', piTurnIndex: 0, deliveries: ['initial'] }])
+  expect(boundaries).toEqual([{ type: 'pi_turn_start', piTurnIndex: 0, deliveries: ['initial'], reasoning: false }])
   session.emit({ type: 'auto_retry_start', attempt: 1, maxAttempts: 3, delayMs: 0, errorMessage: 'retry' })
   session.emit({ type: 'auto_retry_end', attempt: 1, success: true })
   expect(boundaries).toHaveLength(1)
   releaseFirstRequest()
   await completion
   expect(boundaries).toEqual([
-    { type: 'pi_turn_start', piTurnIndex: 0, deliveries: ['initial'] },
+    { type: 'pi_turn_start', piTurnIndex: 0, deliveries: ['initial'], reasoning: false },
     { type: 'pi_turn_end', result: 'committed' },
-    { type: 'pi_turn_start', piTurnIndex: 1, deliveries: ['steer', 'steer', 'steer'] },
+    { type: 'pi_turn_start', piTurnIndex: 1, deliveries: ['steer', 'steer', 'steer'], reasoning: false },
     { type: 'pi_turn_end', result: 'committed' },
-    { type: 'pi_turn_start', piTurnIndex: 2, deliveries: ['follow-up'] },
+    { type: 'pi_turn_start', piTurnIndex: 2, deliveries: ['follow-up'], reasoning: false },
     { type: 'pi_turn_end', result: 'committed' },
-    { type: 'pi_turn_start', piTurnIndex: 3, deliveries: ['follow-up'] },
+    { type: 'pi_turn_start', piTurnIndex: 3, deliveries: ['follow-up'], reasoning: false },
     { type: 'pi_turn_end', result: 'committed' },
     { type: 'pi_agent_settled' },
   ])

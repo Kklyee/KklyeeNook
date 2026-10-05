@@ -7,7 +7,14 @@ export type InputDelivery = 'initial' | 'steer' | 'follow-up'
 
 export type AgentEvent =
   | { type: 'user_message'; inputId: string; delivery: InputDelivery; text: string }
-  | { type: 'step_started'; stepId: string; ordinal: number; piTurnIndex: number; acceptedInputIds: string[] }
+  | {
+      type: 'step_started'
+      stepId: string
+      ordinal: number
+      piTurnIndex: number
+      acceptedInputIds: string[]
+      reasoning?: boolean
+    }
   | { type: 'step_ended'; stepId: string; result: StepResult }
   | { type: 'system_prompt'; text: string }
   | { type: 'agent_started' }

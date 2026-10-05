@@ -912,7 +912,12 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
   private startPendingPiTurn(): void {
     if (!this.pendingPiTurn) return
     this.pendingPiTurn = false
-    this.publishExecutionEvent({ type: 'pi_turn_start', piTurnIndex: this.turnIndex, deliveries: this.deliveredInputs })
+    this.publishExecutionEvent({
+      type: 'pi_turn_start',
+      piTurnIndex: this.turnIndex,
+      deliveries: this.deliveredInputs,
+      reasoning: this.getPiSession().thinkingLevel !== 'off',
+    })
   }
 
   private publishExecutionEvent(event: ExecutionBoundaryEvent): void {

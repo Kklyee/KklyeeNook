@@ -23,7 +23,7 @@ test('keeps reasoning per inference, ends thinking at tool start, and retains to
   const records = events([
     [
       100,
-      { type: 'step_started', stepId: 'step', ordinal: 1, piTurnIndex: 1, acceptedInputIds: [] },
+      { type: 'step_started', stepId: 'step', ordinal: 1, piTurnIndex: 1, acceptedInputIds: [], reasoning: true },
     ],
     [110, { type: 'inference_started' }],
     [120, { type: 'thinking_delta', text: 'Inspect the renderer.\n' }],
@@ -132,6 +132,24 @@ test('ends reasoning before text and separates interleaved reasoning and the nex
     { type: 'thinking', content: ' More detail.', startedAt: 170, endedAt: 200 },
     { type: 'thinking', content: 'Second cycle.', startedAt: 300, endedAt: 400 },
   ])
+})
+
+test('skips the thinking placeholder when the step runs without reasoning', () => {
+  const records = events([
+    [
+      100,
+      { type: 'step_started', stepId: 'step', ordinal: 1, piTurnIndex: 0, acceptedInputIds: [], reasoning: false },
+    ],
+    [110, { type: 'inference_started' }],
+    [200, { type: 'text_delta', text: 'done' }],
+    [
+      300,
+      { type: 'tool_started', call: { id: 'read', toolName: 'read', args: { path: 'file.ts' } } },
+    ],
+    [400, { type: 'inference_started' }],
+    [500, { type: 'agent_completed' }],
+  ])
+  expect(deriveAgentActivities(records).map((activity) => activity.type)).toEqual(['read'])
 })
 
 test('uses approval as current activity and counts its wait until resolution', () => {

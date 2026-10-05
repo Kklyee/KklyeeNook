@@ -5,7 +5,7 @@ import type { InputDelivery } from '@/shared/agent/agentEvent'
 import type { StepResult } from '@/shared/agent/agentStep'
 
 export type ExecutionBoundaryEvent =
-  | { type: 'pi_turn_start'; piTurnIndex: number; deliveries: InputDelivery[] }
+  | { type: 'pi_turn_start'; piTurnIndex: number; deliveries: InputDelivery[]; reasoning?: boolean }
   | { type: 'pi_turn_end'; result: StepResult }
   | { type: 'pi_agent_settled' }
 
