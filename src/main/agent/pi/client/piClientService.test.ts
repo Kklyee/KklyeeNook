@@ -43,6 +43,7 @@ function setup(running = false) {
     })),
     isRunning: vi.fn(() => running),
     sendMessage: vi.fn(),
+    compact: vi.fn(),
     runMessage: vi.fn(),
     cancel: vi.fn(),
     clearQueue: vi.fn(() => ({ steering: [], followUp: [] })),

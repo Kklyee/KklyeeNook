@@ -33,6 +33,7 @@ export type AgentBackendStartupStage =
   | 'ready'
 
 export type AgentBackendRequest =
+  | { action: 'conversation:compact'; id: string; instructions?: string }
   | { action: 'conversation:permission'; id: string; mode: PermissionMode }
   | { action: 'conversation:list' }
   | { action: 'conversation:create'; title?: string; workspaceId: string | null }

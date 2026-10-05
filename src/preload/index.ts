@@ -76,6 +76,7 @@ const api = {
     },
   },
   conversations: {
+    compact(id: string, instructions?: string): Promise<void> { return ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_COMPACT, { id, instructions }) },
     setPermission(id: string, mode: PermissionMode): Promise<AgentSessionSummary> { return ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_PERMISSION, { id, mode }) },
     list(): Promise<AgentSessionSummary[]> { return ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_LIST) },
     create(input: { title?: string; workspaceId: string | null }): Promise<AgentSessionSummary> { return ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_CREATE, input) },

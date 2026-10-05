@@ -36,7 +36,10 @@ import { TooltipIconButton } from '@/renderer/src/components/assistant-ui/elemen
 import { Button } from '@/renderer/src/components/ui/button'
 import { Skeleton } from '@/renderer/src/components/ui/skeleton'
 import { cn } from '@/renderer/src/lib/utils'
-import type { AgentSkill } from '@/shared/agent/agentSkill'
+import { CommandMenu } from './command-menu.aui'
+import { CommandResult } from './command-result.aui'
+import { useComposerCommands } from '@/renderer/src/features/chat/commands/useComposerCommands'
+import { parseSystemCommand } from '@/renderer/src/features/chat/commands/commandParser'
 import { formatMessageTimestamp, formatMessageTimestampFull } from '@/shared/formatMessageTimestamp'
 import {
   ActionBarMorePrimitive,
@@ -49,11 +52,8 @@ import {
   MessagePrimitive,
   groupPartByType,
   ThreadPrimitive,
-  type Unstable_DirectiveFormatter,
   type FileMessagePartComponent,
   type ImageMessagePartComponent,
-  unstable_useSlashCommandAdapter,
-  useAui,
   useAuiState,
 } from '@assistant-ui/react'
 import {
@@ -68,7 +68,6 @@ import {
   MoreHorizontalIcon,
   PencilIcon,
   RefreshCwIcon,
-  SparklesIcon,
   SquareIcon,
 } from 'lucide-react'
 import {
@@ -77,9 +76,7 @@ import {
   type ComponentType,
   type FC,
   type ReactNode,
-  useEffect,
   useMemo,
-  useState,
   memo,
 } from 'react'
 
@@ -108,11 +105,6 @@ export type ThreadProps = {
 }
 
 const EMPTY_COMPONENTS: ThreadComponents = {}
-
-const SKILL_COMMAND_FORMATTER: Unstable_DirectiveFormatter = {
-  serialize: (item) => `/${item.id}`,
-  parse: (text) => [{ kind: 'text', text }],
-}
 
 const ThreadComponentsContext = createContext<ThreadComponents>(EMPTY_COMPONENTS)
 
@@ -302,28 +294,17 @@ const Composer: FC<{
   compactionSettings: AgentCompactionSettings
   isCompacting: boolean
 }> = ({ autoFocus, modelSelector, contextUsage, compactionSettings, isCompacting }) => {
-  const aui = useAui()
-  const skills = useAvailableSkills()
-  const commands = useMemo(
-    () =>
-      skills.map((skill) => ({
-        id: skill.id,
-        label: `/${skill.id}`,
-        description: skill.description ?? skill.name,
-        execute: () => undefined,
-      })),
-    [skills],
-  )
-  const slash = unstable_useSlashCommandAdapter({ commands })
+  const { commands, result, closeResult, submit } = useComposerCommands()
 
   return (
     <div className="flex w-full flex-col gap-1.5">
+      <CommandResult result={result} onClose={closeResult} />
       <ComposerPrimitive.Unstable_TriggerPopoverRoot>
         <ComposerPrimitive.Root
           className="aui-composer-root  relative  flex w-full flex-col "
           onSubmit={(event) => {
             event.preventDefault()
-            aui.composer.send({ steer: false })
+            void submit()
           }}
         >
           <QueuedMessages />
@@ -340,53 +321,28 @@ const Composer: FC<{
               autoFocus={autoFocus}
               enterKeyHint="send"
               aria-label="Message input"
+              onKeyDown={(event) => {
+                if (event.nativeEvent.isComposing) return
+                if (
+                  event.key === 'Enter' &&
+                  event.shiftKey &&
+                  (event.ctrlKey || event.metaKey) &&
+                  parseSystemCommand(event.currentTarget.value)
+                ) {
+                  event.preventDefault()
+                  void submit(true)
+                }
+              }}
             />
             <ComposerAction
+              onSend={() => void submit()}
               modelSelector={modelSelector}
               contextUsage={contextUsage}
               compactionSettings={compactionSettings}
               isCompacting={isCompacting}
             />
           </ComposerPrimitive.AttachmentDropzone>
-          {skills.length > 0 && (
-            <ComposerPrimitive.Unstable_TriggerPopover
-              char="/"
-              adapter={slash.adapter}
-              className={cn(
-                'material-raised',
-                'absolute inset-x-0 bottom-full z-20 mb-2 max-h-72 overflow-y-auto rounded-2xl p-1.5',
-              )}
-              aria-label="Skills"
-            >
-              {/*<div className="text-foreground/40 px-2.5 py-1.5 text-[11px] font-medium">Skills</div>*/}
-              <ComposerPrimitive.Unstable_TriggerPopover.Action
-                {...slash.action}
-                formatter={SKILL_COMMAND_FORMATTER}
-              />
-              <ComposerPrimitive.Unstable_TriggerPopoverItems>
-                {(items) =>
-                  items.length > 0 ? (
-                    items.map((item, index) => (
-                      <ComposerPrimitive.Unstable_TriggerPopoverItem
-                        key={item.id}
-                        item={item}
-                        index={index}
-                        className="data-[highlighted]:bg-hover data-[highlighted]:text-foreground active:bg-active outline-none focus-visible:ring-1 focus-visible:ring-ring text-foreground flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-start text-[13.5px] transition-colors"
-                      >
-                        <SparklesIcon className="text-foreground/35 size-3.5 shrink-0" />
-                        <span className="font-medium">{item.label}</span>
-                        <span className="text-foreground/45 flex-1 truncate text-xs">
-                          {item.description}
-                        </span>
-                      </ComposerPrimitive.Unstable_TriggerPopoverItem>
-                    ))
-                  ) : (
-                    <p className="text-foreground/40 px-2.5 py-2 text-xs">没有匹配的 Skill</p>
-                  )
-                }
-              </ComposerPrimitive.Unstable_TriggerPopoverItems>
-            </ComposerPrimitive.Unstable_TriggerPopover>
-          )}
+          <CommandMenu commands={commands} />
         </ComposerPrimitive.Root>
       </ComposerPrimitive.Unstable_TriggerPopoverRoot>
       <WorkspaceComposerLabel />
@@ -394,35 +350,14 @@ const Composer: FC<{
   )
 }
 
-function useAvailableSkills(): AgentSkill[] {
-  const [skills, setSkills] = useState<AgentSkill[]>([])
-
-  useEffect(() => {
-    if (!window.api) return undefined
-
-    let cancelled = false
-    void window.api.listAgentSkills().then(
-      (nextSkills) => {
-        if (!cancelled) setSkills(nextSkills)
-      },
-      () => undefined,
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  return skills
-}
-
 const ComposerAction: FC<{
+  onSend(): void
   modelSelector?: ThreadProps['modelSelector']
   contextUsage?: AgentContextUsage
   compactionSettings: AgentCompactionSettings
   isCompacting: boolean
-}> = ({ modelSelector, contextUsage, compactionSettings, isCompacting }) => {
+}> = ({ onSend, modelSelector, contextUsage, compactionSettings, isCompacting }) => {
   const canSend = useAuiState((s) => s.composer.canSend)
-  const aui = useAui()
   const budget = calculateAgentContextBudget(contextUsage, compactionSettings, { compacting: isCompacting })
 
   return (
@@ -497,7 +432,7 @@ const ComposerAction: FC<{
           <ComposerPrimitive.Send
             onClick={(event) => {
               event.preventDefault()
-              aui.composer.send({ steer: false })
+              onSend()
             }}
             render={
               <ComposerSend

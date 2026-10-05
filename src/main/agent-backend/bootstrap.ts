@@ -187,6 +187,12 @@ export async function createAgentBackend(
       baseUrl: server.baseUrl,
       async handleRequest(request) {
         switch (request.action) {
+          case 'conversation:compact': {
+            const snapshot = await piClientService.getThread(request.id)
+            if (snapshot.metadata.status === 'running') throw new Error('运行中无法整理上下文')
+            await sessionRuntimeManager.getOrCreate(request.id).compact(request.instructions)
+            return undefined
+          }
           case 'tool-result:read':
             return (await toolResultStore.load(request.resultRef)).result
           case 'conversation:permission': {

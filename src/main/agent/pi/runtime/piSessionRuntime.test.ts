@@ -55,6 +55,7 @@ function fakeSession() {
       sessionListener?.(event)
     },
     prompt: vi.fn(),
+    compact: vi.fn(),
     abort: vi.fn(),
     clearQueue: vi.fn(() => ({ steering: [], followUp: [] })),
     setModel: vi.fn(),
@@ -98,6 +99,40 @@ function fakeSessionManager(
 ) {
   return { buildSessionContext: vi.fn(() => context), getBranch: vi.fn(() => branch) }
 }
+
+test('manually compacts with instructions without sending or queueing a user message', async () => {
+  const session = fakeSession()
+  vi.mocked(createAgentSession).mockResolvedValue({ session } as never)
+  vi.mocked(SessionManager.create).mockReturnValue(fakeSessionManager() as never)
+  vi.mocked(ModelRuntime.create).mockResolvedValue({
+    registerProvider: vi.fn(), unregisterProvider: vi.fn(), setRuntimeApiKey: vi.fn(),
+    getModel: () => ({ provider: 'custom', id: 'model-1' }),
+  } as never)
+  const runtime = new PiSessionRuntime(
+    'session-1',
+    new AgentConfigStore({ model: { provider: 'custom', modelID: 'model-1', baseUrl: 'https://example.test', thinkingLevel: 'off' }, tools: { enabled: [] } }),
+    { getApiKey: () => 'secret' } as unknown as CredentialStore,
+    { findBySessionId: vi.fn(), save: vi.fn() } as unknown as AgentRuntimeStateRepo,
+    new ToolRegistry(), 'sessions',
+  )
+  try {
+    await runtime.compact('preserve decisions')
+    expect(session.compact).toHaveBeenCalledWith('preserve decisions')
+    await runtime.compact('')
+    expect(session.compact).toHaveBeenLastCalledWith(undefined)
+    session.isStreaming = true
+    await expect(runtime.compact()).rejects.toThrow('运行中无法整理上下文')
+    session.isStreaming = false
+    session.isCompacting = true
+    await expect(runtime.compact()).rejects.toThrow('运行中无法整理上下文')
+    expect(session.compact).toHaveBeenCalledTimes(2)
+    expect(session.prompt).not.toHaveBeenCalled()
+    expect(session.followUp).not.toHaveBeenCalled()
+    expect(session.steer).not.toHaveBeenCalled()
+  } finally {
+    runtime.dispose()
+  }
+})
 
 test('reports a product run as running before Pi begins streaming', async () => {
   const session = fakeSession()

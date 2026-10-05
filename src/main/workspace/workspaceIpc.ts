@@ -29,6 +29,10 @@ export function registerWorkspaceIpc(window: BrowserWindow, backend: AgentBacken
     trusted(event)
     return backend.request({ action: 'conversation:list' })
   })
+  ipcMain.handle(IPC_CHANNELS.CONVERSATION_COMPACT, (event, input: { id: string; instructions?: string }) => {
+    trusted(event)
+    return backend.request({ action: 'conversation:compact', ...input })
+  })
   ipcMain.handle(IPC_CHANNELS.CONVERSATION_CREATE, (event, input: { title?: string; workspaceId: string | null }) => {
     trusted(event)
     return backend.request({ action: 'conversation:create', ...input })
@@ -39,6 +43,7 @@ export function registerWorkspaceIpc(window: BrowserWindow, backend: AgentBacken
     return backend.request({ action: 'conversation:permission', ...input })
   })
   return () => {
+    ipcMain.removeHandler(IPC_CHANNELS.CONVERSATION_COMPACT)
     for (const channel of [IPC_CHANNELS.CONVERSATION_PERMISSION, IPC_CHANNELS.CONVERSATION_LIST, IPC_CHANNELS.CONVERSATION_CREATE, IPC_CHANNELS.WORKSPACE_LIST, IPC_CHANNELS.WORKSPACE_PICK, IPC_CHANNELS.WORKSPACE_ATTACH, IPC_CHANNELS.WORKSPACE_DETACH]) ipcMain.removeHandler(channel)
   }
 }

@@ -111,6 +111,7 @@ export interface PiSessionRuntimePort {
   getContextUsage(): AgentContextUsage | undefined
   getSnapshot(metadata: PiThreadMetadata): PiThreadSnapshot
   isRunning(): boolean
+  compact(customInstructions?: string): Promise<void>
   sendMessage(input: PiSendMessageInput): Promise<void>
   runMessage(
     input: PiSendMessageInput,
@@ -290,6 +291,13 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
       session?.isCompacting ||
       session?.isRetrying,
     )
+  }
+
+  async compact(customInstructions?: string): Promise<void> {
+    if (this.isRunning()) throw new Error('运行中无法整理上下文')
+    await this.initialize()
+    if (this.isRunning()) throw new Error('运行中无法整理上下文')
+    await this.getPiSession().compact(customInstructions || undefined)
   }
 
   async sendMessage(input: PiSendMessageInput): Promise<void> {

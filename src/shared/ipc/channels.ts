@@ -2,6 +2,7 @@ export type WindowMenu = 'application' | 'edit'
 export type WindowMenuAction = 'settings'
 
 export const IPC_CHANNELS = {
+  CONVERSATION_COMPACT: 'conversation:compact',
   WALLPAPER_GET: 'wallpaper:get',
   WALLPAPER_CHOOSE: 'wallpaper:choose',
   WALLPAPER_CLEAR: 'wallpaper:clear',

@@ -50,6 +50,7 @@ interface API {
     readWorkspaceFile(request: PreviewWorkspaceFileRequest): Promise<WorkspaceFilePreview>
   }
   conversations: {
+    compact(id: string, instructions?: string): Promise<void>
     setPermission(id: string, mode: PermissionMode): Promise<AgentSessionSummary>
     list(): Promise<AgentSessionSummary[]>
     create(input: { title?: string; workspaceId: string | null }): Promise<AgentSessionSummary>

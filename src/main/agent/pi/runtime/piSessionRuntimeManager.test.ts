@@ -11,6 +11,7 @@ function createFakeRuntime(): PiSessionRuntimePort {
     getSnapshot: vi.fn(),
     isRunning: vi.fn(() => false),
     sendMessage: vi.fn(),
+    compact: vi.fn(),
     runMessage: vi.fn(),
     cancel: vi.fn(),
     clearQueue: vi.fn(() => ({ steering: [], followUp: [] })),
