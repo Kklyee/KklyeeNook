@@ -56,6 +56,7 @@
   --ui-overlay: oklch(0.15 0.006 250 / 0.16);
   --ui-bg-solid: oklch(0.975 0.003 250);
   --ui-titlebar: oklch(0.94 0.003 250 / 0.65);
+  --markdown-accent: oklch(0.8 0.09 255);
 }
 
 .dark {

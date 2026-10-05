@@ -101,7 +101,7 @@ export function ConversationMap({
               className={cn(
                 'w-3 rounded-full transition-[width,height,background-color] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none',
                 current
-                  ? 'bg-foreground/90 h-[3px] group-focus-within/rail:w-6 group-hover/rail:w-6'
+                  ? 'bg-(--markdown-accent)/90 h-[3px] group-focus-within/rail:w-6 group-hover/rail:w-6'
                   : cn(
                       'group-hover:bg-foreground/70 group-focus-visible:bg-foreground/70 h-0.5',
                       'group-hover:w-6! group-focus-visible:w-6!',
@@ -121,8 +121,8 @@ export function ConversationMap({
             <PreviewCard.Positioner side={side} sideOffset={10}>
               <PreviewCard.Popup
                 className={cn(
-                  'material-raised',
-                  'z-50 w-60 origin-(--transform-origin) rounded-2xl p-3.5 outline-none',
+                  'material-control',
+                  'z-50 w-60 origin-(--transform-origin)  p-3.5 outline-none',
                   'transition-[opacity,scale] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none',
                   'data-[starting-style]:scale-[0.97] data-[starting-style]:opacity-0',
                   'data-[ending-style]:scale-[0.97] data-[ending-style]:opacity-0',
