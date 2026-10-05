@@ -69,8 +69,8 @@ export function ThreadSidebar({
   const canCollapse = props.collapsible !== 'none'
 
   return (
-    <Sidebar className={cn('border-border', className)} {...props}>
-      <SidebarContent className="px-2 pt-2 pb-2 group-data-[collapsible=icon]:px-1.5">
+    <Sidebar className={cn('border-border ', className)} {...props}>
+      <SidebarContent className="px-2  pt-2 pb-2  group-data-[collapsible=icon]:px-1.5">
         <ThreadList />
       </SidebarContent>
       {canCollapse && <SidebarRail />}

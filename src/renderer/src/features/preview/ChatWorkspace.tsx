@@ -36,7 +36,7 @@ export function ChatWorkspace({ children }: { children: ReactNode }) {
         data-slot="primary-pane"
         className={cn(
           'relative flex min-h-0 min-w-0 flex-1 flex-col',
-          focused && 'hidden',
+          focused && 'hidden ',
           left && 'order-3',
         )}
       >
@@ -62,7 +62,9 @@ export function ChatWorkspace({ children }: { children: ReactNode }) {
                 if (event.currentTarget.hasPointerCapture(event.pointerId)) resizeAt(event)
               }}
               onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
-              onPointerCancel={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
+              onPointerCancel={(event) =>
+                event.currentTarget.releasePointerCapture(event.pointerId)
+              }
               onKeyDown={(event) => {
                 if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
                 event.preventDefault()

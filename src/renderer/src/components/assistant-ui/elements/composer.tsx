@@ -157,9 +157,7 @@ export function ComposerMenuItem({
       data-active={active || undefined}
       className={cn(
         'flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-[13.5px] text-foreground outline-none transition-colors active:bg-active focus-visible:ring-1 focus-visible:ring-ring',
-        active
-          ? 'bg-selected hover:bg-selected text-foreground'
-          : 'hover:bg-hover',
+        active ? 'bg-selected hover:bg-selected text-foreground' : 'hover:bg-hover',
         className,
       )}
       {...props}
@@ -294,7 +292,7 @@ export function ComposerInput({
         onSubmit?.()
       }}
       className={cn(
-        'placeholder:text-foreground/35 min-h-11 w-full bg-transparent px-3 text-[15px] caret-blue-500 outline-none dark:caret-blue-400',
+        'text-foreground placeholder:text-foreground/35 min-h-11 w-full bg-transparent px-3 text-[15px] caret-primary outline-none',
         className,
       )}
       {...props}
@@ -556,14 +554,18 @@ export function ComposerSend({
       data-slot="composer-send"
       className={cn(
         'grid size-8 place-items-center rounded-full',
-        streaming || !idle
-          ? inkButton
-          : 'bg-foreground text-black dark:bg-foreground transition-colors',
+        'bg-brand text-brand-foreground transition-[opacity,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:opacity-90 active:scale-[0.96] motion-reduce:transition-none',
         className,
       )}
       {...props}
     >
-      <ArrowUpIcon className={cn(iconSwap, 'size-4', streaming ? iconSwapOut : iconSwapIn)} />
+      <ArrowUpIcon
+        className={cn(
+          iconSwap,
+          'size-4 stroke-brand-foreground',
+          streaming ? iconSwapOut : iconSwapIn,
+        )}
+      />
       <SquareIcon
         className={cn(iconSwap, 'size-3 fill-current', streaming ? iconSwapIn : iconSwapOut)}
       />

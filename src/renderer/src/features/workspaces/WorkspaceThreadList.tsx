@@ -364,9 +364,9 @@ function WorkspaceGroupIcon({ open }: { open: boolean }) {
   const Chevron = open ? ChevronDownIcon : ChevronRightIcon
   const Folder = open ? FolderOpenIcon : FolderIcon
   return (
-    <span className="flex shrink-0 items-center gap-1.5">
+    <span className="flex shrink-0 items-center  gap-1.5">
       <Chevron className="size-3" strokeWidth={1.5} />
-      <Folder className="size-3.5" strokeWidth={1.5} />
+      <Folder className={cn('size-3.5', open && 'stroke-brand')}  strokeWidth={1.5} />
     </span>
   )
 }

@@ -205,7 +205,7 @@ const ThreadRoot: FC<{
     <ThreadPrimitive.Root
       className="aui-root aui-thread-root material-base @container flex h-full min-h-0 flex-col"
       style={{
-        ['--thread-max-width' as string]: '44rem',
+        ['--thread-max-width' as string]: '46rem',
         ['--composer-bg' as string]: 'var(--color-card)',
         ['--composer-radius' as string]: '1.5rem',
         ['--composer-padding' as string]: '8px',
@@ -213,7 +213,7 @@ const ThreadRoot: FC<{
     >
       <ThreadScrollViewport
         turnAnchor="bottom"
-        data-slot="aui_thread-viewport"
+        data-slot="aui_thread-viewport "
         className="relative flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto [overflow-anchor:none] [scroll-behavior:auto] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         <ConversationMapAui />
@@ -352,7 +352,7 @@ const Composer: FC<{
             <ComposerAttachments />
             <ComposerPrimitive.Input
               placeholder="描述一个任务，或提出一个问题…"
-              className="aui-composer-input placeholder:text-foreground/35 max-h-48 min-h-11 w-full resize-none bg-transparent px-3 py-1 text-[15px] leading-6 caret-blue-500 outline-none dark:caret-blue-400"
+              className="aui-composer-input text-foreground placeholder:text-foreground/35 max-h-48 min-h-11 w-full resize-none bg-transparent px-3 py-1 text-[15px] leading-6 caret-primary outline-none"
               rows={1}
               autoFocus={autoFocus}
               enterKeyHint="send"
@@ -488,7 +488,7 @@ const ComposerAction: FC<{
                 streaming={false}
                 idle={canSend}
                 disabled={!canSend}
-                className="aui-composer-send"
+                className="aui-composer-send bg-brand text-brand-foreground"
                 title="发送；运行时排队，Ctrl/Cmd+Shift+Enter 调整当前任务"
               />
             }
@@ -503,7 +503,7 @@ const ComposerAction: FC<{
                 type="button"
                 variant="default"
                 size="icon"
-                className="aui-composer-cancel size-7 rounded-full bg-foreground text-black hover:bg-foreground transition-colors dark:bg-foreground"
+                className="aui-composer-cancel size-8 rounded-full bg-brand text-brand-foreground transition-colors"
                 aria-label="Stop generating"
               />
             }

@@ -31,7 +31,6 @@ import {
 } from 'react'
 
 export const ThreadList: FC = () => <WorkspaceThreadList />
-
 export const ThreadListRoot: FC<ComponentPropsWithoutRef<typeof ThreadListPrimitive.Root>> = ({
   className,
   ...props
