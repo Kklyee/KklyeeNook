@@ -1,7 +1,7 @@
 import { memo, useMemo, useState } from 'react'
 import { useAui, useAuiState, type ThreadMessage } from '@assistant-ui/react'
 import type { PiRuntimeExtras } from '@assistant-ui/react-pi'
-import { CheckIcon, LoaderCircleIcon } from 'lucide-react'
+import { CheckIcon } from 'lucide-react'
 import type { AgentActivity } from '@/shared/agent/agentActivity'
 import { ToolTimeline } from '@/renderer/src/components/assistant-ui/elements/tool-timeline'
 import { currentActivity } from '@/shared/agent/agentActivityTiming'
@@ -193,9 +193,9 @@ function ActivityHeader({
   return (
     <ActivityCrossfade transitionKey={transitionKey}>
       {!current ? (
-        <LoaderCircleIcon
+        <span
           aria-hidden="true"
-          className="size-3.5 shrink-0 animate-spin text-faint-foreground"
+          className="size-2 shrink-0 animate-pulse rounded-full bg-current motion-reduce:animate-none"
         />
       ) : completed ? (
         <CheckIcon aria-hidden="true" className="size-3.5 shrink-0" />
