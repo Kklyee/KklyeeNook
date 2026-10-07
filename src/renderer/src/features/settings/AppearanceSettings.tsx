@@ -27,9 +27,7 @@ export function AppearanceSettings() {
             ))}
           </div>
         </SettingsField>
-      </SettingsCard>
-      <SettingsCard>
-        <SettingsField label="半透明毛玻璃" description="为窗口和侧栏启用半透明材质。关闭后使用实色背景，保留壁纸选择。">
+        <SettingsField label="半透明毛玻璃" description="让窗口和侧栏呈现半透明效果。">
           <Button
             variant="ghost"
             className="h-5 w-9 justify-self-end rounded-full border-0 p-0 hover:bg-transparent active:bg-transparent"
@@ -43,9 +41,7 @@ export function AppearanceSettings() {
             </span>
           </Button>
         </SettingsField>
-      </SettingsCard>
-      <SettingsCard>
-        <SettingsField label="应用壁纸" description="为整个窗口铺上壁纸，叠加柔和模糊、细噪点和半透明材质。">
+        <SettingsField label="应用壁纸" description="选择喜欢的图片作为应用背景。">
           <div className="flex flex-wrap gap-2 sm:justify-end">
             <Button variant="outline" disabled={loading} onClick={() => void choose()}>
               <ImageIcon className="size-4" />
@@ -64,7 +60,6 @@ export function AppearanceSettings() {
           </div>
         )}
       </SettingsCard>
-      <p className="text-muted-foreground text-xs">壁纸保存在本机，移除后恢复系统材质。系统关闭透明效果时使用实色背景。</p>
       {error && <p role="alert" className="text-destructive text-sm">{error}</p>}
     </div>
   )
