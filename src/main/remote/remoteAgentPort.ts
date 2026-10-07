@@ -121,7 +121,7 @@ export function createRemoteAgentPort(
   }
   const listProjects = async () => {
     const sessions = (await agents.listSessions()).filter(session => !session.archived)
-    return (await workspaces.list()).map(workspace => {
+    return (await workspaces.list()).filter(workspace => workspace.status === 'attached').map(workspace => {
       const conversations = sessions.filter(session => session.workspaceId === workspace.id)
       return {
         id: workspace.id,

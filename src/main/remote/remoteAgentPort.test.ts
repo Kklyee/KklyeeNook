@@ -58,8 +58,15 @@ function fixture() {
     config.set(updateAgentModelSelectionFromCatalog(config.get(), { provider: selection.provider, modelID: selection.modelId, thinkingLevel: selection.thinkingLevel }))
   })
   const port = createRemoteAgentPort(workspaces as unknown as WorkspaceService, agents as unknown as AgentService, pi as unknown as PiClientService, { get: () => runtime } as unknown as PiSessionRuntimeManager, contexts as unknown as ExecutionContextService, config, saveModelSelection)
-  return { port, pi, agents, sessions, session, project, config, order, runtime, saveModelSelection, piUnsubscribe, snapshot, emit: (event: PiClientEvent) => piListener?.(event) }
+  return { port, pi, agents, workspaces, sessions, session, project, config, order, runtime, saveModelSelection, piUnsubscribe, snapshot, emit: (event: PiClientEvent) => piListener?.(event) }
 }
+
+test('lists only attached database Workspaces, matching Desktop project selection', async () => {
+  const { port, workspaces, project } = fixture()
+  workspaces.list.mockResolvedValue([project, { ...project, id: 'detached', displayName: '.zed', status: 'detached' } as never, { ...project, id: 'missing', status: 'missing' } as never])
+  expect((await port.listProjects()).map(item => item.id)).toEqual(['project'])
+  await expect(port.getProject('detached')).rejects.toMatchObject({ status: 404 })
+})
 
 test('maps existing Workspaces to Projects, filters conversations and excludes paths and provider secrets', async () => {
   const { port } = fixture()
