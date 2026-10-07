@@ -12,6 +12,7 @@ import { AgentConfigStore } from '../settings/agentConfigStore'
 import { updateAgentModelSelectionFromCatalog } from '../settings/modelCatalog'
 import { createRemoteAgentPort } from './remoteAgentPort'
 import { remoteSnapshot } from './remoteState'
+import { ContextAttachmentService } from '../context/contextAttachmentService'
 
 function fixture() {
   const order: string[] = []
@@ -33,6 +34,7 @@ function fixture() {
     providers: [{ id: 'private-provider', baseUrl: 'https://private-provider.test/secret', models: [{ id: 'model-1', name: 'Basic', reasoning: false }, { id: 'model-2', name: 'Reasoning', reasoning: true }] }],
     tools: { enabled: [] },
   })
+  const contextAttachments = new ContextAttachmentService()
   let piListener: ((event: PiClientEvent) => void) | undefined
   const piUnsubscribe = vi.fn()
   const snapshot = (id = 'chat'): PiThreadSnapshot => ({
@@ -44,7 +46,7 @@ function fixture() {
     getThread: vi.fn(async (id: string) => snapshot(id)),
     setModel: vi.fn(async () => { order.push('model') }),
     setThinkingLevel: vi.fn(async () => { order.push('thinking') }),
-    sendMessage: vi.fn(async () => { order.push('send') }),
+    sendMessage: vi.fn(async (_id: string, _input: unknown, _attachmentIds?: readonly string[]) => { order.push('send') }),
     renameThread: vi.fn(async () => {}),
     cancelRun: vi.fn(async () => {}),
     clearQueue: vi.fn(async () => ({ steering: [], followUp: [] })),
@@ -57,9 +59,39 @@ function fixture() {
   const saveModelSelection = vi.fn(selection => {
     config.set(updateAgentModelSelectionFromCatalog(config.get(), { provider: selection.provider, modelID: selection.modelId, thinkingLevel: selection.thinkingLevel }))
   })
-  const port = createRemoteAgentPort(workspaces as unknown as WorkspaceService, agents as unknown as AgentService, pi as unknown as PiClientService, { get: () => runtime } as unknown as PiSessionRuntimeManager, contexts as unknown as ExecutionContextService, config, saveModelSelection)
-  return { port, pi, agents, workspaces, sessions, session, project, config, order, runtime, saveModelSelection, piUnsubscribe, snapshot, emit: (event: PiClientEvent) => piListener?.(event) }
+  const port = createRemoteAgentPort(workspaces as unknown as WorkspaceService, agents as unknown as AgentService, pi as unknown as PiClientService, { get: () => runtime } as unknown as PiSessionRuntimeManager, contexts as unknown as ExecutionContextService, config, saveModelSelection, contextAttachments)
+  return { port, pi, agents, workspaces, sessions, session, project, config, order, runtime, saveModelSelection, contextAttachments, piUnsubscribe, snapshot, emit: (event: PiClientEvent) => piListener?.(event) }
 }
+
+test('sends uploaded documents through the native context service and images through Pi, releasing temporary context on success and failure', async () => {
+  const { port, pi, contextAttachments } = fixture()
+  const file = { type: 'text' as const, name: 'code.ts', mimeType: 'text/plain', size: 5, text: 'hello' }
+  let stagedIds: readonly string[] = []
+  pi.sendMessage.mockImplementation(async (_id, _input, ids = []) => {
+    stagedIds = ids
+    expect(contextAttachments.resolve(ids)[0]).toMatchObject({ name: 'code.ts', text: 'hello' })
+  })
+  await port.sendMessage('chat', { content: 'Review', mode: 'normal', attachments: [file] })
+  expect(() => contextAttachments.resolve(stagedIds)).toThrow('not found')
+  pi.sendMessage.mockImplementation(async (_id, _input, ids = []) => { stagedIds = ids; throw new Error('Connection failed') })
+  await expect(port.sendMessage('chat', { content: 'Retry', mode: 'normal', attachments: [file] })).rejects.toThrow('Connection failed')
+  expect(() => contextAttachments.resolve(stagedIds)).toThrow('not found')
+  pi.sendMessage.mockResolvedValue(undefined)
+  await port.sendMessage('chat', { content: '', mode: 'normal', attachments: [{ type: 'image', name: 'image.png', mimeType: 'image/png', size: 5, data: 'aGVsbG8=' }] })
+  expect(pi.sendMessage).toHaveBeenLastCalledWith('chat', { content: '', streamingBehavior: undefined, attachments: [{ type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' }] })
+})
+
+test('rejects invalid and oversized uploads before creating sessions, and follows Desktop rules for document context during runs', async () => {
+  const { port, agents, pi, session } = fixture()
+  const input = { permission: 'full-access' as const, provider: 'private-provider', modelId: 'model-2', thinkingLevel: 'low', prompt: 'Read' }
+  await expect(port.createConversation('project', { ...input, attachments: [{ type: 'text', name: 'code.ts', mimeType: 'text/plain', size: 512 * 1024 + 1, text: 'x' }] })).rejects.toMatchObject({ status: 400 })
+  expect(agents.createSession).not.toHaveBeenCalled()
+  session.activeRunId = 'run'
+  await expect(port.sendMessage('chat', { content: 'Next', mode: 'followUp', attachments: [{ type: 'text', name: 'code.ts', mimeType: 'text/plain', size: 1, text: 'x' }] })).rejects.toMatchObject({ status: 409 })
+  expect(pi.sendMessage).not.toHaveBeenCalled()
+  await port.sendMessage('chat', { content: 'Look', mode: 'steer', attachments: [{ type: 'image', name: 'image.png', mimeType: 'image/png', size: 5, data: 'aGVsbG8=' }] })
+  expect(pi.sendMessage).toHaveBeenCalledWith('chat', { content: 'Look', streamingBehavior: 'steer', attachments: [{ type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' }] })
+})
 
 test('lists only attached database Workspaces, matching Desktop project selection', async () => {
   const { port, workspaces, project } = fixture()
@@ -168,6 +200,62 @@ test('streams snapshot before buffered deltas, queue, approval and status events
   unsubscribe()
   expect(piUnsubscribe).toHaveBeenCalledOnce()
   expect(pi.cancelRun).not.toHaveBeenCalled()
+})
+
+test('delivers snapshots and native message events without waiting for history activity queries', async () => {
+  const { port, emit, agents, pi } = fixture()
+  let finish!: (runs: never[]) => void
+  agents.listRuns.mockImplementation(() => new Promise<never[]>(resolve => { finish = resolve }))
+  const events: RemoteEvent[] = []
+  const unsubscribe = port.subscribe('chat', event => events.push(event))
+  try {
+    await vi.waitFor(() => expect(events[0]?.type).toBe('snapshot'))
+    await vi.waitFor(() => expect(agents.listRuns).toHaveBeenCalledOnce())
+    emit({ type: 'agent_start', threadId: 'chat', seq: 2 })
+    emit({ type: 'message_update', threadId: 'chat', seq: 3, message: { role: 'assistant', timestamp: 10, content: [{ type: 'text', text: 'Live reply' }] } as never, assistantMessageEvent: {} as never })
+    emit({ type: 'agent_settled', threadId: 'chat', seq: 4 } as PiClientEvent)
+    await vi.waitFor(() => expect(events.map(event => event.type)).toEqual(['snapshot', 'status', 'message', 'snapshot']))
+    expect(pi.getThread).toHaveBeenCalledOnce()
+    finish([])
+    await vi.waitFor(() => expect(events.some(event => event.type === 'activity')).toBe(true))
+    expect(events.map(event => event.seq)).toEqual(events.map((_, index) => index + 1))
+  } finally { unsubscribe() }
+})
+
+test('coalesces activity refresh requests while a history query is in flight and stops after unsubscribe', async () => {
+  const { port, agents } = fixture()
+  let finish!: (runs: never[]) => void
+  agents.listRuns.mockImplementationOnce(() => new Promise<never[]>(resolve => { finish = resolve }))
+  const events: RemoteEvent[] = []
+  const unsubscribe = port.subscribe('chat', event => events.push(event))
+  try {
+    await vi.waitFor(() => expect(agents.listRuns).toHaveBeenCalledOnce())
+    const activityListener = agents.subscribe.mock.calls[0][0]
+    for (let seq = 1; seq <= 20; seq++) activityListener({ sessionId: 'chat', runId: 'run', seq, timestamp: seq, event: { type: 'text_delta', text: 'Next' } })
+    expect(agents.listRuns).toHaveBeenCalledOnce()
+    finish([])
+    await vi.waitFor(() => expect(agents.listRuns).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(events.filter(event => event.type === 'activity')).toHaveLength(2))
+    unsubscribe()
+    const count = events.length
+    activityListener({ sessionId: 'chat', runId: 'run', seq: 21, timestamp: 21, event: { type: 'text_delta', text: 'Detached' } })
+    expect(agents.listRuns).toHaveBeenCalledTimes(2)
+    expect(events).toHaveLength(count)
+  } finally { unsubscribe() }
+})
+
+test('keeps cached history activities in the first snapshot when reopening a conversation', async () => {
+  const { port, agents } = fixture()
+  const run = { id: 'run', sessionId: 'chat', status: 'completed', createdAt: 10, updatedAt: 20, completedAt: 20, toolCalls: [], toolResults: [] }
+  agents.listRuns.mockResolvedValue([run] as never)
+  agents.listExecutionRecords.mockResolvedValue([{ seq: 1, timestamp: 10, runId: 'run', event: { type: 'thinking_delta', text: 'History' } }] as never)
+  const snapshot = await port.getConversation('chat')
+  const events: RemoteEvent[] = []
+  const unsubscribe = port.subscribe('chat', event => events.push(event))
+  try {
+    await vi.waitFor(() => expect(events[0]).toMatchObject({ type: 'snapshot', snapshot: { activities: snapshot.activities } }))
+    expect(agents.listRuns).toHaveBeenCalledOnce()
+  } finally { unsubscribe() }
 })
 
 test('projects transcript content without signatures, session files, tool arguments or raw Pi details', () => {

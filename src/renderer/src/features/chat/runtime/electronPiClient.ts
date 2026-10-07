@@ -13,6 +13,7 @@ export function createElectronPiClient(
   baseUrl: string,
   getWorkspaceId: () => string | null = () => null,
   getMode: () => PermissionMode | null = () => null,
+  onSending?: (threadId: string | undefined, pending: boolean) => void,
 ): PiClient {
   const httpClient = createPiHttpClient({
     baseUrl,
@@ -26,17 +27,20 @@ export function createElectronPiClient(
       return httpClient.subscribe(threadId, listener, options)
     },
     async createThread(input) {
-      const session = await window.api.conversations.create({
-        title: input?.title,
-        workspaceId: getWorkspaceId(),
-      })
-      const mode = getMode()
-      if (mode) await window.api.conversations.setPermission(session.id, mode)
-      const snapshot = await httpClient.getThread(session.id)
-      notifyWorkspaceChanged()
-      if (input?.initialMessage)
-        await attachmentAwareClient.sendMessage(session.id, input.initialMessage)
-      return snapshot
+      onSending?.(undefined, true)
+      try {
+        const session = await window.api.conversations.create({
+          title: input?.title,
+          workspaceId: getWorkspaceId(),
+        })
+        const mode = getMode()
+        if (mode) await window.api.conversations.setPermission(session.id, mode)
+        const snapshot = await httpClient.getThread(session.id)
+        notifyWorkspaceChanged()
+        if (input?.initialMessage)
+          await attachmentAwareClient.sendMessage(session.id, input.initialMessage)
+        return snapshot
+      } finally { onSending?.(undefined, false) }
     },
     async renameThread(id, title) {
       await httpClient.renameThread(id, title)
@@ -51,6 +55,7 @@ export function createElectronPiClient(
       input: PiSendMessageInput,
       contextAttachmentIds: readonly string[] = [],
     ) {
+      onSending?.(threadId, true)
       const pendingIds = takePendingContextAttachmentIds()
       const attachmentIds = [...new Set([...contextAttachmentIds, ...pendingIds])]
       try {
@@ -77,7 +82,7 @@ export function createElectronPiClient(
       } catch (error) {
         restorePendingContextAttachmentIds(pendingIds)
         throw error
-      }
+      } finally { onSending?.(threadId, false) }
     },
   }
 

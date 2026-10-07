@@ -1,5 +1,7 @@
 'use client'
 
+import { ThreadListRowContent, threadListRowClassName, threadListTriggerClassName } from '@kklyeenook/ui/assistant-ui/thread-list-row'
+
 import { WorkspaceThreadList } from '@/renderer/src/features/workspaces/WorkspaceThreadList'
 
 import { useWorkspaces } from '@/renderer/src/features/workspaces/WorkspaceProvider'
@@ -20,7 +22,7 @@ import {
   useAui,
   useAuiState,
 } from '@assistant-ui/react'
-import { LoaderCircleIcon, MoreHorizontalIcon, PlusIcon } from 'lucide-react'
+import { MoreHorizontalIcon, PlusIcon } from 'lucide-react'
 import {
   forwardRef,
   useEffect,
@@ -128,7 +130,7 @@ export const ThreadListItem: FC = () => {
   return (
     <ThreadListItemPrimitive.Root
       data-slot="aui_thread-list-item"
-      className="sidebar-row group relative flex h-[34px] items-center rounded-lg text-muted-foreground transition-colors hover:bg-hover hover:text-foreground focus-visible:bg-hover active:bg-active active:text-foreground data-active:bg-selected data-active:hover:bg-selected data-active:text-foreground has-focus-visible:bg-hover has-data-[state=open]:bg-selected has-data-[state=open]:text-foreground focus-visible:outline-none"
+      className={threadListRowClassName}
     >
       {isRenaming ? (
         <ThreadListItemRename
@@ -141,7 +143,7 @@ export const ThreadListItem: FC = () => {
         <ThreadListItemPrimitive.Trigger
           ref={triggerRef}
           data-slot="aui_thread-list-item-trigger"
-          className="flex h-full min-w-0 flex-1 items-center rounded-lg pe-8 ps-8 text-start text-[13px] outline-none focus-visible:border-ring focus-visible:ring-0"
+          className={threadListTriggerClassName}
           onClick={() => {
             const workspaceId = session?.workspaceId
             setActiveWorkspaceId(
@@ -151,29 +153,7 @@ export const ThreadListItem: FC = () => {
             )
           }}
         >
-          <span data-slot="aui_thread-list-item-title" className="min-w-0 flex-1 truncate">
-            <ThreadListItemPrimitive.Title fallback="新对话" />
-          </span>
-          {isRunning && (
-            <LoaderCircleIcon
-              aria-label="运行中"
-              data-slot="aui_thread-list-item-running"
-              className="me-1.5 size-3 shrink-0 animate-spin text-faint-foreground"
-              strokeWidth={1.5}
-            />
-          )}
-          {isWaiting && (
-            <span className="me-1.5 shrink-0 text-[10px] text-faint-foreground">等待</span>
-          )}
-          {updatedAt && (
-            <time
-              dateTime={new Date(updatedAt).toISOString()}
-              title={new Date(updatedAt).toLocaleString()}
-              className="ml-2 shrink-0 text-[10px] tabular-nums text-faint-foreground"
-            >
-              {formatThreadAge(updatedAt)}
-            </time>
-          )}
+          <ThreadListRowContent title={<ThreadListItemPrimitive.Title fallback="新对话" />} running={isRunning} waiting={isWaiting} updatedAt={updatedAt} />
         </ThreadListItemPrimitive.Trigger>
       )}
       <ThreadListItemMore onRename={() => setIsRenaming(true)} />
@@ -298,12 +278,3 @@ const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
   )
 }
 
-function formatThreadAge(updatedAt: number): string {
-  const minutes = Math.max(0, Math.floor((Date.now() - updatedAt) / 60_000))
-  if (minutes < 1) return '刚刚'
-  if (minutes < 60) return minutes + 'm'
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return hours + 'h'
-  const days = Math.floor(hours / 24)
-  return days < 30 ? days + 'd' : Math.floor(days / 30) + 'mo'
-}

@@ -185,7 +185,7 @@ export async function createAgentBackend(
       createRemoteAgentPort(workspaceService, agentService, piClientService, sessionRuntimeManager, executionContexts, configStore, selection => {
         configStore.set(updateAgentModelSelectionFromCatalog(configStore.get(), { provider: selection.provider, modelID: selection.modelId, thinkingLevel: selection.thinkingLevel }))
         publishModelSelection(selection)
-      }),
+      }, contextAttachments),
       options.remoteStaticRoot ?? join(process.cwd(), 'apps/remote/dist'),
     )
     await remote.configure(configStore.get().remote ?? { enabled: false })

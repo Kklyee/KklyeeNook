@@ -1,4 +1,6 @@
 import type { PermissionMode } from '../approval/permission'
+import type { RemoteFileAttachment } from './attachments'
+export type { RemoteFileAttachment } from './attachments'
 
 export type RemotePermissionMode = PermissionMode
 export interface RemoteSettings {
@@ -106,15 +108,17 @@ export interface RemoteCreateConversationInput {
   modelId: string
   thinkingLevel: string
   prompt: string
+  attachments?: RemoteFileAttachment[]
 }
 export interface RemoteSendMessageInput {
   content: string
   mode: 'normal' | 'followUp' | 'steer'
+  attachments?: RemoteFileAttachment[]
 }
 export interface RemoteState {
   models: RemoteModel[]
   permissions: RemotePermissionMode[]
-  defaults: Omit<RemoteCreateConversationInput, 'prompt'>
+  defaults: Omit<RemoteCreateConversationInput, 'prompt' | 'attachments'>
 }
 export type RemoteEventBody =
   | { type: 'snapshot'; snapshot: RemoteConversationSnapshot }

@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react'
-import { ArrowUpIcon, SquareIcon } from 'lucide-react'
+import { ArrowUpIcon, Loader2Icon, SquareIcon } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { iconSwap, iconSwapIn, iconSwapOut } from '../lib/surfaces'
 
@@ -24,10 +24,11 @@ export function ComposerBar({
 
 export function ComposerSend({
   streaming,
+  pending = false,
   idle: _idle,
   className,
   ...props
-}: Omit<ComponentProps<'button'>, 'children'> & { streaming: boolean; idle: boolean }) {
+}: Omit<ComponentProps<'button'>, 'children'> & { streaming: boolean; idle: boolean; pending?: boolean }) {
   return (
     <button
       type="button"
@@ -44,12 +45,13 @@ export function ComposerSend({
         className={cn(
           iconSwap,
           'size-4 stroke-brand-foreground',
-          streaming ? iconSwapOut : iconSwapIn,
+          streaming || pending ? iconSwapOut : iconSwapIn,
         )}
       />
       <SquareIcon
-        className={cn(iconSwap, 'size-3 fill-current', streaming ? iconSwapIn : iconSwapOut)}
+        className={cn(iconSwap, 'size-3 fill-current', streaming && !pending ? iconSwapIn : iconSwapOut)}
       />
+      {pending && <Loader2Icon className="size-4 animate-spin [grid-area:1/1]" />}
     </button>
   )
 }

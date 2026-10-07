@@ -1,4 +1,5 @@
 import type { PiClientEvent, PiThinkingLevel } from '@assistant-ui/react-pi'
+import type { PiSendMessageInput } from '@assistant-ui/react-pi'
 import { PERMISSION_MODES, effectivePermissionMode } from '@kklyeenook/shared/approval/permission'
 import type {
   RemoteActivity,
@@ -31,9 +32,12 @@ import { getAgentModelChoices } from '../settings/modelCatalog'
 import type { UpdateAgentModelSelectionRequest } from '@/shared/agent/agentSettings'
 import type { ThinkingLevel } from '@/shared/agent/agentConfig'
 import { remoteApproval, remoteMessage, remoteQueue, remoteSnapshot } from './remoteState'
+import { validateRemoteAttachments } from './remoteAttachments'
+import type { ContextAttachmentService } from '../context/contextAttachmentService'
+import type { RemoteFileAttachment } from '@kklyeenook/shared/remote/index'
 
 export class RemoteError extends Error {
-  constructor(readonly status: 400 | 404 | 409, message: string) { super(message) }
+  constructor(readonly status: 400 | 404 | 409 | 413, message: string) { super(message) }
 }
 
 export interface RemoteAgentPort {
@@ -65,11 +69,29 @@ export function createRemoteAgentPort(
   executionContexts: ExecutionContextService,
   config: AgentConfigStore,
   saveModelSelection: (selection: UpdateAgentModelSelectionRequest) => void,
+  contextAttachments: ContextAttachmentService,
 ): RemoteAgentPort {
   const requireSession = (id: string) => {
     const session = agents.getSession(id)?.toSummary()
     if (!session || !session.workspaceId) throw new RemoteError(404, 'Conversation not found')
     return session
+  }
+  const prepareAttachments = (files: RemoteFileAttachment[]) => {
+    const ids: string[] = []
+    const images: NonNullable<PiSendMessageInput['attachments']> = []
+    try {
+      for (const file of files) {
+        if (file.type === 'image') images.push({ type: 'image', mimeType: file.mimeType, data: file.data })
+        else ids.push(contextAttachments.stage(file).id)
+      }
+      contextAttachments.resolve(ids)
+      return { ids, images }
+    } catch (error) { contextAttachments.release(ids); throw new RemoteError(400, (error as Error).message) }
+  }
+  const sendPrepared = async (id: string, input: PiSendMessageInput, prepared: ReturnType<typeof prepareAttachments>) => {
+    const request = { ...input, ...(prepared.images.length ? { attachments: prepared.images } : {}) }
+    if (prepared.ids.length) await pi.sendMessage(id, request, prepared.ids)
+    else await pi.sendMessage(id, request)
   }
   const summary = (session: AgentSessionSummary): RemoteConversationSummary => ({
     id: session.id,
@@ -78,9 +100,10 @@ export function createRemoteAgentPort(
     status: session.activeRunId ? 'running' : 'idle',
     updatedAt: session.updatedAt,
   })
+  const activitySnapshots = new Map<string, RemoteActivity[]>()
   const activities = async (id: string): Promise<RemoteActivity[]> => {
     const runs = (await agents.listRuns(id)).filter(run => !run.parentRunId).sort((a, b) => a.createdAt - b.createdAt)
-    return (await Promise.all(runs.map(async run => {
+    const result = (await Promise.all(runs.map(async run => {
       const records = await agents.listExecutionRecords(run.id)
       const derived = deriveAgentActivities(records, run)
       return groupAgentActivities(records, derived).flatMap(segment => segment.activities.map(activity => ({
@@ -99,6 +122,8 @@ export function createRemoteAgentPort(
         summary: summarizeAgentActivities(segment.activities),
       })))
     }))).flat()
+    activitySnapshots.set(id, result)
+    return result
   }
   const listModels = async (): Promise<RemoteModel[]> => {
     const choices = getAgentModelChoices(config.get())
@@ -125,11 +150,11 @@ export function createRemoteAgentPort(
     const session = requireSession(id)
     if (session.activeRunId || runtimes.get(id)?.isRunning()) throw new RemoteError(409, 'Wait for the current run to finish')
   }
-  const getConversation = async (id: string) => {
+  const getConversation = async (id: string, includeActivities = true) => {
     const session = requireSession(id)
     const context = await executionContexts.resolve(id)
     const snapshot = remoteSnapshot(await pi.getThread(id), summary(session), effectivePermissionMode(session.permissionMode, !!context.workspace, config.get().defaultPermissionMode))
-    snapshot.activities = await activities(id)
+    snapshot.activities = includeActivities ? await activities(id) : activitySnapshots.get(id) ?? []
     return snapshot
   }
   const listProjects = async () => {
@@ -178,15 +203,19 @@ export function createRemoteAgentPort(
       await getProject(projectId)
       const workspace = await workspaces.resolve(projectId)
       if (workspace.status !== 'attached') throw new RemoteError(409, 'Project is unavailable')
-      if (!PERMISSION_MODES.includes(input.permission) || !input.prompt.trim()) throw new RemoteError(400, 'Permission and initial prompt are required')
+      const files = validateRemoteAttachments(input.attachments)
+      if (!PERMISSION_MODES.includes(input.permission) || (!input.prompt.trim() && !files.length)) throw new RemoteError(400, 'Permission and initial prompt are required')
       checkThinking(await checkModel(input), input.thinkingLevel)
+      const prepared = prepareAttachments(files)
+      try {
       const session = await agents.createSession(undefined, projectId)
       await setPermission(session.id, input.permission)
       saveModelSelection({ provider: input.provider, modelId: input.modelId, thinkingLevel: input.thinkingLevel as ThinkingLevel })
       await pi.setModel(session.id, input)
       await pi.setThinkingLevel(session.id, input.thinkingLevel as PiThinkingLevel)
-      await pi.sendMessage(session.id, { content: input.prompt })
+      await sendPrepared(session.id, { content: input.prompt }, prepared)
       return getConversation(session.id)
+      } finally { contextAttachments.release(prepared.ids) }
     },
     getConversation,
     async renameConversation(id, title) {
@@ -196,10 +225,14 @@ export function createRemoteAgentPort(
     },
     async sendMessage(id, input) {
       const session = requireSession(id)
-      if (!input.content.trim()) throw new RemoteError(400, 'Message is required')
+      const files = validateRemoteAttachments(input.attachments)
+      if (!input.content.trim() && !files.length) throw new RemoteError(400, 'Message is required')
       if (!['normal', 'followUp', 'steer'].includes(input.mode)) throw new RemoteError(400, 'Invalid send mode')
       if (input.mode === 'normal' && (session.activeRunId || runtimes.get(id)?.isRunning())) throw new RemoteError(409, 'Run is active; choose follow-up or steer')
-      await pi.sendMessage(id, { content: input.content, streamingBehavior: input.mode === 'normal' ? undefined : input.mode })
+      if (files.some(file => file.type === 'text')) assertIdle(id)
+      const prepared = prepareAttachments(files)
+      try { await sendPrepared(id, { content: input.content, streamingBehavior: input.mode === 'normal' ? undefined : input.mode }, prepared) }
+      finally { contextAttachments.release(prepared.ids) }
     },
     setPermission,
     async setModel(id, input) {
@@ -244,7 +277,32 @@ export function createRemoteAgentPort(
       let active = true
       let approvals: RemoteConversationSnapshot['approvals'] = []
       let chain = Promise.resolve()
+      let ready = false
+      let refreshing = false
+      let activityPending = false
+      let timer: ReturnType<typeof setTimeout> | undefined
       const emit = (event: RemoteEventBody) => { if (active) listener({ ...event, seq: ++seq } as RemoteEvent) }
+      const refreshActivities = () => {
+        activityPending = true
+        if (!active || !ready || refreshing || timer) return
+        timer = setTimeout(async () => {
+          timer = undefined
+          refreshing = true
+          activityPending = false
+          try { emit({ type: 'activity', activities: await activities(id) }) }
+          catch { emit({ type: 'error', error: 'Unable to refresh conversation activity' }) }
+          finally {
+            refreshing = false
+            if (active && activityPending) refreshActivities()
+          }
+        }, 150)
+      }
+      const publishSnapshot = (snapshot: RemoteConversationSnapshot) => {
+        approvals = snapshot.approvals
+        emit({ type: 'snapshot', snapshot })
+        ready = true
+        refreshActivities()
+      }
       const receive = async (event: PiClientEvent) => {
         if (!active) return
         switch (event.type) {
@@ -252,9 +310,8 @@ export function createRemoteAgentPort(
             const context = await executionContexts.resolve(id)
             const session = requireSession(id)
             const snapshot = remoteSnapshot(event.snapshot, summary(session), effectivePermissionMode(session.permissionMode, !!context.workspace, config.get().defaultPermissionMode))
-            snapshot.activities = await activities(id)
-            approvals = snapshot.approvals
-            emit({ type: 'snapshot', snapshot } as RemoteEventBody)
+            snapshot.activities = activitySnapshots.get(id) ?? []
+            publishSnapshot(snapshot)
             break
           }
           case 'message_start':
@@ -275,11 +332,11 @@ export function createRemoteAgentPort(
             break
           case 'agent_start': emit({ type: 'status', status: 'running' } as RemoteEventBody); break
           case 'agent_settled':
-            emit({ type: 'snapshot', snapshot: await getConversation(id) } as RemoteEventBody)
+            publishSnapshot(await getConversation(id, false))
             break
           case 'session_info_changed':
           case 'thinking_level_changed':
-            if (!runtimes.get(id)?.isRunning()) emit({ type: 'snapshot', snapshot: await getConversation(id) } as RemoteEventBody)
+            if (!runtimes.get(id)?.isRunning()) publishSnapshot(await getConversation(id, false))
             break
           case 'error': emit({ type: 'error', error: event.error } as RemoteEventBody); break
         }
@@ -287,13 +344,8 @@ export function createRemoteAgentPort(
       const unsubscribePi = pi.subscribe(id, event => {
         chain = chain.then(() => receive(event)).catch(() => emit({ type: 'error', error: 'Unable to refresh conversation' } as RemoteEventBody))
       })
-      let timer: ReturnType<typeof setTimeout> | undefined
       const unsubscribeActivity = agents.subscribe(envelope => {
-        if (envelope.sessionId !== id || timer) return
-        timer = setTimeout(() => {
-          timer = undefined
-          chain = chain.then(async () => emit({ type: 'activity', activities: await activities(id) } as RemoteEventBody)).catch(() => undefined)
-        }, 150)
+        if (envelope.sessionId === id) refreshActivities()
       })
       return () => { active = false; clearTimeout(timer); unsubscribePi(); unsubscribeActivity() }
     },

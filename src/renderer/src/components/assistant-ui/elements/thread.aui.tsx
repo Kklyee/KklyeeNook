@@ -11,6 +11,7 @@ import {
 import { File } from './file-preview'
 import { AgentActivityGroup } from '@/renderer/src/features/chat/activity/AgentActivityGroup'
 import { QueuedMessages } from '@/renderer/src/features/chat/QueuedMessages'
+import { usePendingSend } from '@/renderer/src/features/chat/runtime/SendState'
 import { ThreadFollowupSuggestions } from '@/renderer/src/components/assistant-ui/elements/follow-up-suggestions.aui'
 import { Image } from './image-preview'
 import { ImageThumbnail } from '@kklyeenook/ui/assistant-ui/image-thumbnail'
@@ -404,6 +405,7 @@ const ComposerAction: FC<{
   isCompacting: boolean
 }> = ({ onSend, modelSelector, contextUsage, compactionSettings, isCompacting }) => {
   const canSend = useAuiState((s) => s.composer.canSend)
+  const pending = usePendingSend()
   const budget = calculateAgentContextBudget(contextUsage, compactionSettings, {
     compacting: isCompacting,
   })
@@ -411,7 +413,6 @@ const ComposerAction: FC<{
   return (
     <div className="aui-composer-action-wrapper relative flex items-center justify-between">
       <div className="flex items-center gap-1">
-        <ComposerAddAttachment />
         <PermissionSelector />
         {modelSelector && modelSelector.models.length > 0 && (
           <ModelSelectorRoot
@@ -478,6 +479,8 @@ const ComposerAction: FC<{
             </ComposerPrimitive.StopDictation>
           </AuiIf>
         </AuiIf>
+        <ComposerAddAttachment disabled={pending} />
+        {pending ? <ComposerSend pending streaming={false} idle={false} disabled aria-label="Sending message" className="aui-composer-send bg-brand text-brand-foreground" /> : <>
         <AuiIf condition={(s) => !s.thread.isRunning || s.composer.canSend}>
           <ComposerPrimitive.Send
             onClick={(event) => {
@@ -512,6 +515,7 @@ const ComposerAction: FC<{
             <SquareIcon className="aui-composer-cancel-icon size-3.5 fill-current" />
           </ComposerPrimitive.Cancel>
         </AuiIf>
+        </>}
       </div>
     </div>
   )

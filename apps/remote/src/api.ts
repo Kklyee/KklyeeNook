@@ -9,6 +9,7 @@ export async function api<T>(path: string, method = 'GET', body?: unknown): Prom
     headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: 'no-store',
+    signal: AbortSignal.timeout(60_000),
   }
   const response = await fetch(`/api${path}`, request)
   const data = await response.json()
@@ -23,7 +24,14 @@ const loadingConversations = new Map<string, Promise<RemoteConversationSnapshot>
 export function loadConversation(id: string) {
   let promise = loadingConversations.get(id)
   if (!promise) {
-    promise = api<RemoteConversationSnapshot>(`/conversations/${id}`).then(snapshot => { conversationSnapshots.set(id, snapshot); return snapshot }).finally(() => loadingConversations.delete(id))
+    const cached = conversationSnapshots.get(id)
+    if (cached) return Promise.resolve(cached)
+    promise = api<RemoteConversationSnapshot>(`/conversations/${id}`).then(snapshot => {
+      const current = conversationSnapshots.get(id)
+      if (current) return current
+      conversationSnapshots.set(id, snapshot)
+      return snapshot
+    }).finally(() => loadingConversations.delete(id))
     loadingConversations.set(id, promise)
   }
   return promise

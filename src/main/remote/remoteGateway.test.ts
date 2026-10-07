@@ -69,6 +69,24 @@ test('requires Tailscale identity on assets and APIs, enforces allowed user and 
   expect((await app.request('/api/projects', { headers })).status).toBe(200)
 })
 
+test('accepts authenticated attachment messages beyond the prompt limit while rejecting invalid file data and maintaining operation limits', async () => {
+  const { app, port } = fixture()
+  const input = { content: 'Read file', mode: 'normal', attachments: [{ type: 'text', name: 'notes.md', mimeType: 'text/markdown', size: 80 * 1024, text: 'x'.repeat(80 * 1024) }] }
+  const response = await app.request('/api/conversations/chat/messages', { method: 'POST', headers, body: JSON.stringify(input) })
+  expect(response.status).toBe(200)
+  expect(port.sendMessage).toHaveBeenCalledWith('chat', input)
+  expect(response.headers.get('content-security-policy')).toContain("img-src 'self' data: blob:")
+  expect((await app.request('/api/conversations/chat/messages', { method: 'POST', body: JSON.stringify(input) })).status).toBe(401)
+  expect((await app.request('/api/conversations/chat/cancel', { method: 'POST', headers, body: JSON.stringify(input) })).status).toBe(413)
+  for (const attachments of [
+    [{ type: 'image', name: 'image.png', mimeType: 'image/png', size: 1, data: 'https://private-file' }],
+    [{ type: 'image', name: 'image.svg', mimeType: 'image/svg+xml', size: 1, data: 'eA==' }],
+    [{ type: 'text', name: 'file.pdf', mimeType: 'application/pdf', size: 1, text: 'x' }],
+    Array(9).fill({ type: 'text', name: 'code.ts', mimeType: 'text/plain', size: 1, text: 'x' }),
+  ]) expect((await app.request('/api/conversations/chat/messages', { method: 'POST', headers, body: JSON.stringify({ content: '', mode: 'normal', attachments }) })).status).toBe(400)
+  expect(port.sendMessage).toHaveBeenCalledTimes(1)
+})
+
 test('allows authenticated top-level homepage navigation from a link while blocking cross-site API and embedded requests', async () => {
   const { port, options } = fixture()
   const directory = await mkdtemp(join(tmpdir(), 'nook-remote-navigation-'))

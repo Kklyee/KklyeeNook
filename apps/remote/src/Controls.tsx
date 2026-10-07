@@ -4,7 +4,7 @@ import { ModelSelectorRoot, ModelSelectorTrigger, ModelSelectorValue, ModelSelec
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@kklyeenook/ui/components/select'
 import { ShieldCheckIcon } from 'lucide-react'
 
-export type Selection = Omit<RemoteCreateConversationInput, 'prompt'>
+export type Selection = Omit<RemoteCreateConversationInput, 'prompt' | 'attachments'>
 
 export function Choice({ label, value, options, disabled, compact, menuOnly, onChange }: {
   label: string
@@ -30,10 +30,10 @@ export function Controls({ state, selection, disabled, onPermission, onModel, on
   onThinking(value: string): void
 }) {
   const models = state.models.map(model => ({ id: JSON.stringify([model.provider, model.modelId]), name: model.name, description: model.provider, efforts: model.supportsThinking ? model.thinkingLevels.map(level => ({ id: level, name: level })) : undefined }))
-  return <div className="mobile-model-controls flex min-w-0 flex-1 items-center gap-1">
+  return <div className="mobile-model-controls mr-auto flex min-w-0 w-fit shrink items-center gap-1">
     <Choice compact label="Permission" value={selection.permission} disabled={disabled} options={state.permissions.map(value => ({ value, label: PERMISSION_LABELS[value] }))} onChange={value => onPermission(value as Selection['permission'])} />
     <ModelSelectorRoot models={models} value={JSON.stringify([selection.provider, selection.modelId])} effort={selection.thinkingLevel} onEffortChange={onThinking} onValueChange={value => { const [provider, modelId] = JSON.parse(value); onModel({ provider, modelId }) }}>
-      <ModelSelectorTrigger disabled={disabled} aria-label="Model and thinking level" variant="muted" className="min-h-11 min-w-0 max-w-full flex-1 rounded-full px-2.5 text-xs"><ModelSelectorValue className="min-w-0 truncate" /></ModelSelectorTrigger>
+      <ModelSelectorTrigger disabled={disabled} aria-label="Model and thinking level" variant="muted" className="min-h-11 min-w-0 w-fit max-w-40 shrink rounded-full px-2.5 text-xs"><ModelSelectorValue className="min-w-0 truncate" /></ModelSelectorTrigger>
       <ModelSelectorContent className="max-w-[calc(100vw-2rem)]" />
     </ModelSelectorRoot>
   </div>

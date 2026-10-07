@@ -1,6 +1,6 @@
 import { WorkspaceProvider, useWorkspaces } from '../../workspaces/WorkspaceProvider'
 import type { ReactNode } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AssistantRuntimeProvider, AuiConfig, Suggestions, Tools } from '@assistant-ui/react'
 import { usePiRuntime } from '@assistant-ui/react-pi'
 import type { AgentBackendInfo, AgentBackendStatus } from '@/shared/agentBackend'
@@ -8,6 +8,7 @@ import { Skeleton } from '../../../components/ui/skeleton'
 import { assistantToolkit } from '../tools/AssistantToolkit'
 import { createElectronPiClient } from './electronPiClient'
 import { contextAttachmentAdapter } from '../context/contextAttachmentAdapter'
+import { SendStateContext } from './SendState'
 
 export function AssistantRuntime({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AgentBackendStatus>({ state: 'starting' })
@@ -71,9 +72,19 @@ function ReadyAssistantRuntime({
   children: ReactNode
 }) {
   const { getDraftWorkspaceId, getDraftMode } = useWorkspaces()
+  const [sending, setSending] = useState({ creating: false, threads: new Set<string>() })
+  const onSending = useCallback((id: string | undefined, pending: boolean) => {
+    setSending(current => {
+      if (!id) return { ...current, creating: pending }
+      const threads = new Set(current.threads)
+      if (pending) threads.add(id)
+      else threads.delete(id)
+      return { ...current, threads }
+    })
+  }, [])
   const client = useMemo(
-    () => createElectronPiClient(info.baseUrl, getDraftWorkspaceId, getDraftMode),
-    [info.baseUrl, getDraftWorkspaceId, getDraftMode],
+    () => createElectronPiClient(info.baseUrl, getDraftWorkspaceId, getDraftMode, onSending),
+    [info.baseUrl, getDraftWorkspaceId, getDraftMode, onSending],
   )
   const runtime = usePiRuntime({ client, adapters: { attachments: contextAttachmentAdapter } })
 
@@ -99,8 +110,8 @@ function ReadyAssistantRuntime({
   })
 
   return (
-    <AssistantRuntimeProvider runtime={runtime} config={config}>
+    <SendStateContext.Provider value={sending}><AssistantRuntimeProvider runtime={runtime} config={config}>
       {children}
-    </AssistantRuntimeProvider>
+    </AssistantRuntimeProvider></SendStateContext.Provider>
   )
 }

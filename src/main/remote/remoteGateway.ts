@@ -11,6 +11,8 @@ import { authorizeRemote, type RemoteIdentityPolicy } from './remoteAuth'
 import { RemoteError, type RemoteAgentPort } from './remoteAgentPort'
 import type { RemoteApprovalResponse, RemoteQueueMutation } from '@kklyeenook/shared/remote/index'
 import { PERMISSION_MODES, type PermissionMode } from '@kklyeenook/shared/approval/permission'
+import { REMOTE_MESSAGE_MAX_BYTES } from '@kklyeenook/shared/remote/attachments'
+import { validateRemoteAttachments } from './remoteAttachments'
 
 export const REMOTE_HOST = '127.0.0.1'
 export const REMOTE_PORT = 43127
@@ -37,8 +39,10 @@ async function body(context: Context): Promise<Record<string, unknown>> {
   if (!context.req.header('content-type')?.startsWith('application/json')) throw new RemoteError(400, 'JSON body is required')
   const value: unknown = await context.req.json().catch(() => { throw new RemoteError(400, 'Invalid JSON') })
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new RemoteError(400, 'JSON object is required')
+  if ((!Array.isArray((value as Record<string, unknown>).attachments) || !(value as { attachments: unknown[] }).attachments.length) && Buffer.byteLength(JSON.stringify(value)) > 64 * 1024) throw new RemoteError(413, 'Request too large')
   return value as Record<string, unknown>
 }
+const messageText = (input: Record<string, unknown>, key: string) => typeof input[key] === 'string' && ((input[key] as string).trim() || (Array.isArray(input.attachments) && input.attachments.length)) ? input[key] as string : text(input, key)
 const permission = (input: Record<string, unknown>) => {
   const mode = text(input, 'permission') as PermissionMode
   if (!PERMISSION_MODES.includes(mode)) throw new RemoteError(400, 'Invalid permission')
@@ -52,12 +56,12 @@ export function createRemoteGatewayApp(port: RemoteAgentPort, options: RemoteGat
     context.header('Cache-Control', 'no-store')
     context.header('X-Content-Type-Options', 'nosniff')
     context.header('Referrer-Policy', 'no-referrer')
-    context.header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+    context.header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
     const denied = authorizeRemote(context, options.identity())
     if (denied) return context.json({ error: denied === 401 ? 'Tailscale identity required' : 'Access denied' }, denied)
     return next()
   })
-  app.use('/api/*', bodyLimit({ maxSize: 64 * 1024, onError: context => context.json({ error: 'Request too large' }, 413) }))
+  app.use('/api/*', (context, next) => bodyLimit({ maxSize: /^\/api\/(?:projects\/[^/]+\/conversations|conversations\/[^/]+\/messages)$/.test(context.req.path) ? REMOTE_MESSAGE_MAX_BYTES : 64 * 1024, onError: context => context.json({ error: 'Request too large' }, 413) })(context, next))
   app.get('/api/state', async context => context.json(await port.getState()))
   app.get('/api/models', async context => context.json(await port.listModels()))
   app.get('/api/projects', async context => context.json(await port.listProjects()))
@@ -70,7 +74,8 @@ export function createRemoteGatewayApp(port: RemoteAgentPort, options: RemoteGat
       provider: text(input, 'provider'),
       modelId: text(input, 'modelId'),
       thinkingLevel: text(input, 'thinkingLevel'),
-      prompt: text(input, 'prompt'),
+      prompt: messageText(input, 'prompt'),
+      ...(input.attachments === undefined ? {} : { attachments: validateRemoteAttachments(input.attachments) }),
     }), 201)
   })
   app.get('/api/conversations/:id', async context => context.json(await port.getConversation(context.req.param('id'))))
@@ -82,7 +87,7 @@ export function createRemoteGatewayApp(port: RemoteAgentPort, options: RemoteGat
     const input = await body(context)
     const mode = text(input, 'mode')
     if (mode !== 'normal' && mode !== 'followUp' && mode !== 'steer') throw new RemoteError(400, 'Invalid send mode')
-    await port.sendMessage(context.req.param('id'), { content: text(input, 'content'), mode })
+    await port.sendMessage(context.req.param('id'), { content: messageText(input, 'content'), mode, ...(input.attachments === undefined ? {} : { attachments: validateRemoteAttachments(input.attachments) }) })
     return context.json({ ok: true })
   })
   app.post('/api/conversations/:id/cancel', async context => {
