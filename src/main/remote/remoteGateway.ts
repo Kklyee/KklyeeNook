@@ -2,6 +2,7 @@ import { once } from 'node:events'
 import { readFile } from 'node:fs/promises'
 import { extname, resolve, sep } from 'node:path'
 import type { Server } from 'node:http'
+import { gzipSync } from 'node:zlib'
 import { serve } from '@hono/node-server'
 import { Hono, type Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
@@ -46,6 +47,7 @@ const permission = (input: Record<string, unknown>) => {
 
 export function createRemoteGatewayApp(port: RemoteAgentPort, options: RemoteGatewayOptions) {
   const app = new Hono()
+  const assets = new Map<string, { data: Buffer; gzip: Buffer }>()
   app.use('*', async (context, next) => {
     context.header('Cache-Control', 'no-store')
     context.header('X-Content-Type-Options', 'nosniff')
@@ -155,11 +157,21 @@ export function createRemoteGatewayApp(port: RemoteAgentPort, options: RemoteGat
     const root = resolve(options.staticRoot)
     const file = resolve(root, urlPath === '/' ? 'index.html' : urlPath.slice(1))
     if (!file.startsWith(root + sep)) return context.notFound()
-    let data: Buffer
-    try { data = await readFile(file) } catch { return context.notFound() }
+    let asset = assets.get(file)
+    if (!asset) {
+      try {
+        const data = await readFile(file)
+        asset = { data, gzip: gzipSync(data) }
+        if (urlPath.startsWith('/assets/')) assets.set(file, asset)
+      } catch { return context.notFound() }
+    }
     const mime: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2' }
     context.header('Content-Type', mime[extname(file)] ?? 'application/octet-stream')
-    return context.body(new Uint8Array(data))
+    context.header('Vary', 'Accept-Encoding')
+    if (urlPath.startsWith('/assets/')) context.header('Cache-Control', 'private, max-age=31536000, immutable')
+    const compressed = /\bgzip\b(?!\s*;\s*q=0(?:\D|$))/.test(context.req.header('accept-encoding') ?? '')
+    if (compressed) context.header('Content-Encoding', 'gzip')
+    return context.body(new Uint8Array(compressed ? asset.gzip : asset.data))
   })
   app.onError((error, context) => {
     if (error instanceof RemoteError) return context.json({ error: error.message }, error.status)

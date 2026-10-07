@@ -1,4 +1,4 @@
-const CACHE = 'kklyeenook-remote-v1'
+const CACHE = 'kklyeenook-remote-__BUILD__'
 const SHELL = ['/', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png']
 
 self.addEventListener('install', event => {
@@ -22,6 +22,8 @@ self.addEventListener('fetch', event => {
   if (!SHELL.includes(url.pathname) && !url.pathname.startsWith('/assets/')) return
   event.respondWith((async () => {
     const cache = await caches.open(CACHE)
+    const cached = await cache.match(event.request)
+    if (cached && url.pathname.startsWith('/assets/')) return cached
     try {
       const response = await fetch(event.request)
       if (response.ok) await cache.put(event.request, response.clone())

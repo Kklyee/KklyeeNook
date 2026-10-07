@@ -1,5 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest'
-import { mkdtemp, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, writeFile, rm, mkdir } from 'node:fs/promises'
+import { gunzipSync } from 'node:zlib'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createRemoteGatewayApp, startRemoteGateway } from './remoteGateway'
@@ -10,6 +11,23 @@ const origin = 'https://desktop.example.ts.net'
 const headers = { 'tailscale-user-login': 'kk@example.com', origin, 'content-type': 'application/json' }
 const snapshot: RemoteConversationSnapshot = { id: 'chat', projectId: 'project', title: 'Chat', status: 'running', updatedAt: 1, permission: 'workspace-write', thinkingLevel: 'off', messages: [], activities: [], queue: [], approvals: [] }
 const cleanup: Array<() => Promise<unknown>> = []
+
+test('compresses authenticated static assets and caches hashed resources without caching APIs', async () => {
+  const { port, options } = fixture()
+  const directory = await mkdtemp(join(tmpdir(), 'nook-remote-assets-'))
+  cleanup.push(() => rm(directory, { recursive: true, force: true }))
+  await mkdir(join(directory, 'assets'))
+  const content = 'export const remote = true;'.repeat(200)
+  await writeFile(join(directory, 'assets', 'entry-hash.js'), content)
+  const app = createRemoteGatewayApp(port, { ...options, staticRoot: directory })
+  const response = await app.request('/assets/entry-hash.js', { headers: { ...headers, 'accept-encoding': 'gzip' } })
+  expect(response.headers.get('content-encoding')).toBe('gzip')
+  expect(response.headers.get('cache-control')).toContain('immutable')
+  expect(gunzipSync(Buffer.from(await response.arrayBuffer())).toString()).toBe(content)
+  expect((await app.request('/assets/entry-hash.js', { headers })).headers.get('content-encoding')).toBeNull()
+  expect((await app.request('/api/projects', { headers })).headers.get('cache-control')).toBe('no-store')
+  expect((await app.request('/assets/entry-hash.js')).status).toBe(401)
+})
 afterEach(async () => { for (const close of cleanup.splice(0)) await close() })
 
 function fixture() {

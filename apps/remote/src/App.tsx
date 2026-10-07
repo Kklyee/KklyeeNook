@@ -1,13 +1,17 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import { ArrowLeftIcon, ChevronRightIcon, FolderIcon, Loader2Icon, PlusIcon, RefreshCwIcon } from 'lucide-react'
 import type { RemoteConversationSnapshot, RemoteConversationSummary, RemoteEvent, RemoteProject, RemoteQueueItem, RemoteQueueMutation, RemoteState } from '@kklyeenook/shared/remote/index'
 import { Button } from '@kklyeenook/ui/components/button'
 import { MessageQueue } from '@kklyeenook/ui/assistant-ui/message-queue'
 import { api } from './api'
 import { Controls, type Selection } from './Controls'
-import { RemoteThread } from './RemoteThread'
 import { Activity } from './Activity'
 import { Approval } from './Approval'
+
+const Thread = lazy(() => import('./RemoteThread').then(module => ({ default: module.RemoteThread })))
+function RemoteThread(props: React.ComponentProps<typeof Thread>) {
+  return <Suspense fallback={<div className="flex-1 animate-pulse bg-surface-muted" aria-label="Loading conversation" />}><Thread {...props} /></Suspense>
+}
 
 function navigate(path: string) { location.hash = path }
 function Header({ title, subtitle, back, children }: { title: string; subtitle?: string; back?: string; children?: ReactNode }) {
@@ -28,10 +32,11 @@ export function App() {
     api<RemoteState>('/state').then(result => { if (active) { setState(result); setError('') } }).catch(error => { if (active) setError(error.message) })
     return () => { active = false }
   }, [attempt])
-  if (!state) return <div className="remote-app"><Header title="KklyeeNook" subtitle="Remote" /><div className="p-6">{error ? <><p role="alert">{error}</p><Button className="mt-4 min-h-11" onClick={() => setAttempt(attempt + 1)}><RefreshCwIcon />Retry</Button></> : <p role="status" className="flex items-center gap-2"><Loader2Icon className="size-4 animate-spin" />Connecting to Desktop…</p>}</div></div>
   const parts = route.split('/').filter(Boolean)
   if (parts[0] !== 'projects' || !parts[1]) return <Projects />
   const projectId = parts[1]
+  if (!parts[2]) return <Project key={projectId} projectId={projectId} />
+  if (!state) return <div className="remote-app"><Header title="KklyeeNook" subtitle="Remote" /><div className="p-6">{error ? <><p role="alert">{error}</p><Button className="mt-4 min-h-11" onClick={() => setAttempt(attempt + 1)}><RefreshCwIcon />Retry</Button></> : <div className="h-32 animate-pulse rounded-2xl bg-surface-muted" aria-label="Loading conversation" />}</div></div>
   if (parts[2] === 'new') return <NewConversation key={projectId} state={state} projectId={projectId} />
   if (parts[2] === 'conversations' && parts[3]) return <Conversation key={parts[3]} state={state} projectId={projectId} id={parts[3]} />
   return <Project key={projectId} projectId={projectId} />
