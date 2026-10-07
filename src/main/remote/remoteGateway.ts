@@ -133,7 +133,7 @@ export function createRemoteGatewayApp(port: RemoteAgentPort, options: RemoteGat
     return context.json({ ok: true })
   })
   app.get('/api/conversations/:id/events', async context => {
-    await port.getConversation(context.req.param('id'))
+    port.assertConversation(context.req.param('id'))
     context.header('X-Accel-Buffering', 'no')
     return streamSSE(context, async stream => {
       let writes = Promise.resolve()

@@ -25,7 +25,7 @@ function fixture() {
     createSession: vi.fn(async (_title: unknown, workspaceId: string) => { order.push('create'); const created = { ...session, id: 'new', workspaceId }; sessions.set('new', created); return created }),
     setPermissionMode: vi.fn(async (id: string, mode: AgentSessionSummary['permissionMode']) => { order.push('permission'); sessions.get(id)!.permissionMode = mode }),
     listRuns: vi.fn(async () => []),
-    listExecutionRecords: vi.fn(async () => []),
+    listExecutionRecords: vi.fn(async (_id: string) => []),
     subscribe: vi.fn((_listener: (event: AgentEventEnvelope) => void) => vi.fn()),
   }
   const config = new AgentConfigStore({
@@ -66,6 +66,24 @@ test('lists only attached database Workspaces, matching Desktop project selectio
   workspaces.list.mockResolvedValue([project, { ...project, id: 'detached', displayName: '.zed', status: 'detached' } as never, { ...project, id: 'missing', status: 'missing' } as never])
   expect((await port.listProjects()).map(item => item.id)).toEqual(['project'])
   await expect(port.getProject('detached')).rejects.toMatchObject({ status: 404 })
+})
+
+test('projects all root run activity segments at Desktop text boundaries and preserves tool identities', async () => {
+  const { port, agents } = fixture()
+  const run = { id: 'run', sessionId: 'chat', status: 'completed', createdAt: 10, updatedAt: 20, completedAt: 20, toolCalls: [], toolResults: [] }
+  agents.listRuns.mockResolvedValue([run, { ...run, id: 'older', createdAt: 1, completedAt: 9 }, { ...run, id: 'child', parentRunId: 'run' }] as never)
+  agents.listExecutionRecords.mockImplementation(async id => id === 'run' ? [
+    { seq: 1, timestamp: 10, runId: 'run', event: { type: 'thinking_delta', text: 'Reason' } },
+    { seq: 2, timestamp: 11, runId: 'run', event: { type: 'text_delta', text: 'First' } },
+    { seq: 3, timestamp: 12, runId: 'run', event: { type: 'tool_started', call: { id: 'read-call', toolName: 'read', args: { path: 'file.ts' } } } },
+    { seq: 4, timestamp: 13, runId: 'run', event: { type: 'tool_finished', result: { toolCallId: 'read-call', status: 'success', content: [{ type: 'text', text: 'result' }] } } },
+    { seq: 5, timestamp: 14, runId: 'run', event: { type: 'thinking_delta', text: 'Next' } },
+    { seq: 6, timestamp: 15, runId: 'run', event: { type: 'text_delta', text: 'Second' } },
+  ] as never : [{ seq: 1, timestamp: 1, runId: 'older', event: { type: 'thinking_delta', text: 'History' } }] as never)
+  const result = await port.getConversation('chat')
+  expect(result.activities.map(item => [item.runId, item.textOffset, item.type])).toEqual([['older', 0, 'thinking'], ['run', 0, 'thinking'], ['run', 5, 'read'], ['run', 5, 'thinking']])
+  expect(result.activities[2]).toMatchObject({ toolCallId: 'read-call', label: '已读取 file.ts', status: 'completed', summary: '读取了 1 个文件' })
+  expect(agents.listExecutionRecords).not.toHaveBeenCalledWith('child')
 })
 
 test('maps existing Workspaces to Projects, filters conversations and excludes paths and provider secrets', async () => {
@@ -159,6 +177,7 @@ test('projects transcript content without signatures, session files, tool argume
   input.messages.push({ role: 'toolResult', timestamp: 3, content: [{ type: 'text', text: 'output' }], details: { internal: 'hidden' } } as never)
   const result = remoteSnapshot(input, { id: 'chat', title: 'Chat', projectId: 'project', status: 'idle', updatedAt: 2 }, 'workspace-write')
   expect(result.messages).toHaveLength(2)
+  expect(result.messages[1].content).toEqual([{ type: 'text', text: 'Reply' }, { type: 'reasoning', text: 'Thinking' }, { type: 'data', name: 'tool-call', data: { toolCallId: 'tool' } }])
   expect(JSON.stringify(result)).not.toContain('opaque-secret')
   expect(JSON.stringify(result)).not.toContain('hidden')
   expect(JSON.stringify(result)).not.toContain('session.jsonl')

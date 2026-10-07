@@ -23,6 +23,9 @@ import type { ExecutionContextService } from '../workspace/executionContextServi
 import type { AgentConfigStore } from '../settings/agentConfigStore'
 import type { AgentSessionSummary } from '@/shared/agent/agentSession'
 import { deriveAgentActivities } from '@/shared/agent/deriveAgentActivities'
+import { groupAgentActivities } from '@/shared/agent/groupAgentActivities'
+import { formatActivityLabel } from '@/shared/agent/agentActivityFormatter'
+import { summarizeAgentActivities } from '@/shared/agent/agentActivitySummary'
 import { getActiveModel } from '@/shared/agent/agentConfig'
 import { getAgentModelChoices } from '../settings/modelCatalog'
 import type { UpdateAgentModelSelectionRequest } from '@/shared/agent/agentSettings'
@@ -34,6 +37,7 @@ export class RemoteError extends Error {
 }
 
 export interface RemoteAgentPort {
+  assertConversation(id: string): void
   getState(): Promise<RemoteState>
   listProjects(): Promise<RemoteProject[]>
   getProject(id: string): Promise<RemoteProject>
@@ -75,17 +79,26 @@ export function createRemoteAgentPort(
     updatedAt: session.updatedAt,
   })
   const activities = async (id: string): Promise<RemoteActivity[]> => {
-    const runs = await agents.listRuns(id)
-    const latest = runs.sort((a, b) => b.createdAt - a.createdAt)[0]
-    if (!latest) return []
-    return deriveAgentActivities(await agents.listExecutionRecords(latest.id), latest).map(activity => ({
-      id: activity.id,
-      label: activity.type === 'thinking' ? 'Thinking' : activity.call.toolName,
-      status: activity.status,
-      detail: activity.type === 'thinking' ? activity.content : 'call' in activity ? [JSON.stringify(activity.call.args), activity.result?.content.filter(part => part.type === 'text').map(part => part.text).join('\n')].filter(Boolean).join('\n') : undefined,
-      startedAt: activity.startedAt,
-      endedAt: activity.endedAt,
-    }))
+    const runs = (await agents.listRuns(id)).filter(run => !run.parentRunId).sort((a, b) => a.createdAt - b.createdAt)
+    return (await Promise.all(runs.map(async run => {
+      const records = await agents.listExecutionRecords(run.id)
+      const derived = deriveAgentActivities(records, run)
+      return groupAgentActivities(records, derived).flatMap(segment => segment.activities.map(activity => ({
+        id: activity.id,
+        type: activity.type,
+        label: formatActivityLabel(activity),
+        status: activity.status,
+        detail: activity.type === 'thinking' ? activity.content : 'call' in activity ? [JSON.stringify(activity.call.args), activity.result?.content.filter(part => part.type === 'text').map(part => part.text).join('\n')].filter(Boolean).join('\n') : undefined,
+        startedAt: activity.startedAt,
+        endedAt: activity.endedAt,
+        runId: run.id,
+        runCreatedAt: run.createdAt,
+        runCompletedAt: run.completedAt,
+        textOffset: segment.textOffset,
+        toolCallId: 'call' in activity ? activity.call.id : undefined,
+        summary: summarizeAgentActivities(segment.activities),
+      })))
+    }))).flat()
   }
   const listModels = async (): Promise<RemoteModel[]> => {
     const choices = getAgentModelChoices(config.get())
@@ -146,6 +159,7 @@ export function createRemoteAgentPort(
     runtimes.get(id)?.reloadConfiguration()
   }
   return {
+    assertConversation(id) { requireSession(id) },
     async getState() {
       const model = getActiveModel(config.get())
       return {

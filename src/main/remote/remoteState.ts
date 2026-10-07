@@ -16,6 +16,7 @@ export function remoteMessage(input: PiAgentMessage, streaming = false): RemoteM
     for (const part of input.content) {
       if (part.type === 'text') content.push({ type: 'text', text: part.text })
       if (part.type === 'thinking') content.push({ type: 'reasoning', text: part.thinking })
+      if (part.type === 'toolCall') content.push({ type: 'data', name: 'tool-call', data: { toolCallId: part.id } })
       if (part.type === 'image' && /^image\/(png|jpeg|gif|webp)$/.test(part.mimeType)) {
         content.push({ type: 'image', image: `data:${part.mimeType};base64,${part.data}` })
       }

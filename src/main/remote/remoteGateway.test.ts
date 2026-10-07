@@ -34,6 +34,7 @@ function fixture() {
   let listener: ((event: RemoteEvent) => void) | undefined
   const unsubscribe = vi.fn()
   const port: RemoteAgentPort = {
+    assertConversation: vi.fn(),
     getState: vi.fn(async () => ({ models: [], permissions: ['read-only' as const], defaults: { permission: 'read-only' as const, provider: 'test', modelId: 'test', thinkingLevel: 'off' } })),
     listProjects: vi.fn(async () => [{ id: 'project', name: 'App', conversationCount: 1, activeRunCount: 1 }]),
     getProject: vi.fn(async () => ({ id: 'project', name: 'App', conversationCount: 1, activeRunCount: 1 })),
@@ -155,4 +156,6 @@ test('SSE snapshots on every reconnect, streams updates and disconnects without 
     await vi.waitFor(() => expect(unsubscribe).toHaveBeenCalledTimes(attempt + 1))
   }
   expect(port.cancel).not.toHaveBeenCalled()
+  expect(port.assertConversation).toHaveBeenCalledTimes(2)
+  expect(port.getConversation).not.toHaveBeenCalled()
 })

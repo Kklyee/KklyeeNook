@@ -40,7 +40,7 @@ export interface RemoteMessage {
   content: Array<{ type: 'text'; text: string } | { type: 'reasoning'; text: string } | {
     type: 'image'
     image: string
-  }>
+  } | { type: 'data'; name: 'tool-call'; data: { toolCallId: string } }>
   status?: 'running' | 'complete' | 'failed' | 'cancelled'
 }
 export interface RemoteActivity {
@@ -50,6 +50,13 @@ export interface RemoteActivity {
   detail?: string
   startedAt?: number
   endedAt?: number
+  type: string
+  runId: string
+  runCreatedAt: number
+  runCompletedAt?: number
+  textOffset: number
+  toolCallId?: string
+  summary: string
 }
 export interface RemoteQueueItem {
   id: string
