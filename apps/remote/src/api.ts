@@ -15,3 +15,16 @@ export async function api<T>(path: string, method = 'GET', body?: unknown): Prom
   if (!response.ok) throw new ApiError(response.status, data.error ?? 'Request failed')
   return data as T
 }
+import type { RemoteConversationSnapshot } from '@kklyeenook/shared/remote/index'
+
+export const conversationSnapshots = new Map<string, RemoteConversationSnapshot>()
+const loadingConversations = new Map<string, Promise<RemoteConversationSnapshot>>()
+
+export function loadConversation(id: string) {
+  let promise = loadingConversations.get(id)
+  if (!promise) {
+    promise = api<RemoteConversationSnapshot>(`/conversations/${id}`).then(snapshot => { conversationSnapshots.set(id, snapshot); return snapshot }).finally(() => loadingConversations.delete(id))
+    loadingConversations.set(id, promise)
+  }
+  return promise
+}

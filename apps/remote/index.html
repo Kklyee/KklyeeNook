@@ -10,9 +10,17 @@
     <link rel="icon" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <title>KklyeeNook Remote</title>
+    <style>
+      html, body { margin: 0; background: var(--ui-bg-solid, #f5f6f7); color: var(--ui-fg, #30343a); }
+      .startup-shell { padding: 24px 20px; font-family: system-ui, sans-serif; }
+      .startup-shell div { height: 64px; margin-top: 16px; border-radius: 16px; background: #e7e9ec; animation: startup-pulse 1.4s ease-in-out infinite alternate; }
+      @keyframes startup-pulse { to { opacity: 0.4; } }
+      @media (prefers-color-scheme: dark) { html, body { background: var(--ui-bg-solid, #202123); color: var(--ui-fg, #e1e2e5); } .startup-shell div { background: #2c2e32; } }
+      @media (prefers-reduced-motion: reduce) { .startup-shell div { animation: none; } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="startup-shell" role="status" aria-label="Loading KklyeeNook"><strong>KklyeeNook</strong><div></div><div></div><div></div></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

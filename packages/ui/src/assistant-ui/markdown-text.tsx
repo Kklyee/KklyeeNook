@@ -10,7 +10,7 @@ import {
   useIsStreamdownCodeBlock,
 } from '@assistant-ui/react-streamdown'
 import remarkGfm from 'remark-gfm'
-import { type FC, memo, useMemo } from 'react'
+import { type FC, lazy, memo, Suspense, useMemo } from 'react'
 import {
   TextMessagePartProvider,
   type TextMessagePartProps,
@@ -20,9 +20,9 @@ import {
 import { CheckIcon, CopyIcon } from 'lucide-react'
 
 import { TooltipIconButton } from './tooltip-icon-button'
-import { MermaidDiagram } from './mermaid-diagram.aui'
-import { SyntaxHighlighter } from './shiki-highlighter.aui'
-import { resolveCodeLanguage } from './shiki-highlighter'
+import type { MermaidDiagramProps } from './mermaid-diagram.aui'
+import type { HighlighterProps } from './shiki-highlighter.aui'
+import { resolveCodeLanguage } from './code-language'
 import { useCopyToClipboard } from '../hooks/use-copy-to-clipboard'
 import { cn } from '../lib/utils'
 import { useStreamingMessage } from './streaming-message'
@@ -30,6 +30,12 @@ import { useStreamingMessage } from './streaming-message'
 type MarkdownTextProps = Partial<TextMessagePartProps> & {
   components?: Parameters<typeof memoizeMarkdownComponents>[0]
 }
+
+const LazyMermaid = lazy(() => import('./mermaid-diagram.aui').then(module => ({ default: module.MermaidDiagram })))
+const LazyHighlighter = lazy(() => import('./shiki-highlighter.aui').then(module => ({ default: module.SyntaxHighlighter })))
+const CodeFallback = ({ code }: { code: string }) => <pre className="overflow-x-auto rounded-xl bg-surface-muted p-3 text-sm"><code>{code}</code></pre>
+const MermaidDiagram = (props: MermaidDiagramProps) => <Suspense fallback={<CodeFallback code={props.code} />}><LazyMermaid {...props} /></Suspense>
+const SyntaxHighlighter = (props: HighlighterProps) => <Suspense fallback={<CodeFallback code={props.code} />}><LazyHighlighter {...props} /></Suspense>
 
 const remarkPlugins = [remarkGfm]
 const pacing = { drainMs: Infinity, maxCharIntervalMs: 4, maxCharsPerFrame: 4, minCommitMs: 16 }
