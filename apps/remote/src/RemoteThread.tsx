@@ -14,6 +14,7 @@ import {
 } from '@assistant-ui/react'
 import type { RemoteActivity, RemoteMessage } from '@kklyeenook/shared/remote/index'
 import { MarkdownText } from '@kklyeenook/ui/assistant-ui/markdown-text'
+import { ImageThumbnail } from '@kklyeenook/ui/assistant-ui/image-thumbnail'
 import { ComposerBar, ComposerSend } from '@kklyeenook/ui/assistant-ui/composer-controls'
 import { StreamingMessage, StreamingText, StreamingThread } from '@kklyeenook/ui/assistant-ui/streaming-message'
 import { Button } from '@kklyeenook/ui/components/button'
@@ -49,7 +50,7 @@ const messageComponents = { UserMessage, AssistantMessage }
 
 function UserMessage() {
   return <MessagePrimitive.Root className="ml-auto my-4 max-w-[90%] rounded-2xl bg-surface-muted px-4 py-3 text-base">
-    <MessagePrimitive.Parts components={{ Text: UserText }} />
+    <MessagePrimitive.Parts components={{ Text: UserText, Image: ImageThumbnail }} />
   </MessagePrimitive.Root>
 }
 

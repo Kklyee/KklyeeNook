@@ -29,7 +29,7 @@ export function Navigation({ open, onOpenChange, route }: { open: boolean; onOpe
   }, [open])
   const select = (path: string) => { location.hash = path; onOpenChange(false) }
   const activeProject = route.split('/')[2] ?? projects?.[0]?.id
-  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="mobile-navigation top-0 left-0 translate-x-0 translate-y-0" showCloseButton={false}>
+  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent initialFocus={false} className="mobile-navigation top-0 left-0 translate-x-0 translate-y-0" showCloseButton={false}>
     <div className="flex items-center justify-between gap-3"><DialogTitle className="text-lg">KklyeeNook</DialogTitle><Button className="min-h-11 rounded-xl" disabled={!activeProject} onClick={() => select(`/projects/${activeProject}/new`)}><PlusIcon className="size-4" />New</Button></div>
     <label className="relative"><SearchIcon className="absolute top-3.5 left-3 size-4 text-muted-foreground" /><Input aria-label="Search conversations" placeholder="Search conversations" value={search} onChange={event => setSearch(event.target.value)} className="min-h-11 rounded-xl pl-9" /></label>
     <nav className="min-h-0 flex-1 overflow-y-auto py-2" aria-label="Projects and conversations">

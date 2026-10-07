@@ -13,6 +13,7 @@ import { AgentActivityGroup } from '@/renderer/src/features/chat/activity/AgentA
 import { QueuedMessages } from '@/renderer/src/features/chat/QueuedMessages'
 import { ThreadFollowupSuggestions } from '@/renderer/src/components/assistant-ui/elements/follow-up-suggestions.aui'
 import { Image } from './image-preview'
+import { ImageThumbnail } from '@kklyeenook/ui/assistant-ui/image-thumbnail'
 import { MarkdownText } from '@/renderer/src/components/assistant-ui/elements/markdown-text'
 import { StreamingMessage, StreamingText, StreamingThread } from './streaming-message'
 import { ThreadScrollViewport, useScrollFollower } from './thread-scroll-follower'
@@ -684,7 +685,7 @@ const UserFilePart: FileMessagePartComponent = (part) => (
 
 const UserImagePart: ImageMessagePartComponent = (part) => (
   <div data-slot="aui_user-message-image" className="py-1">
-    <Image {...part} />
+    <ImageThumbnail {...part} />
   </div>
 )
 
