@@ -1,15 +1,30 @@
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { promisify } from 'node:util'
-import { join } from 'node:path'
+import { win32 } from 'node:path'
 import type { RemoteSettings, RemoteStatus } from '@kklyeenook/shared/remote/index'
 import type { RemoteAgentPort } from './remoteAgentPort'
 import { startRemoteGateway, type RunningRemoteGateway } from './remoteGateway'
 
 const exec = promisify(execFile)
 
+async function tailscaleExecutable(): Promise<string> {
+  if (process.platform !== 'win32') return 'tailscale'
+  const standard = win32.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Tailscale', 'tailscale.exe')
+  if (existsSync(standard)) return standard
+  try {
+    const registry = win32.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'reg.exe')
+    const { stdout } = await exec(registry, ['query', 'HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tailscale', '/v', 'ImagePath'], { timeout: 5000, windowsHide: true })
+    const imagePath = stdout.match(/REG_(?:EXPAND_)?SZ\s+([^\r\n]+)/)?.[1].trim()
+    const service = imagePath?.match(/^"([^"]+)"|^(.+?\.exe)(?:\s|$)/i)
+    if (service) return win32.join(win32.dirname(service[1] ?? service[2]), 'tailscale.exe')
+  } catch {}
+  return 'tailscale'
+}
+
 export async function readTailscaleStatus(): Promise<Pick<RemoteStatus, 'tailscale' | 'url' | 'ownerLogin'>> {
   try {
-    const executable = process.platform === 'win32' ? join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Tailscale', 'tailscale.exe') : 'tailscale'
+    const executable = await tailscaleExecutable()
     const { stdout } = await exec(executable, ['status', '--json'], { timeout: 5000, windowsHide: true })
     const status = JSON.parse(stdout)
     const dnsName = status.Self?.DNSName?.replace(/\.$/, '')
