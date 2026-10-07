@@ -14,6 +14,7 @@ import type { KnowledgeSearchRequest, KnowledgeSource } from '@/shared/knowledge
 export type { AgentBackendInfo, AgentBackendNotification, AgentBackendStatus } from '@/shared/agentBackend'
 
 export interface AgentBackendInitOptions {
+  remoteStaticRoot?: string
   config: AgentConfig
   apiKeys: Record<string, string>
   databaseUrl: string
@@ -33,6 +34,8 @@ export type AgentBackendStartupStage =
   | 'ready'
 
 export type AgentBackendRequest =
+  | { action: 'remote:status' }
+  | { action: 'remote:configure'; settings: import('@kklyeenook/shared/remote/index').RemoteSettings }
   | { action: 'conversation:compact'; id: string; instructions?: string }
   | { action: 'conversation:permission'; id: string; mode: PermissionMode }
   | { action: 'conversation:list' }
@@ -77,6 +80,7 @@ export type MainToAgentBackendMessage =
   | { type: 'shutdown' }
 
 export type AgentBackendToMainMessage =
+  | { type: 'model-selection'; selection: UpdateAgentModelSelectionRequest }
   | { type: 'startup-stage'; stage: AgentBackendStartupStage; detail?: string }
   | { type: 'ready'; info: AgentBackendInfo }
   | { type: 'failed'; message: string }

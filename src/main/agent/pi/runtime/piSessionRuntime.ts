@@ -270,7 +270,7 @@ export class PiSessionRuntime implements PiSessionRuntimePort {
         ...(contextUsage ? { contextUsage } : {}),
         ...(queuedMessages.length ? { queuedMessages } : {}),
       },
-      messages: session.messages as unknown as PiTranscriptMessage[],
+      messages: [...session.messages, ...(session.agent.state.streamingMessage ? [session.agent.state.streamingMessage] : [])] as unknown as PiTranscriptMessage[],
       hostUiRequests: this.extensionUiBridge?.pending() ?? [],
       readiness: model
         ? {

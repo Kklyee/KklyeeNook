@@ -1,0 +1,287 @@
+import type { PiClientEvent, PiThinkingLevel } from '@assistant-ui/react-pi'
+import { PERMISSION_MODES, effectivePermissionMode } from '@kklyeenook/shared/approval/permission'
+import type {
+  RemoteActivity,
+  RemoteApprovalResponse,
+  RemoteConversationSnapshot,
+  RemoteConversationSummary,
+  RemoteCreateConversationInput,
+  RemoteEvent,
+  RemoteEventBody,
+  RemoteModel,
+  RemotePermissionMode,
+  RemoteProject,
+  RemoteQueueMutation,
+  RemoteSendMessageInput,
+  RemoteState,
+} from '@kklyeenook/shared/remote/index'
+import type { WorkspaceService } from '../workspace/workspaceService'
+import type { AgentService } from '../agent/agentService'
+import type { PiClientService } from '../agent/pi/client/piClientService'
+import type { PiSessionRuntimeManager } from '../agent/pi/runtime/piSessionRuntimeManager'
+import type { ExecutionContextService } from '../workspace/executionContextService'
+import type { AgentConfigStore } from '../settings/agentConfigStore'
+import type { AgentSessionSummary } from '@/shared/agent/agentSession'
+import { deriveAgentActivities } from '@/shared/agent/deriveAgentActivities'
+import { getActiveModel } from '@/shared/agent/agentConfig'
+import { getAgentModelChoices } from '../settings/modelCatalog'
+import type { UpdateAgentModelSelectionRequest } from '@/shared/agent/agentSettings'
+import type { ThinkingLevel } from '@/shared/agent/agentConfig'
+import { remoteApproval, remoteMessage, remoteQueue, remoteSnapshot } from './remoteState'
+
+export class RemoteError extends Error {
+  constructor(readonly status: 400 | 404 | 409, message: string) { super(message) }
+}
+
+export interface RemoteAgentPort {
+  getState(): Promise<RemoteState>
+  listProjects(): Promise<RemoteProject[]>
+  getProject(id: string): Promise<RemoteProject>
+  listConversations(projectId: string): Promise<RemoteConversationSummary[]>
+  createConversation(projectId: string, input: RemoteCreateConversationInput): Promise<RemoteConversationSnapshot>
+  getConversation(id: string): Promise<RemoteConversationSnapshot>
+  renameConversation(id: string, title: string): Promise<void>
+  sendMessage(id: string, input: RemoteSendMessageInput): Promise<void>
+  setPermission(id: string, mode: RemotePermissionMode): Promise<void>
+  setModel(id: string, input: { provider: string; modelId: string }): Promise<void>
+  setThinkingLevel(id: string, level: string): Promise<void>
+  cancel(id: string): Promise<void>
+  clearQueue(id: string): Promise<void>
+  updateQueue(id: string, input: RemoteQueueMutation): Promise<void>
+  respondToApproval(id: string, input: RemoteApprovalResponse): Promise<void>
+  listModels(): Promise<RemoteModel[]>
+  subscribe(id: string, listener: (event: RemoteEvent) => void): () => void
+}
+
+export function createRemoteAgentPort(
+  workspaces: WorkspaceService,
+  agents: AgentService,
+  pi: PiClientService,
+  runtimes: PiSessionRuntimeManager,
+  executionContexts: ExecutionContextService,
+  config: AgentConfigStore,
+  saveModelSelection: (selection: UpdateAgentModelSelectionRequest) => void,
+): RemoteAgentPort {
+  const requireSession = (id: string) => {
+    const session = agents.getSession(id)?.toSummary()
+    if (!session || !session.workspaceId) throw new RemoteError(404, 'Conversation not found')
+    return session
+  }
+  const summary = (session: AgentSessionSummary): RemoteConversationSummary => ({
+    id: session.id,
+    projectId: session.workspaceId!,
+    title: session.title ?? 'New Conversation',
+    status: session.activeRunId ? 'running' : 'idle',
+    updatedAt: session.updatedAt,
+  })
+  const activities = async (id: string): Promise<RemoteActivity[]> => {
+    const runs = await agents.listRuns(id)
+    const latest = runs.sort((a, b) => b.createdAt - a.createdAt)[0]
+    if (!latest) return []
+    return deriveAgentActivities(await agents.listExecutionRecords(latest.id), latest).map(activity => ({
+      id: activity.id,
+      label: activity.type === 'thinking' ? 'Thinking' : activity.call.toolName,
+      status: activity.status,
+      detail: activity.type === 'thinking' ? activity.content : 'call' in activity ? [JSON.stringify(activity.call.args), activity.result?.content.filter(part => part.type === 'text').map(part => part.text).join('\n')].filter(Boolean).join('\n') : undefined,
+      startedAt: activity.startedAt,
+      endedAt: activity.endedAt,
+    }))
+  }
+  const listModels = async (): Promise<RemoteModel[]> => {
+    const choices = getAgentModelChoices(config.get())
+    return choices.models.map(model => {
+      const catalog = choices.catalog.find(provider => provider.id === model.provider)?.models.find(item => item.id === model.modelID)
+      return {
+        provider: model.provider,
+        modelId: model.modelID,
+        name: catalog?.name ?? model.modelName ?? model.modelID,
+        supportsThinking: catalog?.reasoning ?? model.reasoning ?? false,
+        thinkingLevels: catalog ? [...catalog.availableThinkingLevels] : ['off'],
+      }
+    })
+  }
+  const checkModel = async (input: { provider: string; modelId: string }) => {
+    const model = (await listModels()).find(model => model.provider === input.provider && model.modelId === input.modelId)
+    if (!model) throw new RemoteError(400, 'Model is not configured')
+    return model
+  }
+  const checkThinking = (model: RemoteModel, level: string) => {
+    if (!model.thinkingLevels.includes(level)) throw new RemoteError(400, 'Thinking level is not supported')
+  }
+  const assertIdle = (id: string) => {
+    const session = requireSession(id)
+    if (session.activeRunId || runtimes.get(id)?.isRunning()) throw new RemoteError(409, 'Wait for the current run to finish')
+  }
+  const getConversation = async (id: string) => {
+    const session = requireSession(id)
+    const context = await executionContexts.resolve(id)
+    const snapshot = remoteSnapshot(await pi.getThread(id), summary(session), effectivePermissionMode(session.permissionMode, !!context.workspace, config.get().defaultPermissionMode))
+    snapshot.activities = await activities(id)
+    return snapshot
+  }
+  const listProjects = async () => {
+    const sessions = (await agents.listSessions()).filter(session => !session.archived)
+    return (await workspaces.list()).map(workspace => {
+      const conversations = sessions.filter(session => session.workspaceId === workspace.id)
+      return {
+        id: workspace.id,
+        name: workspace.displayName,
+        conversationCount: conversations.length,
+        activeRunCount: conversations.filter(session => session.activeRunId).length,
+        updatedAt: Math.max(workspace.updatedAt, ...conversations.map(session => session.updatedAt)),
+      }
+    })
+  }
+  const getProject = async (id: string) => {
+    const project = (await listProjects()).find(project => project.id === id)
+    if (!project) throw new RemoteError(404, 'Project not found')
+    return project
+  }
+  const setPermission = async (id: string, mode: RemotePermissionMode) => {
+    assertIdle(id)
+    if (!PERMISSION_MODES.includes(mode)) throw new RemoteError(400, 'Invalid permission mode')
+    const context = await executionContexts.resolve(id)
+    if (mode === 'workspace-write' && !context.workspace) throw new RemoteError(409, 'Project is unavailable')
+    await agents.setPermissionMode(id, mode)
+    runtimes.get(id)?.reloadConfiguration()
+  }
+  return {
+    async getState() {
+      const model = getActiveModel(config.get())
+      return {
+        models: await listModels(),
+        permissions: PERMISSION_MODES,
+        defaults: { permission: config.get().defaultPermissionMode ?? 'workspace-write', provider: model.provider, modelId: model.modelID, thinkingLevel: model.thinkingLevel ?? 'off' },
+      }
+    },
+    listProjects,
+    getProject,
+    async listConversations(projectId) {
+      await getProject(projectId)
+      return (await agents.listSessions()).filter(session => session.workspaceId === projectId && !session.archived).map(summary).sort((a, b) => b.updatedAt - a.updatedAt)
+    },
+    async createConversation(projectId, input) {
+      await getProject(projectId)
+      const workspace = await workspaces.resolve(projectId)
+      if (workspace.status !== 'attached') throw new RemoteError(409, 'Project is unavailable')
+      if (!PERMISSION_MODES.includes(input.permission) || !input.prompt.trim()) throw new RemoteError(400, 'Permission and initial prompt are required')
+      checkThinking(await checkModel(input), input.thinkingLevel)
+      const session = await agents.createSession(undefined, projectId)
+      await setPermission(session.id, input.permission)
+      saveModelSelection({ provider: input.provider, modelId: input.modelId, thinkingLevel: input.thinkingLevel as ThinkingLevel })
+      await pi.setModel(session.id, input)
+      await pi.setThinkingLevel(session.id, input.thinkingLevel as PiThinkingLevel)
+      await pi.sendMessage(session.id, { content: input.prompt })
+      return getConversation(session.id)
+    },
+    getConversation,
+    async renameConversation(id, title) {
+      requireSession(id)
+      if (!title.trim()) throw new RemoteError(400, 'Title is required')
+      await pi.renameThread(id, title.trim())
+    },
+    async sendMessage(id, input) {
+      const session = requireSession(id)
+      if (!input.content.trim()) throw new RemoteError(400, 'Message is required')
+      if (!['normal', 'followUp', 'steer'].includes(input.mode)) throw new RemoteError(400, 'Invalid send mode')
+      if (input.mode === 'normal' && (session.activeRunId || runtimes.get(id)?.isRunning())) throw new RemoteError(409, 'Run is active; choose follow-up or steer')
+      await pi.sendMessage(id, { content: input.content, streamingBehavior: input.mode === 'normal' ? undefined : input.mode })
+    },
+    setPermission,
+    async setModel(id, input) {
+      assertIdle(id)
+      const model = await checkModel(input)
+      const configured = getAgentModelChoices(config.get()).models.find(item => item.provider === input.provider && item.modelID === input.modelId)
+      const thinkingLevel = configured?.thinkingLevel ?? model.thinkingLevels[0] ?? 'off'
+      await pi.setModel(id, input)
+      saveModelSelection({ ...input, thinkingLevel: thinkingLevel as ThinkingLevel })
+      await pi.setThinkingLevel(id, thinkingLevel as PiThinkingLevel)
+    },
+    async setThinkingLevel(id, level) {
+      assertIdle(id)
+      const snapshot = await getConversation(id)
+      if (!snapshot.model) throw new RemoteError(409, 'Select a model first')
+      checkThinking(await checkModel(snapshot.model), level)
+      await pi.setThinkingLevel(id, level as PiThinkingLevel)
+      saveModelSelection({ ...snapshot.model, thinkingLevel: level as ThinkingLevel })
+    },
+    async cancel(id) { requireSession(id); await pi.cancelRun(id) },
+    async clearQueue(id) { requireSession(id); await pi.clearQueue(id) },
+    async updateQueue(id, input) {
+      requireSession(id)
+      try { await pi.updateQueuedMessage(id, input) }
+      catch { throw new RemoteError(409, 'Queue changed; refresh and retry') }
+    },
+    async respondToApproval(id, input) {
+      requireSession(input.conversationId)
+      const snapshot = await pi.getThread(input.conversationId)
+      const request = snapshot.hostUiRequests?.find(request => request.id === id)
+      if (!request) throw new RemoteError(409, 'Approval is no longer pending')
+      if (request.kind === 'confirm' && !('confirmed' in input)) throw new RemoteError(400, 'Confirmation is required')
+      if (request.kind !== 'confirm' && 'confirmed' in input) throw new RemoteError(400, 'Invalid approval response')
+      if (request.kind === 'select' && 'value' in input && !request.options.includes(input.value)) throw new RemoteError(400, 'Invalid approval option')
+      const response = 'confirmed' in input ? { requestId: id, confirmed: input.confirmed } : 'value' in input ? { requestId: id, value: input.value } : { requestId: id, dismissed: true as const }
+      await pi.respondToHostUiRequest(input.conversationId, response)
+    },
+    listModels,
+    subscribe(id, listener) {
+      requireSession(id)
+      let seq = 0
+      let active = true
+      let approvals: RemoteConversationSnapshot['approvals'] = []
+      let chain = Promise.resolve()
+      const emit = (event: RemoteEventBody) => { if (active) listener({ ...event, seq: ++seq } as RemoteEvent) }
+      const receive = async (event: PiClientEvent) => {
+        if (!active) return
+        switch (event.type) {
+          case 'snapshot': {
+            const context = await executionContexts.resolve(id)
+            const session = requireSession(id)
+            const snapshot = remoteSnapshot(event.snapshot, summary(session), effectivePermissionMode(session.permissionMode, !!context.workspace, config.get().defaultPermissionMode))
+            snapshot.activities = await activities(id)
+            approvals = snapshot.approvals
+            emit({ type: 'snapshot', snapshot } as RemoteEventBody)
+            break
+          }
+          case 'message_start':
+          case 'message_update':
+          case 'message_end': {
+            const message = remoteMessage(event.message, event.type !== 'message_end')
+            if (message) emit({ type: 'message', message } as RemoteEventBody)
+            break
+          }
+          case 'queue_update': emit({ type: 'queue', queue: remoteQueue(event.steering, event.followUp) } as RemoteEventBody); break
+          case 'extension_ui_request':
+            approvals = [...approvals.filter(item => item.id !== event.request.id), remoteApproval(event.request)]
+            emit({ type: 'approvals', approvals } as RemoteEventBody)
+            break
+          case 'extension_ui_resolved':
+            approvals = approvals.filter(item => item.id !== event.requestId)
+            emit({ type: 'approvals', approvals } as RemoteEventBody)
+            break
+          case 'agent_start': emit({ type: 'status', status: 'running' } as RemoteEventBody); break
+          case 'agent_settled':
+            emit({ type: 'snapshot', snapshot: await getConversation(id) } as RemoteEventBody)
+            break
+          case 'session_info_changed':
+          case 'thinking_level_changed':
+            if (!runtimes.get(id)?.isRunning()) emit({ type: 'snapshot', snapshot: await getConversation(id) } as RemoteEventBody)
+            break
+          case 'error': emit({ type: 'error', error: event.error } as RemoteEventBody); break
+        }
+      }
+      const unsubscribePi = pi.subscribe(id, event => {
+        chain = chain.then(() => receive(event)).catch(() => emit({ type: 'error', error: 'Unable to refresh conversation' } as RemoteEventBody))
+      })
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const unsubscribeActivity = agents.subscribe(envelope => {
+        if (envelope.sessionId !== id || timer) return
+        timer = setTimeout(() => {
+          timer = undefined
+          chain = chain.then(async () => emit({ type: 'activity', activities: await activities(id) } as RemoteEventBody)).catch(() => undefined)
+        }, 150)
+      })
+      return () => { active = false; clearTimeout(timer); unsubscribePi(); unsubscribeActivity() }
+    },
+  }
+}

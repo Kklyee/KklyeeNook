@@ -51,6 +51,10 @@ const context = {
 }
 
 const api = {
+  remote: {
+    status(): Promise<import('@kklyeenook/shared/remote/index').RemoteStatus> { return ipcRenderer.invoke(IPC_CHANNELS.REMOTE_STATUS) },
+    configure(settings: import('@kklyeenook/shared/remote/index').RemoteSettings): Promise<import('@kklyeenook/shared/remote/index').RemoteStatus> { return ipcRenderer.invoke(IPC_CHANNELS.REMOTE_CONFIGURE, settings) },
+  },
   wallpaper: {
     get(): Promise<string | null> {
       return ipcRenderer.invoke(IPC_CHANNELS.WALLPAPER_GET)

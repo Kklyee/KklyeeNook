@@ -1,4 +1,6 @@
 import { SandboxService } from '@/main/sandbox/sandboxService'
+import { createRemoteAgentPort } from '@/main/remote/remoteAgentPort'
+import { RemoteController } from '@/main/remote/remoteController'
 import { platformSandboxBackend } from '@/main/sandbox/sandboxBackend'
 import { PERMISSION_MODES } from '@/shared/approval/permission'
 import { ExecutionContextService } from '@/main/workspace/executionContextService'
@@ -71,6 +73,7 @@ export async function createAgentBackend(
   reportStartupStage: StartupStageReporter = () => undefined,
   notify: (notification: AgentBackendNotification) => void = () => undefined,
   publishActivity: (envelope: AgentEventEnvelope) => void = () => undefined,
+  publishModelSelection: (selection: import('@/shared/agent/agentSettings').UpdateAgentModelSelectionRequest) => void = () => undefined,
 ): Promise<AgentBackendRuntime> {
   const configStore = new AgentConfigStore(options.config)
   let credentialStore = createCredentialStore(options.apiKeys)
@@ -81,6 +84,7 @@ export async function createAgentBackend(
   reportStartupStage('database_connected')
 
   let server: RunningAgentHttpServer | undefined
+  let remote: RemoteController | undefined
   let scheduledTaskScheduler: ScheduledTaskScheduler | undefined
   let mcpServerManager: McpServerManager | undefined
   let knowledge: KnowledgeRuntime | undefined
@@ -177,6 +181,14 @@ export async function createAgentBackend(
 
       agentDir: sessionDir,
     })
+    remote = new RemoteController(
+      createRemoteAgentPort(workspaceService, agentService, piClientService, sessionRuntimeManager, executionContexts, configStore, selection => {
+        configStore.set(updateAgentModelSelectionFromCatalog(configStore.get(), { provider: selection.provider, modelID: selection.modelId, thinkingLevel: selection.thinkingLevel }))
+        publishModelSelection(selection)
+      }),
+      options.remoteStaticRoot ?? join(process.cwd(), 'apps/remote/dist'),
+    )
+    await remote.configure(configStore.get().remote ?? { enabled: false })
     server = await startAgentHttpServer(piClient, {
       allowedOrigins: options.allowedOrigins,
     })
@@ -187,6 +199,13 @@ export async function createAgentBackend(
       baseUrl: server.baseUrl,
       async handleRequest(request) {
         switch (request.action) {
+          case 'remote:status':
+            return remote!.status()
+          case 'remote:configure': {
+            const status = await remote!.configure(request.settings)
+            configStore.set({ ...configStore.get(), remote: request.settings })
+            return status
+          }
           case 'conversation:compact': {
             const snapshot = await piClientService.getThread(request.id)
             if (snapshot.metadata.status === 'running') throw new Error('运行中无法整理上下文')
@@ -315,6 +334,7 @@ export async function createAgentBackend(
         return piClient.subscribe(request.threadId, listener, request.options)
       },
       async close() {
+        await remote?.close()
         unsubscribeActivity()
         scheduledTaskScheduler?.stop()
         await knowledge?.close()
@@ -327,6 +347,7 @@ export async function createAgentBackend(
       },
     }
   } catch (error) {
+    await remote?.close()
     scheduledTaskScheduler?.stop()
     await knowledge?.close()
     await mcpServerManager?.close()

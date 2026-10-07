@@ -154,6 +154,9 @@ test('reports a product run as running before Pi begins streaming', async () => 
     expect(runtime.isRunning()).toBe(false)
     expect(runtime.getSnapshot({ id: 'session-1', status: 'running', runningRunId: 'run-1' }).metadata.status).toBe('running')
     expect(runtime.getSnapshot({ id: 'session-1', status: 'idle' }).metadata.status).toBe('idle')
+    const streaming = { role: 'assistant', timestamp: 1, content: [{ type: 'text', text: 'Partial response' }] }
+    Object.assign(session.agent.state, { streamingMessage: streaming })
+    expect(runtime.getSnapshot({ id: 'session-1', status: 'running' }).messages).toEqual([streaming])
   } finally {
     runtime.dispose()
   }

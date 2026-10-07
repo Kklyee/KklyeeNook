@@ -1,0 +1,120 @@
+import type { PermissionMode } from '../approval/permission'
+
+export type RemotePermissionMode = PermissionMode
+export interface RemoteSettings {
+  enabled: boolean
+  allowedLogin?: string
+}
+export interface RemoteStatus extends RemoteSettings {
+  running: boolean
+  tailscale: 'connected' | 'disconnected' | 'unavailable'
+  url?: string
+  ownerLogin?: string
+  error?: string
+}
+export interface RemoteProject {
+  id: string
+  name: string
+  conversationCount: number
+  activeRunCount: number
+  updatedAt?: number
+}
+export interface RemoteModel {
+  provider: string
+  modelId: string
+  name: string
+  supportsThinking: boolean
+  thinkingLevels: string[]
+}
+export interface RemoteConversationSummary {
+  id: string
+  projectId: string
+  title: string
+  status: 'idle' | 'running' | 'failed'
+  updatedAt: number
+}
+export interface RemoteMessage {
+  id: string
+  role: 'user' | 'assistant'
+  timestamp: number
+  content: Array<{ type: 'text'; text: string } | { type: 'reasoning'; text: string } | {
+    type: 'image'
+    image: string
+  }>
+  status?: 'running' | 'complete' | 'failed' | 'cancelled'
+}
+export interface RemoteActivity {
+  id: string
+  label: string
+  status: 'running' | 'completed' | 'failed' | 'waiting'
+  detail?: string
+  startedAt?: number
+  endedAt?: number
+}
+export interface RemoteQueueItem {
+  id: string
+  text: string
+  steer: boolean
+  index: number
+  expected: string[]
+}
+export type RemoteQueueMutation = {
+  mode: 'steer' | 'followUp'
+  expected: string[]
+  index: number
+} & (
+  | { action: 'remove' }
+  | { action: 'steer' }
+  | { action: 'edit'; value: string }
+  | { action: 'move'; value: number }
+)
+export type RemoteApproval = {
+  id: string
+  title: string
+  timeoutMs?: number
+} & (
+  | { kind: 'confirm'; message: string }
+  | { kind: 'select'; options: readonly string[] }
+  | { kind: 'input'; placeholder?: string }
+  | { kind: 'editor'; prefill?: string }
+)
+export type RemoteApprovalAnswer =
+  | { confirmed: boolean }
+  | { value: string }
+  | { dismissed: true }
+export type RemoteApprovalResponse = { conversationId: string } & RemoteApprovalAnswer
+export interface RemoteConversationSnapshot extends RemoteConversationSummary {
+  permission: RemotePermissionMode
+  model?: { provider: string; modelId: string }
+  thinkingLevel: string
+  messages: RemoteMessage[]
+  activities: RemoteActivity[]
+  queue: RemoteQueueItem[]
+  approvals: RemoteApproval[]
+  error?: string
+}
+export interface RemoteCreateConversationInput {
+  permission: RemotePermissionMode
+  provider: string
+  modelId: string
+  thinkingLevel: string
+  prompt: string
+}
+export interface RemoteSendMessageInput {
+  content: string
+  mode: 'normal' | 'followUp' | 'steer'
+}
+export interface RemoteState {
+  models: RemoteModel[]
+  permissions: RemotePermissionMode[]
+  defaults: Omit<RemoteCreateConversationInput, 'prompt'>
+}
+export type RemoteEventBody =
+  | { type: 'snapshot'; snapshot: RemoteConversationSnapshot }
+  | { type: 'message'; message: RemoteMessage }
+  | { type: 'activity'; activities: RemoteActivity[] }
+  | { type: 'queue'; queue: RemoteQueueItem[] }
+  | { type: 'approvals'; approvals: RemoteApproval[] }
+  | { type: 'status'; status: RemoteConversationSummary['status'] }
+  | { type: 'error'; error: string }
+export type RemoteEvent = RemoteEventBody & { seq: number }

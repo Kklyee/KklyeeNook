@@ -1,4 +1,6 @@
 import { ExecutionContextService } from '../workspace/executionContextService'
+import { registerRemoteIpc } from '../remote/remoteIpc'
+import { updateAgentModelSelectionFromCatalog } from '../settings/modelCatalog'
 import { WorkspacePreviewService } from '../preview/workspacePreviewService'
 import { registerPreviewIpc } from '../preview/previewIpc'
 import { WorkspaceService } from '../workspace/workspaceService'
@@ -107,12 +109,16 @@ export async function bootstrap(): Promise<AppContext> {
   const executionContexts = new ExecutionContextService(new DrizzleAgentSessionRepo(db), workspaceService, () => configStore.get().defaultPermissionMode ?? 'workspace-write')
   const contextAttachments = new ContextAttachmentService()
   const backendProcess = createAgentBackendProcess()
+  const disposeModelSelection = backendProcess.onModelSelection(selection => {
+    configStore.set(updateAgentModelSelectionFromCatalog(configStore.get(), { provider: selection.provider, modelID: selection.modelId, thinkingLevel: selection.thinkingLevel }))
+  })
   const disposeBackendNotifications = backendProcess.onNotification((notification) => {
     if (!Notification.isSupported()) return
     new Notification(notification).show()
   })
   const rendererUrl = is.dev ? process.env.ELECTRON_RENDERER_URL : undefined
   const backendOptions: AgentBackendInitOptions = {
+    remoteStaticRoot: app.isPackaged ? join(process.resourcesPath, 'remote') : join(app.getAppPath(), 'apps/remote/dist'),
     config: configStore.get(),
     apiKeys: collectRuntimeCredentials(configStore.get(), credentialStore),
     databaseUrl,
@@ -155,6 +161,7 @@ export async function bootstrap(): Promise<AppContext> {
       backendProcess.request({ action: 'settings:model-selection', selection }),
   })
   const disposeWindowIpc = registerWindowIpc(chatWindow)
+  const disposeRemoteIpc = registerRemoteIpc(chatWindow, configStore, backendProcess)
   const disposeAgentRunIpc = registerAgentRunIpc(backendProcess)
   const disposeAgentSkillIpc = registerAgentSkillIpc(backendProcess)
   const disposeScheduledTaskIpc = registerScheduledTaskIpc(backendProcess)
@@ -177,6 +184,8 @@ export async function bootstrap(): Promise<AppContext> {
 
   return {
     async dispose() {
+      disposeRemoteIpc()
+      disposeModelSelection()
       disposePreviewIpc()
       disposeWorkspaceIpc()
       disposeAgentBackendIpc()

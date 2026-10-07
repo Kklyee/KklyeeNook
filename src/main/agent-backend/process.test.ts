@@ -94,6 +94,22 @@ function makeProcess() {
   return { backend, child }
 }
 
+test('publishes Remote model selections to the desktop and removes detached listeners', async () => {
+  const { backend, child } = makeProcess()
+  await backend.start(options)
+  const listener = vi.fn()
+  const unsubscribe = backend.onModelSelection(listener)
+  const selection = { provider: 'test', modelId: 'model', thinkingLevel: 'low' }
+  child.emit('message', { type: 'model-selection', selection })
+  expect(listener).toHaveBeenCalledWith(selection)
+  unsubscribe()
+  child.emit('message', { type: 'model-selection', selection })
+  expect(listener).toHaveBeenCalledTimes(1)
+  const closed = backend.close()
+  child.emit('exit', 0)
+  await closed
+})
+
 test('waits for backend readiness, proxies requests, and lets the backend finish shutdown', async () => {
   const { backend, child } = makeProcess()
   const status = await backend.start(options)

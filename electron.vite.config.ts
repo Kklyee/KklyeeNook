@@ -7,6 +7,7 @@ export default defineConfig({
   main: {
     resolve: { alias: { '@': resolve('src') } },
     build: {
+      externalizeDeps: { exclude: ['@kklyeenook/shared'] },
       rollupOptions: {
         input: {
           index: resolve('src/main/index.ts'),
@@ -17,5 +18,5 @@ export default defineConfig({
     },
   },
   preload: { resolve: { alias: { '@': resolve('src') } } },
-  renderer: { resolve: { alias: { '@': resolve('src') } }, plugins: [react(), tailwindcss()] },
+  renderer: { resolve: { alias: { '@': resolve('src') }, dedupe: ['react', 'react-dom', '@assistant-ui/react', '@assistant-ui/store'] }, plugins: [react(), tailwindcss()] },
 });

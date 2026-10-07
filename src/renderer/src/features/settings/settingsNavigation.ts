@@ -6,12 +6,14 @@ import {
   GlobeIcon,
   ImageIcon,
   ServerIcon,
+  SmartphoneIcon,
   ShieldCheckIcon,
   SparklesIcon,
   TextSearchIcon,
 } from 'lucide-react'
 
 export type SettingsTab =
+  | 'remote'
   | 'appearance'
   | 'model'
   | 'web-search'
@@ -32,6 +34,13 @@ export type SettingsNavigationItem = {
 }
 
 export const settingsNavigation: SettingsNavigationItem[] = [
+  {
+    id: 'remote',
+    label: 'Remote',
+    description: '通过 Tailscale 在手机上使用 Desktop Agent。',
+    icon: SmartphoneIcon,
+    layout: 'preferences',
+  },
   {
     id: 'appearance',
     label: '外观',

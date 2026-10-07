@@ -30,6 +30,7 @@ async function handleMessage(message: MainToAgentBackendMessage): Promise<void> 
         },
         (notification) => parentPort?.postMessage({ type: 'notification', notification }),
         (envelope) => parentPort?.postMessage({ type: 'activity-event', envelope }),
+        (selection) => parentPort?.postMessage({ type: 'model-selection', selection }),
       )
       postStartupStage('ready')
       parentPort?.postMessage({

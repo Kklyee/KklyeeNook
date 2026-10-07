@@ -2,6 +2,8 @@ export type WindowMenu = 'application' | 'edit'
 export type WindowMenuAction = 'settings'
 
 export const IPC_CHANNELS = {
+  REMOTE_STATUS: 'remote:status',
+  REMOTE_CONFIGURE: 'remote:configure',
   CONVERSATION_COMPACT: 'conversation:compact',
   WALLPAPER_GET: 'wallpaper:get',
   WALLPAPER_CHOOSE: 'wallpaper:choose',

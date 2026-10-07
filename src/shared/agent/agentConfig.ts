@@ -62,6 +62,7 @@ export const DEFAULT_AGENT_COMPACTION_SETTINGS: AgentCompactionSettings = {
 }
 
 export type AgentConfig = {
+  remote?: import('@kklyeenook/shared/remote/index').RemoteSettings
   model: ModelConfig
   models?: SavedModelConfig[]
   activeModelId?: string

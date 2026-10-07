@@ -14,6 +14,7 @@ import { SkillSettings } from './SkillSettings'
 import { WebSearchSettings } from './WebSearchSettings'
 import { settingsNavigation, type SettingsTab } from './settingsNavigation'
 import { AppearanceSettings } from './AppearanceSettings'
+import { RemoteSettings } from './RemoteSettings'
 
 export function SettingsPage({
   settings,
@@ -112,7 +113,7 @@ export function SettingsPage({
 }
 
 const settingsPanels: Record<
-  Exclude<SettingsTab, 'appearance'>,
+  Exclude<SettingsTab, 'appearance' | 'remote'>,
   ComponentType<{ settings: AgentSettingsSnapshot; onChanged: () => Promise<void> }>
 > = {
   model: ModelSettings,
@@ -137,6 +138,7 @@ function SettingsContent({
   onChanged: () => Promise<void>
 }) {
   if (tab === 'appearance') return <AppearanceSettings />
+  if (tab === 'remote') return <RemoteSettings />
   if (error)
     return (
       <p role="alert" className="text-destructive text-sm">

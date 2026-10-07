@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import type { UpdateAgentModelSelectionRequest } from '@/shared/agent/agentSettings'
 import type { AgentEventEnvelope } from '@/shared/agent/agentExecutionRecord'
 
 import type {
@@ -38,6 +39,7 @@ export class AgentBackendProcess {
   private readonly statusListeners = new Set<(status: AgentBackendStatus) => void>()
   private readonly notificationListeners = new Set<(notification: AgentBackendNotification) => void>()
   private readonly activityListeners = new Set<(envelope: AgentEventEnvelope) => void>()
+  private readonly modelSelectionListeners = new Set<(selection: UpdateAgentModelSelectionRequest) => void>()
   private readonly pendingRequests = new Map<string, PendingRequest>()
   private resolveStart: ((status: AgentBackendStatus) => void) | undefined
   private startTimer: ReturnType<typeof setTimeout> | undefined
@@ -68,6 +70,11 @@ export class AgentBackendProcess {
   onActivityEvent(listener: (envelope: AgentEventEnvelope) => void): () => void {
     this.activityListeners.add(listener)
     return () => this.activityListeners.delete(listener)
+  }
+
+  onModelSelection(listener: (selection: UpdateAgentModelSelectionRequest) => void): () => void {
+    this.modelSelectionListeners.add(listener)
+    return () => this.modelSelectionListeners.delete(listener)
   }
 
   async start(
@@ -208,6 +215,10 @@ export class AgentBackendProcess {
     }
     if (message.type === 'notification') {
       for (const listener of this.notificationListeners) listener(message.notification)
+      return
+    }
+    if (message.type === 'model-selection') {
+      for (const listener of this.modelSelectionListeners) listener(message.selection)
       return
     }
     if (message.type === 'activity-event') {

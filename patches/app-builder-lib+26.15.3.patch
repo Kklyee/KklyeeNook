@@ -1,0 +1,13 @@
+diff --git a/node_modules/app-builder-lib/out/node-module-collector/pnpmNodeModulesCollector.js b/node_modules/app-builder-lib/out/node-module-collector/pnpmNodeModulesCollector.js
+index 6330cbe..7223a8d 100644
+--- a/node_modules/app-builder-lib/out/node-module-collector/pnpmNodeModulesCollector.js
++++ b/node_modules/app-builder-lib/out/node-module-collector/pnpmNodeModulesCollector.js
+@@ -76,7 +76,7 @@ class PnpmNodeModulesCollector extends nodeModulesCollector_1.NodeModulesCollector {
+         const skipDownwardSearch = !(await this.isHoisted.value);
+         const promise = (async () => {
+             const fromDep = parentPath ? await this.cache.locatePackageVersion({ pkgName, parentDir: parentPath, requiredRange, skipDownwardSearch }) : null;
+-            if (fromDep) {
++            if (fromDep && (!memoKey || fromDep.packageJson.version === requiredRange)) {
+                 return fromDep;
+             }
+             return this.cache.locatePackageVersion({ pkgName, parentDir: this.rootDir, requiredRange, skipDownwardSearch });

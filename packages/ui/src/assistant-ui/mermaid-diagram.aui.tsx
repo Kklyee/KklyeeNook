@@ -1,0 +1,43 @@
+"use client";
+
+import { memo, type FC } from "react";
+import { useIsCodeFenceIncomplete } from "streamdown";
+import type { SyntaxHighlighterProps } from "@assistant-ui/react-markdown";
+import {
+  MermaidDiagram as MermaidDiagramBase,
+  MermaidZoom,
+} from "./mermaid-diagram";
+
+export type MermaidDiagramProps = SyntaxHighlighterProps & {
+  className?: string;
+};
+
+
+const MermaidDiagramImpl: FC<MermaidDiagramProps> = ({
+  code,
+  className,
+  node: _node,
+  components: _components,
+  language: _language,
+}) => {
+  const isStreaming = useIsCodeFenceIncomplete();
+
+  return (
+    <MermaidDiagramBase
+      code={code}
+      {...(className !== undefined ? { className } : {})}
+      streaming={isStreaming}
+    />
+  );
+};
+
+const MermaidDiagram = memo(
+  MermaidDiagramImpl,
+) as unknown as FC<MermaidDiagramProps> & {
+  Zoom: typeof MermaidZoom;
+};
+
+MermaidDiagram.displayName = "MermaidDiagram";
+MermaidDiagram.Zoom = MermaidZoom;
+
+export { MermaidDiagram, MermaidZoom };

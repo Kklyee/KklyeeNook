@@ -46,5 +46,7 @@ publish:
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/
 extraResources:
+  - from: apps/remote/dist
+    to: remote
   - from: drizzle
     to: drizzle

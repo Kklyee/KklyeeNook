@@ -1,0 +1,30 @@
+@import 'tailwindcss';
+@import 'tw-shimmer';
+@import '@kklyeenook/ui/tokens/graphite-frost.css';
+@source '../../../packages/ui/src';
+@source '../../../node_modules/streamdown/dist/*.js';
+@custom-variant dark (&:is(.dark *));
+@custom-variant data-open (&:where([data-state='open'], [data-open]:not([data-open='false'])));
+@custom-variant data-closed (&:where([data-state='closed'], [data-closed]:not([data-closed='false'])));
+
+@layer base {
+  * { border-color: var(--ui-border); }
+  html { height: 100%; background: var(--ui-bg-solid); color: var(--ui-fg); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  body { margin: 0; height: 100%; }
+  #root { height: 100%; }
+  button, input, textarea { font: inherit; }
+  button { touch-action: manipulation; }
+}
+
+.remote-app { display: flex; flex-direction: column; height: 100dvh; max-width: 100%; overflow: hidden; padding-top: env(safe-area-inset-top); background: radial-gradient(ellipse at top right, var(--ui-brand-muted), transparent 65%), var(--ui-bg-solid); }
+.remote-header { background: var(--ui-surface); backdrop-filter: blur(24px); }
+.material-control { border: 1px solid var(--ui-border); background: var(--ui-control); box-shadow: var(--ui-shadow); backdrop-filter: blur(20px); }
+.composer-dock { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); background: var(--ui-surface); backdrop-filter: blur(24px); }
+.aui-md { overflow-wrap: anywhere; font-size: 15px; line-height: 1.7; }
+.aui-md pre { max-width: 100%; overflow-x: auto; }
+.aui-md table { display: block; max-width: 100%; overflow-x: auto; }
+[data-slot='branch-list-items'] { padding-left: 1rem; border-left: 1px solid var(--ui-border); }
+[data-slot='message-queue'] button { min-width: 2.75rem; min-height: 2.75rem; }
+[data-slot='message-queue'] li { flex-wrap: wrap; padding-block: 0.35rem; }
+[data-slot='approval-card'] button { min-height: 2.75rem; }
+@keyframes nook-word-fade { from { opacity: 0; } to { opacity: 1; } }

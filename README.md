@@ -5,11 +5,25 @@ Electron、React、TypeScript 桌面 Agent。
 ## 开发
 
 ```sh
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
-验证：`npm test`、`npm run lint`、`npm run build`。Windows 打包：`npm run build:win`。
+验证：`pnpm test`、`pnpm run lint`、`pnpm run build`。Windows 打包：`pnpm run build:win`。
+
+## Remote
+
+Remote 是手机优先的 PWA，Project 复用 Desktop 的 Workspace。Desktop 保留在根目录，`apps/remote` 提供独立移动端布局，`packages/shared` 和 `packages/ui` 提供共享类型、权限定义、Graphite Frost tokens 和 assistant-ui elements。
+
+运行 `pnpm run remote:build` 构建 PWA，然后在 Desktop Settings → Remote 打开 Enable Remote。电脑和手机连接 Tailscale 后，在电脑运行 `tailscale serve --bg 43127`，手机浏览器打开设置中的 Remote URL，再添加到主屏幕。Allowed User 留空时只接受电脑所属的 Tailscale 用户，填写后只接受指定 login。需要 Tailscale HTTPS 和 Serve；不使用 Funnel。
+
+Gateway 固定监听 `127.0.0.1:43127`，校验 Serve 提供的用户身份，手机只能访问 Remote API。Gateway 直接复用原有 Agent 服务和 Pi Session。手机断线或关闭页面不会停止任务，重新连接会获取完整快照并继续 SSE 更新。Permission、Model 和 Thinking 使用 Desktop 的同一语义；模型选择也会保存为 Desktop 的默认选择。
+
+手机可以查看项目与会话、新建会话、发送 prompt、运行中 follow-up 或 steer、停止任务、管理 Queue 和响应审批。离线时只保留 PWA 静态界面，消息、活动、审批和 API 响应不进入 service worker 缓存。恢复连接后才能继续操作。
+
+`pnpm run build` 会先构建 Remote，Electron 打包将 `apps/remote/dist` 放入安装包的 `resources/remote`。无需部署网站。`pnpm run remote:dev` 仅用于界面开发，实际 API 与 PWA 验证使用 Desktop Gateway。
+
+`app-builder-lib` 26.15.3 通过 `patch-package` 修正 pnpm hoisted 依赖收集时误用其他版本目录的问题，保证安装包使用 lockfile 中对应版本的依赖。
 
 ## Knowledge
 

@@ -39,6 +39,10 @@ import type {
 } from '../shared/scheduler/scheduledTask'
 
 interface API {
+  remote: {
+    status(): Promise<import('@kklyeenook/shared/remote/index').RemoteStatus>
+    configure(settings: import('@kklyeenook/shared/remote/index').RemoteSettings): Promise<import('@kklyeenook/shared/remote/index').RemoteStatus>
+  }
   wallpaper: {
     get(): Promise<string | null>
     choose(): Promise<string | null>

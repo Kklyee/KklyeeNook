@@ -14,12 +14,7 @@ export interface PiQueueSnapshot {
   followUp: string[]
 }
 
-export type PiQueueMutation = { mode: 'steer' | 'followUp'; expected: string[]; index: number } & (
-  | { action: 'remove' }
-  | { action: 'steer' }
-  | { action: 'edit'; value: string }
-  | { action: 'move'; value: number }
-)
+export type PiQueueMutation = import('@kklyeenook/shared/remote/index').RemoteQueueMutation
 
 export interface PiSubscribeRequest {
   threadId: string

@@ -1,0 +1,214 @@
+:root {
+  --motion-fast: 120ms;
+  --motion-normal: 160ms;
+  --motion-expand: 200ms;
+  --motion-ease: cubic-bezier(0.2, 0, 0, 1);
+  --window-titlebar-height: 1.75rem;
+  --radius: 8px;
+
+  --ui-bg: oklch(0.955 0.003 250 / 0.72);
+  --ui-fg: oklch(0.24 0.006 250);
+
+  --ui-surface: oklch(0.98 0.002 250 / 0.76);
+  --ui-surface-muted: oklch(0.945 0.003 250 / 0.7);
+  --ui-control: oklch(0.985 0.002 250 / 0.84);
+  --ui-surface-raised: oklch(0.995 0.001 250 / 0.97);
+
+  --ui-fg-muted: oklch(0.49 0.007 250);
+  --ui-fg-faint: oklch(0.63 0.005 250);
+
+  --ui-border: oklch(0.24 0.006 250 / 0.08);
+  --ui-border-strong: oklch(0.24 0.006 250 / 0.14);
+
+
+  --ui-brand: oklch(0.55 0.045 255);
+  --ui-brand-light: oklch(0.8 0.09 255);
+  --ui-brand-fg: oklch(0.985 0.002 250);
+  --ui-brand-muted: oklch(0.55 0.045 255 / 0.065);
+  --ui-focus: oklch(0.55 0.045 255 / 0.22);
+
+
+  --ui-hover: oklch(0.24 0.006 250 / 0.03);
+  --ui-active: oklch(0.24 0.006 250 / 0.06);
+  --ui-selected: oklch(0.24 0.006 250 / 0.05);
+
+
+  --ui-success: oklch(0.52 0.065 155);
+  --ui-success-muted: oklch(0.52 0.065 155 / 0.075);
+
+  --ui-warning: oklch(0.6 0.07 78);
+  --ui-warning-muted: oklch(0.6 0.07 78 / 0.075);
+
+  --ui-danger: oklch(0.55 0.095 25);
+  --ui-danger-muted: oklch(0.55 0.095 25 / 0.075);
+
+  --ui-shadow: inset 0 1px 0 oklch(1 0 0 / 0.34), 0 6px 20px oklch(0.2 0.008 250 / 0.07);
+
+  --ui-shadow-raised: inset 0 1px 0 oklch(1 0 0 / 0.48), 0 18px 48px oklch(0.2 0.008 250 / 0.12);
+
+  --ui-overlay: oklch(0.15 0.006 250 / 0.16);
+  --ui-bg-solid: oklch(0.975 0.003 250);
+  --ui-titlebar: oklch(0.94 0.003 250 / 0.65);
+}
+
+.dark {
+  --ui-bg: oklch(0.2 0.003 250 / 0.68);
+  --ui-fg: oklch(0.91 0.003 250);
+
+  --ui-surface: oklch(0.235 0.004 250 / 0.72);
+  --ui-surface-muted: oklch(0.26 0.004 250 / 0.64);
+  --ui-control: oklch(0.285 0.004 250 / 0.78);
+  --ui-surface-raised: oklch(0.3 0.004 250 / 0.96);
+
+  --ui-fg-muted: oklch(0.69 0.004 250);
+  --ui-fg-faint: oklch(0.52 0.004 250);
+
+  --ui-border: oklch(1 0 0 / 0.055);
+  --ui-border-strong: oklch(1 0 0 / 0.1);
+
+
+  --ui-brand: oklch(0.61 0.035 255);
+  --ui-brand-fg: oklch(0.985 0.002 250);
+  --ui-brand-muted: oklch(0.61 0.035 255 / 0.07);
+  --ui-focus: oklch(0.61 0.035 255 / 0.2);
+
+
+  --ui-hover: oklch(1 0 0 / 0.035);
+  --ui-active: oklch(1 0 0 / 0.065);
+  --ui-selected: oklch(1 0 0 / 0.05);
+
+
+  --ui-success: oklch(0.64 0.055 160);
+  --ui-success-muted: oklch(0.64 0.055 160 / 0.075);
+
+  --ui-warning: oklch(0.69 0.06 80);
+  --ui-warning-muted: oklch(0.69 0.06 80 / 0.075);
+
+  --ui-danger: oklch(0.63 0.08 25);
+  --ui-danger-muted: oklch(0.63 0.08 25 / 0.075);
+
+  --ui-shadow: inset 0 1px 0 oklch(1 0 0 / 0.02), 0 8px 24px oklch(0 0 0 / 0.14);
+
+  --ui-shadow-raised: inset 0 1px 0 oklch(1 0 0 / 0.032), 0 18px 56px oklch(0 0 0 / 0.26);
+
+  --ui-overlay: oklch(0 0 0 / 0.32);
+  --ui-bg-solid: oklch(0.23 0.003 250);
+  --ui-titlebar: oklch(0.18 0.003 250 / 0.58);
+}
+
+:root,
+.dark {
+  --background: var(--ui-bg);
+  --foreground: var(--ui-fg);
+
+  --card: var(--ui-surface);
+  --card-foreground: var(--ui-fg);
+
+  --popover: var(--ui-surface-raised);
+  --popover-foreground: var(--ui-fg);
+
+  --primary: var(--ui-brand);
+  --primary-foreground: var(--ui-brand-fg);
+
+  --secondary: var(--ui-surface-muted);
+  --secondary-foreground: var(--ui-fg);
+
+  --muted: var(--ui-surface-muted);
+  --muted-foreground: var(--ui-fg-muted);
+
+  --accent: var(--ui-hover);
+  --accent-foreground: var(--ui-fg);
+
+  --destructive: var(--ui-danger);
+
+  --border: var(--ui-border);
+  --input: var(--ui-border);
+  --ring: var(--ui-focus);
+
+  --chart-1: var(--ui-brand);
+  --chart-2: var(--ui-success);
+  --chart-3: var(--ui-warning);
+  --chart-4: var(--ui-fg-muted);
+  --chart-5: var(--ui-danger);
+
+  --sidebar: var(--ui-surface);
+  --sidebar-foreground: var(--ui-fg);
+  --sidebar-primary: var(--ui-brand);
+  --sidebar-primary-foreground: var(--ui-brand-fg);
+  --sidebar-accent: var(--ui-hover);
+  --sidebar-accent-foreground: var(--ui-fg);
+  --sidebar-border: var(--ui-border);
+  --sidebar-ring: var(--ui-focus);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-surface: var(--ui-surface);
+  --color-surface-muted: var(--ui-surface-muted);
+  --color-surface-raised: var(--ui-surface-raised);
+  --color-faint-foreground: var(--ui-fg-faint);
+  --color-border-strong: var(--ui-border-strong);
+
+  --color-brand: var(--ui-brand);
+  --color-brand-foreground: var(--ui-brand-fg);
+  --color-brand-muted: var(--ui-brand-muted);
+
+  --color-hover: var(--ui-hover);
+  --color-active: var(--ui-active);
+  --color-selected: var(--ui-selected);
+
+  --color-success: var(--ui-success);
+  --color-success-muted: var(--ui-success-muted);
+  --color-warning: var(--ui-warning);
+  --color-warning-muted: var(--ui-warning-muted);
+  --color-danger: var(--ui-danger);
+  --color-danger-muted: var(--ui-danger-muted);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: 1.5rem;
+}
