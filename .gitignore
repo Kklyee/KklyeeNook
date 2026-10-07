@@ -6,6 +6,7 @@ out
 *.log*
 .agents
 docs/*
+!docs/screenshots/
 !docs/architecture.md
 !docs/dsh-reference.md
 !docs/dsh-reference.zh.md

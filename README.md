@@ -4,6 +4,19 @@
 
 KklyeeNook 使用 Electron、React 和 TypeScript 构建，结合 [pi](https://github.com/earendil-works/pi) 的会话与模型能力，以及 [assistant-ui](https://www.assistant-ui.com/) 的聊天组件。你可以在电脑上围绕本地项目与 Agent 协作，也可以通过 Remote 在手机上继续同一个会话、查看任务进度和处理审批。
 
+## 界面预览
+
+桌面端：项目会话、Agent 执行活动与聊天工作台。
+
+![KklyeeNook 桌面工作台](docs/screenshots/desktop.png)
+
+Remote 手机端：继续聊天、查看工具活动，以及浏览项目会话。
+
+<p>
+  <img src="docs/screenshots/remote-chat.jpg" alt="Remote 手机端聊天与 Agent 活动" width="320" />
+  <img src="docs/screenshots/remote-conversations.jpg" alt="Remote 手机端项目会话列表" width="320" />
+</p>
+
 ## 核心功能
 
 | 功能 | 能力 |
