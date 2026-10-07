@@ -11,9 +11,9 @@ import { ShimmerLabel } from '@/renderer/src/lib/surfaces'
 import {
   ActivityCrossfade,
   ActivityDuration,
-  ActivityIcon,
   AgentActivityRow,
 } from './AgentActivity'
+import { ActivityIcon } from '@/renderer/src/components/assistant-ui/elements/tool-icon'
 import { useActivitySelector, type ActivityRun } from './AgentActivityProvider'
 
 interface ActivityScope {
@@ -200,7 +200,7 @@ function ActivityHeader({
       ) : completed ? (
         <CheckIcon aria-hidden="true" className="size-3.5 shrink-0" />
       ) : (
-        <ActivityIcon activity={current} />
+        <ActivityIcon type={current.type} status={current.status} />
       )}
       {label !== undefined && (
         <ShimmerLabel

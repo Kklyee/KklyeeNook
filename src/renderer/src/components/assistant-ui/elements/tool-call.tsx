@@ -1,27 +1,13 @@
 'use client'
 
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
-import {
-  BotIcon,
-  CheckIcon,
-  ChevronRightIcon,
-  GlobeIcon,
-  LoaderCircleIcon,
-  WrenchIcon,
-  XCircleIcon,
-} from 'lucide-react'
+import { CheckIcon, ChevronRightIcon, LoaderCircleIcon, XCircleIcon } from 'lucide-react'
 import {
   useToolCallElapsed,
   type ToolCallMessagePartStatus,
 } from '@assistant-ui/react'
 
-import bashIcon from '@/renderer/src/assets/icon/bash.svg'
-import thinkingIcon from '@/renderer/src/assets/icon/thinking.svg'
-import editFileIcon from '@/renderer/src/assets/icon/edit-file.svg'
-import readFileIcon from '@/renderer/src/assets/icon/read-file.svg'
-import searchIcon from '@/renderer/src/assets/icon/tool-search.svg'
-import globIcon from '@/renderer/src/assets/icon/tool-glob.svg'
-import writeFileIcon from '@/renderer/src/assets/icon/write-file.svg'
+import { getToolIconKind, ToolIcon } from './tool-icon'
 import {
   Collapsible,
   CollapsibleContent,
@@ -38,18 +24,6 @@ export function ToolDetailProvider({ children }: { children: ReactNode }) {
   return <ToolDetailContext.Provider value>{children}</ToolDetailContext.Provider>
 }
 
-export type ToolIconKind =
-  | 'thinking'
-  | 'read'
-  | 'bash'
-  | 'edit'
-  | 'write'
-  | 'search'
-  | 'glob'
-  | 'web_search'
-  | 'agent'
-  | 'generic'
-
 export interface ToolCardProps {
   toolName: string
   label: string
@@ -63,28 +37,6 @@ export interface ToolCardProps {
   className?: string
 }
 
-const iconAssets: Partial<Record<ToolIconKind, string>> = {
-  thinking: thinkingIcon,
-  read: readFileIcon,
-  bash: bashIcon,
-  edit: editFileIcon,
-  write: writeFileIcon,
-  search: searchIcon,
-  glob: globIcon,
-}
-
-export function getToolIconKind(toolName: string): ToolIconKind {
-  const name = toolName.toLowerCase()
-  if (name === 'grep') return 'search'
-  if (name === 'find') return 'glob'
-  if (name.includes('read')) return 'read'
-  if (name.includes('bash') || name.includes('shell') || name.includes('command')) return 'bash'
-  if (name.includes('edit')) return 'edit'
-  if (name.includes('write')) return 'write'
-  if (name.includes('delegate') || name.includes('subagent')) return 'agent'
-  return 'generic'
-}
-
 export function getToolDisplayName(toolName: string): string {
   const labels: Record<string, string> = {
     read: 'Read file',
@@ -96,33 +48,6 @@ export function getToolDisplayName(toolName: string): string {
     delegate_task: 'Subagent',
   }
   return labels[toolName] ?? toolName
-}
-
-export function ToolIcon({ kind }: { kind: ToolIconKind }) {
-  const icon = iconAssets[kind]
-  const className = 'size-3.5 shrink-0 text-muted-foreground'
-
-  if (icon) {
-    return (
-      <span
-        aria-hidden="true"
-        className={cn('shrink-0 bg-current', className)}
-        style={{
-          maskImage: `url("${icon}")`,
-          maskPosition: 'center',
-          maskRepeat: 'no-repeat',
-          maskSize: 'contain',
-          WebkitMaskImage: `url("${icon}")`,
-          WebkitMaskPosition: 'center',
-          WebkitMaskRepeat: 'no-repeat',
-          WebkitMaskSize: 'contain',
-        }}
-      />
-    )
-  }
-
-  const Icon = kind === 'agent' ? BotIcon : kind === 'web_search' ? GlobeIcon : WrenchIcon
-  return <Icon aria-hidden="true" strokeWidth={1.5} className={className} />
 }
 
 function formatToolDuration(ms: number): string {

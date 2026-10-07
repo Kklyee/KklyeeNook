@@ -1,5 +1,5 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { CheckIcon, ChevronRightIcon, CircleAlertIcon, WrenchIcon } from 'lucide-react'
+import { CheckIcon, ChevronRightIcon } from 'lucide-react'
 import {
   TextMessagePartProvider,
   useMessagePartText,
@@ -17,41 +17,13 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/renderer/src/components/ui/collapsible'
-import {
-  ToolDetailProvider,
-  ToolIcon,
-} from '@/renderer/src/components/assistant-ui/elements/tool-call'
+import { ToolDetailProvider } from '@/renderer/src/components/assistant-ui/elements/tool-call'
+import { ActivityIcon } from '@/renderer/src/components/assistant-ui/elements/tool-icon'
 import { ToolCallRenderer } from '../tools/ToolCallRenderer'
 import { assistantToolkit } from '../tools/AssistantToolkit'
 import { cn } from '@/renderer/src/lib/utils'
 import { collapsePanel, ShimmerLabel } from '@/renderer/src/lib/surfaces'
 import { usePreview } from '../../preview/PreviewProvider'
-
-export function ActivityIcon({ activity }: { activity: Activity }) {
-  if (activity.status !== 'failed' && activity.type !== 'approval' && activity.type !== 'tool')
-    return (
-      <span
-        className={cn(
-          'flex shrink-0',
-          activity.status === 'running' && 'animate-pulse motion-reduce:animate-none',
-        )}
-      >
-        <ToolIcon kind={activity.type === 'shell' ? 'bash' : activity.type} />
-      </span>
-    )
-  const Icon =
-    activity.status === 'failed' || activity.type === 'approval' ? CircleAlertIcon : WrenchIcon
-  return (
-    <Icon
-      aria-hidden="true"
-      strokeWidth={1.5}
-      className={cn(
-        'size-3.5 shrink-0 text-muted-foreground',
-        activity.status === 'running' && 'animate-pulse motion-reduce:animate-none',
-      )}
-    />
-  )
-}
 
 export const ActivityDuration = memo(function ActivityDuration({
   startedAt,
@@ -149,7 +121,7 @@ export const AgentActivityRow = memo(function AgentActivityRow({
         >
           <CollapsibleTrigger className="group/trigger flex h-[32px] w-full min-w-0 items-center gap-2 rounded-sm px-2 text-left text-[13px] text-foreground outline-none hover:bg-hover focus-visible:ring-1 focus-visible:ring-border-strong">
             <ActivityCrossfade transitionKey={`${activity.type}:${activity.status}`}>
-              <ActivityIcon activity={activity} />
+              <ActivityIcon type={activity.type} status={activity.status} />
             </ActivityCrossfade>
             <ShimmerLabel
               active={activity.status === 'running' || activity.status === 'waiting'}
