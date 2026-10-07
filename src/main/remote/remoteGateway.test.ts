@@ -50,6 +50,23 @@ test('requires Tailscale identity on assets and APIs, enforces allowed user and 
   expect((await app.request('/api/projects', { headers })).status).toBe(200)
 })
 
+test('allows authenticated top-level homepage navigation from a link while blocking cross-site API and embedded requests', async () => {
+  const { port, options } = fixture()
+  const directory = await mkdtemp(join(tmpdir(), 'nook-remote-navigation-'))
+  cleanup.push(() => rm(directory, { recursive: true, force: true }))
+  await writeFile(join(directory, 'index.html'), '<h1>Remote</h1>')
+  const app = createRemoteGatewayApp(port, { ...options, staticRoot: directory })
+  const navigation = { 'tailscale-user-login': 'kk@example.com', 'sec-fetch-site': 'cross-site', 'sec-fetch-mode': 'navigate', 'sec-fetch-dest': 'document' }
+  expect((await app.request('/', { headers: navigation })).status).toBe(200)
+  expect((await app.request('/index.html', { headers: navigation })).status).toBe(200)
+  expect((await app.request('/', { headers: { ...navigation, 'tailscale-user-login': 'other@example.com' } })).status).toBe(403)
+  expect((await app.request('/', { headers: { ...navigation, 'sec-fetch-dest': 'iframe' } })).status).toBe(403)
+  expect((await app.request('/', { headers: { ...navigation, 'sec-fetch-mode': 'cors' } })).status).toBe(403)
+  expect((await app.request('/api/projects', { headers: navigation })).status).toBe(403)
+  expect((await app.request('/api/conversations/chat/cancel', { method: 'POST', headers: { ...navigation, origin } })).status).toBe(403)
+  expect(port.cancel).not.toHaveBeenCalled()
+})
+
 test('whitelists operations, validates payloads and never exposes arbitrary shell, files or settings', async () => {
   const { app, port } = fixture()
   for (const path of ['/api/shell', '/api/settings', '/api/files', '/api/credentials', '/api/pi/threads']) expect((await app.request(path, { headers })).status).toBe(404)
