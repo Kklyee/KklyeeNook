@@ -597,22 +597,20 @@ function McpServerList({
                         )}
                       </Button>
                     )}
-                    <div role="radiogroup" aria-label={`${server.name} 启用状态`} className="flex items-center gap-3 px-2">
-                      {[true, false].map((enabled) => (
-                        <label key={String(enabled)} className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                          <input
-                            type="radio"
-                            name={`mcp-server-${server.id}-enabled`}
-                            value={String(enabled)}
-                            checked={server.enabled === enabled}
-                            disabled={configBusy}
-                            onChange={() => void toggleServer(server)}
-                            className="size-4 accent-brand"
-                          />
-                          {enabled ? '启用' : '停用'}
-                        </label>
-                      ))}
-                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="mx-2 h-6 w-10 rounded-full p-0"
+                      role="switch"
+                      aria-label={`启用 ${server.name}`}
+                      aria-checked={server.enabled}
+                      disabled={configBusy}
+                      onClick={() => void toggleServer(server)}
+                    >
+                      <span className={`flex h-6 w-10 items-center rounded-full p-0.5 ${server.enabled ? 'bg-brand' : 'bg-muted'}`}>
+                        <span className={`size-5 rounded-full bg-white transition-transform ${server.enabled ? 'translate-x-4' : ''}`} />
+                      </span>
+                    </Button>
                     <Button
                       type="button"
                       variant="ghost"
