@@ -124,70 +124,78 @@ export function WebSearchSettings({
           </Select>
         </SettingsField>
 
-        <SettingsField label="API Key">
-          <div className="grid gap-2">
+        <SettingsField
+          className="sm:items-start"
+          label={
+            <span className="flex min-h-8 flex-wrap items-center gap-2">
+              API Key
+              <span
+                className={
+                  hasApiKey && provider !== 'disabled'
+                    ? 'text-emerald-600 text-[11px] font-normal'
+                    : 'text-muted-foreground text-[11px] font-normal'
+                }
+              >
+                {provider === 'disabled' ? '已禁用' : hasApiKey ? '已配置' : '未配置'}
+              </span>
+            </span>
+          }
+        >
+          <div className="grid gap-2.5">
             <Input
               type="password"
               aria-label="网络搜索 API Key"
               value={apiKey}
               disabled={provider === 'disabled' || busy !== null}
-              placeholder={hasApiKey ? '已保存' : '输入 API Key'}
+              placeholder={hasApiKey ? '输入新密钥以替换' : '输入 API Key'}
               onChange={(event) => {
                 setApiKey(event.target.value)
                 setNotice(null)
               }}
             />
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs">
-                {provider === 'disabled' ? (
-                  <span className="text-muted-foreground">已禁用</span>
-                ) : hasApiKey ? (
-                  <span className="text-emerald-600">✓ 已配置</span>
-                ) : (
-                  <span className="text-muted-foreground">未配置</span>
-                )}
-              </p>
-              {hasApiKey && provider !== 'disabled' && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground h-7 px-2 text-xs"
-                  disabled={busy !== null}
-                  onClick={() => void deleteApiKey()}
-                >
-                  清除密钥
-                </Button>
-              )}
-            </div>
+            {provider !== 'disabled' && (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  {hasApiKey && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground mr-auto px-2 text-xs"
+                      disabled={busy !== null}
+                      onClick={() => void deleteApiKey()}
+                    >
+                      {busy === 'delete' ? '清除中…' : '清除'}
+                    </Button>
+                  )}
+                  <div className="ml-auto flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={busy !== null || (!hasApiKey && !apiKey.trim())}
+                      onClick={() => void testConnection()}
+                    >
+                      {busy === 'test' ? '测试中…' : '测试连接'}
+                    </Button>
+                    {apiKey.trim() && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={busy !== null}
+                        onClick={() => void saveApiKey()}
+                      >
+                        {busy === 'key' ? '保存中…' : '保存'}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <p className="text-muted-foreground text-[11px]">测试可能消耗一次搜索额度。</p>
+              </>
+            )}
           </div>
         </SettingsField>
       </div>
-
-      {provider !== 'disabled' && (
-        <SettingsField label="连接验证" description="测试可能消耗一次搜索额度。">
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={busy !== null || (!hasApiKey && !apiKey.trim())}
-              onClick={() => void testConnection()}
-            >
-              {busy === 'test' ? '测试中…' : '测试连接'}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={busy !== null || !apiKey.trim()}
-              onClick={() => void saveApiKey()}
-            >
-              {busy === 'key' ? '保存中…' : '保存密钥'}
-            </Button>
-          </div>
-        </SettingsField>
-      )}
 
       {error && (
         <p role="alert" className="text-destructive px-5 pb-3 text-xs">

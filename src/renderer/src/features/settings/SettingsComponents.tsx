@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { cn } from '../../lib/utils'
 
 export function SettingsCard({ children }: { children: ReactNode }) {
   return (
@@ -11,14 +12,21 @@ export function SettingsCard({ children }: { children: ReactNode }) {
 export function SettingsField({
   label,
   description,
+  className,
   children,
 }: {
-  label: string
+  label: ReactNode
   description?: string
+  className?: string
   children: ReactNode
 }) {
   return (
-    <div className="grid gap-3 px-5 py-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:items-center sm:gap-8">
+    <div
+      className={cn(
+        'grid gap-3 px-5 py-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:items-center sm:gap-8',
+        className,
+      )}
+    >
       <div>
         <p className="text-sm font-medium">{label}</p>
         {description && (
