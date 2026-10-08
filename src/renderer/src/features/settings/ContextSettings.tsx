@@ -12,7 +12,7 @@ import {
 import { formatContextTokens } from '@/shared/agent/contextTokens'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
-import { SettingsCard, SettingsField } from './SettingsComponents'
+import { SettingsField } from './SettingsComponents'
 
 export function ContextSettings({
   settings,
@@ -36,9 +36,12 @@ export function ContextSettings({
   const invalid = Object.keys(validationErrors).length > 0
   const budget = calculateAgentContextBudget({ contextWindow }, compaction)
 
+  const { enabled, reserveTokens, keepRecentTokens } =
+    settings.compaction ?? DEFAULT_AGENT_COMPACTION_SETTINGS
+
   useEffect(() => {
-    setCompaction(settings.compaction ?? DEFAULT_AGENT_COMPACTION_SETTINGS)
-  }, [settings])
+    setCompaction({ enabled, reserveTokens, keepRecentTokens })
+  }, [enabled, reserveTokens, keepRecentTokens])
 
   const save = async () => {
     if (invalid) return
@@ -58,8 +61,8 @@ export function ContextSettings({
 
   return (
     <section aria-label="上下文设置">
-      <SettingsCard>
-        <div className="border-border/70 border-b px-4 py-3.5">
+      <div className="divide-y divide-border/60">
+        <div className="px-4 py-3.5">
           <p className="text-muted-foreground text-xs">当前默认模型</p>
           <p className="mt-1 text-sm font-medium">{modelName}</p>
           <p className="text-muted-foreground mt-0.5 text-xs">
@@ -99,10 +102,7 @@ export function ContextSettings({
             }}
           />
         </div>
-        <details
-          open={invalid || undefined}
-          className="group border-border/70 border-t px-4 py-3.5"
-        >
+        <details open={invalid || undefined} className="group px-4 py-3.5">
           <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
             <ChevronRightIcon className="text-muted-foreground size-4 transition-transform group-open:rotate-90" />
             高级参数
@@ -116,25 +116,25 @@ export function ContextSettings({
             />
           </div>
         </details>
-      </SettingsCard>
+      </div>
       {error && (
-        <p role="alert" className="text-destructive mt-3 text-sm">
+        <p role="alert" className="text-destructive mt-3 px-4 text-sm">
           {error}
         </p>
       )}
       {saved && (
-        <p role="status" className="text-emerald-600 mt-3 text-sm">
+        <p role="status" className="text-emerald-600 mt-3 px-4 text-sm">
           上下文设置已保存。
         </p>
       )}
-      <div className="mt-4 flex justify-end">
+      <div className="mt-3 flex justify-end px-4">
         <Button
           type="button"
           variant="outline"
           disabled={saving || invalid}
           onClick={() => void save()}
         >
-          {saving ? '保存中…' : '保存'}
+          {saving ? '保存中…' : '保存上下文'}
         </Button>
       </div>
     </section>

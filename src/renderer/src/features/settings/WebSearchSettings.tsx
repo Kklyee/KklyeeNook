@@ -1,13 +1,10 @@
 import { useEffect, useState } from 'react'
 import type { AgentSettingsSnapshot } from '@/shared/agent/agentSettings'
-import {
-  WEB_SEARCH_ERROR_LABELS,
-  type WebSearchProviderId,
-} from '@/shared/web-search/webSearch'
+import { WEB_SEARCH_ERROR_LABELS, type WebSearchProviderId } from '@/shared/web-search/webSearch'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../components/ui/select'
-import { SettingsCard, SettingsField } from './SettingsComponents'
+import { SettingsField } from './SettingsComponents'
 
 const providerLabels: Record<WebSearchProviderId, string> = {
   disabled: '已禁用',
@@ -42,7 +39,9 @@ export function WebSearchSettings({
     setError(null)
     setNotice(null)
     try {
-      await window.api.updateAgentSettings({ webSearch: { provider: value as WebSearchProviderId } })
+      await window.api.updateAgentSettings({
+        webSearch: { provider: value as WebSearchProviderId },
+      })
       await onChanged()
     } catch (changeError) {
       setError(changeError instanceof Error ? changeError.message : '保存失败')
@@ -76,7 +75,9 @@ export function WebSearchSettings({
     setError(null)
     setNotice(null)
     try {
-      await window.api.updateAgentSettings({ webSearchCredential: { provider, deleteApiKey: true } })
+      await window.api.updateAgentSettings({
+        webSearchCredential: { provider, deleteApiKey: true },
+      })
       await onChanged()
       setNotice('API Key 已清除。')
     } catch (deleteError) {
@@ -106,11 +107,14 @@ export function WebSearchSettings({
   }
 
   return (
-    <section aria-label="Web Search 设置">
-      <SettingsCard>
-        <SettingsField label="Provider" description="选择搜索提供商，禁用后 Agent 不会看到 web_search。">
+    <section aria-label="网络搜索设置">
+      <div className="divide-y divide-border/60">
+        <SettingsField
+          label="搜索服务"
+          description="选择搜索提供商，禁用后 Agent 将不使用网络搜索。"
+        >
           <Select value={provider} onValueChange={(value) => void changeProvider(value)}>
-            <SelectTrigger aria-label="Web Search Provider" disabled={busy !== null}>
+            <SelectTrigger aria-label="搜索服务" disabled={busy !== null}>
               {providerLabels[provider]}
             </SelectTrigger>
             <SelectContent>
@@ -130,7 +134,7 @@ export function WebSearchSettings({
           <div className="grid gap-2">
             <Input
               type="password"
-              aria-label="Web Search API Key"
+              aria-label="网络搜索 API Key"
               value={apiKey}
               disabled={provider === 'disabled' || busy !== null}
               placeholder={hasApiKey ? '已保存' : '输入 API Key'}
@@ -164,10 +168,10 @@ export function WebSearchSettings({
             </div>
           </div>
         </SettingsField>
-      </SettingsCard>
+      </div>
 
       {provider !== 'disabled' && (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 px-4">
           <p className="text-muted-foreground text-xs">测试连接可能消耗一次搜索额度。</p>
           <div className="flex items-center gap-2">
             <Button
@@ -176,7 +180,7 @@ export function WebSearchSettings({
               disabled={busy !== null || (!hasApiKey && !apiKey.trim())}
               onClick={() => void testConnection()}
             >
-              {busy === 'test' ? '测试中…' : 'Test connection'}
+              {busy === 'test' ? '测试中…' : '测试连接'}
             </Button>
             <Button
               type="button"
@@ -190,12 +194,12 @@ export function WebSearchSettings({
       )}
 
       {error && (
-        <p role="alert" className="text-destructive mt-3 text-sm">
+        <p role="alert" className="text-destructive mt-3 px-4 text-sm">
           {error}
         </p>
       )}
       {notice && (
-        <p role="status" className="text-emerald-600 mt-3 text-sm">
+        <p role="status" className="text-emerald-600 mt-3 px-4 text-sm">
           {notice}
         </p>
       )}

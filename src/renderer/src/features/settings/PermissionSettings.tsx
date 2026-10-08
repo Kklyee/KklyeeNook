@@ -8,8 +8,8 @@ import type { AgentSettingsSnapshot } from '@/shared/agent/agentSettings'
 import { notifyWorkspaceChanged } from '../workspaces/WorkspaceProvider'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../components/ui/select'
 import { Button } from '../../components/ui/button'
-import { SettingsCard } from './SettingsComponents'
-import { ShieldCheckIcon, Trash2Icon } from 'lucide-react'
+import { SettingsField } from './SettingsComponents'
+import { Trash2Icon } from 'lucide-react'
 
 const toolDescriptions: Record<string, string> = {
   read: '读取文件',
@@ -61,13 +61,13 @@ export function PermissionSettings({
   }
 
   return (
-    <div className="space-y-8">
-      <section aria-labelledby="default-permission-policy">
-        <h2 id="default-permission-policy" className="mb-3 text-sm font-medium">
-          默认权限
-        </h2>
-        <SettingsCard>
-          <div className="px-4 py-3.5">
+    <div className="divide-y divide-border/60">
+      <section aria-label="默认权限">
+        <SettingsField
+          label="默认权限"
+          description="适用于新会话。工作区外操作和受限模式下的命令需单次审批。未分组会话无法使用工作区内修改。"
+        >
+          <div>
             <Select
               value={settings.defaultPermissionMode ?? 'workspace-write'}
               onValueChange={(value) => void change(value)}
@@ -88,14 +88,11 @@ export function PermissionSettings({
                 {error}
               </p>
             )}
-            <p className="mt-3 text-xs text-muted-foreground">
-              默认权限适用于新会话。未分组会话无法使用工作区内修改；工作区外操作和受限模式下的命令需单次审批。
-            </p>
           </div>
-        </SettingsCard>
+        </SettingsField>
       </section>
 
-      <section aria-labelledby="permission-grants-title">
+      <section aria-labelledby="permission-grants-title" className="px-4 pt-3.5">
         <div className="mb-3 flex items-end justify-between gap-4">
           <div>
             <h2 id="permission-grants-title" className="text-sm font-medium">
@@ -111,17 +108,13 @@ export function PermissionSettings({
           </p>
         )}
         {permissionGrants.length === 0 ? (
-          <div className="material-control rounded-xl border-dashed px-5 py-9 text-center">
-            <ShieldCheckIcon className="text-muted-foreground/60 mx-auto size-5" />
-            <p className="mt-3 text-sm font-medium">当前没有临时授权</p>
-            <p className="text-muted-foreground mx-auto mt-1 max-w-sm text-xs leading-relaxed">
-              需要授权的操作会显示在这里。
-            </p>
-          </div>
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            当前没有临时授权，需要授权的操作会显示在这里。
+          </p>
         ) : (
-          <SettingsCard>
+          <div className="divide-y divide-border/60">
             {permissionGrants.map((grant) => (
-              <div key={grant.id} className="flex items-start justify-between gap-4 px-4 py-3.5">
+              <div key={grant.id} className="flex items-start justify-between gap-4 py-3.5">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
                     <span>
@@ -144,7 +137,7 @@ export function PermissionSettings({
                 </Button>
               </div>
             ))}
-          </SettingsCard>
+          </div>
         )}
       </section>
     </div>

@@ -4,11 +4,9 @@ import type { AgentSettingsSnapshot } from '@/shared/agent/agentSettings'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { cn } from '../../lib/utils'
-import { ContextSettings } from './ContextSettings'
+import { AgentSettings } from './AgentSettings'
 import { PluginSettings } from './PluginSettings'
 import { ModelSettings } from './ModelSettings'
-import { PermissionSettings } from './PermissionSettings'
-import { WebSearchSettings } from './WebSearchSettings'
 import { settingsNavigation, type SettingsTab } from './settingsNavigation'
 import { AppearanceSettings } from './AppearanceSettings'
 import { RemoteSettings } from './RemoteSettings'
@@ -28,8 +26,10 @@ export function SettingsPage({
 }) {
   const [tab, setTab] = useState<SettingsTab>(initialTab)
   const [search, setSearch] = useState('')
-  const visibleTabs = settingsNavigation.filter(({ label, description }) =>
-    `${label}${description}`.toLowerCase().includes(search.trim().toLowerCase()),
+  const visibleTabs = settingsNavigation.filter(({ group, label, description, keywords }) =>
+    `${group} ${label} ${description} ${keywords}`
+      .toLowerCase()
+      .includes(search.trim().toLowerCase()),
   )
   const activeTab = settingsNavigation.find((item) => item.id === tab) ?? settingsNavigation[0]
 
@@ -65,25 +65,34 @@ export function SettingsPage({
         </div>
 
         <nav aria-label="设置分类" className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
-          <div className="space-y-0.5">
-            {visibleTabs.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                type="button"
-                aria-current={tab === id ? 'page' : undefined}
-                className={cn(
-                  'flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring',
-                  tab === id
-                    ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground',
-                )}
-                onClick={() => setTab(id)}
-              >
-                <Icon className="size-3.5 shrink-0" />
-                <span>{label}</span>
-              </button>
-            ))}
-          </div>
+          {(['应用', 'Agent', '扩展'] as const).map((group) => {
+            const items = visibleTabs.filter((item) => item.group === group)
+            if (items.length === 0) return null
+            return (
+              <div key={group} className="mb-4 space-y-0.5">
+                <p className="text-muted-foreground px-2 pt-2 pb-1.5 text-[11px] font-medium">
+                  {group}
+                </p>
+                {items.map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-current={tab === id ? 'page' : undefined}
+                    className={cn(
+                      'flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                      tab === id
+                        ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                        : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground',
+                    )}
+                    onClick={() => setTab(id)}
+                  >
+                    <Icon className="size-3.5 shrink-0" />
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+            )
+          })}
           {visibleTabs.length === 0 && (
             <p className="text-muted-foreground px-2 py-4 text-xs">没有匹配的设置</p>
           )}
@@ -112,13 +121,7 @@ export function SettingsPage({
 const settingsPanels: Record<
   Exclude<SettingsTab, 'appearance' | 'remote'>,
   ComponentType<{ settings: AgentSettingsSnapshot; onChanged: () => Promise<void> }>
-> = {
-  model: ModelSettings,
-  'web-search': WebSearchSettings,
-  context: ContextSettings,
-  permissions: PermissionSettings,
-  plugins: PluginSettings,
-}
+> = { model: ModelSettings, agent: AgentSettings, plugins: PluginSettings }
 
 function SettingsContent({
   settings,
