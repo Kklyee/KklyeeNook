@@ -2,6 +2,7 @@
 
 import { PermissionSelector } from './permission-selector.aui'
 import { WorkspaceComposerLabel } from '@/renderer/src/features/workspaces/WorkspaceComposerLabel'
+import { SessionStats } from './session-stats.aui'
 
 import {
   ComposerAddAttachment,
@@ -339,6 +340,7 @@ const Composer: FC<{
         result={result && ['Compacting', '/compact'].includes(result.title) ? undefined : result}
         onClose={closeResult}
       />
+      <WorkspaceComposerLabel />
       <ComposerPrimitive.Unstable_TriggerPopoverRoot>
         <ComposerPrimitive.Root
           className="aui-composer-root  relative  flex w-full flex-col "
@@ -392,7 +394,7 @@ const Composer: FC<{
           <CommandMenu commands={commands} />
         </ComposerPrimitive.Root>
       </ComposerPrimitive.Unstable_TriggerPopoverRoot>
-      <WorkspaceComposerLabel />
+      <SessionStats />
     </div>
   )
 }
