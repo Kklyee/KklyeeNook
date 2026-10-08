@@ -42,7 +42,7 @@ export function Titlebar({
 
   return (
     <header className="titlebar-drag-region flex h-7 shrink-0 items-center border-b border-border bg-(--ui-titlebar) text-foreground">
-      <div className="titlebar-no-drag-region flex h-full min-w-0 flex-1 items-center">
+      <div className="titlebar-no-drag-region flex h-full shrink-0 items-center">
         <Button
           type="button"
           variant="ghost"
@@ -72,6 +72,7 @@ export function Titlebar({
           编辑
         </Button>
       </div>
+      <div className="h-full min-w-0 flex-1" />
       <div className="titlebar-no-drag-region flex h-full shrink-0 items-stretch">
         <WindowButton label="最小化" onClick={() => window.api.window.minimize()}>
           <MinusIcon />
