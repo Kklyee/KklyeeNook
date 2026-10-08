@@ -5,12 +5,9 @@ import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { cn } from '../../lib/utils'
 import { ContextSettings } from './ContextSettings'
-import { KnowledgeSettings } from './KnowledgeSettings'
-import { McpSettings } from './McpSettings'
-import { MemorySettings } from './MemorySettings'
+import { PluginSettings } from './PluginSettings'
 import { ModelSettings } from './ModelSettings'
 import { PermissionSettings } from './PermissionSettings'
-import { SkillSettings } from './SkillSettings'
 import { WebSearchSettings } from './WebSearchSettings'
 import { settingsNavigation, type SettingsTab } from './settingsNavigation'
 import { AppearanceSettings } from './AppearanceSettings'
@@ -120,10 +117,7 @@ const settingsPanels: Record<
   'web-search': WebSearchSettings,
   context: ContextSettings,
   permissions: PermissionSettings,
-  skills: SkillSettings,
-  memory: MemorySettings,
-  knowledge: KnowledgeSettings,
-  mcp: McpSettings,
+  plugins: PluginSettings,
 }
 
 function SettingsContent({

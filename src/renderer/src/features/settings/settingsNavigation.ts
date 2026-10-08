@@ -1,14 +1,11 @@
 import type { ComponentType } from 'react'
 import {
-  BookOpenIcon,
   BotIcon,
-  BrainIcon,
   GlobeIcon,
   ImageIcon,
-  ServerIcon,
+  PuzzleIcon,
   SmartphoneIcon,
   ShieldCheckIcon,
-  SparklesIcon,
   TextSearchIcon,
 } from 'lucide-react'
 
@@ -19,10 +16,7 @@ export type SettingsTab =
   | 'web-search'
   | 'context'
   | 'permissions'
-  | 'skills'
-  | 'memory'
-  | 'knowledge'
-  | 'mcp'
+  | 'plugins'
 export type SettingsLayout = 'preferences' | 'manager'
 
 export type SettingsNavigationItem = {
@@ -77,31 +71,10 @@ export const settingsNavigation: SettingsNavigationItem[] = [
     layout: 'preferences',
   },
   {
-    id: 'skills',
-    label: 'Skills',
-    description: '查看当前可用的 Skills。',
-    icon: SparklesIcon,
-    layout: 'manager',
-  },
-  {
-    id: 'memory',
-    label: 'Memory',
-    description: '查看和管理长期记忆。',
-    icon: BrainIcon,
-    layout: 'manager',
-  },
-  {
-    id: 'knowledge',
-    label: 'Knowledge',
-    description: '导入文档并管理知识来源。',
-    icon: BookOpenIcon,
-    layout: 'manager',
-  },
-  {
-    id: 'mcp',
-    label: 'MCP Servers',
-    description: '配置 MCP 服务和工具连接。',
-    icon: ServerIcon,
+    id: 'plugins',
+    label: '插件',
+    description: '统一管理 Skills、Memory、MCP 和 Knowledge，扩展 Agent 的能力。',
+    icon: PuzzleIcon,
     layout: 'manager',
   },
 ]
