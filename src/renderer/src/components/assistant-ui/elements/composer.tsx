@@ -463,7 +463,7 @@ export function ComposerContext({
         title={status}
         className={cn(
           ghostButton,
-          'text-primary/85 h-6 gap-1.5 rounded-md px-1.5 text-[11px] font-normal tabular-nums',
+          'text-foreground/80 h-6 gap-1.5 rounded-md px-1.5 text-[11px] font-normal tabular-nums',
           warn && 'text-red-500 dark:text-red-400',
         )}
       >

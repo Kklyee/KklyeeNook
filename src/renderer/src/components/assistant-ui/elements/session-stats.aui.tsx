@@ -54,13 +54,13 @@ export function SessionStats({ children }: { children?: ReactNode }) {
     <div
       data-slot="aui-session-stats"
       aria-label="会话统计"
-      className="text-primary/85 flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3 pt-0.5 text-[11px] leading-5 tabular-nums"
+      className="text-foreground/80 flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3 pt-0.5 text-[11px] leading-5 tabular-nums"
     >
       <div className="flex shrink-0 items-center gap-2">
         <span title="当前会话分支：每条用户消息计为一轮，每次模型调用计为一步，包含正在生成的步骤">
           {stats.rounds} 轮 - {stats.steps} 步
         </span>
-        <span aria-hidden="true" className="text-primary/35">
+        <span aria-hidden="true" className="text-foreground/30">
           ·
         </span>
         <span title="模型发起的工具调用次数">{stats.tools} 次工具调用</span>
@@ -68,7 +68,7 @@ export function SessionStats({ children }: { children?: ReactNode }) {
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <Popover>
           <PopoverTrigger
-            className="hover:bg-primary/10 focus-visible:ring-primary/50 -mx-1.5 inline-flex h-6 items-center rounded-md px-1.5 outline-none transition-colors focus-visible:ring-2"
+            className="hover:bg-hover focus-visible:ring-ring -mx-1.5 inline-flex h-6 items-center rounded-md px-1.5 outline-none transition-colors focus-visible:ring-2"
             aria-label="查看累计 Token 用量明细"
           >
             累计 {tokenFormatter.format(stats.totalTokens)} Token（含缓存）
@@ -102,12 +102,12 @@ export function SessionStats({ children }: { children?: ReactNode }) {
               </div>
               <div className="flex items-center justify-between gap-4">
                 <dt className="text-muted-foreground">缓存命中率</dt>
-                <dd className="text-primary tabular-nums">{stats.cacheRate}</dd>
+                <dd className="text-foreground tabular-nums">{stats.cacheRate}</dd>
               </div>
             </dl>
           </PopoverContent>
         </Popover>
-        <span aria-hidden="true" className="text-primary/35">
+        <span aria-hidden="true" className="text-foreground/30">
           ·
         </span>
         <span title="缓存命中率 = 缓存读取 Token ÷（输入 + 缓存读取 + 缓存写入 Token）；用量在模型返回后更新，统计范围为当前会话分支的已加载消息">
