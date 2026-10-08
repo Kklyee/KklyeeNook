@@ -126,20 +126,7 @@ export function WebSearchSettings({
 
         <SettingsField
           className="sm:items-start"
-          label={
-            <span className="flex min-h-8 flex-wrap items-center gap-2">
-              API Key
-              <span
-                className={
-                  hasApiKey && provider !== 'disabled'
-                    ? 'text-emerald-600 text-[11px] font-normal'
-                    : 'text-muted-foreground text-[11px] font-normal'
-                }
-              >
-                {provider === 'disabled' ? '已禁用' : hasApiKey ? '已配置' : '未配置'}
-              </span>
-            </span>
-          }
+          label={<span className="flex min-h-8 items-center">API Key</span>}
         >
           <div className="grid gap-2.5">
             <Input
@@ -147,7 +134,8 @@ export function WebSearchSettings({
               aria-label="网络搜索 API Key"
               value={apiKey}
               disabled={provider === 'disabled' || busy !== null}
-              placeholder={hasApiKey ? '输入新密钥以替换' : '输入 API Key'}
+              placeholder={hasApiKey ? '********' : '输入 API Key'}
+              className={hasApiKey ? 'placeholder:text-foreground/70' : undefined}
               onChange={(event) => {
                 setApiKey(event.target.value)
                 setNotice(null)
