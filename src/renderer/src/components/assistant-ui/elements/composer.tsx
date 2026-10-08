@@ -425,7 +425,7 @@ export function ComposerContext({
       <div
         className={cn(
           'material-raised',
-          'absolute end-0 bottom-full z-10 mb-2 flex w-60 origin-bottom-right flex-col gap-3.5 rounded-2xl p-4',
+          'text-foreground absolute end-0 bottom-full z-10 mb-2 flex w-60 origin-bottom-right flex-col gap-3.5 rounded-2xl p-4',
           'transition-[opacity,scale] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none',
           'pointer-events-none scale-[0.97] opacity-0',
           'group-hover/ctx:pointer-events-auto group-hover/ctx:scale-100 group-hover/ctx:opacity-100',
@@ -464,9 +464,13 @@ export function ComposerContext({
         type="button"
         aria-label={`上下文 ${format(budget.tokens)} / ${format(budget.contextWindow)}，${status}`}
         title={status}
-        className={cn(ghostButton, 'size-8', warn && 'text-red-500 dark:text-red-400')}
+        className={cn(
+          ghostButton,
+          'text-primary/85 h-6 gap-1.5 rounded-md px-1.5 text-[11px] font-normal tabular-nums',
+          warn && 'text-red-500 dark:text-red-400',
+        )}
       >
-        <svg viewBox="0 0 16 16" className="size-4 -rotate-90" aria-hidden>
+        <svg viewBox="0 0 16 16" className="size-3 -rotate-90" aria-hidden>
           <circle
             cx="8"
             cy="8"
@@ -487,6 +491,7 @@ export function ComposerContext({
             strokeDashoffset={circumference * (1 - clamp(fraction, 0, 1))}
           />
         </svg>
+        <span>上下文 {Math.round(fraction * 100)}%</span>
       </button>
     </div>
   )

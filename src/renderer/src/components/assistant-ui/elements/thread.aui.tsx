@@ -333,6 +333,9 @@ const Composer: FC<{
   isCompacting,
 }) => {
   const { commands, result, closeResult, submit } = commandSurface
+  const budget = calculateAgentContextBudget(contextUsage, compactionSettings, {
+    compacting: isCompacting,
+  })
 
   return (
     <div className="flex w-full flex-col gap-1.5">
@@ -386,15 +389,26 @@ const Composer: FC<{
             <ComposerAction
               onSend={() => void submit()}
               modelSelector={modelSelector}
-              contextUsage={contextUsage}
-              compactionSettings={compactionSettings}
-              isCompacting={isCompacting}
             />
           </ComposerPrimitive.AttachmentDropzone>
           <CommandMenu commands={commands} />
         </ComposerPrimitive.Root>
       </ComposerPrimitive.Unstable_TriggerPopoverRoot>
-      <SessionStats />
+      <SessionStats>
+        {isCompacting ? (
+          <span
+            data-slot="composer-context-compaction"
+            aria-live="polite"
+            className="shrink-0 text-xs"
+          >
+            正在整理上下文…
+          </span>
+        ) : budget.tokens !== undefined &&
+          budget.contextWindow !== undefined &&
+          budget.contextWindow > 0 ? (
+          <ComposerContext budget={budget} className="shrink-0" />
+        ) : null}
+      </SessionStats>
     </div>
   )
 }
@@ -402,15 +416,9 @@ const Composer: FC<{
 const ComposerAction: FC<{
   onSend(): void
   modelSelector?: ThreadProps['modelSelector']
-  contextUsage?: AgentContextUsage
-  compactionSettings: AgentCompactionSettings
-  isCompacting: boolean
-}> = ({ onSend, modelSelector, contextUsage, compactionSettings, isCompacting }) => {
+}> = ({ onSend, modelSelector }) => {
   const canSend = useAuiState((s) => s.composer.canSend)
   const pending = usePendingSend()
-  const budget = calculateAgentContextBudget(contextUsage, compactionSettings, {
-    compacting: isCompacting,
-  })
 
   return (
     <div className="aui-composer-action-wrapper relative flex items-center justify-between">
@@ -432,19 +440,6 @@ const ComposerAction: FC<{
         )}
       </div>
       <div className="flex items-center gap-1.5">
-        {isCompacting ? (
-          <span
-            data-slot="composer-context-compaction"
-            aria-live="polite"
-            className="text-foreground/40 whitespace-nowrap text-[11px]"
-          >
-            正在整理上下文…
-          </span>
-        ) : budget.tokens !== undefined &&
-          budget.contextWindow !== undefined &&
-          budget.contextWindow > 0 ? (
-          <ComposerContext budget={budget} />
-        ) : null}
         <AuiIf condition={(s) => s.thread.capabilities.dictation}>
           <AuiIf condition={(s) => s.composer.dictation == null}>
             <ComposerPrimitive.Dictate
