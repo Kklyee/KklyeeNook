@@ -108,11 +108,8 @@ export function WebSearchSettings({
 
   return (
     <section aria-label="网络搜索设置">
-      <div className="divide-y divide-border/60">
-        <SettingsField
-          label="搜索服务"
-          description="选择搜索提供商，禁用后 Agent 将不使用网络搜索。"
-        >
+      <div>
+        <SettingsField label="搜索服务">
           <Select value={provider} onValueChange={(value) => void changeProvider(value)}>
             <SelectTrigger aria-label="搜索服务" disabled={busy !== null}>
               {providerLabels[provider]}
@@ -127,10 +124,7 @@ export function WebSearchSettings({
           </Select>
         </SettingsField>
 
-        <SettingsField
-          label="API Key"
-          description="使用系统加密存储，不会写入配置文件，也不会返回给界面。"
-        >
+        <SettingsField label="API Key">
           <div className="grid gap-2">
             <Input
               type="password"
@@ -171,12 +165,12 @@ export function WebSearchSettings({
       </div>
 
       {provider !== 'disabled' && (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 px-4">
-          <p className="text-muted-foreground text-xs">测试连接可能消耗一次搜索额度。</p>
-          <div className="flex items-center gap-2">
+        <SettingsField label="连接验证" description="测试可能消耗一次搜索额度。">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <Button
               type="button"
               variant="outline"
+              size="sm"
               disabled={busy !== null || (!hasApiKey && !apiKey.trim())}
               onClick={() => void testConnection()}
             >
@@ -184,22 +178,24 @@ export function WebSearchSettings({
             </Button>
             <Button
               type="button"
+              variant="outline"
+              size="sm"
               disabled={busy !== null || !apiKey.trim()}
               onClick={() => void saveApiKey()}
             >
               {busy === 'key' ? '保存中…' : '保存密钥'}
             </Button>
           </div>
-        </div>
+        </SettingsField>
       )}
 
       {error && (
-        <p role="alert" className="text-destructive mt-3 px-4 text-sm">
+        <p role="alert" className="text-destructive px-5 pb-3 text-xs">
           {error}
         </p>
       )}
       {notice && (
-        <p role="status" className="text-emerald-600 mt-3 px-4 text-sm">
+        <p role="status" className="text-emerald-600 px-5 pb-3 text-xs">
           {notice}
         </p>
       )}

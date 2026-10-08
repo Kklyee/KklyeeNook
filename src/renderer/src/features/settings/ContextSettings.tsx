@@ -5,10 +5,7 @@ import {
   DEFAULT_AGENT_COMPACTION_SETTINGS,
   type AgentCompactionSettings,
 } from '@/shared/agent/agentConfig'
-import {
-  calculateAgentContextBudget,
-  getAgentCompactionSettingsErrors,
-} from '@/shared/agent/agentContextBudget'
+import { getAgentCompactionSettingsErrors } from '@/shared/agent/agentContextBudget'
 import { formatContextTokens } from '@/shared/agent/contextTokens'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -34,7 +31,6 @@ export function ContextSettings({
     )?.modelName ?? settings.modelID
   const validationErrors = getAgentCompactionSettingsErrors(compaction, contextWindow)
   const invalid = Object.keys(validationErrors).length > 0
-  const budget = calculateAgentContextBudget({ contextWindow }, compaction)
 
   const { enabled, reserveTokens, keepRecentTokens } =
     settings.compaction ?? DEFAULT_AGENT_COMPACTION_SETTINGS
@@ -61,53 +57,50 @@ export function ContextSettings({
 
   return (
     <section aria-label="上下文设置">
-      <div className="divide-y divide-border/60">
-        <div className="px-4 py-3.5">
-          <p className="text-muted-foreground text-xs">当前默认模型</p>
-          <p className="mt-1 text-sm font-medium">{modelName}</p>
-          <p className="text-muted-foreground mt-0.5 text-xs">
-            {settings.providerName ?? settings.provider}
-          </p>
-          <div className="mt-3 flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">上下文窗口</span>
-            <span className="tabular-nums" title={contextWindow?.toLocaleString('en-US')}>
-              {budget.contextWindow ? formatContextTokens(budget.contextWindow) : '未知'}
-            </span>
-          </div>
-        </div>
-        <div className="flex items-start justify-between gap-4 px-4 py-3.5">
-          <div>
-            <p className="text-sm font-medium">自动压缩</p>
-            <p className="text-muted-foreground mt-0.5 text-xs">
-              接近模型上下文限制时自动整理历史内容。
+      <div>
+        <SettingsField label="默认模型">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium" title={modelName}>
+              {modelName}
             </p>
-            {compaction.enabled &&
-              budget.contextWindow !== undefined &&
-              budget.contextWindow > 0 &&
-              !validationErrors.reserveTokens && (
-                <p className="text-muted-foreground mt-2 text-xs leading-5">
-                  当前配置预计在约 {formatContextTokens(budget.usableTokens!)} token
-                  时开始为上下文压缩预留空间。
-                </p>
-              )}
+            <p className="text-muted-foreground mt-1 text-xs">
+              {settings.providerName ?? settings.provider}
+              <span className="mx-2">·</span>
+              <span title={contextWindow?.toLocaleString('en-US')}>
+                {contextWindow ? formatContextTokens(contextWindow) : '未知'} 上下文
+              </span>
+            </p>
           </div>
-          <input
-            type="checkbox"
-            aria-label="自动压缩"
-            className="accent-foreground mt-0.5 size-4"
-            checked={compaction.enabled}
-            onChange={(event) => {
-              setCompaction((current) => ({ ...current, enabled: event.target.checked }))
-              setSaved(false)
-            }}
-          />
-        </div>
-        <details open={invalid || undefined} className="group px-4 py-3.5">
-          <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
-            <ChevronRightIcon className="text-muted-foreground size-4 transition-transform group-open:rotate-90" />
+        </SettingsField>
+        <SettingsField label="自动压缩" description="接近上下文上限时整理历史内容。">
+          <div className="flex min-h-8 items-center justify-between gap-3">
+            <input
+              type="checkbox"
+              aria-label="自动压缩"
+              className="accent-foreground size-4"
+              checked={compaction.enabled}
+              onChange={(event) => {
+                setCompaction((current) => ({ ...current, enabled: event.target.checked }))
+                setSaved(false)
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={saving || invalid}
+              onClick={() => void save()}
+            >
+              {saving ? '保存中…' : '保存'}
+            </Button>
+          </div>
+        </SettingsField>
+        <details open={invalid || undefined} className="group">
+          <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4 text-sm font-medium [&::-webkit-details-marker]:hidden">
             高级参数
+            <ChevronRightIcon className="text-muted-foreground size-4 transition-transform group-open:rotate-90" />
           </summary>
-          <div className="mt-3 grid gap-3">
+          <div className="grid">
             <CompactionFields
               compaction={compaction}
               setCompaction={setCompaction}
@@ -118,25 +111,15 @@ export function ContextSettings({
         </details>
       </div>
       {error && (
-        <p role="alert" className="text-destructive mt-3 px-4 text-sm">
+        <p role="alert" className="text-destructive px-5 pb-3 text-xs">
           {error}
         </p>
       )}
       {saved && (
-        <p role="status" className="text-emerald-600 mt-3 px-4 text-sm">
+        <p role="status" className="text-emerald-600 px-5 pb-3 text-xs">
           上下文设置已保存。
         </p>
       )}
-      <div className="mt-3 flex justify-end px-4">
-        <Button
-          type="button"
-          variant="outline"
-          disabled={saving || invalid}
-          onClick={() => void save()}
-        >
-          {saving ? '保存中…' : '保存上下文'}
-        </Button>
-      </div>
     </section>
   )
 }
