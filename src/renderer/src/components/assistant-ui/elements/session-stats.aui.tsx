@@ -1,5 +1,11 @@
 import { useMemo, type ReactNode } from 'react'
 import { usePiThreadState, type PiAssistantMessage } from '@assistant-ui/react-pi'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTitle,
+  PopoverTrigger,
+} from '@/renderer/src/components/ui/popover'
 
 const tokenFormatter = new Intl.NumberFormat('en', {
   notation: 'compact',
@@ -60,11 +66,47 @@ export function SessionStats({ children }: { children?: ReactNode }) {
         <span title="模型发起的工具调用次数">{stats.tools} 次工具调用</span>
       </div>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span
-          title={`累计用量为各次模型调用的 Token 总和，历史上下文重复发送会重复计入，不等于当前上下文占用。输入 ${numberFormatter.format(stats.input)} · 输出 ${numberFormatter.format(stats.output)} · 缓存读取 ${numberFormatter.format(stats.cacheRead)} · 缓存写入 ${numberFormatter.format(stats.cacheWrite)}`}
-        >
-          累计 {tokenFormatter.format(stats.totalTokens)} Token（含缓存）
-        </span>
+        <Popover>
+          <PopoverTrigger
+            className="hover:bg-primary/10 focus-visible:ring-primary/50 -mx-1.5 inline-flex h-6 items-center rounded-md px-1.5 outline-none transition-colors focus-visible:ring-2"
+            aria-label="查看累计 Token 用量明细"
+          >
+            累计 {tokenFormatter.format(stats.totalTokens)} Token（含缓存）
+          </PopoverTrigger>
+          <PopoverContent
+            side="top"
+            align="end"
+            sideOffset={8}
+            className="w-64 gap-3 rounded-2xl p-4"
+          >
+            <PopoverTitle>累计 Token 用量</PopoverTitle>
+            <dl className="flex flex-col gap-2 text-xs">
+              {(
+                [
+                  ['未缓存输入', stats.input],
+                  ['缓存读取', stats.cacheRead],
+                  ...(stats.cacheWrite > 0 ? [['缓存写入', stats.cacheWrite] as const] : []),
+                  ['输出', stats.output],
+                ] satisfies (readonly [string, number])[]
+              ).map(([label, value]) => (
+                <div key={label} className="flex items-center justify-between gap-4">
+                  <dt className="text-muted-foreground">{label}</dt>
+                  <dd className="text-foreground tabular-nums">{numberFormatter.format(value)}</dd>
+                </div>
+              ))}
+              <div className="border-border/60 mt-1 flex items-center justify-between gap-4 border-t pt-3">
+                <dt className="text-muted-foreground">合计</dt>
+                <dd className="text-foreground font-medium tabular-nums">
+                  {numberFormatter.format(stats.totalTokens)}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-muted-foreground">缓存命中率</dt>
+                <dd className="text-primary tabular-nums">{stats.cacheRate}</dd>
+              </div>
+            </dl>
+          </PopoverContent>
+        </Popover>
         <span aria-hidden="true" className="text-primary/35">
           ·
         </span>
