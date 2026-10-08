@@ -12,7 +12,7 @@ export function WorkspaceComposerLabel() {
   if (!workspace) return null
   return (
     <div
-      className="flex min-w-0 items-center gap-1.5 px-3 text-[11px] leading-5 text-faint-foreground"
+      className="text-foreground/75 flex min-w-0 items-center gap-1.5 px-3 text-xs leading-5 font-medium"
       title={workspace.rootPath ?? workspace.lastKnownPath}
     >
       <FolderOpenIcon className="size-3.5 shrink-0" strokeWidth={1.5} />

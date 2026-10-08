@@ -433,7 +433,7 @@ export function ComposerContext({
         )}
       >
         <div className="flex items-baseline justify-between">
-          <p className="text-[13.5px] font-medium">Context</p>
+          <p className="text-[13.5px] font-medium">当前上下文</p>
           <p
             className={cn(
               mono,
@@ -451,11 +451,14 @@ export function ComposerContext({
           />
         </div>
         <div className="text-foreground/55 flex items-center justify-between text-[13px]">
-          <span>Total</span>
+          <span>占用 / 容量</span>
           <span className={cn(mono, 'text-foreground/40 tabular-nums')}>
             {format(budget.tokens)} / {format(budget.contextWindow)}
           </span>
         </div>
+        <p className="text-foreground/65 text-xs leading-5">
+          当前模型上下文的占用量，不是多次调用的累计 Token 用量。
+        </p>
       </div>
       <button
         type="button"
