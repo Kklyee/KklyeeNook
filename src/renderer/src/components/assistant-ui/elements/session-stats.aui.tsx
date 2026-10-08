@@ -50,6 +50,8 @@ export function SessionStats({ children }: { children?: ReactNode }) {
     }
   }, [messages])
 
+  if (messages.length === 0) return null
+
   return (
     <div
       data-slot="aui-session-stats"
