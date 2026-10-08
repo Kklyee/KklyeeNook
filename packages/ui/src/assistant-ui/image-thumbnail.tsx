@@ -5,7 +5,7 @@ export const ImageThumbnail: ImageMessagePartComponent = ({ image, filename }) =
   <Dialog>
     <DialogTrigger
       aria-label={`View ${filename || 'image'}`}
-      className="my-1 block size-24 cursor-zoom-in overflow-hidden rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="block size-20 cursor-zoom-in overflow-hidden rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <img src={image} alt={filename || 'Image attachment'} className="size-full object-cover" />
     </DialogTrigger>

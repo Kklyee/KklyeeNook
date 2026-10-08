@@ -685,7 +685,7 @@ const UserFilePart: FileMessagePartComponent = (part) => (
 )
 
 const UserImagePart: ImageMessagePartComponent = (part) => (
-  <div data-slot="aui_user-message-image" className="py-1">
+  <div data-slot="aui_user-message-image" className="me-2 inline-flex py-1 align-top last:me-0">
     <ImageThumbnail {...part} />
   </div>
 )
