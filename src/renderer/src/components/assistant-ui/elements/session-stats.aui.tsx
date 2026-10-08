@@ -71,7 +71,7 @@ export function SessionStats({ children }: { children?: ReactNode }) {
             className="hover:bg-hover focus-visible:ring-ring -mx-1.5 inline-flex h-6 items-center rounded-md px-1.5 outline-none transition-colors focus-visible:ring-2"
             aria-label="查看累计 Token 用量明细"
           >
-            累计 {tokenFormatter.format(stats.totalTokens)} Token（含缓存）
+            累计 {tokenFormatter.format(stats.totalTokens)} Token
           </PopoverTrigger>
           <PopoverContent
             side="top"
