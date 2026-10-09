@@ -202,6 +202,18 @@ test('streams snapshot before buffered deltas, queue, approval and status events
   expect(pi.cancelRun).not.toHaveBeenCalled()
 })
 
+test('exposes configured model context capacity for remote clients', async () => {
+  const { port, config } = fixture()
+  const current = config.get()
+  config.set({ ...current, providers: current.providers!.map(provider => ({
+    ...provider,
+    models: provider.models!.map(model => ({ ...model, contextWindow: 128_000 })),
+  })) })
+  expect((await port.getState()).models).toEqual(expect.arrayContaining([
+    expect.objectContaining({ provider: 'private-provider', modelId: 'model-1', contextWindow: 128_000 }),
+  ]))
+})
+
 test('streams context window usage updates to remote clients', async () => {
   const { port, emit } = fixture()
   const events: RemoteEvent[] = []

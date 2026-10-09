@@ -27,6 +27,7 @@ export interface RemoteModel {
   name: string
   supportsThinking: boolean
   thinkingLevels: string[]
+  contextWindow?: number
 }
 export interface RemoteConversationSummary {
   id: string

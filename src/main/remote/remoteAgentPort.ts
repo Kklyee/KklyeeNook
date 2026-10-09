@@ -135,6 +135,7 @@ export function createRemoteAgentPort(
         name: catalog?.name ?? model.modelName ?? model.modelID,
         supportsThinking: catalog?.reasoning ?? model.reasoning ?? false,
         thinkingLevels: catalog ? [...catalog.availableThinkingLevels] : ['off'],
+        contextWindow: catalog?.contextWindow ?? model.contextWindow,
       }
     })
   }
