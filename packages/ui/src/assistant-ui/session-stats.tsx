@@ -18,10 +18,11 @@ interface SessionMessage {
   usage?: { input: number; output: number; cacheRead: number; cacheWrite: number }
 }
 
-export function SessionStats({ messages, contextUsage, showContext = false, children }: {
+export function SessionStats({ messages, contextUsage, showContext = false, compact = false, children }: {
   messages: readonly SessionMessage[]
   contextUsage?: { tokens: number | null; contextWindow: number; percent: number | null }
   showContext?: boolean
+  compact?: boolean
   children?: ReactNode
 }) {
   const stats = useMemo(() => {
@@ -68,24 +69,26 @@ export function SessionStats({ messages, contextUsage, showContext = false, chil
     <div
       data-slot="aui-session-stats"
       aria-label="会话统计"
-      className="text-foreground/80 flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3 pt-0.5 text-[11px] leading-5 tabular-nums"
+      className={compact
+        ? 'text-foreground/80 flex min-w-0 items-center justify-between gap-2 overflow-x-auto whitespace-nowrap px-1 pt-0.5 text-[10px] leading-5 tabular-nums [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+        : 'text-foreground/80 flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3 pt-0.5 text-[11px] leading-5 tabular-nums'}
     >
-      <div className="flex shrink-0 items-center gap-2">
+      <div className={compact ? 'flex shrink-0 items-center gap-1' : 'flex shrink-0 items-center gap-2'}>
         <span title="当前会话分支：每条用户消息计为一轮，每次模型调用计为一步，包含正在生成的步骤">
-          {stats.rounds} 轮 - {stats.steps} 步
+          {compact ? `${stats.rounds}轮/${stats.steps}步` : `${stats.rounds} 轮 - ${stats.steps} 步`}
         </span>
         <span aria-hidden="true" className="text-foreground/30">
           ·
         </span>
-        <span title="模型发起的工具调用次数">{stats.tools} 次工具调用</span>
+        <span title="模型发起的工具调用次数">{stats.tools} {compact ? '工具' : '次工具调用'}</span>
       </div>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <div className={compact ? 'flex shrink-0 items-center gap-1' : 'flex flex-wrap items-center gap-x-2 gap-y-1'}>
         <Popover>
           <PopoverTrigger
             className="hover:bg-hover focus-visible:ring-ring -mx-1.5 inline-flex h-6 items-center rounded-md px-1.5 outline-none transition-colors focus-visible:ring-2"
             aria-label="查看累计 Token 用量明细"
           >
-            累计 {tokenFormatter.format(stats.totalTokens)} Token
+            {!compact && '累计 '}{tokenFormatter.format(stats.totalTokens)} Token
           </PopoverTrigger>
           <PopoverContent
             side="top"
@@ -130,7 +133,7 @@ export function SessionStats({ messages, contextUsage, showContext = false, chil
         {(showContext || contextUsage) && (
           <Popover>
             <PopoverTrigger
-              className="hover:bg-hover focus-visible:ring-ring inline-flex min-h-6 items-center rounded-md px-1.5 outline-none focus-visible:ring-2"
+              className="hover:bg-hover focus-visible:ring-ring inline-flex min-h-6 items-center gap-1 rounded-md px-1 outline-none focus-visible:ring-2"
               aria-label="查看上下文窗口用量"
             >
               上下文 {contextUsage?.percent == null ? '未知' : `${Math.round(contextUsage.percent)}%`}
