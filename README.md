@@ -1,21 +1,25 @@
 # KklyeeNook
 
-基于 **pi Agent 引擎**的桌面 AI 工作台，把代码执行、项目会话、知识检索和手机远程控制放在同一个应用中。
+基于 **pi SDK** 的开源桌面 **AI Agent**，集成代码执行、项目会话、知识检索与移动端远程访问能力。
 
 KklyeeNook 使用 Electron、React 和 TypeScript 构建，结合 [pi](https://github.com/earendil-works/pi) 的会话与模型能力，以及 [assistant-ui](https://www.assistant-ui.com/) 的聊天组件。你可以在电脑上围绕本地项目与 Agent 协作，也可以通过 Remote 在手机上继续同一个会话、查看任务进度和处理审批。
 
 ## 界面预览
 
-桌面端：项目会话、Agent 执行活动与聊天工作台。
+桌面会话与 Agent 执行活动、外观设置，以及 Remote 手机端聊天。
 
-![KklyeeNook 桌面工作台](docs/screenshots/desktop.png)
-
-Remote 手机端：继续聊天、查看工具活动，以及浏览项目会话。
-
-<p>
-  <img src="docs/screenshots/remote-chat.jpg" alt="Remote 手机端聊天与 Agent 活动" width="320" />
-  <img src="docs/screenshots/remote-conversations.jpg" alt="Remote 手机端项目会话列表" width="320" />
-</p>
+<table>
+  <tr>
+    <th>桌面端</th>
+    <th>外观设置</th>
+    <th>Remote 手机端</th>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/desktop.png" alt="KklyeeNook 桌面会话与 Agent 执行活动" width="320" /></td>
+    <td><img src="docs/screenshots/appearance.png" alt="KklyeeNook 主题、壁纸与毛玻璃外观设置" width="320" /></td>
+    <td><img src="docs/screenshots/remote-chat.png" alt="Remote 手机端聊天与上下文信息" width="150" /></td>
+  </tr>
+</table>
 
 ## 核心功能
 
@@ -24,7 +28,7 @@ Remote 手机端：继续聊天、查看工具活动，以及浏览项目会话�
 | **pi 驱动的 Agent** | 持久化会话、流式回复、工具调用、模型与 Thinking 切换、自动和手动上下文压缩 |
 | **Workspace 与项目会话** | 将本地目录绑定为工作区，按项目组织会话，为工具提供对应的执行目录 |
 | **代码与文件操作** | 读取、写入、编辑、查找文件、搜索内容和执行 Shell；在侧边预览代码、Markdown、图片与 Diff |
-| **Remote 手机工作台** | 通过 Tailscale 私网使用移动端 PWA，共享桌面的项目、pi 会话和任务状态 |
+| **Remote 移动端访问** | 通过 Tailscale 私网使用移动端 PWA，共享桌面的项目、pi 会话和任务状态 |
 | **运行中交互与 Queue** | 发送 Steer 调整当前执行方向，发送 Follow-up 排队后续任务，编辑队列消息或停止运行 |
 | **Subagent 与执行记录** | 委派独立子任务，查看计划、工具活动和运行历史；最多同时运行两个子任务，子任务不再继续委派 |
 | **权限与审批** | 提供只读、工作区内修改和完全权限三种模式，支持临时授权及桌面、手机审批 |
