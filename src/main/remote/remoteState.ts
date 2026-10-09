@@ -71,6 +71,7 @@ export function remoteSnapshot(
       ? { provider: input.metadata.config.provider, modelId: input.metadata.config.modelId }
       : undefined,
     thinkingLevel: input.metadata.config?.thinkingLevel ?? 'off',
+    contextUsage: input.metadata.contextUsage,
     messages: input.messages.flatMap((message, index) => remoteMessage(message, input.metadata.status === 'running' && index === input.messages.length - 1) ?? []),
     activities: [],
     queue: remoteQueue(queue.filter(item => item.mode === 'steer').map(item => item.content), queue.filter(item => item.mode === 'followUp').map(item => item.content)),

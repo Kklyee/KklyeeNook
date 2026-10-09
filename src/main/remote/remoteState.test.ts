@@ -1,6 +1,17 @@
 import { expect, test } from 'vitest'
-import type { PiAssistantMessage } from '@assistant-ui/react-pi'
-import { remoteMessage } from './remoteState'
+import type { PiAssistantMessage, PiThreadSnapshot } from '@assistant-ui/react-pi'
+import { remoteMessage, remoteSnapshot } from './remoteState'
+
+test('includes context window usage in remote snapshots', () => {
+  const contextUsage = { tokens: 32_000, contextWindow: 128_000, percent: 25 }
+  const snapshot: PiThreadSnapshot = {
+    metadata: { id: 'chat', status: 'idle', contextUsage },
+    messages: [],
+  }
+  expect(remoteSnapshot(snapshot, {
+    id: 'chat', projectId: 'project', title: 'Chat', status: 'idle', updatedAt: 1,
+  }, 'workspace-write').contextUsage).toEqual(contextUsage)
+})
 
 test('preserves assistant usage and tool calls for remote session statistics', () => {
   const message: PiAssistantMessage = {

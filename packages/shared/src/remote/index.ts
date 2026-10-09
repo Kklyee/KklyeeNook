@@ -93,7 +93,13 @@ export type RemoteApprovalAnswer =
   | { value: string }
   | { dismissed: true }
 export type RemoteApprovalResponse = { conversationId: string } & RemoteApprovalAnswer
+export interface RemoteContextUsage {
+  tokens: number | null
+  contextWindow: number
+  percent: number | null
+}
 export interface RemoteConversationSnapshot extends RemoteConversationSummary {
+  contextUsage?: RemoteContextUsage
   permission: RemotePermissionMode
   model?: { provider: string; modelId: string }
   thinkingLevel: string
@@ -125,6 +131,7 @@ export type RemoteEventBody =
   | { type: 'snapshot'; snapshot: RemoteConversationSnapshot }
   | { type: 'message'; message: RemoteMessage }
   | { type: 'activity'; activities: RemoteActivity[] }
+  | { type: 'context'; contextUsage: RemoteContextUsage }
   | { type: 'queue'; queue: RemoteQueueItem[] }
   | { type: 'approvals'; approvals: RemoteApproval[] }
   | { type: 'status'; status: RemoteConversationSummary['status'] }

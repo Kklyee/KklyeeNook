@@ -202,6 +202,17 @@ test('streams snapshot before buffered deltas, queue, approval and status events
   expect(pi.cancelRun).not.toHaveBeenCalled()
 })
 
+test('streams context window usage updates to remote clients', async () => {
+  const { port, emit } = fixture()
+  const events: RemoteEvent[] = []
+  const unsubscribe = port.subscribe('chat', event => events.push(event))
+  const contextUsage = { tokens: 32_000, contextWindow: 128_000, percent: 25 }
+  try {
+    emit({ type: 'context_usage', threadId: 'chat', seq: 2, contextUsage })
+    await vi.waitFor(() => expect(events).toContainEqual({ type: 'context', seq: 2, contextUsage }))
+  } finally { unsubscribe() }
+})
+
 test('delivers snapshots and native message events without waiting for history activity queries', async () => {
   const { port, emit, agents, pi } = fixture()
   let finish!: (runs: never[]) => void

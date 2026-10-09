@@ -321,6 +321,7 @@ export function createRemoteAgentPort(
             if (message) emit({ type: 'message', message } as RemoteEventBody)
             break
           }
+          case 'context_usage': emit({ type: 'context', contextUsage: event.contextUsage }); break
           case 'queue_update': emit({ type: 'queue', queue: remoteQueue(event.steering, event.followUp) } as RemoteEventBody); break
           case 'extension_ui_request':
             approvals = [...approvals.filter(item => item.id !== event.request.id), remoteApproval(event.request)]
