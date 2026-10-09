@@ -6,15 +6,17 @@ KklyeeNook 使用 Electron、React 和 TypeScript 构建，结合 [pi](https://g
 
 ## 界面预览
 
-桌面会话与 Agent 执行活动、外观设置，以及 Remote 手机端聊天。
+桌面首页、会话与 Agent 执行活动、外观设置，以及 Remote 手机端聊天。
 
 <table>
   <tr>
-    <th>桌面端</th>
+    <th>桌面首页</th>
+    <th>桌面会话</th>
     <th>外观设置</th>
     <th>Remote 手机端</th>
   </tr>
   <tr>
+    <td><img src="docs/screenshots/home.png" alt="KklyeeNook 桌面首页与新会话输入" width="320" /></td>
     <td><img src="docs/screenshots/desktop.png" alt="KklyeeNook 桌面会话与 Agent 执行活动" width="320" /></td>
     <td><img src="docs/screenshots/appearance.png" alt="KklyeeNook 主题、壁纸与毛玻璃外观设置" width="320" /></td>
     <td><img src="docs/screenshots/remote-chat.png" alt="Remote 手机端聊天与上下文信息" width="150" /></td>
