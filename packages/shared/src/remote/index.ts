@@ -44,6 +44,7 @@ export interface RemoteMessage {
     image: string
   } | { type: 'data'; name: 'tool-call'; data: { toolCallId: string } }>
   status?: 'running' | 'complete' | 'failed' | 'cancelled'
+  usage?: { input: number; output: number; cacheRead: number; cacheWrite: number }
 }
 export interface RemoteActivity {
   id: string

@@ -17,6 +17,7 @@ import type { RemoteActivity, RemoteFileAttachment, RemoteMessage } from '@kklye
 import { MarkdownText } from '@kklyeenook/ui/assistant-ui/markdown-text'
 import { ImageThumbnail } from '@kklyeenook/ui/assistant-ui/image-thumbnail'
 import { ComposerBar, ComposerSend } from '@kklyeenook/ui/assistant-ui/composer-controls'
+import { SessionStats } from '@kklyeenook/ui/assistant-ui/session-stats'
 import { StreamingMessage, StreamingText, StreamingThread } from '@kklyeenook/ui/assistant-ui/streaming-message'
 import { Button } from '@kklyeenook/ui/components/button'
 import { Choice } from './Controls'
@@ -144,6 +145,6 @@ export function RemoteThread({ messages: transcript, activities = [], loading = 
         <ThreadPrimitive.ScrollToBottom asChild><Button variant="secondary" className="mx-auto min-h-11 disabled:hidden" aria-label="Scroll to latest"><ArrowDownIcon />Latest</Button></ThreadPrimitive.ScrollToBottom>
       </div>
     </ThreadPrimitive.Viewport>
-    <div className="composer-dock mx-auto w-full max-w-3xl shrink-0 px-3 pt-2">{sendError && <p role="alert" className="mb-2 text-xs text-destructive">{sendError}</p>}<Composer running={running} busy={busy} disabled={disabled} controls={controls} onStop={onStop} /></div>
+    <div className="composer-dock mx-auto w-full max-w-3xl shrink-0 px-3 pt-2">{sendError && <p role="alert" className="mb-2 text-xs text-destructive">{sendError}</p>}<Composer running={running} busy={busy} disabled={disabled} controls={controls} onStop={onStop} /><SessionStats messages={transcript} /></div>
   </ThreadPrimitive.Root></StreamingThread></AssistantRuntimeProvider></ActivityContext.Provider>
 }

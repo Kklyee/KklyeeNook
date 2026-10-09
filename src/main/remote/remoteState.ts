@@ -1,4 +1,4 @@
-import type { PiAgentMessage, PiHostUiRequest, PiThreadSnapshot } from '@assistant-ui/react-pi'
+import type { PiAgentMessage, PiAssistantMessage, PiHostUiRequest, PiThreadSnapshot } from '@assistant-ui/react-pi'
 import type {
   RemoteApproval,
   RemoteConversationSnapshot,
@@ -10,6 +10,7 @@ import type {
 export function remoteMessage(input: PiAgentMessage, streaming = false): RemoteMessage | undefined {
   if (input.role !== 'user' && input.role !== 'assistant') return
   const timestamp = typeof input.timestamp === 'number' ? input.timestamp : 0
+  const usage = input.role === 'assistant' ? (input as PiAssistantMessage).usage : undefined
   const content: RemoteMessage['content'] = []
   if (typeof input.content === 'string') content.push({ type: 'text', text: input.content })
   else if (Array.isArray(input.content)) {
@@ -28,6 +29,12 @@ export function remoteMessage(input: PiAgentMessage, streaming = false): RemoteM
     timestamp,
     content,
     ...(input.role === 'assistant' ? {
+      ...(usage ? { usage: {
+        input: usage.input,
+        output: usage.output,
+        cacheRead: usage.cacheRead,
+        cacheWrite: usage.cacheWrite,
+      } } : {}),
       status: streaming ? 'running' : input.stopReason === 'error' ? 'failed' : input.stopReason === 'aborted' ? 'cancelled' : 'complete',
     } : {}),
   }
