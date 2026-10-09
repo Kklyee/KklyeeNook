@@ -13,11 +13,12 @@ import {
   groupPartByType,
   type ThreadMessageLike,
 } from '@assistant-ui/react'
-import type { RemoteActivity, RemoteContextUsage, RemoteFileAttachment, RemoteMessage } from '@kklyeenook/shared/remote/index'
+import type { RemoteActivity, RemoteContextBudget, RemoteFileAttachment, RemoteMessage } from '@kklyeenook/shared/remote/index'
 import { MarkdownText } from '@kklyeenook/ui/assistant-ui/markdown-text'
 import { ImageThumbnail } from '@kklyeenook/ui/assistant-ui/image-thumbnail'
 import { ComposerBar, ComposerSend } from '@kklyeenook/ui/assistant-ui/composer-controls'
 import { SessionStats } from '@kklyeenook/ui/assistant-ui/session-stats'
+import { ComposerContext } from '@kklyeenook/ui/assistant-ui/composer-context'
 import { StreamingMessage, StreamingText, StreamingThread } from '@kklyeenook/ui/assistant-ui/streaming-message'
 import { Button } from '@kklyeenook/ui/components/button'
 import { Choice } from './Controls'
@@ -96,9 +97,9 @@ function Composer({ running, busy, disabled, controls, onStop }: {
   </ComposerBar></ComposerPrimitive.Root>
 }
 
-export function RemoteThread({ messages: transcript, contextUsage, activities = [], loading = false, running, busy, disabled, controls, children, onSend, onStop }: {
+export function RemoteThread({ messages: transcript, contextBudget, activities = [], loading = false, running, busy, disabled, controls, children, onSend, onStop }: {
   messages: RemoteMessage[]
-  contextUsage?: RemoteContextUsage
+  contextBudget?: RemoteContextBudget
   activities?: RemoteActivity[]
   loading?: boolean
   running: boolean
@@ -146,6 +147,6 @@ export function RemoteThread({ messages: transcript, contextUsage, activities = 
         <ThreadPrimitive.ScrollToBottom asChild><Button variant="secondary" className="mx-auto min-h-11 disabled:hidden" aria-label="Scroll to latest"><ArrowDownIcon />Latest</Button></ThreadPrimitive.ScrollToBottom>
       </div>
     </ThreadPrimitive.Viewport>
-    <div className="composer-dock mx-auto w-full max-w-3xl shrink-0 px-3 pt-2">{sendError && <p role="alert" className="mb-2 text-xs text-destructive">{sendError}</p>}<Composer running={running} busy={busy} disabled={disabled} controls={controls} onStop={onStop} /><SessionStats messages={transcript} contextUsage={contextUsage} showContext compact /></div>
+    <div className="composer-dock mx-auto w-full max-w-3xl shrink-0 px-3 pt-2">{sendError && <p role="alert" className="mb-2 text-xs text-destructive">{sendError}</p>}<Composer running={running} busy={busy} disabled={disabled} controls={controls} onStop={onStop} /><SessionStats messages={transcript} compact>{contextBudget && <ComposerContext budget={contextBudget} className="shrink-0" />}</SessionStats></div>
   </ThreadPrimitive.Root></StreamingThread></AssistantRuntimeProvider></ActivityContext.Provider>
 }

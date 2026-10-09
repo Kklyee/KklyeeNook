@@ -202,6 +202,19 @@ test('streams snapshot before buffered deltas, queue, approval and status events
   expect(pi.cancelRun).not.toHaveBeenCalled()
 })
 
+test('uses the desktop context budget calculation for existing remote conversations', async () => {
+  const { port, pi, config, snapshot } = fixture()
+  config.set({ ...config.get(), compaction: { enabled: true, reserveTokens: 16_000, keepRecentTokens: 20_000 } })
+  const thread = snapshot()
+  pi.getThread.mockResolvedValue({ ...thread, metadata: { ...thread.metadata, contextUsage: { tokens: 105_000, contextWindow: 128_000, percent: 82.03125 } } })
+  expect((await port.getConversation('chat')).contextBudget).toMatchObject({
+    tokens: 105_000,
+    contextWindow: 128_000,
+    usedPercent: 105_000 / 128_000,
+    state: 'critical',
+  })
+})
+
 test('exposes configured model context capacity for remote clients', async () => {
   const { port, config } = fixture()
   const current = config.get()
@@ -221,7 +234,7 @@ test('streams context window usage updates to remote clients', async () => {
   const contextUsage = { tokens: 32_000, contextWindow: 128_000, percent: 25 }
   try {
     emit({ type: 'context_usage', threadId: 'chat', seq: 2, contextUsage })
-    await vi.waitFor(() => expect(events).toContainEqual({ type: 'context', seq: 2, contextUsage }))
+    await vi.waitFor(() => expect(events).toContainEqual(expect.objectContaining({ type: 'context', seq: 2, contextUsage, contextBudget: expect.objectContaining({ tokens: 32_000, contextWindow: 128_000, usedPercent: 0.25, state: 'normal' }) })))
   } finally { unsubscribe() }
 })
 

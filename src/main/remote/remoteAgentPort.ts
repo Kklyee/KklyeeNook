@@ -27,7 +27,9 @@ import { deriveAgentActivities } from '@/shared/agent/deriveAgentActivities'
 import { groupAgentActivities } from '@/shared/agent/groupAgentActivities'
 import { formatActivityLabel } from '@/shared/agent/agentActivityFormatter'
 import { summarizeAgentActivities } from '@/shared/agent/agentActivitySummary'
-import { getActiveModel } from '@/shared/agent/agentConfig'
+import { getActiveModel, getAgentCompactionSettings } from '@/shared/agent/agentConfig'
+import { calculateAgentContextBudget } from '@/shared/agent/agentContextBudget'
+import { toAgentContextUsage } from '@/shared/agent/agentContextUsage'
 import { getAgentModelChoices } from '../settings/modelCatalog'
 import type { UpdateAgentModelSelectionRequest } from '@/shared/agent/agentSettings'
 import type { ThinkingLevel } from '@/shared/agent/agentConfig'
@@ -100,6 +102,7 @@ export function createRemoteAgentPort(
     status: session.activeRunId ? 'running' : 'idle',
     updatedAt: session.updatedAt,
   })
+  const contextBudget = (usage: RemoteConversationSnapshot['contextUsage']) => calculateAgentContextBudget(toAgentContextUsage(usage), getAgentCompactionSettings(config.get()))
   const activitySnapshots = new Map<string, RemoteActivity[]>()
   const activities = async (id: string): Promise<RemoteActivity[]> => {
     const runs = (await agents.listRuns(id)).filter(run => !run.parentRunId).sort((a, b) => a.createdAt - b.createdAt)
@@ -155,6 +158,7 @@ export function createRemoteAgentPort(
     const session = requireSession(id)
     const context = await executionContexts.resolve(id)
     const snapshot = remoteSnapshot(await pi.getThread(id), summary(session), effectivePermissionMode(session.permissionMode, !!context.workspace, config.get().defaultPermissionMode))
+    snapshot.contextBudget = contextBudget(snapshot.contextUsage)
     snapshot.activities = includeActivities ? await activities(id) : activitySnapshots.get(id) ?? []
     return snapshot
   }
@@ -311,6 +315,7 @@ export function createRemoteAgentPort(
             const context = await executionContexts.resolve(id)
             const session = requireSession(id)
             const snapshot = remoteSnapshot(event.snapshot, summary(session), effectivePermissionMode(session.permissionMode, !!context.workspace, config.get().defaultPermissionMode))
+            snapshot.contextBudget = contextBudget(snapshot.contextUsage)
             snapshot.activities = activitySnapshots.get(id) ?? []
             publishSnapshot(snapshot)
             break
@@ -322,7 +327,7 @@ export function createRemoteAgentPort(
             if (message) emit({ type: 'message', message } as RemoteEventBody)
             break
           }
-          case 'context_usage': emit({ type: 'context', contextUsage: event.contextUsage }); break
+          case 'context_usage': emit({ type: 'context', contextUsage: event.contextUsage, contextBudget: contextBudget(event.contextUsage) }); break
           case 'queue_update': emit({ type: 'queue', queue: remoteQueue(event.steering, event.followUp) } as RemoteEventBody); break
           case 'extension_ui_request':
             approvals = [...approvals.filter(item => item.id !== event.request.id), remoteApproval(event.request)]

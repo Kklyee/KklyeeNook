@@ -99,7 +99,14 @@ export interface RemoteContextUsage {
   contextWindow: number
   percent: number | null
 }
+export interface RemoteContextBudget {
+  tokens?: number
+  contextWindow?: number
+  usedPercent?: number
+  state: 'unknown' | 'normal' | 'warning' | 'critical' | 'compacting'
+}
 export interface RemoteConversationSnapshot extends RemoteConversationSummary {
+  contextBudget?: RemoteContextBudget
   contextUsage?: RemoteContextUsage
   permission: RemotePermissionMode
   model?: { provider: string; modelId: string }
@@ -132,7 +139,7 @@ export type RemoteEventBody =
   | { type: 'snapshot'; snapshot: RemoteConversationSnapshot }
   | { type: 'message'; message: RemoteMessage }
   | { type: 'activity'; activities: RemoteActivity[] }
-  | { type: 'context'; contextUsage: RemoteContextUsage }
+  | { type: 'context'; contextUsage: RemoteContextUsage; contextBudget: RemoteContextBudget }
   | { type: 'queue'; queue: RemoteQueueItem[] }
   | { type: 'approvals'; approvals: RemoteApproval[] }
   | { type: 'status'; status: RemoteConversationSummary['status'] }

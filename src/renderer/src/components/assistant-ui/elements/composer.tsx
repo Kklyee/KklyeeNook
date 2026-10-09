@@ -22,9 +22,7 @@ import {
   mono,
   ShimmerLabel,
 } from '@/renderer/src/lib/surfaces'
-import { clamp, pct } from '@/renderer/src/lib/range'
-import type { AgentContextBudget, AgentContextBudgetState } from '@/shared/agent/agentContextBudget'
-import { formatContextTokens } from '@/shared/agent/contextTokens'
+import { pct } from '@/renderer/src/lib/range'
 
 export interface ComposerAttachment {
   name: string
@@ -404,103 +402,7 @@ export function ComposerModelItem({
   )
 }
 
-export function ComposerContext({
-  budget,
-  className,
-  ...props
-}: Omit<ComponentProps<'div'>, 'children'> & { budget: AgentContextBudget }) {
-  const fraction = budget.usedPercent ?? 0
-  const warn = budget.state === 'warning' || budget.state === 'critical'
-  const circumference = 2 * Math.PI * 6
-  const status = CONTEXT_STATE_LABELS[budget.state]
-  const format = (value?: number) => (value === undefined ? '未知' : formatContextTokens(value))
-
-  return (
-    <div
-      data-slot="composer-context"
-      data-state={budget.state}
-      className={cn('group/ctx relative', className)}
-      {...props}
-    >
-      <div
-        className={cn(
-          'material-raised',
-          'text-foreground absolute end-0 bottom-full z-10 mb-2 flex w-60 origin-bottom-right flex-col gap-3.5 rounded-2xl p-4',
-          'transition-[opacity,scale] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none',
-          'pointer-events-none scale-[0.97] opacity-0',
-          'group-hover/ctx:pointer-events-auto group-hover/ctx:scale-100 group-hover/ctx:opacity-100',
-          'group-focus-within/ctx:pointer-events-auto group-focus-within/ctx:scale-100 group-focus-within/ctx:opacity-100',
-        )}
-      >
-        <div className="flex items-baseline justify-between">
-          <p className="text-[13.5px] font-medium">当前上下文</p>
-          <p
-            className={cn(
-              mono,
-              'tabular-nums',
-              warn ? 'text-red-500 dark:text-red-400' : 'text-foreground/35',
-            )}
-          >
-            {Math.round(fraction * 100)}%
-          </p>
-        </div>
-        <div className="bg-foreground/[0.06] flex h-[5px] w-full gap-px overflow-hidden rounded-full">
-          <span
-            className="bg-foreground/80 h-full transition-[width] duration-700 motion-reduce:transition-none"
-            style={{ width: `${clamp(fraction, 0, 1) * 100}%` }}
-          />
-        </div>
-        <div className="text-foreground/55 flex items-center justify-between text-[13px]">
-          <span>占用 / 容量</span>
-          <span className={cn(mono, 'text-foreground/40 tabular-nums')}>
-            {format(budget.tokens)} / {format(budget.contextWindow)}
-          </span>
-        </div>
-      </div>
-      <button
-        type="button"
-        aria-label={`上下文 ${format(budget.tokens)} / ${format(budget.contextWindow)}，${status}`}
-        title={status}
-        className={cn(
-          ghostButton,
-          'text-foreground/80 h-6 gap-1.5 rounded-md px-1.5 text-[11px] font-normal tabular-nums',
-          warn && 'text-red-500 dark:text-red-400',
-        )}
-      >
-        <svg viewBox="0 0 16 16" className="size-3 -rotate-90" aria-hidden>
-          <circle
-            cx="8"
-            cy="8"
-            r="6"
-            fill="none"
-            strokeWidth="2.5"
-            className="stroke-foreground/10"
-          />
-          <circle
-            cx="8"
-            cy="8"
-            r="6"
-            fill="none"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            className="stroke-current transition-[stroke-dashoffset] duration-700 motion-reduce:transition-none"
-            strokeDasharray={circumference}
-            strokeDashoffset={circumference * (1 - clamp(fraction, 0, 1))}
-          />
-        </svg>
-        <span>上下文 {Math.round(fraction * 100)}%</span>
-      </button>
-    </div>
-  )
-}
-
-const CONTEXT_STATE_LABELS: Record<AgentContextBudgetState, string> = {
-  unknown: '上下文预算未知',
-  normal: '上下文预算充足',
-  warning: '接近预计压缩边界',
-  critical: '即将达到预计压缩边界',
-  compacting: '正在整理上下文…',
-}
+export { ComposerContext } from '@kklyeenook/ui/assistant-ui/composer-context'
 
 export function ComposerVoiceButton({
   active,
