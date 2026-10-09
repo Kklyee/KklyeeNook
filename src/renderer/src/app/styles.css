@@ -179,6 +179,30 @@ body,
   box-sizing: border-box;
 }
 
+.thread-sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.thread-sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.thread-sidebar-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--ui-brand) 65%, transparent);
+}
+
+.thread-sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--ui-brand);
+}
+
+.thread-sidebar-scroll::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 .composer,
 .aui-edit-composer-root {
   background: oklch(from var(--ui-control) l c h / 1);
