@@ -25,9 +25,16 @@ test('runs the same Harness smoke inside an Electron utility process', async () 
   const directory = await mkdtemp(join(process.cwd(), 'node_modules', '.nook-durable-'))
   try {
     const source = await readFile(new URL('./testing/durable-smoke.ts', import.meta.url), 'utf8')
-    const compiled = ts.transpileModule(source, {
-      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
-    })
+    const compilerOptions = { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext }
+    const compiled = ts.transpileModule(
+      source.replace('../../agent/agent-engine', './agent-engine.mjs'),
+      { compilerOptions },
+    )
+    const engine = await readFile(new URL('../agent/agent-engine.ts', import.meta.url), 'utf8')
+    await writeFile(
+      join(directory, 'agent-engine.mjs'),
+      ts.transpileModule(engine, { compilerOptions }).outputText,
+    )
     await writeFile(join(directory, 'durable-smoke.mjs'), compiled.outputText)
     await writeFile(
       join(directory, 'entry.mjs'),

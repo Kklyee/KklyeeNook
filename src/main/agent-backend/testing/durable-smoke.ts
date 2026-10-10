@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/chord/context'
 import { createModels } from '@earendil-works/pi-ai/models'
 import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux'
-import { AssistantEntry, createRegistry, Harness } from '@earendil-works/pi-durable'
-import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
+import { AssistantEntry, createRegistry } from '@earendil-works/pi-durable'
+import { AgentEngine } from '../../agent/agent-engine'
 
 export async function runDurableSmoke(databasePath: string) {
   const context = withAbortSignal(AbortSignal.timeout(15_000), BACKGROUND_CONTEXT)
@@ -12,15 +12,7 @@ export async function runDurableSmoke(databasePath: string) {
   models.setProvider(faux.provider)
   faux.setResponses([fauxAssistantMessage('Durable smoke passed.')])
   const options = { models, registry: createRegistry(), settings: { extensions: [] } }
-  const open = async () => {
-    const storage = await openNodeSqliteStorage(databasePath)
-    try {
-      return await Harness.open(storage, options, context)
-    } catch (error) {
-      await storage.close(BACKGROUND_CONTEXT)
-      throw error
-    }
-  }
+  const open = () => AgentEngine.open(databasePath, options, context)
   const request = {
     type: 'input',
     content: 'Reply to the smoke test.',
@@ -31,7 +23,8 @@ export async function runDurableSmoke(databasePath: string) {
   let submissionId
   let entryIds
   try {
-    const root = await first.root(context, {
+    await assert.rejects(open(), /locked/)
+    const root = await first.harness.root(context, {
       agent: { model: { provider: 'faux', modelId: 'faux-1' }, extensions: [], tools: [] },
     })
     conversationId = root.id
@@ -48,17 +41,16 @@ export async function runDurableSmoke(databasePath: string) {
     )
     assert.equal(faux.state.callCount, 1)
   } finally {
-    await first.close(BACKGROUND_CONTEXT)
+    await first.close()
   }
   const reopened = await open()
   try {
-    const root = await reopened.root(context)
+    const root = await reopened.harness.root(context)
     assert.equal(root.id, conversationId)
-    reopened.resume()
     const repeated = await root.submit(request, context)
     assert.equal(repeated.id, submissionId)
     assert.equal((await repeated.wait(context)).status, 'done')
-    await reopened.waitForIdle(context)
+    await reopened.harness.waitForIdle(context)
     assert.deepEqual(
       (await root.entries({ order: 'ascending' }, 100, undefined, context)).items.map(
         (entry) => entry.id,
@@ -66,7 +58,7 @@ export async function runDurableSmoke(databasePath: string) {
       entryIds,
     )
     assert.equal(faux.state.callCount, 1)
-    assert.equal((await reopened.inspect(context)).tasks.length, 0)
+    assert.equal((await reopened.harness.inspect(context)).tasks.length, 0)
     return {
       conversationId,
       submissionId,
@@ -76,6 +68,6 @@ export async function runDurableSmoke(databasePath: string) {
       electron: process.versions.electron,
     }
   } finally {
-    await reopened.close(BACKGROUND_CONTEXT)
+    await reopened.close()
   }
 }
