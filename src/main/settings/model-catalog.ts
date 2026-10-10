@@ -1,5 +1,5 @@
-import { getSupportedThinkingLevels } from '@earendil-works/pi-ai'
-import { builtinModels } from '@earendil-works/pi-ai/providers/all'
+import { getSupportedThinkingLevels } from 'pi-ai-legacy'
+import { builtinModels } from 'pi-ai-legacy/providers/all'
 import type { ModelCatalogProvider } from '@/shared/agent/agentSettings'
 import {
   getConfiguredProviders,

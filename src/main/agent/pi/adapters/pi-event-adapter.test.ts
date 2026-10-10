@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import type { AssistantMessage } from '@earendil-works/pi-ai'
+import type { AssistantMessage } from 'pi-ai-legacy'
 import { convertPiEvent } from './piEventAdapter'
 
 const message: AssistantMessage = {

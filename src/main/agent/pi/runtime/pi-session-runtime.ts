@@ -22,7 +22,7 @@ import type {
   PiThreadSnapshot,
   PiTranscriptMessage,
 } from '@assistant-ui/react-pi/node'
-import { getSupportedThinkingLevels } from '@earendil-works/pi-ai'
+import { getSupportedThinkingLevels } from 'pi-ai-legacy'
 
 import {
   createAgentSession,
@@ -52,7 +52,7 @@ import {
   getModelCatalog,
   hasBuiltinModel,
   mergeConfiguredProvidersIntoCatalog,
-} from '@/main/settings/modelCatalog'
+} from '@/main/settings/model-catalog'
 
 import { createPiApprovalExtension } from '@/main/approval/piApprovalExtension'
 import type { AgentRuntimeStateRepo } from '@/main/db/repositories/agentRuntimeStateRepo'

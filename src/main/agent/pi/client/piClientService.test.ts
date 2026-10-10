@@ -9,7 +9,7 @@ import type { MessageProjectionService } from '../../messageProjectionService'
 import { ContextAttachmentService } from '@/main/context/contextAttachmentService'
 import { ContextBuilder } from '@/main/context/contextBuilder'
 import type { AgentSessionSummary } from '@/shared/agent/agentSession'
-import type { PiSessionClientEventListener, PiSessionRuntimePort } from '../runtime/piSessionRuntime'
+import type { PiSessionClientEventListener, PiSessionRuntimePort } from '../runtime/pi-session-runtime'
 import { PiSessionRuntimeManager } from '../runtime/piSessionRuntimeManager'
 import { PiClientService } from './piClientService'
 

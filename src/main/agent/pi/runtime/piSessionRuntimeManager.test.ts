@@ -1,6 +1,6 @@
 import { expect, test, vi } from 'vitest'
 
-import type { PiSessionRuntimePort } from './piSessionRuntime'
+import type { PiSessionRuntimePort } from './pi-session-runtime'
 import { PiSessionRuntimeManager } from './piSessionRuntimeManager'
 
 function createFakeRuntime(): PiSessionRuntimePort {

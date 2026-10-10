@@ -39,7 +39,7 @@ import {
   mergeConfiguredProvidersIntoCatalog,
   mergeSavedModelsIntoCatalog,
   updateAgentModelSelectionFromCatalog,
-} from './modelCatalog'
+} from './model-catalog'
 import { discoverRemoteModels } from './modelDiscovery'
 import { webSearchErrorCode } from '../web-search/webSearchErrors'
 import { WebSearchService } from '../web-search/webSearchService'

@@ -8,6 +8,7 @@ out
 docs/*
 !docs/screenshots/
 !docs/architecture.md
+!docs/pi-durable-m0.md
 !docs/dsh-reference.md
 !docs/dsh-reference.zh.md
 .tmp*

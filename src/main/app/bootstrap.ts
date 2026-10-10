@@ -1,6 +1,6 @@
 import { ExecutionContextService } from '../workspace/executionContextService'
 import { registerRemoteIpc } from '../remote/remoteIpc'
-import { updateAgentModelSelectionFromCatalog } from '../settings/modelCatalog'
+import { updateAgentModelSelectionFromCatalog } from '../settings/model-catalog'
 import { WorkspacePreviewService } from '../preview/workspacePreviewService'
 import { registerPreviewIpc } from '../preview/previewIpc'
 import { WorkspaceService } from '../workspace/workspaceService'

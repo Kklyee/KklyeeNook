@@ -1,5 +1,5 @@
 import type { ModelCatalogModel } from '@/shared/agent/agentSettings'
-import { modelCatalogDefaults } from './modelCatalog'
+import { modelCatalogDefaults } from './model-catalog'
 
 const DEFAULT_API = 'openai-completions'
 const DEFAULT_THINKING_LEVELS = ['off'] as const

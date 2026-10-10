@@ -1,7 +1,7 @@
 import { expect, test, vi } from 'vitest'
 import { Agent } from '@earendil-works/pi-agent-core'
 import { AgentSession } from '@earendil-works/pi-coding-agent'
-import { createAssistantMessageEventStream, type AssistantMessage } from '@earendil-works/pi-ai'
+import { createAssistantMessageEventStream, type AssistantMessage } from 'pi-ai-legacy'
 
 function createSession(
   agent = new Agent({

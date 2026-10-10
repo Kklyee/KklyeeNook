@@ -6,7 +6,7 @@ import {
   hasBuiltinModel,
   mergeConfiguredProvidersIntoCatalog,
   mergeSavedModelsIntoCatalog,
-} from './modelCatalog'
+} from './model-catalog'
 
 test('exposes the pi-ai built-in provider and model catalog', () => {
   const catalog = getModelCatalog()

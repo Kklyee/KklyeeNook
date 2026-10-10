@@ -7,7 +7,7 @@ import {
   createAssistantMessageEventStream,
   type AssistantMessage,
   type Model,
-} from '@earendil-works/pi-ai'
+} from 'pi-ai-legacy'
 import { Type } from 'typebox'
 import { ToolRegistry } from '@/main/tools/toolRegistry'
 import { ToolResultStore } from '@/main/tools/toolResultStore'

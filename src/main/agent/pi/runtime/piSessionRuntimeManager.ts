@@ -1,5 +1,5 @@
-import type { PiSessionRuntimePort } from './piSessionRuntime'
-import type { PiSessionRuntimeOptions } from './piSessionRuntime'
+import type { PiSessionRuntimePort } from './pi-session-runtime'
+import type { PiSessionRuntimeOptions } from './pi-session-runtime'
 import type { PiHostUiResponse } from '@assistant-ui/react-pi/node'
 
 export type PiSessionRuntimeFactory = (

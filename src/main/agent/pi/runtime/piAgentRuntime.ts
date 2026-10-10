@@ -1,7 +1,7 @@
 import type { AgentEvent } from '@/shared/agent/agentEvent'
 import type { AgentRuntime, AgentRuntimeInput, AgentRuntimeEvent } from '../../agentRuntime'
 import { convertPiEvent } from '../adapters/piEventAdapter'
-import type { PiSessionRuntimePort } from './piSessionRuntime'
+import type { PiSessionRuntimePort } from './pi-session-runtime'
 
 type Emit = (event: AgentRuntimeEvent) => void
 

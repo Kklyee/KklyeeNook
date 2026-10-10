@@ -6,7 +6,7 @@ import type {
   PiSessionEventListener,
   PiSessionRuntimePort,
   PiSessionProductEventListener,
-} from './piSessionRuntime'
+} from './pi-session-runtime'
 
 test('keeps the AgentRuntime projection on top of the shared session runtime', async () => {
   const sessionListeners = new Set<PiSessionEventListener>()

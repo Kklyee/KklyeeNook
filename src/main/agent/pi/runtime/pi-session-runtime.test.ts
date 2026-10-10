@@ -1,6 +1,6 @@
 import { expect, test, vi } from 'vitest'
 import { Agent } from '@earendil-works/pi-agent-core'
-import { createAssistantMessageEventStream, Type, type AssistantMessage, type Model } from '@earendil-works/pi-ai'
+import { createAssistantMessageEventStream, Type, type AssistantMessage, type Model } from 'pi-ai-legacy'
 import type { ExecutionBoundaryEvent } from '@/main/agent/agentRuntime'
 import { PiAgentRuntime } from './piAgentRuntime'
 
@@ -16,7 +16,7 @@ import type { AgentRuntimeStateRepo } from '@/main/db/repositories/agentRuntimeS
 import type { CredentialStore } from '@/main/settings/credentialStore'
 import { ToolRegistry } from '@/main/tools/toolRegistry'
 import type { AgentEvent } from '@/shared/agent/agentEvent'
-import { normalizePiSkillCommand, PiSessionRuntime } from './piSessionRuntime'
+import { normalizePiSkillCommand, PiSessionRuntime } from './pi-session-runtime'
 
 vi.mock('@earendil-works/pi-coding-agent', () => ({
   createAgentSession: vi.fn(),

@@ -10,7 +10,7 @@ import { DrizzleWorkspaceRepo } from '@/main/db/repositories/workspaceRepo'
 import { PiClientService } from '@/main/agent/pi/client/piClientService'
 import { MessageProjectionService } from '@/main/agent/messageProjectionService'
 import { createPiAgentRuntimeFactory } from '@/main/agent/pi/runtime/createPiAgentRuntime'
-import { PiSessionRuntime } from '@/main/agent/pi/runtime/piSessionRuntime'
+import { PiSessionRuntime } from '@/main/agent/pi/runtime/pi-session-runtime'
 import { PiSessionRuntimeManager } from '@/main/agent/pi/runtime/piSessionRuntimeManager'
 import { registerPiBuiltinTools } from '@/main/agent/pi/adapters/piBuiltinToolAdapter'
 import { registerPiMemoryTool } from '@/main/agent/pi/adapters/piMemoryToolAdapter'
@@ -35,7 +35,7 @@ import type {
   AgentBackendRequest,
   AgentBackendStartupStage,
 } from './protocol'
-import { updateAgentModelSelectionFromCatalog } from '@/main/settings/modelCatalog'
+import { updateAgentModelSelectionFromCatalog } from '@/main/settings/model-catalog'
 import { startAgentHttpServer, type RunningAgentHttpServer } from './httpServer'
 import { createPiNodeClientAdapter } from './piNodeClientAdapter'
 import { SkillLoader } from './skillLoader'

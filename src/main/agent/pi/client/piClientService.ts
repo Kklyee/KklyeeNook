@@ -17,13 +17,13 @@ import {
   getModelCatalog,
   mergeConfiguredProvidersIntoCatalog,
   mergeSavedModelsIntoCatalog,
-} from '@/main/settings/modelCatalog'
+} from '@/main/settings/model-catalog'
 import { getActiveModel, getConfiguredProviders, getSavedModels } from '@/shared/agent/agentConfig'
 import type { ContextBuilder } from '@/main/context/contextBuilder'
 import type { ContextAttachmentService } from '@/main/context/contextAttachmentService'
 import type { AgentService } from '../../agentService'
 import type { MessageProjectionService } from '../../messageProjectionService'
-import type { PiSessionRuntimePort } from '../runtime/piSessionRuntime'
+import type { PiSessionRuntimePort } from '../runtime/pi-session-runtime'
 import type { PiSessionRuntimeManager } from '../runtime/piSessionRuntimeManager'
 
 type Listener = (event: PiClientEvent) => void

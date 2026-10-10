@@ -5,11 +5,11 @@ import { AgentConfigStore } from './agentConfigStore'
 import { MemoryCredentialStore, type CredentialStore } from './credentialStore'
 import type { ApprovalPolicy } from '../approval/approvalPolicy'
 import { IPC_CHANNELS } from '@/shared/ipc/channels'
-import { getAgentModelChoices } from './modelCatalog'
+import { getAgentModelChoices } from './model-catalog'
 
 vi.mock('electron', () => ({ ipcMain: { handle: vi.fn(), removeHandler: vi.fn() } }))
-vi.mock('./modelCatalog', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./modelCatalog')>()
+vi.mock('./model-catalog', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./model-catalog')>()
   return { ...actual, getAgentModelChoices: vi.fn() }
 })
 
