@@ -196,7 +196,7 @@ export function getConfiguredModelConfigs(
 
 export function getAgentModelChoices(config: AgentConfig) {
   const providers = getConfiguredProviders(config)
-  const catalog = mergeConfiguredProvidersIntoCatalog(getModelCatalog(), providers)
+  const catalog = mergeSavedModelsIntoCatalog(mergeConfiguredProvidersIntoCatalog(getModelCatalog(), providers), getSavedModels(config))
   const expandedModels = getConfiguredModelConfigs(providers, catalog)
 
   return {

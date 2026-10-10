@@ -43,7 +43,7 @@
 
 **剩余：**
 
-- [x] 通过 `src/main/agent-backend/production-smoke.test.ts`，使用显式 production main 构建验证真实 Utility Process；现有四个场景包括生命周期、审批崩溃、取消崩溃和 unsafe 效果中断，不以最小 Harness smoke 替代。
+- [x] 通过 `src/main/agent-backend/production-smoke.test.ts`，使用显式 production main 构建验证真实 Utility Process；六个默认场景包括生命周期、审批崩溃、取消崩溃、unsafe 效果中断、委派审批恢复和父取消恢复，不以最小 Harness smoke 替代。
 - [ ] 验证应用实际使用 `/api/agent`，旧执行循环没有启动。
 - [x] 同一数据目录的重复生产启动拒绝；正常退出或强制终止后新 Utility Process 能重新取得所有权并恢复原回执。
 - [ ] 验证初始化失败、设置重载、进程退出及异常关闭释放 HTTP、watch、MCP、Harness 和资源。
@@ -88,7 +88,7 @@
 
 **剩余：**
 
-- [ ] 在实际 Remote 页面验证项目列表、会话列表、发送、流式回复、取消、模型、thinking、权限、队列和审批。
+- [x] 通过已有 Tailscale HTTPS Serve 和真实身份访问实际 Remote 页面，验证项目/会话列表、UI 发送/回复、排队/取消、审批、历史只读及明确续接；模型/thinking/权限通过正式 API 修改并核对页面和容量。下拉菜单交互与完整后台重启闭环仍待补充。
 - [ ] 验证后台重启及订阅建立/取消竞争没有 watch 泄漏或错误顺序。
 - [ ] 补齐历史活动/工具展示与桌面文本边界的一致性；当前展示投影不能只在工具运行期间可见，完成后丢失。
 - [x] 明确并实现旧历史会话在 Remote 的只读可见性与继续入口：保留列表、惰性只读快照、稳定继续目标、原 Workspace/权限及脱敏；历史发送/配置拒绝，失效 Workspace 拒绝继续。实际 Remote 页面验收仍在上一条产品门禁中。
@@ -232,6 +232,8 @@
 | 新增实现交付 | 连贯增量开始提交；迁移未完成 | 2026-10-10 核心回归 44 文件 / 239 项通过，类型检查及 lint 通过；不替代最终全量门禁 |
 
 2026-10-10 后续增量：核心整体回归为 47 文件 / 263 项通过，Node/Web/Remote 类型检查和 lint 通过。`desktop-smoke.test.ts` 在独立目录构建并运行实际 main、preload、renderer，验证 composer 新建/发送、回复持久化、实际菜单重命名、renderer 刷新后重新选择并恢复单份历史。生产强制终止场景验证审批等待不自动批准、正式排队编辑内容/Submission 去重恢复、取消后过期审批拒绝、已发生的受限命令效果不重放以及 Sandbox 旧资源最终回收。这些是矩阵中已验证的样本，不表示整个子任务/调度/队列放置/撤回崩溃矩阵已完成。两项文件 symlink 特权环境跳过仍未放行。
+
+2026-10-11 增量：`af48631` 的 Host/生产恢复共 20 项通过，覆盖三个真实同时委派最多准入两个、子任务嵌套拒绝、父历史隔离、审批/队列强制终止恢复和父取消恢复。真实 Remote 页面验收使用 `NOOK_REMOTE_ACCEPTANCE=1` 单独启用 `remote-acceptance` 场景，保留实际 Tailscale 身份和 HTTPS 验证，浏览器仅在隔离 session 中直连；没有伪造认证头或修改 Serve 配置。该场景不作为缺少 Tailscale 环境时的默认 CI 门禁。页面联调修正了保存的自定义模型 reasoning/容量未进入公共目录的问题，相关 28 项测试及全项目类型检查、lint 通过。尚不能据此放行 M3/M4/M5 全部门禁。
 
 ## 7. 建议执行顺序
 

@@ -2,6 +2,7 @@ import { expect, test } from 'vitest'
 
 import {
   getConfiguredModelConfigs,
+  getAgentModelChoices,
   getModelCatalog,
   hasBuiltinModel,
   mergeConfiguredProvidersIntoCatalog,
@@ -84,4 +85,13 @@ test('keeps a provider-level custom model in the same chat catalog', () => {
     reasoning: true,
     thinkingLevel: 'medium',
   })
+})
+
+test('public choices retain reasoning levels and capacity from saved custom profiles', () => {
+  const model = { provider: 'saved-provider', modelID: 'saved-model', modelName: 'Saved reasoning model', baseUrl: 'https://saved-provider.test/v1', api: 'openai-completions', reasoning: true, thinkingLevel: 'off' as const, contextWindow: 65536 }
+  const choices = getAgentModelChoices({ model, models: [{ ...model, id: 'saved-provider:saved-model' }], tools: { enabled: [] } })
+  const saved = choices.catalog.find(provider => provider.id === 'saved-provider')?.models[0]
+  expect(saved).toMatchObject({ id: 'saved-model', name: 'Saved reasoning model', reasoning: true, contextWindow: 65536 })
+  expect(saved?.availableThinkingLevels).toContain('low')
+  expect(choices.models[0]).toMatchObject({ provider: 'saved-provider', modelID: 'saved-model', reasoning: true, contextWindow: 65536 })
 })

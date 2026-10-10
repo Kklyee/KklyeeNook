@@ -10,10 +10,14 @@ import { promisify } from 'node:util'
 import { expect, test } from 'vitest'
 import { resolveConfig } from 'electron-vite'
 import { build } from 'vite'
+import type { AgentBackendInitOptions } from './protocol'
+import { verifyRemote } from './testing/remote-browser'
 
 const execute = promisify(execFile)
 
-test.each(['lifecycle', 'approval-crash', 'cancel-crash', 'unsafe-crash', 'delegation-crash', 'delegation-cancel-crash'] as const)('production utility-process bootstrap and recovery: %s', async (scenario) => {
+const scenarios = ['lifecycle', 'approval-crash', 'cancel-crash', 'unsafe-crash', 'delegation-crash', 'delegation-cancel-crash', ...(process.env.NOOK_REMOTE_ACCEPTANCE === '1' ? ['remote-acceptance'] : [])]
+
+test.each(scenarios)('production utility-process bootstrap and recovery: %s', async (scenario) => {
   const directory = await mkdtemp(join(process.cwd(), 'node_modules', '.nook-production-'))
   const data = await mkdtemp(join(tmpdir(), 'nook-production-data-'))
   let calls = 0
@@ -42,10 +46,24 @@ test.each(['lifecycle', 'approval-crash', 'cancel-crash', 'unsafe-crash', 'deleg
     const address = server.address()
     if (!address || typeof address === 'string') throw new Error('Model server did not bind')
     const require = createRequire(import.meta.url)
-    const options = {
+    const options: AgentBackendInitOptions = {
       config: { model: { provider: 'test-provider', modelID: 'test-model', api: 'openai-completions', baseUrl: `http://127.0.0.1:${address.port}/v1` }, tools: { enabled: scenario === 'lifecycle' ? [] : ['write', 'bash', ...(scenario.startsWith('delegation') ? ['delegate_task'] : [])] }, compaction: { enabled: false, reserveTokens: 1000, keepRecentTokens: 1000 } },
       apiKeys: { 'test-provider': 'synthetic-key' }, databaseUrl: 'file:' + join(data, 'business.sqlite'),
       migrationsPath: fileURLToPath(new URL('../../../drizzle', import.meta.url)), sessionDir: join(data, 'sessions'), allowedOrigins: [],
+    }
+    if (scenario === 'remote-acceptance') {
+      options.remoteStaticRoot = join(process.cwd(), 'apps', 'remote', 'dist')
+      options.config.defaultPermissionMode = 'read-only'
+      options.config.models = [
+        { ...options.config.model, id: 'test-provider:test-model', modelName: 'Test', reasoning: true },
+        { ...options.config.model, id: 'test-provider:alternate-model', modelID: 'alternate-model', modelName: 'Alternate', reasoning: true, contextWindow: 65536 },
+      ]
+      await mkdir(options.sessionDir)
+      await writeFile(join(options.sessionDir, 'historical.jsonl'), [
+        { type: 'session', version: 3, id: 'historical-thread' },
+        { type: 'message', id: 'old-user', parentId: null, message: { role: 'user', content: 'Historical remote request' } },
+        { type: 'message', id: 'old-answer', parentId: 'old-user', message: { role: 'assistant', content: [{ type: 'text', text: 'Historical remote answer' }, { type: 'toolCall', id: 'historical-tool', name: 'write', arguments: { path: 'never.txt', content: 'never replay' } }] } },
+      ].map(record => JSON.stringify(record)).join('\n'))
     }
     const config = await resolveConfig({ build: { outDir: directory }, logLevel: 'silent' }, 'build', 'production')
     await build(config.config!.main!)
@@ -53,10 +71,12 @@ test.each(['lifecycle', 'approval-crash', 'cancel-crash', 'unsafe-crash', 'deleg
     if (process.platform === 'win32') await cp(join(process.cwd(), 'resources', 'sandbox'), join(directory, 'resources', 'sandbox'), { recursive: true })
     const utility = join(directory, 'main', 'agent-backend-entry.mjs')
     const script = `
-import { app, utilityProcess } from 'electron'
+import { app, BrowserWindow, utilityProcess } from 'electron'
 import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
+import { createClient } from '@libsql/client'
 app.setPath('userData', ${JSON.stringify(data)})
+app.on('window-all-closed', () => {})
 const options = ${JSON.stringify(options)}
 const scenario = ${JSON.stringify(scenario)}
 const children = new Set()
@@ -110,7 +130,7 @@ app.whenReady().then(async () => {
       }
       await json('/threads', { threadId: 'production-thread' })
       await first.rpc('settings:prepare')
-      await first.rpc('settings:commit', { config: { ...options.config, model: { provider: 'invalid-provider', modelID: 'invalid-model' } }, apiKeys: {} }).then(() => { throw new Error('Invalid settings accepted') }, error => { if (error.message === 'Invalid settings accepted') throw error })
+      await first.rpc('settings:commit', { config: { ...options.config, models: undefined, activeModelId: undefined, model: { provider: 'invalid-provider', modelID: 'invalid-model' } }, apiKeys: {} }).then(() => { throw new Error('Invalid settings accepted') }, error => { if (error.message === 'Invalid settings accepted') throw error })
       await first.rpc('settings:prepare')
       await first.rpc('settings:cancel')
       const input = { type: 'input', content: 'Hello', requestId: 'production-request' }
@@ -137,7 +157,26 @@ app.whenReady().then(async () => {
       const restoredRuns = await restored.rpc('agent-run:list', { request: { sessionId: 'production-thread' } })
       if (JSON.stringify(restoredRuns) !== JSON.stringify(runs)) throw new Error('Restart changed official run receipts')
       let crash
-      if (scenario !== 'lifecycle') {
+      let remote
+      if (scenario === 'remote-acceptance') {
+        const workspace = await restored.rpc('workspace:attach', { path: ${JSON.stringify(join(data, 'workspace'))} })
+        const database = createClient({ url: options.databaseUrl })
+        await database.execute({ sql: 'INSERT INTO conversations (id, title, workspace_id, permission_mode, created_at, updated_at, archived) VALUES (?, ?, ?, ?, ?, ?, 0)', args: ['historical-thread', 'Historical remote', workspace.workspace.id, 'read-only', 1, 1] })
+        database.close()
+        const status = await restored.rpc('remote:configure', { settings: { enabled: true } })
+        if (!status.running || status.tailscale !== 'connected' || !status.url) throw new Error('Real Tailscale Remote acceptance requires an existing connected Serve route')
+        const browser = new BrowserWindow({ show: false, webPreferences: { partition: 'nook-remote-acceptance', contextIsolation: true, sandbox: true, backgroundThrottling: false } })
+        await browser.webContents.session.setProxy({ mode: 'direct' })
+        browser.webContents.on('console-message', details => { if (details.level === 'error') console.error(details.message) })
+        await browser.loadURL(status.url)
+        remote = await browser.webContents.executeJavaScript(${JSON.stringify(`(${verifyRemote.toString()})()`)})
+        browser.destroy()
+        await restored.rpc('remote:configure', { settings: { enabled: false } })
+        await restored.close()
+        const continuation = remote.continuationId
+        if (await readFile(${JSON.stringify(join(data, 'workspace', 'never.txt'))}, 'utf8').catch(() => '') !== '') throw new Error('Historical effect was replayed')
+        if (!continuation) throw new Error('Remote continuation receipt was missing')
+      } else if (scenario !== 'lifecycle') {
         const delegated = scenario.startsWith('delegation')
         const cancelled = scenario === 'cancel-crash' || scenario === 'delegation-cancel-crash'
         base = restoredBase
@@ -213,7 +252,7 @@ app.whenReady().then(async () => {
         if (scenario === 'unsafe-crash' && (await readdir(${JSON.stringify(join(data, 'sandbox'))})).length) throw new Error('Recovered resources were not collected')
         crash = { scenario, submissionId: admitted.submissionId, recovered: true }
       } else await restored.close()
-      process.stdout.write('PRODUCTION_SMOKE=' + JSON.stringify({ snapshot, runs, records, crash }) + '\\n')
+      process.stdout.write('PRODUCTION_SMOKE=' + JSON.stringify({ snapshot, runs, records, crash, remote }) + '\\n')
       app.exit(0)
     } catch (error) {
       console.error(error)
@@ -227,11 +266,12 @@ app.whenReady().then(async () => {
     await execute(process.execPath, ['--check', path], { windowsHide: true })
     const env = { ...process.env }
     delete env.ELECTRON_RUN_AS_NODE
-    const { stdout } = await execute(require('electron'), [path], { env, windowsHide: true, timeout: 45000 })
+    const { stdout } = await execute(require('electron'), [path], { env, windowsHide: true, timeout: scenario === 'remote-acceptance' ? 120000 : 45000 })
     const line = stdout.split(/\r?\n/).find((value) => value.startsWith('PRODUCTION_SMOKE='))
     expect(line).toBeDefined()
     const result = JSON.parse(line!.slice('PRODUCTION_SMOKE='.length))
     if (scenario === 'lifecycle') expect(calls).toBe(1)
+    else if (scenario === 'remote-acceptance') expect(result.remote).toMatchObject({ sent: true, queue: true, cancel: true, approval: true, configuration: true, history: true })
     else expect(result.crash).toMatchObject({ scenario, recovered: true })
     if (scenario.startsWith('delegation')) {
       const children = modelRequests.filter(body => JSON.stringify(body.messages.filter((message: { role: string }) => message.role === 'user').at(-1)?.content).includes('approval-effect child-'))
@@ -247,4 +287,4 @@ app.whenReady().then(async () => {
     await rm(directory, { recursive: true, force: true })
     await rm(data, { recursive: true, force: true })
   }
-}, 60000)
+}, 150000)
