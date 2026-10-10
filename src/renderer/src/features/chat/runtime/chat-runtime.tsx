@@ -85,6 +85,12 @@ export function useChatRuntimeSnapshot() {
   return context.snapshot
 }
 
+export function useChatStore() {
+  const context = useContext(ChatRuntimeContext)
+  if (!context) throw new Error('Durable runtime is required')
+  return context.store
+}
+
 export function useChatRuntimeExtras(): ChatExtras {
   return useChatRuntimeSnapshot().extras
 }

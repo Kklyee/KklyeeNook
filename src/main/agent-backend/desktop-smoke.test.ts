@@ -17,9 +17,17 @@ test('built desktop renders the real runtime, submits from the composer and rest
   const data = await mkdtemp(join(tmpdir(), 'nook-desktop-data-'))
   let calls = 0
   const server = createServer(async (request, response) => {
-    for await (const _chunk of request) {}
+    const chunks: Buffer[] = []
+    for await (const chunk of request) chunks.push(Buffer.from(chunk))
+    const body = JSON.parse(Buffer.concat(chunks).toString())
     calls++
     response.writeHead(200, { 'content-type': 'text/event-stream' })
+    if (!body.messages.some((message: { role: string }) => message.role === 'tool')) {
+      response.write('data: ' + JSON.stringify({ id: 'desktop', object: 'chat.completion.chunk', created: 1, model: 'test-model', choices: [{ index: 0, delta: { role: 'assistant', tool_calls: [{ index: 0, id: 'desktop-read', type: 'function', function: { name: 'read', arguments: JSON.stringify({ path: 'sample.txt' }) } }] }, finish_reason: null }] }) + '\n\n')
+      response.end('data: ' + JSON.stringify({ id: 'desktop', object: 'chat.completion.chunk', created: 1, model: 'test-model', choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }] }) + '\n\ndata: [DONE]\n\n')
+      return
+    }
+    await new Promise(resolve => setTimeout(resolve, 1500))
     for (const text of ['Desktop ', 'production reply.']) {
       response.write('data: ' + JSON.stringify({ id: 'desktop', object: 'chat.completion.chunk', created: 1, model: 'test-model', choices: [{ index: 0, delta: { content: text }, finish_reason: null }] }) + '\n\n')
       await new Promise(resolve => setTimeout(resolve, 100))
@@ -31,7 +39,9 @@ test('built desktop renders the real runtime, submits from the composer and rest
   try {
     const address = server.address()
     if (!address || typeof address === 'string') throw new Error('Model server did not bind')
-    await writeFile(join(data, 'agent-settings.json'), JSON.stringify({ model: { provider: 'test-provider', modelID: 'test-model', api: 'openai-completions', baseUrl: `http://127.0.0.1:${address.port}/v1` }, tools: { enabled: [] }, compaction: { enabled: false, reserveTokens: 1000, keepRecentTokens: 1000 } }))
+    await mkdir(join(data, 'workspace'))
+    await writeFile(join(data, 'workspace', 'sample.txt'), 'Desktop tool context')
+    await writeFile(join(data, 'agent-settings.json'), JSON.stringify({ model: { provider: 'test-provider', modelID: 'test-model', api: 'openai-completions', baseUrl: `http://127.0.0.1:${address.port}/v1` }, tools: { enabled: ['read'] }, compaction: { enabled: false, reserveTokens: 1000, keepRecentTokens: 1000 } }))
     await cp(join(process.cwd(), 'drizzle'), join(directory, 'drizzle'), { recursive: true })
     await mkdir(join(directory, 'resources'))
     await cp(join(process.cwd(), 'resources', 'sandbox'), join(directory, 'resources', 'sandbox'), { recursive: true })
@@ -51,7 +61,7 @@ app.on('browser-window-created', (_event, window) => {
   window.webContents.on('did-fail-load', (_event, code, description, url) => console.error('Load failed: ' + code + ' ' + description + ' ' + url))
   window.webContents.once('did-finish-load', async () => {
     try {
-      const result = await window.webContents.executeJavaScript(${JSON.stringify(`(${verifyDesktop.toString()})()`)})
+      const result = await window.webContents.executeJavaScript(${JSON.stringify(`(${verifyDesktop.toString()})(${JSON.stringify(join(data, 'workspace'))})`)})
       const click = async point => {
         await window.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point })
         await window.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 })
@@ -82,7 +92,7 @@ await import('./main/index.mjs')
     const line = stdout.split(/\r?\n/).find(value => value.startsWith('DESKTOP_SMOKE='))
     expect(line).toBeDefined()
     expect(JSON.parse(line!.slice('DESKTOP_SMOKE='.length))).toMatchObject({ submitted: true, restored: true, protocol: 'agent' })
-    expect(calls).toBe(1)
+    expect(calls).toBe(2)
   } finally {
     server.closeAllConnections()
     await new Promise<void>(resolve => server.close(() => resolve()))
@@ -91,7 +101,7 @@ await import('./main/index.mjs')
   }
 }, 150000)
 
-async function verifyDesktop() {
+async function verifyDesktop(workspacePath: string) {
   const api = (window as unknown as { api: any }).api
   const wait = async (condition: () => unknown | Promise<unknown>) => {
     const until = Date.now() + 20000
@@ -104,16 +114,24 @@ async function verifyDesktop() {
   }
   const status = await wait(async () => { const status = await api.agentBackend.getStatus(); return status.state === 'ready' && status }) as { info: { baseUrl: string } }
   if (!status.info.baseUrl.endsWith('/api/agent')) throw new Error('Desktop selected the legacy protocol')
+  const attached = await api.workspaces.attach({ path: workspacePath })
+  if (!attached.workspace) throw new Error('Desktop workspace did not attach')
+  window.dispatchEvent(new Event('nook:workspace-changed'))
+  await wait(() => [...document.querySelectorAll<HTMLElement>('[title]')].some(element => element.tagName === 'DIV' && element.title === workspacePath && element.textContent?.includes('workspace')))
   const input = await wait(() => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message input"]')) as HTMLTextAreaElement
   Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(input, 'Desktop request')
   input.dispatchEvent(new Event('input', { bubbles: true }))
   const send = await wait(() => document.querySelector<HTMLButtonElement>('.aui-composer-send:not(:disabled)')) as HTMLButtonElement
   send.click()
+  await wait(() => document.querySelector('[data-slot="agent-activity-summary"]')?.textContent?.includes('sample.txt'))
+  if (!document.querySelector('.aui-composer-cancel')) throw new Error('Desktop tool activity did not update during execution')
   await wait(() => document.querySelector('[data-slot="aui_assistant-message-root"]')?.textContent?.includes('Desktop production reply.'))
   await wait(() => !document.querySelector('.aui-composer-cancel'))
   const sessions = await api.conversations.list()
   if (sessions.length !== 1) throw new Error('Composer created duplicate conversations')
   const id = sessions[0].id
+  if (sessions[0].workspaceId !== attached.workspace.id) throw new Error('Desktop composer lost its selected workspace')
+  await wait(() => document.querySelector('[data-slot="agent-activity-slot"][data-running="false"] [data-slot="agent-activity-summary"]'))
   const json = async (path: string) => {
     const response = await fetch(status.info.baseUrl + path)
     if (!response.ok) throw new Error('Desktop snapshot request failed')
@@ -173,7 +191,7 @@ async function verifyDesktopRefresh() {
   }
   while (Date.now() < until) {
     const messages = document.querySelectorAll('[data-slot="aui_assistant-message-root"]')
-    if (messages.length === 1 && messages[0].textContent?.includes('Desktop production reply.')) return true
+    if (messages.length === 1 && messages[0].textContent?.includes('Desktop production reply.') && document.querySelector('[data-slot="agent-activity-slot"][data-running="false"] [data-slot="agent-activity-summary"]')) return true
     await new Promise(resolve => setTimeout(resolve, 50))
   }
   throw new Error('Renderer refresh did not restore the persisted conversation: ' + document.body.innerText.slice(0, 1500))

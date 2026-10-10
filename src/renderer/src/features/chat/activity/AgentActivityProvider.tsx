@@ -13,6 +13,7 @@ import type { AgentActivity } from '@/shared/agent/agentActivity'
 import { deriveAgentActivities } from '@/shared/agent/deriveAgentActivities'
 import { groupAgentActivities, type ActivitySegment } from '@/shared/agent/groupAgentActivities'
 import { usePreview } from '../../preview/PreviewProvider'
+import { useChatStore } from '../runtime/chat-runtime'
 
 export interface ActivityRun {
   run: AgentRun
@@ -53,6 +54,7 @@ export function AgentActivityProvider({
   children: ReactNode
 }) {
   const [store] = useState(createActivityStore)
+  const chat = useChatStore()
   const { refreshFile } = usePreview()
   const refreshPreviewFile = useEffectEvent(refreshFile)
 
@@ -60,101 +62,64 @@ export function AgentActivityProvider({
     store.publish([])
     if (!sessionId) return
     let disposed = false
-    let runs: AgentRun[] = []
     let timer: ReturnType<typeof setTimeout> | undefined
-    const records = new Map<string, Map<number, AgentEventEnvelope>>()
-    const previous = new Map<string, ActivityRun>()
-    const dirty = new Set<string>()
-    const loaded = new Set<string>()
-    let loadVersion = 0
-
-    const flush = () => {
-      timer = undefined
-      if (disposed) return
-      store.publish(
-        runs.map((run) => {
-          const previousGroup = previous.get(run.id)
-          if (previousGroup?.run === run && !dirty.has(run.id)) return previousGroup
-          const existing = new Map(
-            previousGroup?.activities.map((activity) => [activity.id, activity]),
-          )
-          const events = [...(records.get(run.id)?.values() ?? [])]
-          const activities = deriveAgentActivities(events, run).map((activity) => {
-            const old = existing.get(activity.id)
-            return old && Object.keys(activity).every((key) => activity[key] === old[key])
-              ? old
-              : activity
-          })
-          const group = { run, activities, segments: groupAgentActivities(events, activities) }
-          previous.set(run.id, group)
-          dirty.delete(run.id)
-          return group
-        }),
-      )
-    }
+    const completed = new Map<string, { signature: string; events: AgentEventEnvelope[] }>()
+    const refreshed = new Set<string>()
+    let initialized = false
+    let loading = false
+    let dirty = false
     const schedule = () => {
-      timer ??= setTimeout(flush, 100)
-    }
-    const append = (envelope: AgentEventEnvelope) => {
-      let events = records.get(envelope.runId)
-      if (!events) records.set(envelope.runId, (events = new Map()))
-      events.set(envelope.seq, envelope)
-      dirty.add(envelope.runId)
+      dirty = true
+      timer ??= setTimeout(() => {
+        timer = undefined
+        void load().catch(error => console.error('[AgentActivity] could not load activity', error))
+      }, 100)
     }
     const load = async () => {
-      const version = ++loadVersion
-      const nextRuns = await window.api.listAgentRuns({ sessionId })
-      if (disposed || version !== loadVersion) return
-      runs = nextRuns
-      await Promise.all(
-        runs
-          .filter((run) => !loaded.has(run.id))
-          .map(async (run) => {
-            loaded.add(run.id)
-            let events: AgentEventEnvelope[]
-            try {
-              events = await window.api.listAgentExecutionRecords({ runId: run.id })
-            } catch (error) {
-              loaded.delete(run.id)
-              throw error
-            }
-            if (!disposed) events.forEach(append)
-          }),
-      )
-      schedule()
-    }
-    const unsubscribe = window.api.onAgentActivityEvent((envelope) => {
-      if (envelope.sessionId !== sessionId) return
-      append(envelope)
-      const event = envelope.event
-      if (event.type === 'tool_finished' && event.result.status === 'success') {
-        const call = [...(records.get(envelope.runId)?.values() ?? [])].find(
-          (record) =>
-            record.event.type === 'tool_started' &&
-            record.event.call.id === event.result.toolCallId,
-        )?.event
-        if (call?.type === 'tool_started' && ['edit', 'write'].includes(call.call.toolName)) {
-          const args = call.call.args as Record<string, unknown>
-          const path = args.path ?? args.file_path
-          if (typeof path === 'string') refreshPreviewFile(path)
+      if (disposed || loading || chat.getSnapshot().current.historical) return
+      loading = true
+      dirty = false
+      try {
+        const runs = await window.api.listAgentRuns({ sessionId })
+        const groups = await Promise.all(runs.map(async run => {
+          const signature = JSON.stringify(run)
+          const cached = completed.get(run.id)
+          const events = cached?.signature === signature ? cached.events : await window.api.listAgentExecutionRecords({ runId: run.id })
+          if (['completed', 'aborted', 'failed'].includes(run.status)) completed.set(run.id, { signature, events })
+          const activities = deriveAgentActivities(events, run)
+          return { run, activities, segments: groupAgentActivities(events, activities) }
+        }))
+        if (disposed) return
+        for (const group of groups) {
+          for (const activity of group.activities) {
+            if (!('call' in activity) || !('result' in activity) || activity.result?.status !== 'success' || !['edit', 'write'].includes(activity.call.toolName)) continue
+            const key = `${group.run.id}:${activity.call.id}`
+            if (refreshed.has(key)) continue
+            refreshed.add(key)
+            const args = activity.call.args as Record<string, unknown>
+            const path = args.path ?? args.file_path
+            if (initialized && typeof path === 'string') refreshPreviewFile(path)
+          }
         }
+        initialized = true
+        store.publish(groups)
+      } finally {
+        loading = false
+        if (!disposed && dirty) schedule()
       }
-      if (
-        ['agent_started', 'agent_completed', 'agent_failed', 'agent_aborted'].includes(event.type)
-      ) {
-        void load().catch((error) => console.error('[AgentActivity] could not load runs', error))
-      }
-      schedule()
-    })
+    }
+    const unsubscribe = chat.subscribe(schedule)
+    const poll = setInterval(() => { if (chat.getSnapshot().current.projected.isRunning) schedule() }, 500)
     void load().catch((error) =>
       console.error('[AgentActivity] could not load activity history', error),
     )
     return () => {
       disposed = true
       unsubscribe()
+      clearInterval(poll)
       if (timer) clearTimeout(timer)
     }
-  }, [sessionId, store])
+  }, [sessionId, store, chat])
 
   return <AgentActivityContext.Provider value={store}>{children}</AgentActivityContext.Provider>
 }

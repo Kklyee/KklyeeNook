@@ -66,8 +66,10 @@ export function AgentActivityGroup({ afterPartIndex }: { afterPartIndex?: number
     const transcript = (thread.extras as ChatExtras | undefined)?.state?.messages
     const match = (message: ThreadMessage): ActivityRun | undefined => {
       const messageRunId = message.metadata.custom?.runId
-      if (typeof messageRunId === 'string')
-        return groups.find((group) => group.run.id === messageRunId)
+      if (typeof messageRunId === 'string') {
+        const group = groups.find((group) => group.run.id === messageRunId)
+        if (group) return group
+      }
       const ids = new Set(
         message.content.flatMap((part) => (part.type === 'tool-call' ? [part.toolCallId] : [])),
       )
