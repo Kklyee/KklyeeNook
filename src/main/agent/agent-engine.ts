@@ -99,6 +99,20 @@ export class AgentEngine {
     return conversation
   }
 
+  async ownerThread(conversationId: ConversationId, context: Context) {
+    const links = await this.links(context)
+    return this.harness.commit(async (tx) => {
+      let id = conversationId
+      while (true) {
+        const threadId = Object.keys(links).find((key) => links[key] === id)
+        if (threadId) return { threadId, conversationId: id }
+        const record = await tx.conversation(id)
+        if (!record?.owner) throw new Error('Conversation has no authorized business metadata')
+        id = record.owner.conversationId
+      }
+    }, context)
+  }
+
   async submission(threadId: string, submissionId: SubmissionId, context: Context) {
     const conversation = await this.conversation(threadId, context)
     const submission = await this.harness.submission(submissionId, context)

@@ -26,6 +26,8 @@ import { ConversationService } from './conversation-service'
 import { DurableTools } from './durable-tools'
 import { approvalDoc } from './durable-approvals'
 import { DurableInputs } from './durable-inputs'
+import { DurableDelegation } from './durable-delegation'
+import { RunResources } from './run-resources'
 
 export type AgentHostOptions = {
   databasePath: string
@@ -49,6 +51,8 @@ export class AgentHost {
     readonly models: AgentModels,
     readonly tools: DurableTools,
     readonly inputs: DurableInputs,
+    readonly delegation: DurableDelegation,
+    readonly resources: RunResources,
     private readonly options: AgentHostOptions,
     private readonly registry: ReturnType<typeof createRegistry>,
     private readonly identities: { coding: Extension; personal: Extension },
@@ -66,11 +70,10 @@ export class AgentHost {
     )
     let engine: AgentEngine
     const executionContext = async (id: ConversationId, context: Context) => {
-      const links = await engine.links(context)
-      const threadId = Object.keys(links).find((threadId) => links[threadId] === id)
-      if (!threadId) throw new Error('Conversation has no authorized business metadata')
-      return contexts.resolve(threadId)
+      const owner = await engine.ownerThread(id, context)
+      return contexts.resolve(owner.threadId)
     }
+    const resources = new RunResources(options.sandbox, options.onReport)
     const tools = new DurableTools(
       options.tools,
       options.sandbox,
@@ -79,12 +82,14 @@ export class AgentHost {
         const resolved = await executionContext(id, context)
         return { executionContext: resolved, cwd: resolved.workspace?.rootPath }
       },
+      resources,
     )
     const inputs = new DurableInputs(
       options.contextBuilder,
       options.skills,
       async (id, context) => (await executionContext(id, context)).workspaceId,
     )
+    const delegation = new DurableDelegation(inputs)
     const loader = new AgentInstructions()
     const identities = {
       coding: createAgentInstructions({
@@ -114,6 +119,7 @@ export class AgentHost {
     registry.install(tools.extension())
     registry.install(tools.approvals.extension)
     registry.install(inputs.extension)
+    registry.install(delegation.extension)
     await options.skills.reload()
     const settings: HarnessSettings = {
       extensions: [],
@@ -123,12 +129,22 @@ export class AgentHost {
     }
     engine = await AgentEngine.open(
       options.databasePath,
-      { models: models.models, registry, settings, onReport: options.onReport },
+      {
+        models: models.models,
+        registry,
+        settings,
+        onReport: options.onReport,
+        conversationCreated: async (tx, conversation) => {
+          await tx.doc(approvalDoc, conversation.id)
+        },
+      },
       context,
       async (initializing) => {
         engine = initializing
         tools.connect(initializing.harness)
         inputs.connect(initializing.harness)
+        delegation.connect(initializing.harness)
+        await resources.connect(initializing, context)
         for (const id of Object.values(await initializing.links(context))) {
           await initializing.harness.commit(async (tx) => {
             await tx.doc(approvalDoc, id)
@@ -136,7 +152,17 @@ export class AgentHost {
         }
       },
     )
-    return new AgentHost(engine, models, tools, inputs, options, registry, identities)
+    return new AgentHost(
+      engine,
+      models,
+      tools,
+      inputs,
+      delegation,
+      resources,
+      options,
+      registry,
+      identities,
+    )
   }
 
   async create(
@@ -170,6 +196,7 @@ export class AgentHost {
             this.tools.extension(),
             this.tools.approvals.extension,
             this.inputs.extension,
+            this.delegation.extension,
           ],
           tools: this.enabledTools(),
           cwd: workspace?.status === 'attached' ? workspace.rootPath : undefined,
@@ -198,7 +225,7 @@ export class AgentHost {
   }
 
   close() {
-    return this.engine.close()
+    return this.resources.close(() => this.engine.close())
   }
 
   private enabledTools() {
@@ -215,6 +242,11 @@ export class AgentHost {
     for (const tool of this.options.tools.list()) {
       if (tool.origin?.kind === 'mcp' || tool.name === 'read_tool_result') names.add(tool.name)
     }
-    return this.tools.extension().tools!.filter((tool) => names.has(tool.name))
+    return [
+      ...this.tools
+        .extension()
+        .tools!.filter((tool) => names.has(tool.name) && tool.name !== 'delegate_task'),
+      ...(names.has('delegate_task') ? [this.delegation.tool] : []),
+    ]
   }
 }

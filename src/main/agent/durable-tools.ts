@@ -16,6 +16,7 @@ import type { ToolResultRetentionPolicy } from '../tools/toolResultRetentionPoli
 import { SandboxService, toolPermissionResource } from '../sandbox/sandboxService'
 import { ToolExecutionHarness } from './toolExecutionHarness'
 import { DurableApprovals } from './durable-approvals'
+import type { RunResources } from './run-resources'
 
 type ExecutableTool = {
   execute(
@@ -49,15 +50,22 @@ export class DurableTools {
     private readonly sandbox: SandboxService,
     private readonly retention: ToolResultRetentionPolicy,
     private readonly resolveContext: ResolveContext,
+    private readonly resources?: RunResources,
   ) {
     this.approvals = new DurableApprovals(async (call, api, context) => {
       const adapter = await this.resolveContext(api.conversationId, context)
-      const request = permission({ id: call.id, toolName: call.name, args: call.arguments }, adapter)
+      const request = permission(
+        { id: call.id, toolName: call.name, args: call.arguments },
+        adapter,
+      )
       const decision = await this.sandbox.policy.evaluate(request)
       if (decision.outcome === 'deny') return { block: decision.reason }
       if (decision.outcome === 'allow') return undefined
       return {
-        request: copyJson({ permission: request, requestedMode: decision.requestedMode }) as JsonObject,
+        request: copyJson({
+          permission: request,
+          requestedMode: decision.requestedMode,
+        }) as JsonObject,
         reason: decision.reason,
       }
     })
@@ -70,38 +78,60 @@ export class DurableTools {
   extension() {
     return defineExtension({
       name: 'nook.tools',
-      tools: this.registry.list().map((definition) => defineTool({
-        name: definition.name,
-        description: definition.description,
-        parameters: definition.inputSchema as TSchema,
-        replay: 'unsafe',
-        execute: async (args, api, context) => this.execute(definition.name, args, api, context),
-      })),
+      tools: this.registry
+        .list()
+        .map((definition) =>
+          defineTool({
+            name: definition.name,
+            description: definition.description,
+            parameters: definition.inputSchema as TSchema,
+            replay: 'unsafe',
+            execute: async (args, api, context) =>
+              this.execute(definition.name, args, api, context),
+          }),
+        ),
     })
   }
 
   private async execute(name: string, args: unknown, api: ToolExecutionApi, context: Context) {
     const adapter = await this.resolveContext(api.conversationId, context)
-    const runId = `durable:${api.conversationId}:${api.taskId}`
+    const runId = this.resources
+      ? await this.resources.acquire(api.conversationId, context)
+      : `durable:${api.conversationId}:${api.taskId}`
     const call = { id: `${api.taskId}:${api.callId}`, toolName: name, args }
     const harness = new ToolExecutionHarness(
-      this.registry, this.sandbox, this.retention,
-      async (_call, decision) => this.approvals.authorized(
-        api.conversationId, api.taskId, { id: api.callId, name, arguments: args as JsonObject, type: 'toolCall' },
-        {
-          request: copyJson({ permission: permission(call, adapter), requestedMode: decision.requestedMode }) as JsonObject,
-          reason: decision.reason,
-        }, context,
-      ),
+      this.registry,
+      this.sandbox,
+      this.retention,
+      async (_call, decision) =>
+        this.approvals.authorized(
+          api.conversationId,
+          api.taskId,
+          { id: api.callId, name, arguments: args as JsonObject, type: 'toolCall' },
+          {
+            request: copyJson({
+              permission: permission(call, adapter),
+              requestedMode: decision.requestedMode,
+            }) as JsonObject,
+            reason: decision.reason,
+          },
+          context,
+        ),
     )
-    const [tool] = this.registry.resolve<ExecutableTool>('pi', [name], { ...adapter, getRunId: () => runId })
+    const [tool] = this.registry.resolve<ExecutableTool>('pi', [name], {
+      ...adapter,
+      getRunId: () => runId,
+    })
     try {
       const result = await harness.execute(
-        runId, call, adapter,
-        (input, signal) => tool.execute(api.callId, input, signal, (update) => {
-          if (signal.aborted) return
-          for (const part of update.content ?? []) if (part.type === 'text') api.output(part.text)
-        }),
+        runId,
+        call,
+        adapter,
+        (input, signal) =>
+          tool.execute(api.callId, input, signal, (update) => {
+            if (signal.aborted) return
+            for (const part of update.content ?? []) if (part.type === 'text') api.output(part.text)
+          }),
         context.abortSignal,
       )
       const { content, toolCallId: _id, toolName: _name, ...details } = result
@@ -111,7 +141,7 @@ export class DurableTools {
         details: copyJson(details, { omitUndefinedProperties: true }),
       }
     } finally {
-      await this.sandbox.finishRun(runId)
+      if (!this.resources) await this.sandbox.finishRun(runId)
     }
   }
 }

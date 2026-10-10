@@ -59,14 +59,21 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
-async function setup(write = true) {
+type Reply = string | { name: string; arguments: Record<string, unknown>; id?: string }
+
+async function setup(write = true, respond?: (body: Record<string, any>) => Reply) {
   const requests: Record<string, unknown>[] = []
   const server = createServer(async (request, response) => {
     const chunks: Buffer[] = []
     for await (const chunk of request) chunks.push(chunk)
     const body = JSON.parse(Buffer.concat(chunks).toString('utf8'))
     requests.push(body)
-    const call = write && !body.messages.some((message) => message.role === 'tool')
+    const reply =
+      respond?.(body) ??
+      (write && !body.messages.some((message) => message.role === 'tool')
+        ? { name: 'write', arguments: { path: 'file.txt', content: 'written by durable host' } }
+        : 'complete')
+    const call = typeof reply !== 'string'
     response.writeHead(200, { 'content-type': 'text/event-stream' })
     response.write(
       `data: ${JSON.stringify({
@@ -83,19 +90,13 @@ async function setup(write = true) {
                   tool_calls: [
                     {
                       index: 0,
-                      id: 'write-call',
+                      id: reply.id ?? 'write-call',
                       type: 'function',
-                      function: {
-                        name: 'write',
-                        arguments: JSON.stringify({
-                          path: 'file.txt',
-                          content: 'written by durable host',
-                        }),
-                      },
+                      function: { name: reply.name, arguments: JSON.stringify(reply.arguments) },
                     },
                   ],
                 }
-              : { role: 'assistant', content: 'complete' },
+              : { role: 'assistant', content: reply },
             finish_reason: null,
           },
         ],
@@ -525,4 +526,101 @@ test('SSE frames reset on reconnect, preserve order and do not own execution lif
     'written by durable host',
   )
   second.stop()
+}, 30_000)
+
+function delegateReply(body: Record<string, any>): Reply {
+  const user = body.messages.filter((message) => message.role === 'user').at(-1)?.content
+  if (body.messages.some((message) => message.role === 'tool')) return 'complete'
+  return JSON.stringify(user).includes('root-secret')
+    ? {
+        name: 'delegate_task',
+        arguments: { task: 'child task', context: 'explicit context only', skillIds: ['review'] },
+      }
+    : { name: 'write', arguments: { path: 'file.txt', content: 'child wrote safely' } }
+}
+
+test('durable delegation inherits permissions, isolates history and resumes the same child after restart', async () => {
+  const { host, open, workspaceId, config, setConfig, requests, options } = await setup(
+    false,
+    delegateReply,
+  )
+  setConfig({ ...config, tools: { enabled: ['delegate_task', 'write'] } })
+  await host.reload(context())
+  const finish = vi.spyOn(options.sandbox, 'finishRun')
+  await host.create({ threadId: 'thread', workspaceId, permissionMode: 'read-only' }, context())
+  const accepted = await host.conversations.submit(
+    'thread',
+    { type: 'input', requestId: 'root', content: 'root-secret must not leak into child' },
+    context(),
+  )
+  let childId
+  await vi.waitFor(
+    async () => {
+      const inspection = await host.engine.harness.inspect(context())
+      childId = inspection.tasks
+        .map(({ record }) => record.conversationId)
+        .find((id) => id !== accepted.conversationId)
+      expect(
+        childId,
+        JSON.stringify(await host.conversations.snapshot('thread', context())),
+      ).toBeDefined()
+      expect(await host.tools.approvals.pending(childId, context())).toHaveLength(1)
+    },
+    { timeout: 15_000 },
+  )
+  const [approval] = await host.tools.approvals.pending(childId, context())
+  expect((await host.engine.ownerThread(childId, context())).threadId).toBe('thread')
+  expect(JSON.stringify(requests[1])).not.toContain('root-secret')
+  expect(JSON.stringify(requests[1])).toContain('explicit context only')
+  expect(JSON.stringify(requests[1])).toContain('Actual selected skill')
+  await host.close()
+  await rm(join(directory, 'skills'), { recursive: true })
+  const restored = await open()
+  expect(await restored.tools.approvals.pending(childId, context())).toEqual([approval])
+  await restored.tools.approvals.decide(childId, approval.id, 'approved', context())
+  await (
+    await restored.engine.submission('thread', accepted.submissionId, context())
+  ).wait(context())
+  await (await restored.engine.conversation('thread', context())).waitForIdle(context())
+  expect(await readFile(join(directory, 'workspace', 'file.txt'), 'utf8')).toBe(
+    'child wrote safely',
+  )
+  expect(requests).toHaveLength(4)
+  await vi.waitFor(() =>
+    expect(finish).toHaveBeenCalledWith(
+      `durable:${accepted.conversationId}:${accepted.submissionId}`,
+    ),
+  )
+}, 30_000)
+
+test('aborting a parent drains owned child work and invalidates its approvals', async () => {
+  const { host, workspaceId, config, setConfig } = await setup(false, delegateReply)
+  setConfig({ ...config, tools: { enabled: ['delegate_task', 'write'] } })
+  await host.reload(context())
+  await host.create({ threadId: 'thread', workspaceId, permissionMode: 'read-only' }, context())
+  const accepted = await host.conversations.submit(
+    'thread',
+    { type: 'input', requestId: 'root', content: 'root-secret' },
+    context(),
+  )
+  let approval
+  let childId
+  await vi.waitFor(
+    async () => {
+      childId = (await host.engine.harness.inspect(context())).tasks
+        .map(({ record }) => record.conversationId)
+        .find((id) => id !== accepted.conversationId)
+      expect(childId).toBeDefined()
+      ;[approval] = await host.tools.approvals.pending(childId, context())
+      expect(approval).toBeDefined()
+    },
+    { timeout: 15_000 },
+  )
+  await host.conversations.cancel('thread', context())
+  expect((await host.engine.harness.inspect(context())).tasks).toEqual([])
+  expect(await host.tools.approvals.pending(childId, context())).toEqual([])
+  await expect(
+    host.tools.approvals.decide(childId, approval.id, 'approved', context()),
+  ).rejects.toThrow('no longer active')
+  await expect(readFile(join(directory, 'workspace', 'file.txt'))).rejects.toThrow()
 }, 30_000)
