@@ -37,3 +37,7 @@ Host 在创建会话的原子事务中初始化审批文档；打开已有映射
 Remote 保留历史会话的列表和只读展示，提供稳定目标 ID 的明确继续入口；失效 Workspace 拒绝继续，原权限与 Workspace 保留。HTTP 和 Remote 对 busy、历史只读、过期队列/审批和跨会话读取分别返回业务冲突或不存在状态。正式测试覆盖这些行为及订阅初始化失败/取消竞争，未以删除旧协议测试替代产品验收。
 
 当前整体核心迁移回归为 45 文件 / 253 项通过，Node/Web/Remote 类型检查、lint、桌面/Remote 构建通过。实际桌面/Remote 页面、真实 SIGKILL 矩阵、停机备份恢复及删除旧链路仍待验收。
+
+后续生产 smoke 以显式 production 模式构建，四个场景覆盖生命周期、审批等待强制终止、取消后强制终止和受限 Shell 效果已发生后的强制终止。恢复保持原 Submission、排队编辑内容、待决定审批和去重；unsafe 效果只发生一次并返回正式 interruption，旧 Sandbox 资源最终回收。Windows 使用 UtilityProcess.kill 的进程强制终止，不能把它描述为断电验收。
+
+新增桌面 smoke 构建并启动真实 main/preload/renderer，在隔离数据目录通过实际 composer 和菜单验证新建/发送、正式回复、重命名与刷新后恢复。修复 SDK system 指令被投影为空 assistant 气泡的问题；system 仍保留在正式 transcript 中。该轮整体核心回归为 47 文件 / 263 项通过，全部类型检查及 lint 通过，仍不等于全部产品门禁。

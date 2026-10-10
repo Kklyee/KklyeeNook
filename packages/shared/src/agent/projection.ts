@@ -325,7 +325,7 @@ function projectTranscript(
   }
   items.forEach((item, index) => {
     const { message } = item
-    if (message.role === 'toolResult') return
+    if (message.role === 'toolResult' || message.role === 'system') return
     if (message.role === 'assistant') {
       if (!group) {
         group = {
@@ -367,13 +367,6 @@ function projectTranscript(
         role: 'user',
         createdAt: new Date(message.timestamp),
         content: userContent(message.content),
-      })
-    } else {
-      output.push({
-        id: `durable-msg:${index}`,
-        role: 'assistant',
-        createdAt: new Date(message.timestamp),
-        content: [{ type: 'data', name: 'durable-system-message', data: { message } }],
       })
     }
   })

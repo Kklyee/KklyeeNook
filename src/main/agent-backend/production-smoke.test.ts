@@ -1,8 +1,9 @@
 import { execFile } from 'node:child_process'
 import { createServer } from 'node:http'
 import { once } from 'node:events'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
@@ -12,15 +13,23 @@ import { build } from 'vite'
 
 const execute = promisify(execFile)
 
-test('production utility-process bootstrap serves authenticated submissions and official run receipts', async () => {
+test.each(['lifecycle', 'approval-crash', 'cancel-crash', 'unsafe-crash'] as const)('production utility-process bootstrap and recovery: %s', async (scenario) => {
   const directory = await mkdtemp(join(process.cwd(), 'node_modules', '.nook-production-'))
+  const data = await mkdtemp(join(tmpdir(), 'nook-production-data-'))
   let calls = 0
   const server = createServer(async (request, response) => {
-    for await (const _chunk of request) {}
+    const chunks: Buffer[] = []
+    for await (const chunk of request) chunks.push(Buffer.from(chunk))
+    const body = JSON.parse(Buffer.concat(chunks).toString())
     calls++
+    const user = JSON.stringify(body.messages.filter((message: { role: string; content?: unknown }) => message.role === 'user').at(-1)?.content)
+    const tool = !body.messages.some((message: { role: string }) => message.role === 'tool') && (user.includes('approval-effect') || user.includes('unsafe-effect'))
+    const args = user.includes('unsafe-effect')
+      ? { command: process.platform === 'win32' ? "Add-Content -LiteralPath 'effect.txt' -Value 'once'; Start-Sleep -Seconds 30" : "printf 'once\\n' >> effect.txt; sleep 30" }
+      : { path: 'effect.txt', content: 'once' }
     response.writeHead(200, { 'content-type': 'text/event-stream' })
-    response.write('data: ' + JSON.stringify({ id: 'synthetic', object: 'chat.completion.chunk', created: 1, model: 'test-model', choices: [{ index: 0, delta: { role: 'assistant', content: 'Production host accepted.' }, finish_reason: null }] }) + '\n\n')
-    response.end('data: ' + JSON.stringify({ id: 'synthetic', object: 'chat.completion.chunk', created: 1, model: 'test-model', choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] }) + '\n\ndata: [DONE]\n\n')
+    response.write('data: ' + JSON.stringify({ id: 'synthetic', object: 'chat.completion.chunk', created: 1, model: 'test-model', choices: [{ index: 0, delta: tool ? { role: 'assistant', tool_calls: [{ index: 0, id: 'effect-call', type: 'function', function: { name: user.includes('unsafe-effect') ? 'bash' : 'write', arguments: JSON.stringify(args) } }] } : { role: 'assistant', content: 'Production host accepted.' }, finish_reason: null }] }) + '\n\n')
+    response.end('data: ' + JSON.stringify({ id: 'synthetic', object: 'chat.completion.chunk', created: 1, model: 'test-model', choices: [{ index: 0, delta: {}, finish_reason: tool ? 'tool_calls' : 'stop' }] }) + '\n\ndata: [DONE]\n\n')
   })
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
@@ -29,20 +38,24 @@ test('production utility-process bootstrap serves authenticated submissions and 
     if (!address || typeof address === 'string') throw new Error('Model server did not bind')
     const require = createRequire(import.meta.url)
     const options = {
-      config: { model: { provider: 'test-provider', modelID: 'test-model', api: 'openai-completions', baseUrl: `http://127.0.0.1:${address.port}/v1` }, tools: { enabled: [] }, compaction: { enabled: false, reserveTokens: 1000, keepRecentTokens: 1000 } },
-      apiKeys: { 'test-provider': 'synthetic-key' }, databaseUrl: 'file:' + join(directory, 'business.sqlite'),
-      migrationsPath: fileURLToPath(new URL('../../../drizzle', import.meta.url)), sessionDir: join(directory, 'sessions'), allowedOrigins: [],
+      config: { model: { provider: 'test-provider', modelID: 'test-model', api: 'openai-completions', baseUrl: `http://127.0.0.1:${address.port}/v1` }, tools: { enabled: scenario === 'lifecycle' ? [] : ['write', 'bash'] }, compaction: { enabled: false, reserveTokens: 1000, keepRecentTokens: 1000 } },
+      apiKeys: { 'test-provider': 'synthetic-key' }, databaseUrl: 'file:' + join(data, 'business.sqlite'),
+      migrationsPath: fileURLToPath(new URL('../../../drizzle', import.meta.url)), sessionDir: join(data, 'sessions'), allowedOrigins: [],
     }
-    const config = await resolveConfig({ build: { outDir: directory }, logLevel: 'silent' }, 'build')
+    const config = await resolveConfig({ build: { outDir: directory }, logLevel: 'silent' }, 'build', 'production')
     await build(config.config!.main!)
+    await mkdir(join(data, 'workspace'))
+    if (process.platform === 'win32') await cp(join(process.cwd(), 'resources', 'sandbox'), join(directory, 'resources', 'sandbox'), { recursive: true })
     const utility = join(directory, 'main', 'agent-backend-entry.mjs')
     const script = `
 import { app, utilityProcess } from 'electron'
-app.setPath('userData', ${JSON.stringify(directory)})
+import { readFile, readdir } from 'node:fs/promises'
+app.setPath('userData', ${JSON.stringify(data)})
 const options = ${JSON.stringify(options)}
+const scenario = ${JSON.stringify(scenario)}
 const children = new Set()
 const start = () => {
-  const child = utilityProcess.fork(${JSON.stringify(utility)}, [], { env: { ...process.env, USERPROFILE: ${JSON.stringify(directory)}, HOME: ${JSON.stringify(directory)} }, stdio: 'pipe' })
+  const child = utilityProcess.fork(${JSON.stringify(utility)}, [], { env: { ...process.env, USERPROFILE: ${JSON.stringify(data)}, HOME: ${JSON.stringify(data)} }, stdio: 'pipe' })
   children.add(child)
   child.stdout.pipe(process.stdout)
   child.stderr.pipe(process.stderr)
@@ -75,7 +88,7 @@ const start = () => {
 app.whenReady().then(async () => {
     try {
       const first = start()
-      const base = (await first.ready).baseUrl
+      let base = (await first.ready).baseUrl
       if (!base.endsWith('/api/agent')) throw new Error('Legacy execution protocol is active')
       const unauthorized = await fetch(new URL('/wrong/api/agent/threads', base))
       if (unauthorized.status !== 404) throw new Error('Missing authentication')
@@ -117,8 +130,77 @@ app.whenReady().then(async () => {
       if (repeatedAfterRestart.submissionId !== accepted.submissionId) throw new Error('Restart duplicated admission')
       const restoredRuns = await restored.rpc('agent-run:list', { request: { sessionId: 'production-thread' } })
       if (JSON.stringify(restoredRuns) !== JSON.stringify(runs)) throw new Error('Restart changed official run receipts')
-      await restored.close()
-      process.stdout.write('PRODUCTION_SMOKE=' + JSON.stringify({ snapshot, runs, records }) + '\\n')
+      let crash
+      if (scenario !== 'lifecycle') {
+        base = restoredBase
+        const workspace = await restored.rpc('workspace:attach', { path: ${JSON.stringify(join(data, 'workspace'))} })
+        await json('/threads', { threadId: 'crash-thread', workspaceId: workspace.workspace.id, permissionMode: scenario === 'unsafe-crash' ? 'workspace-write' : 'read-only' })
+        const request = { type: 'input', content: scenario === 'unsafe-crash' ? 'unsafe-effect' : 'approval-effect', requestId: 'crash-request' }
+        const admitted = await json('/threads/crash-thread/submissions', request)
+        const poll = async (read, check) => {
+          const until = Date.now() + 15000
+          while (Date.now() < until) {
+            const value = await read()
+            if (check(value)) return value
+            await new Promise(resolve => setTimeout(resolve, 25))
+          }
+          throw new Error('Recovery condition timed out')
+        }
+        const effect = ${JSON.stringify(join(data, 'workspace', 'effect.txt'))}
+        let approval
+        let queued
+        if (scenario === 'unsafe-crash') {
+          await poll(async () => {
+            const value = await readFile(effect, 'utf8').catch(() => '')
+            if (!value) {
+              const state = await json('/threads/crash-thread')
+              if (state.approvals.length) throw new Error('Restricted command unexpectedly requires approval: ' + JSON.stringify(state.approvals))
+              if ((await json('/threads/crash-thread/submissions/' + admitted.submissionId)).status === 'done') throw new Error('Restricted effect did not run: ' + JSON.stringify(state.snapshot.entries))
+            }
+            return value
+          }, value => value.trim() === 'once')
+          const directories = await readdir(${JSON.stringify(join(data, 'sandbox'))})
+          if (!directories.length) throw new Error('Restricted run did not allocate sandbox resources')
+        } else {
+          approval = (await poll(() => json('/threads/crash-thread/approvals'), value => value.length === 1))[0]
+          queued = await json('/threads/crash-thread/submissions', { type: 'input', content: 'queued-original', requestId: 'queue-request', whenBusy: 'followUp' })
+          await json('/threads/crash-thread/queue/item', { mode: 'followUp', expected: ['queued-original'], index: 0, action: 'edit', value: 'queued-edited' })
+          if (scenario === 'cancel-crash') await fetch(base + '/threads/crash-thread/cancel', { method: 'POST' }).then(response => { if (!response.ok) throw new Error('Cancel failed') })
+        }
+        restored.child.kill()
+        await restored.exited
+        const recovered = start()
+        base = (await recovered.ready).baseUrl
+        const repeated = await json('/threads/crash-thread/submissions', request)
+        if (repeated.submissionId !== admitted.submissionId) throw new Error('Crash recovery duplicated submission')
+        if (scenario === 'approval-crash') {
+          const pending = await poll(() => json('/threads/crash-thread/approvals'), value => value.length === 1)
+          if (pending[0].id !== approval.id || pending[0].state !== 'pending') throw new Error('Recovery changed or auto-approved the request')
+          if (await readFile(effect, 'utf8').catch(() => '') !== '') throw new Error('Pending approval caused an effect')
+          const state = await json('/threads/crash-thread')
+          if (state.queue.length !== 1 || state.queue[0].id !== queued.submissionId || state.queue[0].content !== 'queued-edited') throw new Error('Queue was not restored from official state')
+          const retry = await json('/threads/crash-thread/submissions', { type: 'input', content: 'queued-original', requestId: 'queue-request', whenBusy: 'followUp' })
+          if (retry.submissionId !== queued.submissionId) throw new Error('Lost queue acknowledgement duplicated work')
+          await json('/threads/crash-thread/approvals/' + approval.id, { state: 'approved' })
+          await poll(() => json('/threads/crash-thread/submissions/' + queued.submissionId), value => value.status === 'done')
+          if ((await readFile(effect, 'utf8')).trim() !== 'once') throw new Error('Approved effect changed')
+        } else if (scenario === 'cancel-crash') {
+          if ((await json('/threads/crash-thread/approvals')).length) throw new Error('Cancelled approval remained pending')
+          const stale = await fetch(base + '/threads/crash-thread/approvals/' + approval.id, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ state: 'approved' }) })
+          if (stale.status !== 409) throw new Error('Stale approval accepted after crash')
+          if (await readFile(effect, 'utf8').catch(() => '') !== '') throw new Error('Cancelled work caused an effect')
+          if ((await json('/threads/crash-thread/submissions/' + queued.submissionId)).status !== 'unanswered') throw new Error('Cancelled queued work resumed')
+        } else {
+          await poll(() => json('/threads/crash-thread/submissions/' + admitted.submissionId), value => value.status === 'done' || value.status === 'unanswered')
+          const state = await json('/threads/crash-thread')
+          if (!JSON.stringify(state.snapshot.entries).includes('interrupted')) throw new Error('Unsafe interruption was not reported')
+          if ((await readFile(effect, 'utf8')).trim() !== 'once') throw new Error('Unsafe side effect was replayed')
+        }
+        await recovered.close()
+        if (scenario === 'unsafe-crash' && (await readdir(${JSON.stringify(join(data, 'sandbox'))})).length) throw new Error('Recovered resources were not collected')
+        crash = { scenario, submissionId: admitted.submissionId, recovered: true }
+      } else await restored.close()
+      process.stdout.write('PRODUCTION_SMOKE=' + JSON.stringify({ snapshot, runs, records, crash }) + '\\n')
       app.exit(0)
     } catch (error) {
       console.error(error)
@@ -136,7 +218,8 @@ app.whenReady().then(async () => {
     const line = stdout.split(/\r?\n/).find((value) => value.startsWith('PRODUCTION_SMOKE='))
     expect(line).toBeDefined()
     const result = JSON.parse(line!.slice('PRODUCTION_SMOKE='.length))
-    expect(calls).toBe(1)
+    if (scenario === 'lifecycle') expect(calls).toBe(1)
+    else expect(result.crash).toMatchObject({ scenario, recovered: true })
     expect(result.runs).toEqual([expect.objectContaining({ status: 'completed', result: 'Production host accepted.' })])
     expect(result.records.map((record) => record.event.type)).toEqual(['agent_started', 'text_delta', 'agent_completed'])
     expect(JSON.stringify(result.snapshot.snapshot.entries)).toContain('Production host accepted.')
@@ -144,5 +227,6 @@ app.whenReady().then(async () => {
     server.closeAllConnections()
     await new Promise<void>((resolve) => server.close(() => resolve()))
     await rm(directory, { recursive: true, force: true })
+    await rm(data, { recursive: true, force: true })
   }
 }, 60000)

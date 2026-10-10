@@ -106,6 +106,19 @@ test('uses authoritative resets and rejects gaps while ignoring repeated deliver
   expect(() => reduceDurableFrame(first, { ...frame, epoch: 'next', events: [] })).toThrow('Snapshot required')
 })
 
+test('does not render persisted system instructions as empty assistant bubbles', () => {
+  const snapshot = emptySnapshot()
+  snapshot.entries = [
+    entry(1, { role: 'user', content: 'Question', timestamp: 1 }),
+    entry(2, { role: 'system', content: '', sections: { identity: 'Private system instructions' }, timestamp: 2 }),
+    entry(3, fauxAssistantMessage('Visible answer')),
+  ]
+  const projected = projectDurableThread({ snapshot, approvals: [], queue: [], sequence: 0 })
+  expect(projected.messages.map(message => message.role)).toEqual(['user', 'assistant'])
+  expect(JSON.stringify(projected.messages)).not.toContain('Private system instructions')
+  expect(projected.transcript).toHaveLength(3)
+})
+
 test('events without additional snapshot fields do not invent execution or mutate official state', () => {
   const snapshot = emptySnapshot()
   const events: AgentEvent[] = [
