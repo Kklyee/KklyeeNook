@@ -24,11 +24,27 @@ Node 类型检查与相关 oxlint 通过。测试使用官方 Faux Provider 和�
 
 后续移除了 `thread-list-row.tsx` 中未使用的解构参数，保留 props 类型与所有显示行为。全仓 `pnpm run typecheck`、`pnpm run lint`、`pnpm run build` 现已通过，包括 Remote 和桌面构建。这只证明当前迁移分支可构建，不代表新执行器已接入产品或 M3–M5 已完成。
 
+## 已完成：持久审批基础
+
+`src/main/agent/durable-approvals.ts` 使用正式 `ToolTask` 的 `beforeTool` 与 `nook.approvals` Conversation Document。这里不是渲染端 Promise：请求和决定由 Durable 原子提交，等待只观察持久文档。工具仍停在官方 `call` checkpoint，批准后才由 SDK 写入 `execute` 意图。
+
+- 稳定审批 ID 绑定 Conversation/Task，不使用工具名称或前端序号。
+- 同一决定可幂等重试，矛盾决定、跨会话决定、已取消的待审批决定被拒绝。
+- 原始参数、权限请求和说明保持绑定；恢复时权限请求变化不会消费旧批准。
+- 关闭或崩溃不自动批准；恢复同一待审批请求。
+- `AgentEngine.open` 的初始化回调在 `resume` 前执行，初始化失败释放 Harness/SQLite 所有权，避免恢复任务先于权限集成运行。
+- 取消时依据 Durable Task 的终态/abort 标记过滤旧请求，不用业务数据库维护另一份执行状态。
+- 真实 SIGKILL 测试覆盖等待中恢复和副作用发生后恢复：等待恢复批准后执行一次；`unsafe` 执行中崩溃不会再次执行，并产生官方 interrupted 结果。
+
+`durable-approvals.test.ts` 七项测试及 `agent-engine.test.ts` 八项测试通过，Node 类型检查、全仓 lint 通过。审批服务目前是基础组件，实际 Sandbox 策略与生产 HTTP/UI 决策接口仍需接线。
+
+已执行现有 `pnpm run sandbox:setup`，UAC setup 返回成功。随后单独 Windows Sandbox 测试运行 120 秒未完成，仍需进一步诊断和完整复测；不能据此声称 Sandbox 验收通过。
+
 ## 待完成
 
 - 真实 Provider、自定义模型/base URL、Thinking Level 与现有设置集成。
 - 现有 ToolRegistry/Sandbox/Workspace 工具适配，不能绕过 ToolExecutionHarness。
-- beforeTool 准备阶段的持久审批暂停、允许/拒绝、重启恢复和工具危险副作用测试。
+- 将已验证的持久审批基础接到真实 Sandbox 策略、生产 HTTP/UI 与工具执行权限。
 - Skills/ContextBuilder/MCP 的实际 Registry/sections 集成。
 - 正式 Agent Backend 初始化顺序、restore 与 Hono 接线。
 

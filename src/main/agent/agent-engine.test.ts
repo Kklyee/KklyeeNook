@@ -217,6 +217,17 @@ test('rolls back failed creation and rejects admission after shutdown', async ()
   await expect(engine.create('late', { model }, context())).rejects.toThrow('closed')
 })
 
+test('initializes host integrations before recovery and releases storage after initialization failure', async () => {
+  const { engine, path, harnessOptions, open } = await setup()
+  await engine.close()
+  await expect(AgentEngine.open(path, harnessOptions, context(), async (initializing) => {
+    expect((await initializing.harness.inspect(context())).scheduling).toBe('paused')
+    throw new Error('host integration failed')
+  })).rejects.toThrow('host integration failed')
+  const restored = await open()
+  expect((await restored.harness.inspect(context())).scheduling).toBe('running')
+})
+
 test('rejects a second owner and releases ownership after close', async () => {
   const { engine, open, path, harnessOptions } = await setup()
   await expect(AgentEngine.open(path, harnessOptions, context())).rejects.toThrow(/locked/)

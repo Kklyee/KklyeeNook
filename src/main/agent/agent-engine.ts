@@ -32,7 +32,12 @@ export class AgentEngine {
     private readonly owner: DatabaseSync,
   ) {}
 
-  static async open(databasePath: string, options: HarnessOptions, context: Context) {
+  static async open(
+    databasePath: string,
+    options: HarnessOptions,
+    context: Context,
+    initialize?: (engine: AgentEngine) => void | Promise<void>,
+  ) {
     await mkdir(dirname(databasePath), { recursive: true })
     const owner = new DatabaseSync(`${databasePath}.owner.sqlite`, { timeout: 0 })
     try {
@@ -46,8 +51,14 @@ export class AgentEngine {
         throw error
       }
       const engine = new AgentEngine(harness, owner)
-      harness.resume()
-      return engine
+      try {
+        await initialize?.(engine)
+        harness.resume()
+        return engine
+      } catch (error) {
+        await harness.close(BACKGROUND_CONTEXT)
+        throw error
+      }
     } catch (error) {
       owner.close()
       throw error
