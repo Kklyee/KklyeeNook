@@ -79,6 +79,7 @@ export function createRemoteGatewayApp(port: RemoteAgentPort, options: RemoteGat
     }), 201)
   })
   app.get('/api/conversations/:id', async context => context.json(await port.getConversation(context.req.param('id'))))
+  app.post('/api/conversations/:id/continue', async context => context.json(await port.continueConversation(context.req.param('id'), text(await body(context), 'threadId')), 201))
   app.patch('/api/conversations/:id', async context => {
     await port.renameConversation(context.req.param('id'), text(await body(context), 'title'))
     return context.json({ ok: true })
@@ -180,6 +181,9 @@ export function createRemoteGatewayApp(port: RemoteAgentPort, options: RemoteGat
   })
   app.onError((error, context) => {
     if (error instanceof RemoteError) return context.json({ error: error.message }, error.status)
+    const message = error instanceof Error ? error.message : ''
+    if (/not found/i.test(message)) return context.json({ error: 'Conversation or approval not found' }, 404)
+    if (/(busy|historical.*read-only|target already exists|already decided|no longer active|queue changed)/i.test(message)) return context.json({ error: 'Operation conflicts with the current conversation state' }, 409)
     console.error('[Remote Gateway]', error)
     return context.json({ error: 'Request failed' }, 500)
   })

@@ -64,7 +64,7 @@
 - [ ] 验证流式文本、思考、工具参数/结果、图片、附件、Markdown、统计与原有工具展示没有退化。
 - [ ] 验证 Workspace/权限草稿、新会话绑定与一个 selectedThreadId 的一致性。
 - [ ] 验证连接恢复后 composer、队列、审批与 loading 状态一致，没有重复消息或残留等待。
-- [ ] 补齐共享 reducer 的正式测试；已有 ChatStore 测试不能代替全部官方事件类型的覆盖。
+- [x] 补齐共享 reducer 的正式测试：覆盖全部官方事件类型、完整消息替换、工具参数嵌套 delta、输出 trim/set、null details、重试/延迟、compaction、Inbox、重复 Entry 与连接 reset/gap；ChatStore 测试单独保留。
 - [ ] 验证 renderer 刷新/退出后，不依赖前端 Promise 才能继续或恢复执行。
 
 **已有相关测试：** 快照引用缓存、过期切换结果、旧连接事件、重复/跨会话帧、缺口后重新 reset、丢失确认后的稳定提交 ID 与附件、历史惯性展示。
@@ -91,7 +91,7 @@
 - [ ] 在实际 Remote 页面验证项目列表、会话列表、发送、流式回复、取消、模型、thinking、权限、队列和审批。
 - [ ] 验证后台重启及订阅建立/取消竞争没有 watch 泄漏或错误顺序。
 - [ ] 补齐历史活动/工具展示与桌面文本边界的一致性；当前展示投影不能只在工具运行期间可见，完成后丢失。
-- [ ] 明确并实现旧历史会话在 Remote 的只读可见性与继续入口；当前新列表过滤 historical 会话，尚不能算历史兼容完成。
+- [x] 明确并实现旧历史会话在 Remote 的只读可见性与继续入口：保留列表、惰性只读快照、稳定继续目标、原 Workspace/权限及脱敏；历史发送/配置拒绝，失效 Workspace 拒绝继续。实际 Remote 页面验收仍在上一条产品门禁中。
 - [ ] 复验 busy/conflict 与历史只读错误，不把正常业务冲突统一返回 500。
 - [ ] 验证 context budget 使用当前模型容量与最近模型上下文用量，而不是累积计费 token。
 - [ ] 保留脱敏：不暴露本机 session 路径、Provider URL/密钥、opaque signatures 或未授权的原始工具细节。
@@ -225,7 +225,7 @@
 | 全量测试 | 97 文件中 94 通过；506 通过、2 失败、2 跳过；另 1 个 suite 加载失败 | 不是全量通过 |
 | 全量中的两个失败 | Office PDF 与 Sandbox ACL 测试超时 | 后续隔离复验通过，不替代最终全量重跑 |
 | 旧 UI mock 加载失败 | 已补新 Runtime mock，相关 suite 复验通过 | 不能据此声称其它桌面 UI 已验收 |
-| 新核心相关复验 | 最近 4 文件 / 34 测试通过 | 包括 Host、Engine、Remote、ChatStore，非完整产品门禁 |
+| 新核心相关复验 | 2026-10-10 45 文件 / 253 测试整体通过 | 包括真实生产 smoke、共享 reducer、Host、Engine、Remote、Scheduler、Backup、ChatStore，非完整产品门禁 |
 | Backup / Scheduler 模块 | 近期相关测试通过 | 仍缺实际恢复演练及生产崩溃矩阵 |
 | 生产 Utility Process smoke | 2026-10-10 实际 main 构建后通过 | 覆盖认证、重复启动、设置回滚、提交、重启和退出；尚未覆盖完整异常/崩溃矩阵 |
 | 旧依赖清理 | 未执行 | `pi-coding-agent` 等依赖仍在 |

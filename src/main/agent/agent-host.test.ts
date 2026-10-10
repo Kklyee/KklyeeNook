@@ -440,6 +440,33 @@ async function events(baseUrl: string, threadId: string) {
   }
 }
 
+test('HTTP keeps historical metadata editable, rejects historical execution and reports busy and stale queues as conflicts', async () => {
+  const { host, sessions, workspaceId, options } = await setup()
+  Object.assign(options, { history: new LegacyHistory(join(directory, 'legacy'), undefined, { resolveSourceMetadata: (id) => sessions.findById(id) }) })
+  await sessions.save({ id: 'historical-thread', title: 'History', archived: false, createdAt: 1, updatedAt: 1, workspaceId, permissionMode: 'read-only' })
+  const { request } = await api(host)
+  expect((await (await request('/threads/historical-thread')).json()).historical).toBe(true)
+  expect((await request('/threads/historical-thread', 'PATCH', { title: 'Renamed' })).status).toBe(200)
+  expect((await request('/threads/historical-thread/archive', 'POST')).status).toBe(204)
+  expect((await request('/threads/historical-thread/unarchive', 'POST')).status).toBe(204)
+  expect((await request('/threads/historical-thread/submissions', 'POST', { type: 'input', content: 'Never replay', requestId: 'historical-input' })).status).toBe(409)
+  expect((await request('/threads/historical-thread/continue', 'POST', { threadId: 'continued-thread' })).status).toBe(201)
+  expect((await request('/threads/historical-thread/continue', 'POST', { threadId: 'continued-thread' })).status).toBe(201)
+  await host.create({ threadId: 'unrelated-thread' }, context())
+  expect((await request('/threads/historical-thread/continue', 'POST', { threadId: 'unrelated-thread' })).status).toBe(409)
+  expect((await host.conversations.snapshot('continued-thread', context())).entries).toEqual([])
+  const first = await (await request('/threads/continued-thread/submissions', 'POST', { type: 'input', content: 'Write', requestId: 'first' })).json()
+  await vi.waitFor(async () => expect(await host.pendingApprovals('continued-thread', context())).toHaveLength(1), { timeout: 15_000 })
+  expect((await request('/threads/continued-thread/submissions', 'POST', { type: 'input', content: 'Busy', requestId: 'busy' })).status).toBe(409)
+  const queued = await (await request('/threads/continued-thread/submissions', 'POST', { type: 'input', content: 'Queued', requestId: 'queued', whenBusy: 'followUp' })).json()
+  expect((await request('/threads/continued-thread/queue/item', 'POST', { mode: 'followUp', expected: ['stale'], index: 0, action: 'remove' })).status).toBe(409)
+  expect((await request('/threads/continued-thread/queue/item', 'POST', { mode: 'followUp', expected: ['Queued'], index: 0, action: 'move', value: 1 })).status).toBe(400)
+  expect((await request(`/threads/unrelated-thread/submissions/${queued.submissionId}`, 'DELETE')).status).toBe(404)
+  await request('/threads/continued-thread', 'DELETE')
+  expect(await host.pendingApprovals('continued-thread', context())).toEqual([])
+  expect((await host.conversations.status('continued-thread', first.submissionId, context())).status).toBe('unanswered')
+}, 30_000)
+
 test('durable HTTP keeps authentication, rejects passive writes and preserves scoped idempotency', async () => {
   const { host, workspaceId, requests } = await setup()
   const { baseUrl, request } = await api(host)

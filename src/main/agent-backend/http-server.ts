@@ -366,7 +366,7 @@ function sendUnexpectedError(context: Context, error: unknown): Response {
   if (/not found/i.test(rawMessage)) {
     return sendError(context, 404, 'not_found', 'Thread not found.')
   }
-  if (/(running|active run|invalid state|cannot .* while)/i.test(rawMessage)) {
+  if (/(running|active run|invalid state|cannot .* while|busy|historical.*read-only|target already exists)/i.test(rawMessage)) {
     return sendError(context, 409, 'conflict', 'Operation conflicts with the current agent state.')
   }
   return sendError(context, 500, 'internal_error', 'Agent backend request failed.')

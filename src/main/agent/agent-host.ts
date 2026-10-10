@@ -239,7 +239,7 @@ export class AgentHost {
   async readHistory(threadId: string, context: Context) {
     await this.conversations.get(threadId, context)
     const snapshot = await this.historySnapshot(threadId, context)
-    if (snapshot?.sourceThreadId) return snapshot.records
+    if (snapshot) return snapshot.records
     return this.options.history?.read(threadId) ?? []
   }
 

@@ -1,4 +1,5 @@
 import type { ThreadMessageLike } from '@assistant-ui/react'
+import { applyImmutable } from '@earendil-works/chord/delta'
 import type { AgentEvent, EntryRecord, InboxItem, SnapshotEvent } from '@earendil-works/pi-durable'
 import type { AssistantMessage, Message, ToolCall, ToolResultMessage, Usage } from '@earendil-works/pi-ai'
 import type { AgentApproval, AgentFrame } from './chat-protocol'
@@ -110,10 +111,10 @@ export function projectDurableThread(state: AgentProjectionState): AgentProjecte
 }
 
 function applyEvents(snapshot: SnapshotEvent, events: readonly AgentEvent[]): SnapshotEvent {
-  return events.reduce<SnapshotEvent>((current, event) => applyEvent(current, event), snapshot)
+  return events.reduce<SnapshotEvent>((current, event) => applyAgentEvent(current, event), snapshot)
 }
 
-function applyEvent(snapshot: SnapshotEvent, event: AgentEvent): SnapshotEvent {
+export function applyAgentEvent(snapshot: SnapshotEvent, event: AgentEvent): SnapshotEvent {
   switch (event.type) {
     case 'snapshot':
       return event
@@ -121,6 +122,14 @@ function applyEvent(snapshot: SnapshotEvent, event: AgentEvent): SnapshotEvent {
       return { ...snapshot, run: { inputs: event.inputs } }
     case 'run_end':
       return { ...snapshot, run: undefined, generation: undefined, tools: [] }
+    case 'inbox_update':
+      return { ...snapshot, inbox: event.items }
+    case 'auto_retry_start':
+      return { ...snapshot, generation: { attempt: event.attempt, retry: { at: event.at, error: event.errorMessage } } }
+    case 'auto_retry_end':
+      return { ...snapshot, generation: snapshot.generation ? { ...snapshot.generation, retry: undefined } : undefined }
+    case 'deferred_poll':
+      return { ...snapshot, generation: { ...snapshot.generation, attempt: snapshot.generation?.attempt ?? 1, deferred: { pollAt: event.pollAt } } }
     case 'message_start':
       return event.message.role === 'assistant'
         ? { ...snapshot, generation: { attempt: snapshot.generation?.attempt ?? 1, message: event.message } }
@@ -222,13 +231,13 @@ function mergeTool(
   const output = event.output
     ? 'set' in event.output
       ? event.output.set
-      : `${previous.output ?? ''}${event.output.append ?? ''}`
+      : `${(previous.output ?? '').slice(event.output.trimStart ?? 0)}${event.output.append ?? ''}`
     : previous.output
   return {
     ...previous,
     status: previous.status === 'done' ? 'done' : 'running',
     output,
-    details: event.details ?? previous.details,
+    details: event.details === undefined ? previous.details : event.details,
     diagnostics: event.diagnostics ? [...event.diagnostics] : previous.diagnostics,
   }
 }
@@ -256,6 +265,8 @@ function applyMessageChanges(
     } else if (change.type === 'thinking_delta') {
       const block = content[change.contentIndex]
       if (block?.type === 'thinking') content = setAt(content, change.contentIndex, { ...block, thinking: block.thinking + change.delta })
+    } else if (change.type === 'toolcall_delta') {
+      content = applyImmutable(content, [['a', [change.contentIndex, 'arguments', ...change.path], change.delta]])
     }
   }
   return { ...message, content }

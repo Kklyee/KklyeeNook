@@ -103,9 +103,8 @@ export class ConversationService {
   }
 
   async getLive(threadId: string, context: Context) {
-    const record = await this.sessions.findById(threadId)
-    if (!record) throw new Error('Conversation not found')
-    await this.engine.conversation(threadId, context)
+    const record = await this.get(threadId, context)
+    if ('historical' in record && record.historical) throw new Error('Historical conversation is read-only')
     return record
   }
 

@@ -127,6 +127,7 @@ function Conversation({ state, projectId, id }: { state: RemoteState; projectId:
   const [busy, setBusy] = useState(false)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+  const [continuationId] = useState(() => crypto.randomUUID())
   useEffect(() => {
     let active = true
     const source = new EventSource(`/api/conversations/${id}/events`)
@@ -176,10 +177,19 @@ function Conversation({ state, projectId, id }: { state: RemoteState; projectId:
   const selection: Selection = { permission: snapshot?.permission ?? state.defaults.permission, provider: snapshot?.model?.provider ?? state.defaults.provider, modelId: snapshot?.model?.modelId ?? state.defaults.modelId, thinkingLevel: snapshot?.thinkingLevel ?? state.defaults.thinkingLevel }
   const modelContextWindow = state.models.find(model => model.provider === selection.provider && model.modelId === selection.modelId)?.contextWindow
   const contextBudget = snapshot?.contextBudget ?? { contextWindow: modelContextWindow, state: 'unknown' as const }
-  const controls = <Controls state={state} selection={selection} disabled={!connected || busy || sending || running} onPermission={permission => { void mutate(`/conversations/${id}/permission`, { permission }, true) }} onModel={model => { void mutate(`/conversations/${id}/model`, model, true) }} onThinking={thinkingLevel => { void mutate(`/conversations/${id}/thinking`, { thinkingLevel }, true) }} />
+  const controls = <Controls state={state} selection={selection} disabled={snapshot?.historical || !connected || busy || sending || running} onPermission={permission => { void mutate(`/conversations/${id}/permission`, { permission }, true) }} onModel={model => { void mutate(`/conversations/${id}/model`, model, true) }} onThinking={thinkingLevel => { void mutate(`/conversations/${id}/thinking`, { thinkingLevel }, true) }} />
   return <div className="remote-app"><Header title={snapshot?.title ?? ''} subtitle={project?.name} back={`/projects/${projectId}`} create={`/projects/${projectId}/new`}>{!snapshot ? <Skeleton className="h-4 w-24" /> : <span aria-label={connected ? snapshot.status : 'Reconnecting'} className={`size-2 shrink-0 rounded-full ${connected ? running ? 'animate-pulse bg-brand' : 'bg-success' : 'animate-pulse bg-warning'}`} />}</Header>
     {(error || snapshot?.error) && <p role="alert" className="px-4 py-2 text-sm text-destructive">{error || snapshot?.error}</p>}
-    <RemoteThread messages={snapshot?.messages ?? []} contextBudget={contextBudget} activities={snapshot?.activities ?? []} loading={!snapshot && !error} running={running} busy={sending} disabled={!connected || !snapshot || busy} controls={controls} onSend={async (content, mode, attachments) => { if (!await mutate(`/conversations/${id}/messages`, { content, mode, ...(attachments.length ? { attachments } : {}) }, false, true)) throw new Error('Send failed') }} onStop={() => { void mutate(`/conversations/${id}/cancel`) }}>
+    <RemoteThread messages={snapshot?.messages ?? []} contextBudget={contextBudget} activities={snapshot?.activities ?? []} loading={!snapshot && !error} running={running} busy={sending} disabled={snapshot?.historical || !connected || !snapshot || busy} controls={controls} onSend={async (content, mode, attachments) => { if (!await mutate(`/conversations/${id}/messages`, { content, mode, ...(attachments.length ? { attachments } : {}) }, false, true)) throw new Error('Send failed') }} onStop={() => { void mutate(`/conversations/${id}/cancel`) }}>
+      {snapshot?.historical && <div className="flex items-center gap-3 py-4 text-sm"><span className="min-w-0 flex-1 text-muted-foreground">历史会话仅供读取。继续会创建独立会话，并保留原 Workspace 和权限。</span><Button disabled={busy || !connected} onClick={async () => {
+        setBusy(true); setError('')
+        try {
+          const next = await api<RemoteConversationSnapshot>(`/conversations/${id}/continue`, 'POST', { threadId: continuationId })
+          conversationSnapshots.set(next.id, next)
+          navigate(`/projects/${projectId}/conversations/${next.id}`)
+        } catch (error) { setError((error as Error).message) }
+        finally { setBusy(false) }
+      }}>在新会话中继续</Button></div>}
       <MessageQueue queued={snapshot?.queue ?? []} clearing={busy || !connected} onClear={() => { void mutate(`/conversations/${id}/queue/clear`) }} onRemove={message => { void queueAction(message, 'remove') }} onSteer={message => { void queueAction(message, 'steer') }} onEdit={(message, value) => queueAction(message, 'edit', value)} onMove={(message, offset) => { void queueAction(message, 'move', message.index + offset) }} />
       {snapshot?.approvals.map(approval => <Approval key={approval.id} approval={approval} disabled={busy || !connected} onRespond={response => { void mutate(`/approvals/${approval.id}/respond`, { ...response, conversationId: id }) }} />)}
     </RemoteThread>

@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { createRemoteGatewayApp, startRemoteGateway } from './remoteGateway'
 import { RemoteError, type RemoteAgentPort } from './remoteAgentPort'
 import type { RemoteConversationSnapshot, RemoteEvent } from '@kklyeenook/shared/remote/index'
+import { ConversationBusy } from '@earendil-works/pi-durable'
 
 const origin = 'https://desktop.example.ts.net'
 const headers = { 'tailscale-user-login': 'kk@example.com', origin, 'content-type': 'application/json' }
@@ -40,6 +41,7 @@ function fixture() {
     getProject: vi.fn(async () => ({ id: 'project', name: 'App', conversationCount: 1, activeRunCount: 1 })),
     listConversations: vi.fn(async () => [snapshot]),
     getConversation: vi.fn(async () => snapshot),
+    continueConversation: vi.fn(async () => snapshot),
     createConversation: vi.fn(async () => snapshot),
     renameConversation: vi.fn(async () => {}),
     sendMessage: vi.fn(async () => {}),
@@ -56,6 +58,28 @@ function fixture() {
   const options = { staticRoot: 'apps/remote/dist', identity: () => ({ origin, allowedLogin: 'kk@example.com' }) }
   return { port, options, app: createRemoteGatewayApp(port, options), unsubscribe, emit: (event: RemoteEvent) => listener?.(event) }
 }
+
+test('returns business conflicts and scoped missing approvals without disguising them as server errors', async () => {
+  const { app, port } = fixture()
+  for (const error of [new ConversationBusy(1 as never), new Error('Historical conversation is read-only')]) {
+    vi.mocked(port.sendMessage).mockRejectedValueOnce(error)
+    const response = await app.request('/api/conversations/chat/messages', { method: 'POST', headers, body: JSON.stringify({ content: 'Hello', mode: 'normal' }) })
+    expect(response.status).toBe(409)
+  }
+  for (const [error, status] of [[new Error('Approval not found'), 404], [new Error('Approval no longer active'), 409], [new Error('Approval already decided'), 409]] as const) {
+    vi.mocked(port.respondToApproval).mockRejectedValueOnce(error)
+    expect((await app.request('/api/approvals/approval/respond', { method: 'POST', headers, body: JSON.stringify({ conversationId: 'chat', confirmed: true }) })).status).toBe(status)
+  }
+})
+
+test('authenticates explicit historical continuation and passes a stable target without submitting a prompt', async () => {
+  const { app, port } = fixture()
+  expect((await app.request('/api/conversations/legacy/continue', { method: 'POST', headers, body: JSON.stringify({ threadId: 'continued' }) })).status).toBe(201)
+  expect(port.continueConversation).toHaveBeenCalledWith('legacy', 'continued')
+  expect(port.sendMessage).not.toHaveBeenCalled()
+  expect((await app.request('/api/conversations/legacy/continue', { method: 'POST', headers, body: '{}' })).status).toBe(400)
+  expect((await app.request('/api/conversations/legacy/continue', { method: 'POST', body: JSON.stringify({ threadId: 'continued' }) })).status).toBe(401)
+})
 
 test('requires Tailscale identity on assets and APIs, enforces allowed user and blocks cross-site mutation', async () => {
   const { app, port } = fixture()

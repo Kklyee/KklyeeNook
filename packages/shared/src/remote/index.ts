@@ -35,6 +35,7 @@ export interface RemoteConversationSummary {
   title: string
   status: 'idle' | 'running' | 'failed'
   updatedAt: number
+  historical?: boolean
 }
 export interface RemoteMessage {
   id: string

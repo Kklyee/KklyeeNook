@@ -10,7 +10,7 @@ import { createRemoteAgentPort } from './remoteAgentPort'
 
 function fixture() {
   const session: AgentSessionRecord = { archived: false, id: 'chat', workspaceId: 'project', title: 'Existing chat', createdAt: 1, updatedAt: 2, permissionMode: 'workspace-write' as const }
-  const sessions = new Map<string, AgentSessionRecord>([['chat', session], ['global', { ...session, id: 'global', workspaceId: null }]])
+  const sessions = new Map<string, AgentSessionRecord & { historical?: boolean }>([['chat', session], ['global', { ...session, id: 'global', workspaceId: null }]])
   const project = { id: 'project', displayName: 'App', rootPath: 'C:\\private-project', status: 'attached', createdAt: 1, updatedAt: 2 }
   const workspaces = { list: vi.fn(async () => [project]), resolve: vi.fn(async () => project) }
   const config = new AgentConfigStore({ model: { provider: 'private-provider', modelID: 'basic', thinkingLevel: 'off' }, providers: [{ id: 'private-provider', baseUrl: 'https://private-provider.test/secret', models: [{ id: 'basic', name: 'Basic', reasoning: false, contextWindow: 128000 }, { id: 'reasoning', name: 'Reasoning', reasoning: true }] }], tools: { enabled: [] } })
@@ -25,6 +25,7 @@ function fixture() {
   const host = {
     models: { contextWindow: vi.fn(() => 128000) },
     conversations: {
+      get: vi.fn(async (id: string) => { const value = sessions.get(id); if (!value) throw new Error('Conversation not found'); return value }),
       getLive: vi.fn(async (id: string) => { const value = sessions.get(id); if (!value) throw new Error('Conversation not found'); return value }),
       list: vi.fn(async () => [...sessions.values()]), snapshot: vi.fn(async () => snapshot),
       submit: vi.fn(async (_id: string, _input: any) => ({})), cancel: vi.fn(async () => {}),
@@ -32,6 +33,12 @@ function fixture() {
     },
     create: vi.fn(async (input: any) => { const value = { ...session, ...input }; sessions.set(value.threadId, { ...value, id: value.threadId }); return { ...value, id: value.threadId } }),
     configure: vi.fn(async (_id: string, patch: any) => Object.assign(snapshot.agent, patch)),
+    readHistory: vi.fn(async () => [] as any[]),
+    continueHistory: vi.fn(async (id: string, threadId: string) => {
+      const value = { ...sessions.get(id)!, id: threadId, historical: false }
+      sessions.set(threadId, value)
+      return value
+    }),
     pendingApprovals: vi.fn(async () => []), decideApproval: vi.fn(async () => {}),
     engine: {
       conversation: vi.fn(async () => ({ id: 1 })),
@@ -41,7 +48,7 @@ function fixture() {
   }
   const save = vi.fn()
   const port = createRemoteAgentPort(workspaces as unknown as WorkspaceService, host as unknown as AgentHost, config, save, attachments)
-  return { port, host, attachments, workspaces, snapshot, session, queue, save, stop, emit: (events: any[]) => listener?.(events), emitApproval: () => approvalListener?.() }
+  return { port, host, attachments, workspaces, snapshot, session, sessions, queue, save, stop, emit: (events: any[]) => listener?.(events), emitApproval: () => approvalListener?.() }
 }
 
 test('validates uploads before admission and releases staged context after both success and failure', async () => {
@@ -152,4 +159,85 @@ test('strips opaque model signatures and tool details from public transcript pro
   const result = agentRemoteSnapshot({ snapshot, metadata: session, queue: [], approvals: [], permission: 'workspace-write' })
   expect(JSON.stringify(result)).not.toContain('opaque-secret')
   expect(JSON.stringify(result)).not.toContain('hidden')
+})
+
+test('keeps historical conversations visible, inert and explicitly continued with their workspace and permission', async () => {
+  const { port, host, sessions, session } = fixture()
+  sessions.set('legacy', { ...session, id: 'legacy', historical: true, permissionMode: 'read-only' })
+  host.readHistory.mockResolvedValue([{ id: 'old', kind: 'message', role: 'assistant', createdAt: 1, source: { sessionFile: 'C:\\private-session' }, payload: { message: { role: 'assistant', content: [{ type: 'text', text: 'Historical answer' }, { type: 'toolCall', id: 'old-tool', name: 'write', arguments: { secret: 'hidden-argument' } }] } } }])
+  expect((await port.listProjects())[0].conversationCount).toBe(2)
+  expect(await port.listConversations('project')).toContainEqual(expect.objectContaining({ id: 'legacy', historical: true, status: 'idle' }))
+  const old = await port.getConversation('legacy')
+  expect(old).toMatchObject({ historical: true, permission: 'read-only', queue: [], approvals: [] })
+  expect(JSON.stringify(old)).toContain('Historical answer')
+  expect(JSON.stringify(old)).not.toContain('private-session')
+  expect(JSON.stringify(old)).not.toContain('hidden-argument')
+  await expect(port.sendMessage('legacy', { content: 'Do not replay', mode: 'normal' })).rejects.toMatchObject({ status: 409 })
+  await expect(port.setPermission('legacy', 'full-access')).rejects.toMatchObject({ status: 409 })
+  expect(host.conversations.submit).not.toHaveBeenCalled()
+  const events: RemoteEvent[] = []
+  const stop = port.subscribe('legacy', event => events.push(event))
+  await vi.waitFor(() => expect(events[0]?.type).toBe('snapshot'))
+  expect(host.engine.watch).not.toHaveBeenCalled()
+  stop()
+  await port.renameConversation('legacy', 'Renamed history')
+  const continued = await port.continueConversation('legacy', 'continued')
+  expect(host.continueHistory).toHaveBeenCalledWith('legacy', 'continued', expect.anything())
+  expect(continued).toMatchObject({ id: 'continued', projectId: 'project', permission: 'read-only' })
+  expect(host.conversations.submit).not.toHaveBeenCalled()
+})
+
+test('refuses historical continuation into a detached workspace', async () => {
+  const { port, host, sessions, session, workspaces } = fixture()
+  sessions.set('legacy', { ...session, id: 'legacy', historical: true })
+  workspaces.resolve.mockResolvedValue({ ...await workspaces.resolve(), status: 'detached' })
+  expect((await port.getConversation('legacy')).permission).toBe('read-only')
+  await expect(port.continueConversation('legacy', 'continued')).rejects.toMatchObject({ status: 409 })
+  expect(host.continueHistory).not.toHaveBeenCalled()
+})
+
+test('preserves completed tool and thinking activity at desktop text boundaries on reopening', async () => {
+  const { port, snapshot } = fixture()
+  const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }
+  snapshot.entries = [
+    { id: 1, model: [{ role: 'user', content: 'Question', timestamp: 1 }] },
+    { id: 2, model: [{ role: 'assistant', content: [{ type: 'thinking', thinking: 'Plan' }, { type: 'text', text: 'Before' }, { type: 'toolCall', id: 'read', name: 'read', arguments: { private: 'hidden' } }], timestamp: 2, usage }] },
+    { id: 3, model: [{ role: 'toolResult', toolCallId: 'read', toolName: 'read', content: [{ type: 'text', text: 'output' }], isError: false, timestamp: 3, details: { secret: 'hidden' } }] },
+    { id: 4, model: [{ role: 'assistant', content: [{ type: 'text', text: 'After' }], timestamp: 4, usage }] },
+  ] as any
+  const first = await port.getConversation('chat')
+  expect(first.activities).toEqual([
+    expect.objectContaining({ type: 'thinking', status: 'completed', textOffset: 0, detail: 'Plan' }),
+    expect.objectContaining({ toolCallId: 'read', status: 'completed', textOffset: 6 }),
+  ])
+  expect(JSON.stringify(first.activities)).not.toContain('hidden')
+  expect((await port.getConversation('chat')).activities).toEqual(first.activities)
+})
+
+test('counts actual active conversations and rejects invalid queue mode changes and destinations', async () => {
+  const { port, snapshot, queue } = fixture()
+  snapshot.run = { inputs: [1 as never] }
+  expect((await port.listProjects())[0].activeRunCount).toBe(1)
+  queue.push({ id: 1, mode: 'steer', content: 's' })
+  await expect(port.updateQueue('chat', { mode: 'steer', expected: ['s'], index: 0, action: 'steer' })).rejects.toMatchObject({ status: 400 })
+  await expect(port.updateQueue('chat', { mode: 'steer', expected: ['s'], index: 0, action: 'move', value: 1 })).rejects.toMatchObject({ status: 400 })
+  await expect(port.updateQueue('chat', { mode: 'steer', expected: ['s'], index: -1, action: 'remove' })).rejects.toMatchObject({ status: 400 })
+})
+
+test('stops watches when the initial snapshot fails and suppresses delivery after unsubscribe races', async () => {
+  const { port, host, stop, emit } = fixture()
+  const events: RemoteEvent[] = []
+  host.conversations.snapshot.mockRejectedValueOnce(new Error('C:\\private-failure'))
+  const unsubscribe = port.subscribe('chat', event => events.push(event))
+  await vi.waitFor(() => expect(events[0]?.type).toBe('error'))
+  expect(stop).toHaveBeenCalledOnce()
+  expect(JSON.stringify(events)).not.toContain('private-failure')
+  unsubscribe()
+  const previous = events.length
+  await emit([])
+  expect(events).toHaveLength(previous)
+  const cancel = port.subscribe('chat', event => events.push(event))
+  cancel()
+  await vi.waitFor(() => expect(stop).toHaveBeenCalledTimes(3))
+  expect(events).toHaveLength(previous)
 })

@@ -172,10 +172,16 @@ async function handle(context: Context, prefix: string, host: AgentHost): Promis
     const input = await parse(context, continueSchema)
     return context.json(await host.continueHistory(threadId, input.threadId, ctx), 201)
   }
+  if (parts.length === 3 && (action === 'archive' || action === 'unarchive') && method === 'POST') {
+    await host.conversations.archive(threadId, action === 'archive', ctx)
+    return context.body(null, 204)
+  }
+  await host.conversations.getLive(threadId, ctx)
   const conversation = await host.engine.conversation(threadId, ctx)
   if (parts.length === 3 && action === 'submissions' && method === 'POST') {
+    const input = await parse(context, inputSchema)
     return context.json(
-      await host.conversations.submit(threadId, await parse(context, inputSchema), ctx),
+      await host.conversations.submit(threadId, { ...input, whenBusy: input.whenBusy ?? 'reject' }, ctx),
       202,
     )
   }
@@ -190,14 +196,6 @@ async function handle(context: Context, prefix: string, host: AgentHost): Promis
   }
   if (parts.length === 3 && action === 'cancel' && method === 'POST') {
     await host.conversations.cancel(threadId, ctx)
-    return context.body(null, 204)
-  }
-  if (parts.length === 3 && action === 'archive' && method === 'POST') {
-    await host.conversations.archive(threadId, true, ctx)
-    return context.body(null, 204)
-  }
-  if (parts.length === 3 && action === 'unarchive' && method === 'POST') {
-    await host.conversations.archive(threadId, false, ctx)
     return context.body(null, 204)
   }
   if (parts.length === 3 && action === 'model' && method === 'POST') {
@@ -327,11 +325,11 @@ async function mutateQueue(
   const text = (item: InboxItem) => (item.mode === 'write' ? '' : contentText(item.content))
   const current = (await host.engine.harness.snapshot(InboxDoc, conversationId, context))?.items ?? []
   const candidates = current.filter((item) => item.mode === mode)
-  if (JSON.stringify(candidates.map(text)) !== JSON.stringify(input.expected)) throw new Error('Queue changed')
-  if (input.index >= candidates.length) throw new Error('Queue changed')
-  if (input.action === 'steer' && mode !== 'followUp') throw new Error('Invalid queue operation')
-  if (input.action === 'edit' && (typeof input.value !== 'string' || !input.value.trim())) throw new Error('Invalid queue operation')
-  if (input.action === 'move' && (typeof input.value !== 'number' || input.value < 0 || input.value >= candidates.length)) throw new Error('Invalid queue operation')
+  if (JSON.stringify(candidates.map(text)) !== JSON.stringify(input.expected)) throw new HttpError(409, 'queue_changed', 'Queue changed')
+  if (input.index >= candidates.length) throw new HttpError(409, 'queue_changed', 'Queue changed')
+  if (input.action === 'steer' && mode !== 'followUp') throw new HttpError(400, 'bad_request', 'Invalid queue operation')
+  if (input.action === 'edit' && (typeof input.value !== 'string' || !input.value.trim())) throw new HttpError(400, 'bad_request', 'Invalid queue operation')
+  if (input.action === 'move' && (typeof input.value !== 'number' || input.value < 0 || input.value >= candidates.length)) throw new HttpError(400, 'bad_request', 'Invalid queue operation')
   const target = candidates[input.index]!
   if (input.action === 'remove') await host.engine.harness.abortSubmission(target.id, context, conversationId)
   else await host.engine.harness.commit(async (tx) => {
@@ -339,7 +337,7 @@ async function mutateQueue(
     if (JSON.stringify(doc.items.filter((item) => item.mode === mode).map(text)) !== JSON.stringify(input.expected))
       throw new HttpError(409, 'queue_changed', 'Queue changed')
     const index = doc.items.findIndex((item) => item.id === target.id)
-    if (index < 0 || doc.items[index]?.mode !== mode) throw new Error('Queue changed')
+    if (index < 0 || doc.items[index]?.mode !== mode) throw new HttpError(409, 'queue_changed', 'Queue changed')
     if (input.action === 'edit') {
       const item = doc.items[index]
       item.content = input.value as never
