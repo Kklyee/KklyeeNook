@@ -12,7 +12,6 @@ export function ThreadListRowContent({
   title,
   running,
   waiting,
-  updatedAt,
 }: {
   title: ReactNode
   running?: boolean

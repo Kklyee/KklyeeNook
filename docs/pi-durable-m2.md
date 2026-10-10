@@ -22,6 +22,8 @@
 
 Node 类型检查与相关 oxlint 通过。测试使用官方 Faux Provider 和磁盘 SQLite，测试文件/数据库已清理。没有调用真实模型、用户凭据或用户 Workspace 的危险工具。
 
+后续移除了 `thread-list-row.tsx` 中未使用的解构参数，保留 props 类型与所有显示行为。全仓 `pnpm run typecheck`、`pnpm run lint`、`pnpm run build` 现已通过，包括 Remote 和桌面构建。这只证明当前迁移分支可构建，不代表新执行器已接入产品或 M3–M5 已完成。
+
 ## 待完成
 
 - 真实 Provider、自定义模型/base URL、Thinking Level 与现有设置集成。
@@ -30,4 +32,6 @@ Node 类型检查与相关 oxlint 通过。测试使用官方 Faux Provider 和�
 - Skills/ContextBuilder/MCP 的实际 Registry/sections 集成。
 - 正式 Agent Backend 初始化顺序、restore 与 Hono 接线。
 
-Windows Sandbox 的设备权限问题仍需通过项目现有管理员 setup 流程处理；不能用 full-access、跳过安全测试或降低文件权限边界替代。
+最新 `pnpm test --maxWorkers=2`：89 个文件中 88 通过，429 测试通过、30 失败、2 跳过，另有 1 个未处理拒绝。失败仍全部来自 Windows Sandbox Null 设备拒绝访问。
+
+Windows Sandbox 的设备权限问题仍需通过项目现有管理员 setup 流程处理：`pnpm run sandbox:setup` 会调用已存在的 setup 脚本并请求 UAC 管理员批准。不能用 full-access、跳过安全测试或降低文件权限边界替代。
