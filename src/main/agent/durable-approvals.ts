@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util'
 import { copyJson, type Context, type Draft } from '@earendil-works/chord'
 import { awaitWithContext } from '@earendil-works/chord/context'
 import type { ToolCall } from '@earendil-works/pi-ai'
@@ -109,6 +110,20 @@ export class DurableApprovals {
     }, context)
   }
 
+  async authorized(
+    conversationId: ConversationId,
+    taskId: TaskId,
+    call: ToolCall,
+    requirement: ApprovalRequirement,
+    context: Context,
+  ) {
+    const doc = await this.host().snapshot(approvalDoc, conversationId, context)
+    const request = doc?.requests[`${conversationId}:${taskId}`]
+    return request?.state === 'approved' && request.callId === call.id &&
+      request.toolName === call.name && isDeepStrictEqual(request.arguments, call.arguments) &&
+      request.reason === requirement.reason && isDeepStrictEqual(request.request, requirement.request)
+  }
+
   private host() {
     if (!this.harness) throw new Error('Approval service is not connected')
     return this.harness
@@ -123,13 +138,13 @@ export class DurableApprovals {
       callId: call.id, toolName: call.name, arguments: call.arguments, ...requirement,
     }) as Draft<ApprovalRequirement & { callId: string; toolName: string; arguments: JsonObject }>
     const matches = (request: DurableApproval) =>
-      JSON.stringify({
+      isDeepStrictEqual({
         callId: request.callId,
         toolName: request.toolName,
         arguments: request.arguments,
         request: request.request,
         reason: request.reason,
-      }) === JSON.stringify(expected)
+      }, expected)
     await harness.commit(async (tx) => {
       const task = await tx.task(api.taskId)
       if (!task || task.abortRequested || task.state.status !== 'running') {

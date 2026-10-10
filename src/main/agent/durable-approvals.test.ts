@@ -107,6 +107,16 @@ test('restores the same pending approval before unsafe execution intent after cl
   expect(execute).toHaveBeenCalledTimes(1)
 })
 
+test('an approved request remains bound to the exact tool arguments', async () => {
+  const { approvals, conversation, request } = await setup()
+  await approvals.decide(conversation.id, request.id, 'approved', context())
+  const requirement = { request: request.request, reason: request.reason }
+  const call = fauxToolCall(request.toolName, request.arguments, { id: request.callId })
+  expect(await approvals.authorized(conversation.id, request.taskId, call, requirement, context())).toBe(true)
+  expect(await approvals.authorized(conversation.id, request.taskId, { ...call, arguments: { path: 'different' } }, requirement, context())).toBe(false)
+  expect(await approvals.authorized(conversation.id, request.taskId, { ...call, name: 'other' }, requirement, context())).toBe(false)
+})
+
 test('a rejected approval never executes the tool', async () => {
   const { approvals, execute, conversation, submission, request } = await setup()
   await approvals.decide(conversation.id, request.id, 'rejected', context())
