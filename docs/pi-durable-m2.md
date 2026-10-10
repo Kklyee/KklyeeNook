@@ -55,9 +55,28 @@ Node 类型检查与相关 oxlint 通过。测试使用官方 Faux Provider 和�
 
 已执行现有 `pnpm run sandbox:setup`，UAC setup 返回成功。完整 Windows Sandbox 测试随后运行约 123 秒：30 通过、2 失败、1 原有环境跳过。Null 设备问题已解决；两个失败是 Python 解析到 WindowsApps 执行别名而无法在受限进程启动。符号链接测试仍因环境缺少 Developer Mode/SeCreateSymbolicLinkPrivilege 跳过。未修改测试过滤条件或安全策略，仍不能声称完整 Sandbox 验收通过。
 
+## 已完成：Provider 与设置基础
+
+`src/main/agent/agent-models.ts` 使用 pi-ai 1.1.0 的 Models、Provider 工厂和 lazy API 实现，读取现有 AgentConfig/ProviderConfig/模型配置及 CredentialStore。
+
+- 保留内置 Provider 的认证与 API 特殊处理；支持已有模型配置、自定义 Provider/base URL、混合 API、模型输入/窗口/输出上限覆盖。
+- 默认使用现有 API Key 存储；读取跟随当前设置，凭据轮换/删除不要求重启，不写进 Durable Transcript/Agent Document。
+- API Key 登录/退出通过现有存储，写入按 Provider 串行。现有应用设置不保存 OAuth，桥接不会静默将 OAuth 降级为 API Key。
+- 使用安装版本的 clampThinkingLevel，非推理模型不会强行启用 max。
+- 无效 API 配置在发布前失败，不替换当前有效模型集合。
+- 七项测试包含真实本机 HTTP SSE 请求、内置模型 API/base URL 覆盖、凭据轮换/删除、混合 API、配置重载、API Key 存储和 Durable→pi-ai→HTTP 的完整模型请求。测试只使用合成密钥和本机服务，不调用付费模型。
+
+四个 Durable 核心文件 31 测试、全仓 typecheck/lint/build 通过。生产 bootstrap 仍未切换到此模型集合。
+
+## 全仓复测
+
+找到现有 uv 管理的 Python：`C:\\Users\\kk\\AppData\\Roaming\\uv\\python\\cpython-3.11.13-windows-x86_64-none\\python.exe`。只为测试子进程临时将该目录前置到 PATH，运行结束恢复，不安装软件、不永久改变 PATH、不修改 Sandbox 策略或测试 skip 条件。
+
+复测 `pnpm test --maxWorkers=2`：92 文件通过，483 测试通过，2 项原有环境跳过，无失败。Windows Sandbox 的 Python 启动和子进程边界测试由真实解释器执行并通过。这是当前分支回归通过，不是迁移产品验收或 M5 放行。
+
 ## 待完成
 
-- 真实 Provider、自定义模型/base URL、Thinking Level 与现有设置集成。
+- 将已验证的 Provider/设置基础接到生产初始化与设置变更生命周期。
 - 将已验证的 ToolRegistry/Sandbox/Workspace 和持久审批基础接到生产 HTTP/UI。
 - 统一 Durable Run 的临时资源生命周期，并最终替换工具实现的旧依赖边界。
 - Skills/ContextBuilder/MCP 的实际 Registry/sections 集成。
