@@ -136,6 +136,36 @@ describe.skipIf(process.platform !== 'win32')('Windows filesystem sandbox', () =
     expect(await readdir(join(directory, 'data', 'sandbox'))).toEqual([])
   }, 30000)
 
+  test('a fresh backend reuses persisted run resources and cleans them without an in-memory directory map', async () => {
+    expect((await execute('Set-Content "$env:TEMP\\recovered.txt" durable')).isError).toBe(false)
+    const recovered = new WindowsSandboxBackend(join(directory, 'data'))
+    const result = await recovered.execute({
+      mode: 'workspace-write',
+      command: 'Get-Content "$env:TEMP\\recovered.txt"',
+      workspaceRoot: workspace,
+      cwd: workspace,
+      runId: 'run',
+      executeDirect,
+    })
+    expect(result.isError, JSON.stringify(result)).toBe(false)
+    expect(result.content).toEqual([{ type: 'text', text: expect.stringContaining('durable') }])
+    expect(await readdir(join(directory, 'data', 'sandbox'))).toHaveLength(1)
+    const cleanup = new WindowsSandboxBackend(join(directory, 'data'))
+    await cleanup.finishRun('run')
+    expect(await readdir(join(directory, 'data', 'sandbox'))).toEqual([])
+  }, 30000)
+
+  test('recovery rejects a sandbox-root junction without deleting its target', async () => {
+    const data = join(directory, 'data')
+    await mkdir(data)
+    await symlink(outside, join(data, 'sandbox'), 'junction')
+    await expect(execute('Set-Content "$env:TEMP\\escaped.txt" escaped')).rejects.toThrow('invalid boundary')
+    expect(await readFile(join(outside, 'existing.txt'), 'utf8')).toBe('outside')
+    await expect(access(join(outside, 'escaped.txt'))).rejects.toThrow()
+    await expect(backend.finishRun('run')).rejects.toThrow('invalid boundary')
+    await rm(join(data, 'sandbox'))
+  }, 30000)
+
   test('outside reads succeed while writes, deletes and junction escapes fail', async () => {
     await symlink(outside, join(workspace, 'junction'), 'junction')
     expect((await execute(`type ${quote(join(outside, 'existing.txt'))}`)).isError).toBe(false)

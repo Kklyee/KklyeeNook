@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import ts from 'typescript'
 import { expect, test } from 'vitest'
-import { runDurableSmoke } from './testing/durable-smoke'
+import { runDurableSmoke } from './testing/engine-smoke'
 
 const execute = promisify(execFile)
 
@@ -24,7 +24,7 @@ test('opens SQLite, answers an input, closes and reopens without duplicating it'
 test('runs the same Harness smoke inside an Electron utility process', async () => {
   const directory = await mkdtemp(join(process.cwd(), 'node_modules', '.nook-durable-'))
   try {
-    const source = await readFile(new URL('./testing/durable-smoke.ts', import.meta.url), 'utf8')
+    const source = await readFile(new URL('./testing/engine-smoke.ts', import.meta.url), 'utf8')
     const compilerOptions = { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext }
     const compiled = ts.transpileModule(
       source.replace('../../agent/agent-engine', './agent-engine.mjs'),
@@ -35,11 +35,11 @@ test('runs the same Harness smoke inside an Electron utility process', async () 
       join(directory, 'agent-engine.mjs'),
       ts.transpileModule(engine, { compilerOptions }).outputText,
     )
-    await writeFile(join(directory, 'durable-smoke.mjs'), compiled.outputText)
+    await writeFile(join(directory, 'engine-smoke.mjs'), compiled.outputText)
     await writeFile(
       join(directory, 'entry.mjs'),
       `
-import { runDurableSmoke } from './durable-smoke.mjs'
+import { runDurableSmoke } from './engine-smoke.mjs'
 try {
   process.parentPort.postMessage(await runDurableSmoke(process.argv[2]))
   setImmediate(() => process.exit(0))

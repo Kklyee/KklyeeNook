@@ -26,7 +26,7 @@ Node 类型检查与相关 oxlint 通过。测试使用官方 Faux Provider 和�
 
 ## 已完成：持久审批基础
 
-`src/main/agent/durable-approvals.ts` 使用正式 `ToolTask` 的 `beforeTool` 与 `nook.approvals` Conversation Document。这里不是渲染端 Promise：请求和决定由 Durable 原子提交，等待只观察持久文档。工具仍停在官方 `call` checkpoint，批准后才由 SDK 写入 `execute` 意图。
+`src/main/agent/approvals.ts` 使用正式 `ToolTask` 的 `beforeTool` 与 `nook.approvals` Conversation Document。这里不是渲染端 Promise：请求和决定由 Durable 原子提交，等待只观察持久文档。工具仍停在官方 `call` checkpoint，批准后才由 SDK 写入 `execute` 意图。
 
 - 稳定审批 ID 绑定 Conversation/Task，不使用工具名称或前端序号。
 - 同一决定可幂等重试，矛盾决定、跨会话决定、已取消的待审批决定被拒绝。
@@ -36,11 +36,11 @@ Node 类型检查与相关 oxlint 通过。测试使用官方 Faux Provider 和�
 - 取消时依据 Durable Task 的终态/abort 标记过滤旧请求，不用业务数据库维护另一份执行状态。
 - 真实 SIGKILL 测试覆盖等待中恢复和副作用发生后恢复：等待恢复批准后执行一次；`unsafe` 执行中崩溃不会再次执行，并产生官方 interrupted 结果。
 
-`durable-approvals.test.ts` 八项测试及 `agent-engine.test.ts` 八项测试通过，Node 类型检查、全仓 lint 通过。批准还绑定工具名称与精确参数，后续 Hook 改写参数不能消费旧批准。生产 HTTP/UI 决策接口仍需接线。
+`approvals.test.ts` 八项测试及 `agent-engine.test.ts` 八项测试通过，Node 类型检查、全仓 lint 通过。批准还绑定工具名称与精确参数，后续 Hook 改写参数不能消费旧批准。生产 HTTP/UI 决策接口仍需接线。
 
 ## 已完成：工具权限桥接基础
 
-`src/main/agent/durable-tools.ts` 将现有 ToolRegistry 的工具执行能力提供给 Durable，保留 ToolExecutionHarness、SandboxService、WorkspacePathPolicy 与结果保留策略。它不创建 Coding Agent Session，也没有旧 Agent/AgentRun 执行循环。
+`src/main/agent/tools.ts` 将现有 ToolRegistry 的工具执行能力提供给 Durable，保留 ToolExecutionHarness、SandboxService、WorkspacePathPolicy 与结果保留策略。它不创建 Coding Agent Session，也没有旧 Agent/AgentRun 执行循环。
 
 - beforeTool 使用真实 PermissionPolicy；MCP 和文件/命令的单次扩权都先持久审批。
 - execute 阶段重新解析 Workspace/权限，审批回调只读取已提交批准，不在 unsafe checkpoint 后等待前端。
@@ -78,7 +78,7 @@ Host 提供工具 Registry 刷新与模型/Skill 设置重载，MCP 工具自动
 
 ## 已完成：Skills / ContextBuilder 输入基础
 
-`src/main/agent/durable-inputs.ts` 为每个 requestId 保存 `nook.input` Document Family，捕获原始输入、明确选择的 Skill 内容、附件文本与 Memory 快照。通过正式 Conversation.submit 准入，不实现自定义队列或调度状态机。
+`src/main/agent/inputs.ts` 为每个 requestId 保存 `nook.input` Document Family，捕获原始输入、明确选择的 Skill 内容、附件文本与 Memory 快照。通过正式 Conversation.submit 准入，不实现自定义队列或调度状态机。
 
 - 输入准备先持久化，再调用官方提交；准入失败后的重试可使用原始快照，不依赖已丢失的内存附件或删除的 Skill 文件。
 - 两次提交相同 requestId 使用同一份初始输入和上下文，不能被重试的新内容覆盖。

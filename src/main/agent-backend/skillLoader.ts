@@ -1,7 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
-import { parseFrontmatter } from '@earendil-works/pi-coding-agent'
+import { parse } from 'yaml'
 import type { AgentSkill } from '@/shared/agent/agentSkill'
 
 export function getUserSkillsDirectory(): string {
@@ -90,6 +90,13 @@ export class SkillLoader {
       return undefined
     }
   }
+}
+
+function parseFrontmatter(content: string): { frontmatter: unknown; body: string } {
+  if (!content.startsWith('---')) return { frontmatter: {}, body: content.trim() }
+  const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/.exec(content)
+  if (!match) return { frontmatter: {}, body: content.trim() }
+  return { frontmatter: parse(match[1] || '{}') ?? {}, body: match[2].trim() }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -50,7 +50,7 @@
 - [ ] 验证设置提交失败时不会留下混合配置或不可恢复的后台状态。
 - [ ] 验证业务元数据发布/镜像失败不会提升权限，也不会使已持久的权限收缩在恢复后失效。
 
-**已知阻断：** 新生产 smoke 首次运行因源码模块解析失败，报 `ERR_MODULE_NOT_FOUND`，找不到 `bootstrap`。测试入口已改为显式注册 tsx loader，但该修正尚未复验。不得把现有最小 Electron smoke 的通过当作此项通过。
+**2026-10-10 更新：** tsx loader 修正后仍出现 ESM 循环加载错误。测试现使用项目 electron-vite 实际 main 构建入口，真实生产 Utility Process smoke 已通过，覆盖认证/Origin、同目录重复启动拒绝、无效设置提交回滚、提交与去重、Run/Trace、正常退出和重启稳定性。初始化失败、异常关闭及完整配置故障矩阵仍待验证。
 
 **验收：** 真实 Utility Process 完成启动、认证访问、创建会话、提交、查询完成状态、重复 requestId 去重、运行/Trace 查询和正常退出。
 
@@ -227,9 +227,9 @@
 | 旧 UI mock 加载失败 | 已补新 Runtime mock，相关 suite 复验通过 | 不能据此声称其它桌面 UI 已验收 |
 | 新核心相关复验 | 最近 4 文件 / 34 测试通过 | 包括 Host、Engine、Remote、ChatStore，非完整产品门禁 |
 | Backup / Scheduler 模块 | 近期相关测试通过 | 仍缺实际恢复演练及生产崩溃矩阵 |
-| 生产 Utility Process smoke | 首次失败，loader 修正待复验 | 最小 Harness Electron smoke 与此项不同 |
+| 生产 Utility Process smoke | 2026-10-10 实际 main 构建后通过 | 覆盖认证、重复启动、设置回滚、提交、重启和退出；尚未覆盖完整异常/崩溃矩阵 |
 | 旧依赖清理 | 未执行 | `pi-coding-agent` 等依赖仍在 |
-| 新增实现交付 | 未完成 | 当前大量工作树修改尚未提交/推送 |
+| 新增实现交付 | 连贯增量开始提交；迁移未完成 | 2026-10-10 核心回归 44 文件 / 239 项通过，类型检查及 lint 通过；不替代最终全量门禁 |
 
 ## 7. 建议执行顺序
 

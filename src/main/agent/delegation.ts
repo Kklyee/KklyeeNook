@@ -8,14 +8,14 @@ import {
   type EntryId,
   type Harness,
 } from '@earendil-works/pi-durable'
-import type { DurableInputs } from './durable-inputs'
+import type { AgentInputs } from './inputs'
 
-export class DurableDelegation {
+export class AgentDelegation {
   private harness: Harness | undefined
   readonly tool
   readonly extension
 
-  constructor(private readonly inputs: DurableInputs) {
+  constructor(private readonly inputs: AgentInputs) {
     this.tool = defineTool({
       name: 'delegate_task',
       description:

@@ -1,11 +1,7 @@
 import { useEffect, useState, type ButtonHTMLAttributes } from 'react'
 import { useAui, useAuiState } from '@assistant-ui/react'
-import {
-  usePiSession,
-  usePiThreadState,
-  type PiRuntimeExtras,
-  type PiThinkingLevel,
-} from '@assistant-ui/react-pi'
+import { useChatSession, useChatThreadState } from './runtime/chat-runtime'
+import type { ChatExtras } from './runtime/chat-store'
 import { toAgentContextUsage } from '@/shared/agent/agentContextUsage'
 import type { AgentSettingsSnapshot } from '@/shared/agent/agentSettings'
 import type { ThinkingLevel } from '@/shared/agent/agentConfig'
@@ -13,7 +9,7 @@ import { Thread } from '../../components/assistant-ui/elements/thread.aui'
 import { cn } from '@/renderer/src/lib/utils'
 import { RunHistoryPanel } from '../runs/RunHistoryPanel'
 import { AgentRunFocusProvider } from '../runs/AgentRunFocusContext'
-import { PiExtensionUiPrompt } from './runtime/PiExtensionUiPrompt'
+import { ApprovalPrompt } from './runtime/approval-prompt'
 import { SubagentSessionPanel } from '../../components/assistant-ui/elements/subagent-session-panel.aui'
 import { PreviewProvider } from '../preview/PreviewProvider'
 import { ChatWorkspace } from '../preview/ChatWorkspace'
@@ -32,7 +28,6 @@ const THINKING_LEVELS = [
 const isThinkingLevel = (value: string): value is ThinkingLevel =>
   THINKING_LEVELS.some((option) => option.id === value)
 
-const toPiThinkingLevel = (level: ThinkingLevel): PiThinkingLevel => level as PiThinkingLevel
 
 export function ChatPanel({
   settings,
@@ -45,8 +40,8 @@ export function ChatPanel({
   const [focusedRunId, setFocusedRunId] = useState<string>()
   const threadItemId = useAuiState((state) => state.threadListItem.id)
   const sessionId = useAuiState((state) => state.threadListItem.remoteId)
-  const contextUsage = usePiThreadState((state) => state.contextUsage)
-  const isCompacting = usePiThreadState((state) => state.compaction.active)
+  const contextUsage = useChatThreadState((state) => state.contextUsage)
+  const isCompacting = useChatThreadState((state) => state.compaction.active)
   const {
     switchingModel,
     modelError,
@@ -99,7 +94,7 @@ export function ChatPanel({
             {view === 'chat' ? (
               <div className="relative min-h-0 flex-1">
                 <Thread
-                  composerAccessory={<PiExtensionUiPrompt />}
+                  composerAccessory={<ApprovalPrompt />}
                   contextUsage={toAgentContextUsage(contextUsage)}
                   compactionSettings={settings?.compaction}
                   isCompacting={isCompacting}
@@ -159,7 +154,7 @@ function useChatModelSelection(
 ) {
   const [switchingModel, setSwitchingModel] = useState(false)
   const [modelError, setModelError] = useState<string | null>(null)
-  const session = usePiSession()
+  const session = useChatSession()
   const aui = useAui()
   const configuredModels = settings?.models ?? []
   const [globalSelection, setGlobalSelection] = useState<{
@@ -217,14 +212,14 @@ function useChatModelSelection(
     const model = configuredModels.find((item) => item.id === id)
     if (!model) return
     const thinkingLevel = model.thinkingLevel ?? (model.reasoning ? 'medium' : 'off')
-    const piRuntime = aui.thread.getState().extras as PiRuntimeExtras
+    const piRuntime = aui.thread.getState().extras as ChatExtras
     setSwitchingModel(true)
     setModelError(null)
     try {
       await saveSelection(model, thinkingLevel)
       if (sessionId) {
         await piRuntime.setModel({ provider: model.provider, modelId: model.modelID })
-        await piRuntime.setThinkingLevel(toPiThinkingLevel(thinkingLevel))
+        await piRuntime.setThinkingLevel(thinkingLevel)
       }
       await onSettingsChanged?.()
     } catch (error) {
@@ -236,12 +231,12 @@ function useChatModelSelection(
   const switchThinkingLevel = async (level: string) => {
     if (!isThinkingLevel(level)) return
     if (!selectedModel) return
-    const piRuntime = aui.thread.getState().extras as PiRuntimeExtras
+    const piRuntime = aui.thread.getState().extras as ChatExtras
     setSwitchingModel(true)
     setModelError(null)
     try {
       await saveSelection(selectedModel, level)
-      if (sessionId) await piRuntime.setThinkingLevel(toPiThinkingLevel(level))
+      if (sessionId) await piRuntime.setThinkingLevel(level)
       await onSettingsChanged?.()
     } catch (error) {
       setModelError(error instanceof Error ? error.message : '推理等级切换失败')

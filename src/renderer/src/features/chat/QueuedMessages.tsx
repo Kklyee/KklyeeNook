@@ -1,14 +1,13 @@
 import { useState } from 'react'
-import { usePiRuntimeExtras } from '@assistant-ui/react-pi'
+import { useChatRuntimeExtras } from './runtime/chat-runtime'
 import {
   MessageQueue,
   type QueuedMessage,
 } from '@/renderer/src/components/assistant-ui/elements/message-queue'
-import type { PiQueueMutation } from '@/shared/pi/piClient'
-import { updateQueuedMessage } from './runtime/electronPiClient'
+import type { AgentQueueMutation } from '@/shared/agent/chat-protocol'
 
 export function QueuedMessages() {
-  const { metadata, queue, clearQueue, refresh } = usePiRuntimeExtras()
+  const { queue, clearQueue, refresh, updateQueue } = useChatRuntimeExtras()
   const [clearing, setClearing] = useState(false)
   const [error, setError] = useState<string>()
   const clear = async () => {
@@ -25,17 +24,17 @@ export function QueuedMessages() {
   }
   const mutate = async (
     message: QueuedMessage,
-    action: Pick<PiQueueMutation, 'action'> & { value?: string | number },
+    action: Pick<AgentQueueMutation, 'action'> & { value?: string | number },
   ) => {
     setClearing(true)
     setError(undefined)
     try {
-      await updateQueuedMessage(metadata.id, {
+      await updateQueue({
         mode: message.steer ? 'steer' : 'followUp',
         expected: message.expected,
         index: message.index,
         ...action,
-      } as PiQueueMutation)
+      } as AgentQueueMutation)
       await refresh()
       return true
     } catch (error) {

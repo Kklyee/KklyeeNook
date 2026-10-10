@@ -15,7 +15,7 @@ import type { ToolAdapterContext, ToolRegistry } from '../tools/toolRegistry'
 import type { ToolResultRetentionPolicy } from '../tools/toolResultRetentionPolicy'
 import { SandboxService, toolPermissionResource } from '../sandbox/sandboxService'
 import { ToolExecutionHarness } from './toolExecutionHarness'
-import { DurableApprovals } from './durable-approvals'
+import { AgentApprovals } from './approvals'
 import type { RunResources } from './run-resources'
 
 type ExecutableTool = {
@@ -42,8 +42,8 @@ function permission(call: ToolCall, context: ToolAdapterContext): PermissionRequ
   }
 }
 
-export class DurableTools {
-  readonly approvals: DurableApprovals
+export class AgentTools {
+  readonly approvals: AgentApprovals
 
   constructor(
     private readonly registry: ToolRegistry,
@@ -52,7 +52,7 @@ export class DurableTools {
     private readonly resolveContext: ResolveContext,
     private readonly resources?: RunResources,
   ) {
-    this.approvals = new DurableApprovals(async (call, api, context) => {
+    this.approvals = new AgentApprovals(async (call, api, context) => {
       const adapter = await this.resolveContext(api.conversationId, context)
       const request = permission(
         { id: call.id, toolName: call.name, args: call.arguments },

@@ -14,10 +14,10 @@ import {
   type TaskId,
 } from '@earendil-works/pi-durable'
 
-import type { ApprovalRequirement, DurableApproval } from '@/shared/agent/durable-protocol'
-export type { ApprovalRequirement, DurableApproval } from '@/shared/agent/durable-protocol'
+import type { ApprovalRequirement, AgentApproval } from '@/shared/agent/chat-protocol'
+export type { ApprovalRequirement, AgentApproval } from '@/shared/agent/chat-protocol'
 
-export const approvalDoc = defineDoc<{ requests: Record<string, DurableApproval> }>({
+export const approvalDoc = defineDoc<{ requests: Record<string, AgentApproval> }>({
   kind: 'nook.approvals',
   version: 1,
   scope: 'conversation',
@@ -26,11 +26,15 @@ export const approvalDoc = defineDoc<{ requests: Record<string, DurableApproval>
   initial: () => ({ requests: {} }),
 })
 
+export const approvalSignalDoc = defineDoc<{ revision: number }>({
+  kind: 'nook.approval-notifications', version: 1, scope: 'session', initial: () => ({ revision: 0 }),
+})
+
 type Assessment = ApprovalRequirement | { block: string } | undefined
 
 type AssessTool = (call: ToolCall, api: HookApi, context: Context) => Promise<Assessment>
 
-export class DurableApprovals {
+export class AgentApprovals {
   private harness: Harness | undefined
   readonly extension
 
@@ -96,6 +100,7 @@ export class DurableApprovals {
       }
       current.state = state
       current.decidedAt = Date.now()
+      ;(await tx.doc(approvalSignalDoc)).revision++
       return state
     }, context)
   }
@@ -135,7 +140,7 @@ export class DurableApprovals {
       arguments: call.arguments,
       ...requirement,
     }) as Draft<ApprovalRequirement & { callId: string; toolName: string; arguments: JsonObject }>
-    const matches = (request: DurableApproval) =>
+    const matches = (request: AgentApproval) =>
       isDeepStrictEqual(
         {
           callId: request.callId,
@@ -152,6 +157,7 @@ export class DurableApprovals {
         throw new Error('Tool call no longer active')
       }
       const doc = await tx.doc(approvalDoc, api.conversationId)
+      ;(await tx.doc(approvalSignalDoc)).revision++
       doc.requests[id] ??= {
         id,
         taskId: api.taskId,
@@ -163,7 +169,7 @@ export class DurableApprovals {
     const watch = await harness.watchDoc(approvalDoc, api.conversationId, context)
     if (!watch) throw new Error('Approval document not found')
     try {
-      const decision = new Promise<DurableApproval>((resolve, reject) => {
+      const decision = new Promise<AgentApproval>((resolve, reject) => {
         const check = (value: typeof watch.value) => {
           const request = value?.requests[id]
           if (!request || !matches(request)) reject(new Error('Approval request changed'))

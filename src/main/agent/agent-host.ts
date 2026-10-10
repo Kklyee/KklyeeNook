@@ -4,6 +4,7 @@ import {
   type ConversationId,
   type Extension,
   type HarnessSettings,
+  type ModelRef,
 } from '@earendil-works/pi-durable'
 import type { AgentConfig } from '@/shared/agent/agentConfig'
 import { getAgentCompactionSettings } from '@/shared/agent/agentConfig'
@@ -23,11 +24,14 @@ import { AgentEngine } from './agent-engine'
 import { AgentModels } from './agent-models'
 import { AgentInstructions, createAgentInstructions } from './agent-instructions'
 import { ConversationService } from './conversation-service'
-import { DurableTools } from './durable-tools'
-import { approvalDoc } from './durable-approvals'
-import { DurableInputs } from './durable-inputs'
-import { DurableDelegation } from './durable-delegation'
+import { AgentTools } from './tools'
+import { approvalDoc, approvalSignalDoc } from './approvals'
+import { AgentInputs } from './inputs'
+import { AgentDelegation } from './delegation'
 import { RunResources } from './run-resources'
+import { historyDoc, historyExtension, type HistorySnapshot } from './history'
+import { createRunMembershipExtension } from './run-membership'
+import type { LegacyHistory } from './legacy-history'
 
 export type AgentHostOptions = {
   databasePath: string
@@ -40,7 +44,10 @@ export type AgentHostOptions = {
   retention: ToolResultRetentionPolicy
   contextBuilder: ContextBuilder
   skills: SkillLoader
+  history?: LegacyHistory
   onReport?: (error: unknown) => void
+  extensions?: readonly Extension[]
+  initialize?: (host: AgentHost, context: Context) => Promise<void>
 }
 
 export class AgentHost {
@@ -49,13 +56,14 @@ export class AgentHost {
   private constructor(
     readonly engine: AgentEngine,
     readonly models: AgentModels,
-    readonly tools: DurableTools,
-    readonly inputs: DurableInputs,
-    readonly delegation: DurableDelegation,
+    readonly tools: AgentTools,
+    readonly inputs: AgentInputs,
+    readonly delegation: AgentDelegation,
     readonly resources: RunResources,
     private readonly options: AgentHostOptions,
     private readonly registry: ReturnType<typeof createRegistry>,
     private readonly identities: { coding: Extension; personal: Extension },
+    private readonly membership: Extension,
   ) {
     this.conversations = new ConversationService(engine, options.sessions, inputs)
   }
@@ -74,7 +82,7 @@ export class AgentHost {
       return contexts.resolve(owner.threadId)
     }
     const resources = new RunResources(options.sandbox, options.onReport)
-    const tools = new DurableTools(
+    const tools = new AgentTools(
       options.tools,
       options.sandbox,
       options.retention,
@@ -84,12 +92,12 @@ export class AgentHost {
       },
       resources,
     )
-    const inputs = new DurableInputs(
+    const inputs = new AgentInputs(
       options.contextBuilder,
       options.skills,
       async (id, context) => (await executionContext(id, context)).workspaceId,
     )
-    const delegation = new DurableDelegation(inputs)
+    const delegation = new AgentDelegation(inputs)
     const loader = new AgentInstructions()
     const identities = {
       coding: createAgentInstructions({
@@ -116,9 +124,13 @@ export class AgentHost {
     }
     registry.install(identities.coding)
     registry.install(identities.personal)
+    for (const extension of options.extensions ?? []) registry.install(extension)
     registry.install(tools.extension())
     registry.install(tools.approvals.extension)
     registry.install(inputs.extension)
+    registry.install(historyExtension)
+    const membership = createRunMembershipExtension(() => engine.harness)
+    registry.install(membership)
     registry.install(delegation.extension)
     await options.skills.reload()
     const settings: HarnessSettings = {
@@ -127,6 +139,7 @@ export class AgentHost {
         return getAgentCompactionSettings(options.config())
       },
     }
+    let host: AgentHost | undefined
     engine = await AgentEngine.open(
       options.databasePath,
       {
@@ -144,25 +157,30 @@ export class AgentHost {
         tools.connect(initializing.harness)
         inputs.connect(initializing.harness)
         delegation.connect(initializing.harness)
+        host = new AgentHost(
+          initializing,
+          models,
+          tools,
+          inputs,
+          delegation,
+          resources,
+          options,
+          registry,
+          identities,
+          membership,
+        )
         await resources.connect(initializing, context)
+        await initializing.harness.commit(async (tx) => { await tx.doc(approvalSignalDoc) }, context)
         for (const id of Object.values(await initializing.links(context))) {
           await initializing.harness.commit(async (tx) => {
             await tx.doc(approvalDoc, id)
           }, context)
         }
+        await options.initialize?.(host, context)
       },
     )
-    return new AgentHost(
-      engine,
-      models,
-      tools,
-      inputs,
-      delegation,
-      resources,
-      options,
-      registry,
-      identities,
-    )
+    if (!host) throw new Error('Agent host failed to initialize')
+    return host
   }
 
   async create(
@@ -171,6 +189,7 @@ export class AgentHost {
       title?: string
       workspaceId?: string | null
       permissionMode?: PermissionMode
+      history?: HistorySnapshot
     },
     context: Context,
   ) {
@@ -188,6 +207,7 @@ export class AgentHost {
         permissionMode,
         initialize: async (tx, id) => {
           await tx.doc(approvalDoc, id)
+          if (input.history) Object.assign(await tx.doc(historyDoc, id), input.history)
         },
         agent: {
           ...this.models.selection(),
@@ -196,7 +216,10 @@ export class AgentHost {
             this.tools.extension(),
             this.tools.approvals.extension,
             this.inputs.extension,
+            historyExtension,
+            this.membership,
             this.delegation.extension,
+            ...(this.options.extensions ?? []),
           ],
           tools: this.enabledTools(),
           cwd: workspace?.status === 'attached' ? workspace.rootPath : undefined,
@@ -206,10 +229,35 @@ export class AgentHost {
     )
   }
 
+  async historySnapshot(threadId: string, context: Context) {
+    const links = await this.engine.links(context)
+    const id = links[threadId]
+    if (!id) return undefined
+    return (await this.engine.harness.snapshot(historyDoc, id, context)) ?? { sourceThreadId: '', records: [] }
+  }
+
+  async readHistory(threadId: string, context: Context) {
+    await this.conversations.get(threadId, context)
+    const snapshot = await this.historySnapshot(threadId, context)
+    if (snapshot?.sourceThreadId) return snapshot.records
+    return this.options.history?.read(threadId) ?? []
+  }
+
+  async continueHistory(sourceThreadId: string, targetThreadId: string, context: Context) {
+    const source = await this.conversations.get(sourceThreadId, context)
+    if (!('historical' in source) || !source.historical) throw new Error('Only historical conversations can be continued')
+    if (!this.options.history) throw new Error('History service is not configured')
+    return (await this.options.history.continue(this, sourceThreadId, targetThreadId, context)).record
+  }
+
+  install(extension: Extension) {
+    this.registry.install(extension)
+  }
+
   async refreshTools(context: Context) {
     this.registry.install(this.tools.extension())
     const tools = this.enabledTools()
-    for (const record of await this.conversations.list(context)) {
+    for (const record of await this.conversations.live(context)) {
       await (await this.engine.conversation(record.id, context)).configure({ tools }, context)
     }
   }
@@ -219,9 +267,29 @@ export class AgentHost {
     await this.options.skills.reload()
     await this.refreshTools(context)
     const selection = this.models.selection()
-    for (const record of await this.conversations.list(context)) {
+    for (const record of await this.conversations.live(context)) {
       await (await this.engine.conversation(record.id, context)).configure(selection, context)
     }
+  }
+
+  async configure(threadId: string, change: { model?: ModelRef; thinkingLevel?: import('@earendil-works/pi-ai').ModelThinkingLevel }, context: Context) {
+    await (await this.engine.conversation(threadId, context)).configure(change, context)
+  }
+
+  async pendingApprovals(threadId: string, context: Context) {
+    const approvals: import('@/shared/agent/chat-protocol').AgentApproval[] = []
+    for (const id of await this.engine.ownedConversationIds(threadId, context)) {
+      approvals.push(...(await this.tools.approvals.pending(id, context)))
+    }
+    return approvals
+  }
+
+  async decideApproval(threadId: string, id: string, state: 'approved' | 'rejected', context: Context) {
+    const conversationId = Number(id.split(':', 1)[0])
+    if (!Number.isSafeInteger(conversationId) || conversationId <= 0) throw new Error('Approval not found')
+    const owner = await this.engine.ownerThread(conversationId as ConversationId, context)
+    if (owner.threadId !== threadId) throw new Error('Approval not found')
+    return this.tools.approvals.decide(conversationId as ConversationId, id, state, context)
   }
 
   close() {

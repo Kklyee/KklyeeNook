@@ -5,7 +5,7 @@ import {
   createProvider,
   type MutableModels,
 } from '@earendil-works/pi-ai/models'
-import { builtinProviders } from '@earendil-works/pi-ai/providers/all'
+import { applicationProviders } from '../settings/model-providers'
 import { anthropicMessagesApi } from '@earendil-works/pi-ai/api/anthropic-messages.lazy'
 import { azureOpenAIResponsesApi } from '@earendil-works/pi-ai/api/azure-openai-responses.lazy'
 import { bedrockConverseStreamApi } from '@earendil-works/pi-ai/api/bedrock-converse-stream.lazy'
@@ -93,9 +93,13 @@ export class AgentModels {
     }
   }
 
+  contextWindow(model: AgentChange['model']) {
+    return model ? this.models.getModel(model.provider, model.modelId)?.contextWindow : undefined
+  }
+
   reload() {
     const config = this.config()
-    const providers = new Map(builtinProviders().map((provider) => [provider.id, provider]))
+    const providers = new Map(applicationProviders().map((provider) => [provider.id, provider]))
     const saved = getSavedModels(config)
     const configured = new Map(getConfiguredProviders(config).map((provider) => [provider.id, provider]))
     for (const profile of saved) {

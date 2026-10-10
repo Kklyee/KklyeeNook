@@ -11,7 +11,7 @@ import { createModels } from '@earendil-works/pi-ai/models'
 import { fauxAssistantMessage, fauxProvider, fauxToolCall } from '@earendil-works/pi-ai/providers/faux'
 import { createRegistry, defineExtension, defineTool } from '@earendil-works/pi-durable'
 import { AgentEngine } from './agent-engine'
-import { DurableApprovals } from './durable-approvals'
+import { AgentApprovals } from './approvals'
 
 let directory: string
 const engines: AgentEngine[] = []
@@ -52,9 +52,9 @@ async function setup() {
   registry.install(tools)
   const open = async (
     request = { mode: 'full-access' },
-    beforeResume?: (approvals: DurableApprovals) => Promise<unknown>,
+    beforeResume?: (approvals: AgentApprovals) => Promise<unknown>,
   ) => {
-    const approvals = new DurableApprovals(async () => ({ request, reason: 'write requires approval' }))
+    const approvals = new AgentApprovals(async () => ({ request, reason: 'write requires approval' }))
     registry.install(approvals.extension)
     const engine = await AgentEngine.open(
       join(directory, 'durable.sqlite'), { models, registry, settings: { retry: { enabled: false } } },
@@ -149,7 +149,7 @@ test('changed authorization context cannot consume an old approved request', asy
 test.each(['waiting', 'executing'])('SIGKILL recovery preserves approval and unsafe replay policy (%s)', async (mode) => {
   const fixture = await mkdtemp(join(process.cwd(), 'node_modules', '.nook-approval-recovery-'))
   try {
-    for (const name of ['agent-engine', 'durable-approvals']) {
+    for (const name of ['agent-engine', 'approvals']) {
       const source = await readFile(new URL(`./${name}.ts`, import.meta.url), 'utf8')
       await writeFile(join(fixture, `${name}.mjs`), ts.transpileModule(source, {
         compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
@@ -158,7 +158,7 @@ test.each(['waiting', 'executing'])('SIGKILL recovery preserves approval and uns
     await writeFile(join(fixture, 'entry.mjs'), `
 import { appendFile } from 'node:fs/promises'
 import { AgentEngine } from './agent-engine.mjs'
-import { DurableApprovals } from './durable-approvals.mjs'
+import { AgentApprovals } from './approvals.mjs'
 import { BACKGROUND_CONTEXT as context, awaitWithContext } from '@earendil-works/chord/context'
 import { createModels } from '@earendil-works/pi-ai/models'
 import { fauxProvider, fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai/providers/faux'
@@ -185,7 +185,7 @@ try {
     },
   })
   const tools = defineExtension({ name: 'nook.tools', tools: [tool] })
-  const approvals = new DurableApprovals(async () => ({ request: { mode: 'full-access' }, reason: 'write requires approval' }))
+  const approvals = new AgentApprovals(async () => ({ request: { mode: 'full-access' }, reason: 'write requires approval' }))
   const registry = createRegistry()
   registry.install(tools)
   registry.install(approvals.extension)

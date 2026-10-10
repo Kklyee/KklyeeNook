@@ -1,5 +1,5 @@
-import { defineTool } from '@earendil-works/pi-coding-agent'
 import { Type } from 'typebox'
+import { defineExecutableTool } from '@/main/tools/executable-tool'
 import type { WebSearchService } from '@/main/web-search/webSearchService'
 import { formatWebSearchResult } from '@/main/web-search/normalizeWebSearch'
 import type { ToolRegistry } from '@/main/tools/toolRegistry'
@@ -18,7 +18,7 @@ const webSearchSchema = Type.Object(
 )
 
 export function createWebSearchTools(service: () => WebSearchService) {
-  const webSearch = defineTool({
+  const webSearch = defineExecutableTool({
     name: 'web_search',
     label: 'Web Search',
     description:

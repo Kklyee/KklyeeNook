@@ -6,7 +6,7 @@ M4 和 M5 未完成。生产 bootstrap、Chat ExternalStoreRuntime 和 Remote �
 
 ## 本次已验证的 M4 实现
 
-- `durable-delegation.ts` 使用官方 replay-safe ToolTask、task-owned Conversation 和稳定 requestId。恢复通过正式 ownership 索引复用同一子会话/提交，不创建第二份工作。
+- `delegation.ts` 使用官方 replay-safe ToolTask、task-owned Conversation 和稳定 requestId。恢复通过正式 ownership 索引复用同一子会话/提交，不创建第二份工作。
 - 父任务最多同时拥有两个执行中的子会话；子会话移除 delegate 工具，执行端也拒绝 task-owned 会话再次委派。并发限制读取正式任务记录及 ownership 索引，不另建运行状态机。
 - 子会话只接收明确 task/context、选择的 Skill 与 Workspace Memory，不复制父会话 Transcript。继承父会话解析出的 extension/tool 显式列表，保留权限、审批和上下文 sections。
 - AgentEngine 根据正式 Conversation ownership 找到根业务会话。子任务工具每次重新读取根 Workspace/权限；父级取消由 SDK 自底向上取消所有普通 owned work。

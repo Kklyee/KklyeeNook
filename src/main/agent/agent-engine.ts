@@ -12,6 +12,7 @@ import {
   type ConversationInit,
   type HarnessOptions,
   type SubmissionId,
+  type TaskId,
   watchEvents,
 } from '@earendil-works/pi-durable'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
@@ -111,6 +112,35 @@ export class AgentEngine {
         id = record.owner.conversationId
       }
     }, context)
+  }
+
+  async ownedConversationIds(threadId: string, context: Context) {
+    const root = (await this.conversation(threadId, context)).id
+    const inspection = await this.harness.inspect(context)
+    const taskIds: TaskId[] = []
+    const conversations = new Set<ConversationId>([root])
+    for (const { record } of inspection.tasks) {
+      try {
+        const owner = await this.ownerThread(record.conversationId, context)
+        if (owner.threadId === threadId) {
+          taskIds.push(record.id)
+          conversations.add(record.conversationId)
+        }
+      } catch {
+        continue
+      }
+    }
+    await this.harness.commit(async (tx) => {
+      for (const taskId of taskIds) {
+        let cursor: Readonly<import('@earendil-works/pi-durable').JsonObject> | undefined
+        do {
+          const page = await tx.scanConversations({ ownerTaskId: taskId }, 256, cursor)
+          for (const conversation of page.items) conversations.add(conversation.id)
+          cursor = page.next
+        } while (cursor)
+      }
+    }, context)
+    return [...conversations]
   }
 
   async submission(threadId: string, submissionId: SubmissionId, context: Context) {

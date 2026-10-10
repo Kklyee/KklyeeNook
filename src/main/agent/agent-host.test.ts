@@ -21,9 +21,11 @@ import { ContextBuilder } from '../context/contextBuilder'
 import { SkillLoader } from '../agent-backend/skillLoader'
 import { registerPiBuiltinTools } from './pi/adapters/piBuiltinToolAdapter'
 import { AgentHost } from './agent-host'
-import { startDurableHttpServer } from '../agent-backend/durable-http'
+import { LegacyHistory } from './legacy-history'
+import { RunProjection } from './run-projection'
+import { startAgentHttpServer } from '../agent-backend/agent-http'
 import type { RunningAgentHttpServer } from '../agent-backend/http-server'
-import type { DurableFrame } from '@/shared/agent/durable-protocol'
+import type { AgentFrame } from '@/shared/agent/chat-protocol'
 
 let directory: string
 const hosts: AgentHost[] = []
@@ -173,6 +175,76 @@ async function setup(write = true, respond?: (body: Record<string, any>) => Repl
   }
 }
 
+test('permission reductions remain authoritative when the metadata mirror fails and the host restarts', async () => {
+  const { host, sessions, workspaceId, open } = await setup()
+  await host.create({ threadId: 'permission-thread', workspaceId, permissionMode: 'full-access' }, context())
+  const conversation = await host.engine.conversation('permission-thread', context())
+  const mirror = vi.spyOn(conversation, 'commit').mockRejectedValueOnce(new Error('Mirror unavailable'))
+  const resolve = vi.spyOn(host.engine, 'conversation').mockResolvedValue(conversation)
+  await expect(host.conversations.update('permission-thread', { permissionMode: 'read-only' }, context())).rejects.toThrow('Mirror unavailable')
+  expect((await sessions.findById('permission-thread'))?.permissionMode).toBe('read-only')
+  mirror.mockRestore()
+  resolve.mockRestore()
+  await host.close()
+  const recovered = await open()
+  const accepted = await recovered.conversations.submit('permission-thread', { type: 'input', content: 'Write', requestId: 'permission-request' }, context())
+  await vi.waitFor(async () => expect(await recovered.pendingApprovals('permission-thread', context())).toHaveLength(1), { timeout: 15_000 })
+  await expect(readFile(join(directory, 'workspace', 'file.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
+  const [approval] = await recovered.pendingApprovals('permission-thread', context())
+  await recovered.decideApproval('permission-thread', approval.id, 'rejected', context())
+  await (await recovered.engine.submission('permission-thread', accepted.submissionId, context())).wait(context())
+}, 30_000)
+
+test('historical continuation freezes context in the creating commit and never fabricates execution', async () => {
+  const { host, options, sessions, workspaceId, requests, open } = await setup(false)
+  const legacyDir = join(directory, 'legacy')
+  await mkdir(legacyDir)
+  const file = join(legacyDir, 'old.jsonl')
+  const original = [
+    { type: 'session', version: 3, id: 'old-thread', timestamp: '2026-01-01T00:00:00.000Z' },
+    { type: 'message', id: 'old-user', parentId: null, message: { role: 'user', content: 'Frozen historical request' } },
+    { type: 'message', id: 'old-call', parentId: 'old-user', message: { role: 'assistant', content: [{ type: 'toolCall', id: 'old-tool', name: 'write', arguments: { path: 'never.txt', content: 'never replay' } }] } },
+  ].map((entry) => JSON.stringify(entry)).join('\n')
+  await writeFile(file, original)
+  await sessions.save({ id: 'old-thread', title: 'Old', archived: false, createdAt: 1, updatedAt: 1, workspaceId, permissionMode: 'read-only' })
+  Object.assign(options, { history: new LegacyHistory(legacyDir, undefined, { resolveSourceMetadata: (id) => sessions.findById(id) }) })
+  await host.continueHistory('old-thread', 'continued-thread', context())
+  expect(requests).toHaveLength(0)
+  expect((await host.conversations.snapshot('continued-thread', context())).entries).toHaveLength(0)
+  const frozen = await host.historySnapshot('continued-thread', context())
+  await writeFile(file, original.replace('Frozen historical request', 'Mutated source'))
+  await host.close()
+  const recovered = await open()
+  await recovered.continueHistory('old-thread', 'continued-thread', context())
+  expect(await recovered.historySnapshot('continued-thread', context())).toEqual(frozen)
+  await recovered.create({ threadId: 'unrelated-thread' }, context())
+  await expect(recovered.continueHistory('old-thread', 'unrelated-thread', context())).rejects.toThrow('already exists')
+  const accepted = await recovered.conversations.submit('continued-thread', { type: 'input', content: 'Continue explicitly', requestId: 'continue-request' }, context())
+  await (await recovered.engine.submission('continued-thread', accepted.submissionId, context())).wait(context())
+  expect(JSON.stringify(requests)).toContain('Frozen historical request')
+  expect(JSON.stringify(requests)).not.toContain('Mutated source')
+  await expect(readFile(join(directory, 'workspace', 'never.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
+}, 30_000)
+
+test('run and trace projections derive identities and outcomes from official task receipts across restart', async () => {
+  const { host, open, workspaceId } = await setup()
+  await host.create({ threadId: 'projection-thread', workspaceId, permissionMode: 'workspace-write' }, context())
+  const accepted = await host.conversations.submit('projection-thread', { type: 'input', content: 'Write', requestId: 'projection-request' }, context())
+  await (await host.engine.submission('projection-thread', accepted.submissionId, context())).wait(context())
+  await (await host.engine.conversation('projection-thread', context())).waitForIdle(context())
+  const projection = new RunProjection(host)
+  const [run] = await projection.list('projection-thread', context())
+  expect(run).toMatchObject({ status: 'completed', depth: 0, rootRunId: run.id })
+  expect(run.toolCalls).toEqual([expect.objectContaining({ id: 'write-call', toolName: 'write' })])
+  expect(run.toolResults).toEqual([expect.objectContaining({ toolCallId: 'write-call', status: 'success' })])
+  const records = await projection.records(run.id, context())
+  expect(records.map((record) => record.event.type)).toEqual(['agent_started', 'tool_started', 'tool_finished', 'text_delta', 'agent_completed'])
+  await host.close()
+  const recovered = new RunProjection(await open())
+  expect(await recovered.list('projection-thread', context())).toEqual([run])
+  expect(await recovered.records(run.id, context())).toEqual(records)
+}, 30_000)
+
 test('one host connects business metadata, model dispatch, instructions, persisted approvals and workspace tools', async () => {
   const { host, options, workspaceId, sessions, attachments, requests } = await setup()
   await host.create({ threadId: 'thread', workspaceId, permissionMode: 'read-only' }, context())
@@ -320,7 +392,7 @@ test('personal identity stays separate and registry refresh changes only the dur
 }, 30_000)
 
 async function api(host: AgentHost) {
-  const server = await startDurableHttpServer(host, {
+  const server = await startAgentHttpServer(host, {
     secret: 'test-secret',
     allowedOrigins: ['http://allowed.test'],
   })
@@ -347,7 +419,7 @@ async function events(baseUrl: string, threadId: string) {
   let buffer = ''
   return {
     stop: () => controller.abort(),
-    next: async (): Promise<DurableFrame> => {
+    next: async (): Promise<AgentFrame> => {
       while (true) {
         const end = buffer.indexOf('\n\n')
         if (end >= 0) {

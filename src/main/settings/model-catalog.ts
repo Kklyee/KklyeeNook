@@ -1,5 +1,6 @@
-import { getSupportedThinkingLevels } from 'pi-ai-legacy'
-import { builtinModels } from 'pi-ai-legacy/providers/all'
+import { getSupportedThinkingLevels } from '@earendil-works/pi-ai'
+import { createModels } from '@earendil-works/pi-ai/models'
+import { applicationProviders } from './model-providers'
 import type { ModelCatalogProvider } from '@/shared/agent/agentSettings'
 import {
   getConfiguredProviders,
@@ -16,7 +17,8 @@ import type {
 } from '@/shared/agent/agentConfig'
 import { resolveModelInput } from '@/shared/agent/modelCapabilities'
 
-const builtins = builtinModels()
+const builtins = createModels()
+for (const provider of applicationProviders()) builtins.setProvider(provider)
 const UI_THINKING_LEVELS: readonly ThinkingLevel[] = [
   'off',
   'minimal',

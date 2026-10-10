@@ -1,5 +1,5 @@
-import { Type, type TSchema } from 'typebox'
-import { defineTool } from '@earendil-works/pi-coding-agent'
+import { Type } from 'typebox'
+import { defineExecutableTool } from '@/main/tools/executable-tool'
 import type { ToolRegistry } from '@/main/tools/toolRegistry'
 import { ToolResultStore } from '@/main/tools/toolResultStore'
 import type { ReadToolResultInput } from '@/shared/tool/tool'
@@ -22,9 +22,9 @@ export function registerPiToolResultTool(registry: ToolRegistry, store: ToolResu
     adapter: {
       runtime: 'pi',
       create: () =>
-        defineTool({
+        defineExecutableTool({
           ...definition,
-          parameters: inputSchema as TSchema,
+          parameters: inputSchema,
           async execute(_id, input) {
             const page = await store.read(input as ReadToolResultInput)
             return {

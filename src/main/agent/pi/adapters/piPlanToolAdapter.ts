@@ -1,6 +1,7 @@
-import { defineTool, type ToolDefinition as PiToolDefinition } from '@earendil-works/pi-coding-agent'
 import { Type } from 'typebox'
 
+import type { ExecutableTool } from '@/main/tools/executable-tool'
+import { defineExecutableTool } from '@/main/tools/executable-tool'
 import {
   parseAgentPlan,
   type AgentPlan,
@@ -27,8 +28,8 @@ const planSchema = Type.Object({
   ),
 })
 
-export function createPlanToolDefinition(): PiToolDefinition<typeof planSchema, AgentPlan> {
-  return defineTool({
+export function createPlanToolDefinition(): ExecutableTool<typeof planSchema, AgentPlan> {
+  return defineExecutableTool({
     name: 'update_plan',
     label: 'Update plan',
     description:

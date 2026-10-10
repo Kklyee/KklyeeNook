@@ -1,10 +1,8 @@
-import {
-  defineTool,
-  type ToolDefinition as PiToolDefinition,
-} from '@earendil-works/pi-coding-agent'
 import { Type } from 'typebox'
 
 import type { AgentMemoryRepo } from '@/main/db/repositories/memoryRepo'
+import type { ExecutableTool } from '@/main/tools/executable-tool'
+import { defineExecutableTool } from '@/main/tools/executable-tool'
 import type { ToolRegistration } from '@/main/tools/toolRegistry'
 import { ToolRegistry } from '@/main/tools/toolRegistry'
 
@@ -19,8 +17,8 @@ const memorySchema = Type.Object({
 export function createSaveMemoryToolDefinition(
   repo: AgentMemoryRepo,
   workspaceId?: string,
-): PiToolDefinition<typeof memorySchema> {
-  return defineTool({
+): ExecutableTool<typeof memorySchema> {
+  return defineExecutableTool({
     name: 'save_memory',
     label: 'Save memory',
     description:
@@ -59,7 +57,11 @@ export function registerPiMemoryTool(
       description: tool.description,
       inputSchema: tool.parameters,
     },
-    adapter: { runtime: 'pi', create: ({ executionContext }) => createSaveMemoryToolDefinition(repo, executionContext?.workspaceId) },
+    adapter: {
+      runtime: 'pi',
+      create: ({ executionContext }) =>
+        createSaveMemoryToolDefinition(repo, executionContext?.workspaceId),
+    },
   }
   registry.register(registration)
 }

@@ -2,11 +2,13 @@
 
 ## 当前边界
 
-生产 Chat 仍使用旧 Pi Runtime；M3 未完成。新 Host 与 HTTP 服务可以独立组装执行，但尚未替换 `agent-backend/bootstrap.ts`。不可同时启动新旧执行器处理同一产品会话。
+生产 `agent-backend/bootstrap.ts` 已接入 AgentHost、新 HTTP/SSE、MCP、工具与正式调度 Task，桌面接入 ChatStore / ExternalStoreRuntime，Remote 接入同一 Host。M3 仍未完成；真实桌面与 Remote 的产品回归和剩余兼容门禁以 `agent-migration-remaining.md` 为准。同一产品会话只交给新执行器。
+
+2026-10-10 生产 Utility Process smoke 使用项目 electron-vite 的实际 main 构建配置，验证 `/api/agent`、secret / Origin 边界、同目录重复启动拒绝、无效设置提交回滚、提交完成、稳定 requestId 去重、Run / Trace 查询、正常退出和重启后正式回执稳定。没有使用 tsx loader 或以最小 Harness smoke 代替生产启动。当前核心迁移回归为 44 个文件 / 239 项通过，Node/Web/Remote 类型检查与 lint 通过；这不是 M3/M4/M5 最终全量或产品验收。
 
 ## 已完成：HTTP / SSE 基础
 
-`src/main/agent-backend/durable-http.ts` 提供 `/agent/threads`、会话快照、稳定 requestId 提交、Submission 状态/撤回、取消及持久审批决策 API。复用原 Hono 服务的随机 secret 路径、Origin 白名单、4 MiB 请求体限制、错误响应及关闭方式，不引入第二套认证。
+`src/main/agent-backend/agent-http.ts` 提供 `/agent/threads`、会话快照、稳定 requestId 提交、Submission 状态/撤回、取消及持久审批决策 API。复用原 Hono 服务的随机 secret 路径、Origin 白名单、4 MiB 请求体限制、错误响应及关闭方式，不引入第二套认证。
 
 输入只允许 SDK input draft、显式文本/图片块、Skill 与附件引用。禁止客户端通过 HTTP 提交任意 write Entry 或附加未识别字段。Submission 与审批操作均绑定 URL 中的业务 threadId，不能跨会话读取或决策。
 
@@ -25,5 +27,5 @@ Host 在创建会话的原子事务中初始化审批文档；打开已有映射
 - ChatStore 的展示投影 reducer、失序/缺口恢复与前后端协议联调。
 - ExternalStoreRuntime / ExternalStoreThreadListAdapter 与桌面、Remote 的实际接线。
 - Thread metadata CRUD、模型选择、历史会话只读及继续入口的完整 API。
-- 替换生产 bootstrap，完成设置、MCP、恢复与关闭生命周期；不能将独立模块测试当作生产切换验收。
+- 补齐生产初始化失败、异常关闭、MCP 与设置重载失败的完整生命周期矩阵；不能将独立模块测试当作生产切换验收。
 - M4 任务/调度/历史迁移及 M5 产品、崩溃、回滚验收通过后删除旧实现和依赖。

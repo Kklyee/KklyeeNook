@@ -1,7 +1,7 @@
-import { defineTool } from '@earendil-works/pi-coding-agent'
 import { Type } from 'typebox'
 import type { KnowledgeService } from '@/main/knowledge/knowledgeService'
 import type { ToolRegistry } from '@/main/tools/toolRegistry'
+import { defineExecutableTool } from '@/main/tools/executable-tool'
 import { knowledgeCitationLabel } from '@/shared/knowledge/knowledge'
 
 const searchSchema = Type.Object({
@@ -15,7 +15,7 @@ const searchSchema = Type.Object({
 const readSchema = Type.Object({ chunkId: Type.String({ minLength: 1 }) })
 
 export function createKnowledgeTools(service: () => Pick<KnowledgeService, 'search' | 'read'>, workspaceId?: string) {
-  const search = defineTool({
+  const search = defineExecutableTool({
     name: 'search_knowledge',
     label: 'Search knowledge',
     description:
@@ -50,7 +50,7 @@ export function createKnowledgeTools(service: () => Pick<KnowledgeService, 'sear
       }
     },
   })
-  const read = defineTool({
+  const read = defineExecutableTool({
     name: 'read_knowledge',
     label: 'Read knowledge',
     description:

@@ -13,6 +13,9 @@ asarUnpack:
   - node_modules/tesseract.js/**
   - node_modules/tesseract.js-core/**
   - node_modules/onnxruntime-node/**
+  - node_modules/@vscode/ripgrep-*/**
+  - node_modules/sharp/**
+  - node_modules/@img/**
 win:
   executableName: kklyeenook
 nsis:

@@ -63,7 +63,7 @@ function renderContext(context?: AgentRunContext) {
   )
 }
 
-export class DurableInputs {
+export class AgentInputs {
   private harness: Harness | undefined
   readonly extension
 

@@ -1,11 +1,9 @@
-import {
-  defineTool,
-  type ToolDefinition as PiToolDefinition,
-} from '@earendil-works/pi-coding-agent'
 import type { TSchema } from 'typebox'
 
 import type { ToolRegistration } from '@/main/tools/toolRegistry'
 import { ToolRegistry } from '@/main/tools/toolRegistry'
+import type { ExecutableTool } from '@/main/tools/executable-tool'
+import { defineExecutableTool } from '@/main/tools/executable-tool'
 import type {
   McpCallToolResult,
   McpServerConfig,
@@ -16,7 +14,7 @@ interface McpToolCaller {
   callTool(name: string, args: unknown, signal?: AbortSignal): Promise<McpCallToolResult>
 }
 
-type AnyPiToolDefinition = PiToolDefinition<any, any, any>
+type AnyPiToolDefinition = ExecutableTool<TSchema, any>
 
 export function registerPiMcpTool(
   registry: ToolRegistry,
@@ -54,7 +52,7 @@ function createPiTool(
   name: string,
 ): AnyPiToolDefinition {
   const parameters = remoteTool.inputSchema as TSchema
-  return defineTool({
+  return defineExecutableTool({
     name,
     label: `${server.name}: ${remoteTool.name}`,
     description: remoteTool.description ?? remoteTool.name,

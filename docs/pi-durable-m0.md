@@ -92,8 +92,8 @@ Durable 测试只导入正式名称下的 1.1.0。不对 Pi SDK 设置全局版�
 
 文件：
 
-- `src/main/agent-backend/testing/durable-smoke.ts`：两次顺序打开同一 SQLite 文件，验证输入答案、稳定 Entry ID、requestId 重试、模型仅调用一次及最终无活跃任务；两个 Harness 均在 finally 中关闭。
-- `src/main/agent-backend/durable-smoke.test.ts`：本机 Node 测试，以及真实 `utilityProcess.fork()` 子进程测试。后者使用已安装 TypeScript 转译同一个 fixture，不 mock Electron/Storage/Harness。
+- `src/main/agent-backend/testing/engine-smoke.ts`：两次顺序打开同一 SQLite 文件，验证输入答案、稳定 Entry ID、requestId 重试、模型仅调用一次及最终无活跃任务；两个 Harness 均在 finally 中关闭。
+- `src/main/agent-backend/engine-smoke.test.ts`：本机 Node 测试，以及真实 `utilityProcess.fork()` 子进程测试。后者使用已安装 TypeScript 转译同一个 fixture，不 mock Electron/Storage/Harness。
 
 使用官方 Faux Provider，不发送网络请求，不读取用户凭据，不调用业务工具。测试生成的入口和 SQLite 文件在 finally 中删除；测试后没有遗留 `.nook-durable-*` 目录。不使用 MemoryStorage，不触碰旧 Session 文件或应用数据库。
 
@@ -101,7 +101,7 @@ Durable 测试只导入正式名称下的 1.1.0。不对 Pi SDK 设置全局版�
 
 | 命令 | 结果 |
 | --- | --- |
-| `pnpm exec vitest run src/main/agent-backend/durable-smoke.test.ts` | 2/2 通过 |
+| `pnpm exec vitest run src/main/agent-backend/engine-smoke.test.ts` | 2/2 通过 |
 | `pnpm exec vitest run src/main/agent-backend src/main/agent/pi src/main/settings src/main/remote --maxWorkers=2` | 33 文件、135 测试通过 |
 | `pnpm run typecheck:node` | 通过 |
 | `pnpm run typecheck:remote` | 通过 |

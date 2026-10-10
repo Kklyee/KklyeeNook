@@ -1,14 +1,9 @@
-import { WorkspaceProvider, useWorkspaces } from '../../workspaces/WorkspaceProvider'
+import { WorkspaceProvider } from '../../workspaces/WorkspaceProvider'
 import type { ReactNode } from 'react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AssistantRuntimeProvider, AuiConfig, Suggestions, Tools } from '@assistant-ui/react'
-import { usePiRuntime } from '@assistant-ui/react-pi'
+import { useEffect, useState } from 'react'
 import type { AgentBackendInfo, AgentBackendStatus } from '@/shared/agentBackend'
 import { Skeleton } from '../../../components/ui/skeleton'
-import { assistantToolkit } from '../tools/AssistantToolkit'
-import { createElectronPiClient } from './electronPiClient'
-import { contextAttachmentAdapter } from '../context/contextAttachmentAdapter'
-import { SendStateContext } from './SendState'
+import { ChatRuntimeProvider } from './chat-runtime'
 
 export function AssistantRuntime({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AgentBackendStatus>({ state: 'starting' })
@@ -71,47 +66,5 @@ function ReadyAssistantRuntime({
   info: AgentBackendInfo
   children: ReactNode
 }) {
-  const { getDraftWorkspaceId, getDraftMode } = useWorkspaces()
-  const [sending, setSending] = useState({ creating: false, threads: new Set<string>() })
-  const onSending = useCallback((id: string | undefined, pending: boolean) => {
-    setSending(current => {
-      if (!id) return { ...current, creating: pending }
-      const threads = new Set(current.threads)
-      if (pending) threads.add(id)
-      else threads.delete(id)
-      return { ...current, threads }
-    })
-  }, [])
-  const client = useMemo(
-    () => createElectronPiClient(info.baseUrl, getDraftWorkspaceId, getDraftMode, onSending),
-    [info.baseUrl, getDraftWorkspaceId, getDraftMode, onSending],
-  )
-  const runtime = usePiRuntime({ client, adapters: { attachments: contextAttachmentAdapter } })
-
-  const config = AuiConfig({
-    tools: Tools({ toolkit: assistantToolkit }),
-    suggestions: Suggestions([
-      {
-        title: '了解项目',
-        label: '',
-        prompt: '请阅读当前项目，介绍目录结构和主要模块，暂时不要修改文件。',
-      },
-      {
-        title: '解释代码',
-        label: '',
-        prompt: '请解释当前项目中 Agent 从接收消息到完成回复的流程，暂时不要修改文件。',
-      },
-      {
-        title: '整理文档',
-        label: '',
-        prompt: '请阅读项目并提出 README 的改进建议，等我确认后再修改。',
-      },
-    ]),
-  })
-
-  return (
-    <SendStateContext.Provider value={sending}><AssistantRuntimeProvider runtime={runtime} config={config}>
-      {children}
-    </AssistantRuntimeProvider></SendStateContext.Provider>
-  )
+  return <ChatRuntimeProvider baseUrl={info.baseUrl}>{children}</ChatRuntimeProvider>
 }

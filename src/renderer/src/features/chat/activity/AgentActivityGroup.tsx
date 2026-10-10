@@ -1,6 +1,6 @@
 import { memo, useMemo, useState } from 'react'
 import { useAui, useAuiState, type ThreadMessage } from '@assistant-ui/react'
-import type { PiRuntimeExtras } from '@assistant-ui/react-pi'
+import type { ChatExtras } from '../runtime/chat-store'
 import { CheckIcon } from 'lucide-react'
 import type { AgentActivity } from '@/shared/agent/agentActivity'
 import { ToolTimeline } from '@/renderer/src/components/assistant-ui/elements/tool-timeline'
@@ -63,7 +63,7 @@ export function AgentActivityGroup({ afterPartIndex }: { afterPartIndex?: number
   )
   const boundary = useActivitySelector((groups) => {
     const thread = aui.thread.getState()
-    const transcript = (thread.extras as PiRuntimeExtras | undefined)?.state?.messages
+    const transcript = (thread.extras as ChatExtras | undefined)?.state?.messages
     const match = (message: ThreadMessage): ActivityRun | undefined => {
       const messageRunId = message.metadata.custom?.runId
       if (typeof messageRunId === 'string')

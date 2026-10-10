@@ -11,7 +11,7 @@ import { ContextBuilder } from '../context/contextBuilder'
 import { SkillLoader } from '../agent-backend/skillLoader'
 import type { AgentMemoryRepo } from '../db/repositories/memoryRepo'
 import { AgentEngine } from './agent-engine'
-import { DurableInputs, inputDoc } from './durable-inputs'
+import { AgentInputs, inputDoc } from './inputs'
 
 let directory: string
 const engines: AgentEngine[] = []
@@ -42,7 +42,7 @@ async function setup(options: Parameters<typeof fauxProvider>[0] = {}) {
   models.setProvider(faux.provider)
   const registry = createRegistry()
   const open = async () => {
-    const inputs = new DurableInputs(builder, skills, workspaceId)
+    const inputs = new AgentInputs(builder, skills, workspaceId)
     registry.install(inputs.extension)
     const engine = await AgentEngine.open(join(directory, 'durable.sqlite'), {
       models, registry, settings: { retry: { enabled: false } },

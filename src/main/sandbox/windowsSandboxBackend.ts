@@ -1,9 +1,9 @@
 import { spawn, spawnSync } from 'node:child_process'
 import { randomUUID, createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
+import { lstat, mkdir, mkdtemp, readdir, realpath, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ToolExecutionError } from '@/shared/tool/toolExecutionResult'
 import { shellArgs, shellExecutable, resolveShellRuntime } from './shellRuntime'
@@ -65,7 +65,8 @@ export class WindowsSandboxBackend implements SandboxBackend {
     await Promise.allSettled(this.executions.get(runId) ?? [])
     const directory = this.directories.get(runId)
     this.directories.delete(runId)
-    if (directory) await rm(await directory, { recursive: true, force: true })
+    if (directory) await directory
+    await Promise.all((await this.runDirectories(runId)).map((path) => rm(path, { recursive: true, force: true })))
   }
 
   private runDirectory(runId: string): Promise<string> {
@@ -84,14 +85,37 @@ export class WindowsSandboxBackend implements SandboxBackend {
     const root = join(this.userData, 'sandbox')
     await mkdir(root, { recursive: true })
     const run = createHash('sha256').update(runId).digest('hex').slice(0, 24)
-    const directory = await mkdtemp(join(root, `${run}-`))
+    const existing = await this.runDirectories(runId)
+    const directory = existing[0] ?? await mkdtemp(join(root, `${run}-`))
     try {
-      await mkdir(join(directory, 'tmp'))
+      const temp = join(directory, 'tmp')
+      await mkdir(temp, { recursive: true })
+      const info = await lstat(temp)
+      if (info.isSymbolicLink() || !info.isDirectory() || dirname(await realpath(temp)) !== await realpath(directory))
+        throw new Error('Sandbox temporary directory has an invalid boundary')
       return directory
     } catch (error) {
       await rm(directory, { recursive: true, force: true })
       throw error
     }
+  }
+
+  private async runDirectories(runId: string): Promise<string[]> {
+    const root = join(this.userData, 'sandbox')
+    let info
+    try {
+      info = await lstat(root)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
+      throw error
+    }
+    if (info.isSymbolicLink() || !info.isDirectory() || dirname(await realpath(root)) !== await realpath(this.userData))
+      throw new Error('Sandbox resource directory has an invalid boundary')
+    const prefix = `${createHash('sha256').update(runId).digest('hex').slice(0, 24)}-`
+    return (await readdir(root, { withFileTypes: true }))
+      .filter((entry) => entry.name.startsWith(prefix) && entry.isDirectory() && !entry.isSymbolicLink())
+      .map((entry) => join(root, entry.name))
+      .sort()
   }
 
   private async executeRestricted(

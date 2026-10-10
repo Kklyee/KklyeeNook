@@ -12,7 +12,7 @@ import { ToolRegistry, type ToolAdapterContext } from '../tools/toolRegistry'
 import { SandboxService } from '../sandbox/sandboxService'
 import type { SandboxBackend } from '../sandbox/sandboxBackend'
 import { AgentEngine } from './agent-engine'
-import { DurableTools } from './durable-tools'
+import { AgentTools } from './tools'
 
 let directory: string
 const engines: AgentEngine[] = []
@@ -55,14 +55,14 @@ async function setup(
   ])
   const models = createModels()
   models.setProvider(faux.provider)
-  const durableRegistry = createRegistry()
-  let bridge: DurableTools
-  const open = async (beforeResume?: (bridge: DurableTools) => Promise<unknown>) => {
-    bridge = new DurableTools(registry, sandbox, retention, async () => adapter)
-    durableRegistry.install(bridge.extension())
-    durableRegistry.install(bridge.approvals.extension)
+  const agentRegistry = createRegistry()
+  let bridge: AgentTools
+  const open = async (beforeResume?: (bridge: AgentTools) => Promise<unknown>) => {
+    bridge = new AgentTools(registry, sandbox, retention, async () => adapter)
+    agentRegistry.install(bridge.extension())
+    agentRegistry.install(bridge.approvals.extension)
     const engine = await AgentEngine.open(join(directory, 'durable.sqlite'), {
-      models, registry: durableRegistry, settings: { retry: { enabled: false } },
+      models, registry: agentRegistry, settings: { retry: { enabled: false } },
     }, context(), async (engine) => {
       bridge.connect(engine.harness)
       await beforeResume?.(bridge)
