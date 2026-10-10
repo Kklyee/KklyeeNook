@@ -119,6 +119,7 @@ export interface RemoteConversationSnapshot extends RemoteConversationSummary {
   error?: string
 }
 export interface RemoteCreateConversationInput {
+  requestId?: string
   permission: RemotePermissionMode
   provider: string
   modelId: string
@@ -127,6 +128,7 @@ export interface RemoteCreateConversationInput {
   attachments?: RemoteFileAttachment[]
 }
 export interface RemoteSendMessageInput {
+  requestId?: string
   content: string
   mode: 'normal' | 'followUp' | 'steer'
   attachments?: RemoteFileAttachment[]
@@ -134,7 +136,7 @@ export interface RemoteSendMessageInput {
 export interface RemoteState {
   models: RemoteModel[]
   permissions: RemotePermissionMode[]
-  defaults: Omit<RemoteCreateConversationInput, 'prompt' | 'attachments'>
+  defaults: Omit<RemoteCreateConversationInput, 'prompt' | 'attachments' | 'requestId'>
 }
 export type RemoteEventBody =
   | { type: 'snapshot'; snapshot: RemoteConversationSnapshot }

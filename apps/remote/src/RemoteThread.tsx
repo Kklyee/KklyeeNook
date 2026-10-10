@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { ArrowDownIcon, CopyIcon } from 'lucide-react'
 import {
   ActionBarPrimitive,
@@ -13,7 +13,7 @@ import {
   groupPartByType,
   type ThreadMessageLike,
 } from '@assistant-ui/react'
-import type { RemoteActivity, RemoteContextBudget, RemoteFileAttachment, RemoteMessage } from '@kklyeenook/shared/remote/index'
+import type { RemoteActivity, RemoteContextBudget, RemoteFileAttachment, RemoteMessage, RemoteSendMessageInput } from '@kklyeenook/shared/remote/index'
 import { MarkdownText } from '@kklyeenook/ui/assistant-ui/markdown-text'
 import { ImageThumbnail } from '@kklyeenook/ui/assistant-ui/image-thumbnail'
 import { ComposerBar, ComposerSend } from '@kklyeenook/ui/assistant-ui/composer-controls'
@@ -26,6 +26,7 @@ import { ActivityContext, InlineActivity } from './Activity'
 import { HistorySkeleton } from './Loading'
 import { ComposerAddAttachment, ComposerAttachments } from '@kklyeenook/ui/assistant-ui/attachment.aui'
 import { remoteAttachmentAdapter, serializeAttachments } from './attachments'
+import { ApiError } from './api'
 
 const convertMessage = (message: RemoteMessage): ThreadMessageLike => ({
   id: message.id,
@@ -107,10 +108,11 @@ export function RemoteThread({ messages: transcript, contextBudget, activities =
   disabled: boolean
   controls: ReactNode
   children?: ReactNode
-  onSend(text: string, mode: 'normal' | 'followUp' | 'steer', attachments: RemoteFileAttachment[]): Promise<void>
+  onSend(text: string, mode: 'normal' | 'followUp' | 'steer', attachments: RemoteFileAttachment[], requestId: string): Promise<void>
   onStop?: () => void
 }) {
   const [sendError, setSendError] = useState('')
+  const pending = useRef<{ fingerprint: string; input: RemoteSendMessageInput & { requestId: string; attachments: RemoteFileAttachment[] } } | undefined>(undefined)
   const messages = useMemo(() => {
     const result: RemoteMessage[] = []
     for (const message of transcript) {
@@ -134,7 +136,17 @@ export function RemoteThread({ messages: transcript, contextBudget, activities =
       let attachments: RemoteFileAttachment[]
       try { attachments = serializeAttachments(message.attachments ?? []) }
       catch (error) { setSendError((error as Error).message); throw error }
-      await onSend(message.content.filter(part => part.type === 'text').map(part => part.text).join('\n'), running ? message.steer ? 'steer' : 'followUp' : 'normal', attachments)
+      const content = message.content.filter(part => part.type === 'text').map(part => part.text).join('\n')
+      const fingerprint = JSON.stringify({ content, attachments })
+      const admission = pending.current?.fingerprint === fingerprint ? pending.current : { fingerprint, input: { content, attachments, mode: running ? message.steer ? 'steer' as const : 'followUp' as const : 'normal' as const, requestId: crypto.randomUUID() } }
+      pending.current = admission
+      try {
+        await onSend(admission.input.content, admission.input.mode, admission.input.attachments, admission.input.requestId)
+        if (pending.current === admission) pending.current = undefined
+      } catch (error) {
+        if (error instanceof ApiError && error.status >= 400 && error.status < 500 && pending.current === admission) pending.current = undefined
+        throw error
+      }
     },
     onCancel: async () => { onStop?.() },
   })

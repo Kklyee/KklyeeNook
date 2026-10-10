@@ -27,6 +27,10 @@ import type { Message, ModelThinkingLevel } from '@earendil-works/pi-ai'
 
 type Listener = () => void
 
+class AgentRequestError extends Error {
+  constructor(readonly status: number, message: string) { super(message) }
+}
+
 type SendingState = { creating: boolean; threads: Set<string> }
 
 type CreateOptions = {
@@ -96,6 +100,8 @@ export class ChatStore {
   private source: EventSource | undefined
   private sending: SendingState = { creating: false, threads: new Set() }
   private pendingAdmission: { threadId: string; fingerprint: string; input: AgentSubmissionInput } | undefined
+  private pendingCreation: { fingerprint: string; id: string } | undefined
+  private pendingContinuation: { sourceId: string; id: string } | undefined
 
   constructor(baseUrl: string, getCreateOptions: () => CreateOptions) {
     this.endpoint = baseUrl.replace(/\/+$/, '')
@@ -202,22 +208,28 @@ export class ChatStore {
 
   async createThread(options: CreateOptions = {}) {
     const input = { ...this.getCreateOptions(), ...options }
-    const id = crypto.randomUUID()
+    const fingerprint = JSON.stringify(input)
+    const creation = this.pendingCreation?.fingerprint === fingerprint ? this.pendingCreation : { fingerprint, id: crypto.randomUUID() }
+    this.pendingCreation = creation
     this.setSending(undefined, true)
     try {
       const created = await this.request<AgentThreadSummary>('/threads', {
         method: 'POST',
         body: {
-          threadId: id,
+          threadId: creation.id,
           title: input.title,
           workspaceId: input.workspaceId ?? undefined,
           permissionMode: input.permissionMode ?? undefined,
         },
       })
+      if (this.pendingCreation === creation) this.pendingCreation = undefined
       this.threads = [created, ...this.threads.filter((thread) => thread.id !== created.id)]
       await this.switchToThread(created.id)
       notifyWorkspaceChanged()
       return created.id
+    } catch (error) {
+      if (error instanceof AgentRequestError && error.status >= 400 && error.status < 500 && this.pendingCreation === creation) this.pendingCreation = undefined
+      throw error
     } finally {
       this.setSending(undefined, false)
     }
@@ -239,6 +251,7 @@ export class ChatStore {
       notifyWorkspaceChanged()
       void this.reloadThreads().catch(() => undefined)
     } catch (error) {
+      if (error instanceof AgentRequestError && error.status >= 400 && error.status < 500 && this.pendingAdmission === admission) this.pendingAdmission = undefined
       restorePendingContextAttachmentIds(pendingIds)
       throw error
     } finally {
@@ -320,10 +333,19 @@ export class ChatStore {
 
   async continueThread() {
     if (!this.selectedThreadId) return this.createThread()
-    const result = await this.request<AgentThreadSummary>(
-      `/threads/${encodeURIComponent(this.selectedThreadId)}/continue`,
-      { method: 'POST', body: { threadId: crypto.randomUUID() } },
-    )
+    const continuation = this.pendingContinuation?.sourceId === this.selectedThreadId ? this.pendingContinuation : { sourceId: this.selectedThreadId, id: crypto.randomUUID() }
+    this.pendingContinuation = continuation
+    let result: AgentThreadSummary
+    try {
+      result = await this.request<AgentThreadSummary>(
+        `/threads/${encodeURIComponent(continuation.sourceId)}/continue`,
+        { method: 'POST', body: { threadId: continuation.id } },
+      )
+      if (this.pendingContinuation === continuation) this.pendingContinuation = undefined
+    } catch (error) {
+      if (error instanceof AgentRequestError && error.status >= 400 && error.status < 500 && this.pendingContinuation === continuation) this.pendingContinuation = undefined
+      throw error
+    }
     this.threads = [result, ...this.threads.filter((thread) => thread.id !== result.id)]
     await this.switchToThread(result.id)
     notifyWorkspaceChanged()
@@ -493,7 +515,7 @@ export class ChatStore {
     })
     if (!response.ok) {
       const body = await response.text().catch(() => '')
-      throw new Error(`${response.status} ${response.statusText}${body ? ` — ${body}` : ''}`)
+      throw new AgentRequestError(response.status, `${response.status} ${response.statusText}${body ? ` — ${body}` : ''}`)
     }
     if (response.status === 204) return undefined as T
     return response.json() as Promise<T>

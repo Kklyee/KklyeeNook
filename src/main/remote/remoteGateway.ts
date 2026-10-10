@@ -75,6 +75,7 @@ export function createRemoteGatewayApp(port: RemoteAgentPort, options: RemoteGat
       modelId: text(input, 'modelId'),
       thinkingLevel: text(input, 'thinkingLevel'),
       prompt: messageText(input, 'prompt'),
+      ...(input.requestId === undefined ? {} : { requestId: text(input, 'requestId') }),
       ...(input.attachments === undefined ? {} : { attachments: validateRemoteAttachments(input.attachments) }),
     }), 201)
   })
@@ -88,7 +89,7 @@ export function createRemoteGatewayApp(port: RemoteAgentPort, options: RemoteGat
     const input = await body(context)
     const mode = text(input, 'mode')
     if (mode !== 'normal' && mode !== 'followUp' && mode !== 'steer') throw new RemoteError(400, 'Invalid send mode')
-    await port.sendMessage(context.req.param('id'), { content: messageText(input, 'content'), mode, ...(input.attachments === undefined ? {} : { attachments: validateRemoteAttachments(input.attachments) }) })
+    await port.sendMessage(context.req.param('id'), { content: messageText(input, 'content'), mode, ...(input.requestId === undefined ? {} : { requestId: text(input, 'requestId') }), ...(input.attachments === undefined ? {} : { attachments: validateRemoteAttachments(input.attachments) }) })
     return context.json({ ok: true })
   })
   app.post('/api/conversations/:id/cancel', async context => {

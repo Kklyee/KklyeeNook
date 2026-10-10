@@ -4,7 +4,7 @@ import { ModelSelectorRoot, ModelSelectorTrigger, ModelSelectorValue, ModelSelec
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@kklyeenook/ui/components/select'
 import { ShieldCheckIcon } from 'lucide-react'
 
-export type Selection = Omit<RemoteCreateConversationInput, 'prompt' | 'attachments'>
+export type Selection = Omit<RemoteCreateConversationInput, 'prompt' | 'attachments' | 'requestId'>
 
 export function Choice({ label, value, options, disabled, compact, menuOnly, onChange }: {
   label: string

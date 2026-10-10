@@ -155,6 +155,22 @@ test('passes project, conversation, configuration, queue and approval requests t
   expect(port.respondToApproval).toHaveBeenCalledWith('approval', { conversationId: 'chat', confirmed: false })
 })
 
+test('passes stable admission IDs and rejects invalid IDs before reaching the host', async () => {
+  const { app, port } = fixture()
+  const input = { requestId: 'same-admission', content: 'Retry', mode: 'steer' }
+  expect((await app.request('/api/conversations/chat/messages', { method: 'POST', headers, body: JSON.stringify(input) })).status).toBe(200)
+  expect(port.sendMessage).toHaveBeenCalledWith('chat', input)
+  const create = { requestId: 'same-creation', permission: 'read-only', provider: 'test', modelId: 'model', thinkingLevel: 'off', prompt: 'New' }
+  expect((await app.request('/api/projects/project/conversations', { method: 'POST', headers, body: JSON.stringify(create) })).status).toBe(201)
+  expect(port.createConversation).toHaveBeenCalledWith('project', create)
+  for (const requestId of ['', ' ', 1, null]) {
+    expect((await app.request('/api/conversations/chat/messages', { method: 'POST', headers, body: JSON.stringify({ ...input, requestId }) })).status).toBe(400)
+    expect((await app.request('/api/projects/project/conversations', { method: 'POST', headers, body: JSON.stringify({ ...create, requestId }) })).status).toBe(400)
+  }
+  expect(port.sendMessage).toHaveBeenCalledTimes(1)
+  expect(port.createConversation).toHaveBeenCalledTimes(1)
+})
+
 test('preserves conflict status and sanitizes unexpected backend errors', async () => {
   const { app, port } = fixture()
   vi.mocked(port.sendMessage).mockRejectedValueOnce(new RemoteError(409, 'Run is active'))

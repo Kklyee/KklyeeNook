@@ -177,6 +177,21 @@ async function setup(write = true, respond?: (body: Record<string, any>) => Repl
   }
 }
 
+test('creation persists the selected model atomically and retries preserve later configuration', async () => {
+  const { host, config, setConfig, workspaceId, open } = await setup(false)
+  setConfig({ ...config, models: [{ ...config.model, id: 'custom:custom-model' }, { ...config.model, id: 'custom:alternate', modelID: 'alternate', reasoning: true }] })
+  await host.reload(context())
+  await host.create({ threadId: 'selected-model', workspaceId, permissionMode: 'read-only', model: { provider: 'custom', modelId: 'alternate' }, thinkingLevel: 'low' }, context())
+  expect((await host.conversations.snapshot('selected-model', context())).agent).toMatchObject({ model: { provider: 'custom', modelId: 'alternate' }, thinkingLevel: 'low' })
+  await host.close()
+  const restored = await open()
+  expect((await restored.conversations.snapshot('selected-model', context())).agent).toMatchObject({ model: { provider: 'custom', modelId: 'alternate' }, thinkingLevel: 'low' })
+  await restored.configure('selected-model', { model: { provider: 'custom', modelId: 'custom-model' }, thinkingLevel: 'off' }, context())
+  await restored.create({ threadId: 'selected-model', workspaceId, permissionMode: 'full-access', model: { provider: 'custom', modelId: 'alternate' }, thinkingLevel: 'low' }, context())
+  expect((await restored.conversations.snapshot('selected-model', context())).agent).toMatchObject({ model: { provider: 'custom', modelId: 'custom-model' }, thinkingLevel: 'off' })
+  expect((await restored.conversations.get('selected-model', context())).permissionMode).toBe('read-only')
+})
+
 test('permission reductions remain authoritative when the metadata mirror fails and the host restarts', async () => {
   const { host, sessions, workspaceId, open } = await setup()
   await host.create({ threadId: 'permission-thread', workspaceId, permissionMode: 'full-access' }, context())

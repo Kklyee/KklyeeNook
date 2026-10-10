@@ -28,14 +28,30 @@ export async function verifyRemote() {
   project.click()
   ;(await button('New')).click()
   await enter('Remote first request')
+  const originalFetch = window.fetch.bind(window)
+  const retriedBodies: string[] = []
+  window.fetch = async (input, init) => {
+    const response = await originalFetch(input, init)
+    if (input === `/api/projects/${projectId}/conversations` && init?.method === 'POST') {
+      retriedBodies.push(String(init.body))
+      if (retriedBodies.length === 1) throw new Error('Acceptance acknowledgement lost')
+    }
+    return response
+  }
   const send = await wait(() => document.querySelector<HTMLButtonElement>('[aria-label="Send message"]:not(:disabled)')) as HTMLButtonElement
   send.click()
+  await wait(() => document.body.innerText.includes('Acceptance acknowledgement lost'))
+  await enter('Remote first request')
+  ;(await wait(() => document.querySelector<HTMLButtonElement>('[aria-label="Send message"]:not(:disabled)')) as HTMLButtonElement).click()
   await wait(() => document.body.innerText.includes('Production host accepted.'))
+  window.fetch = originalFetch
+  if (retriedBodies.length !== 2 || retriedBodies[0] !== retriedBodies[1] || !JSON.parse(retriedBodies[0]).requestId) throw new Error('Remote retry changed the original admission')
   await wait(async () => {
     const conversations = await api(`/projects/${projectId}/conversations`)
     return conversations.find(conversation => !conversation.historical && conversation.status === 'idle')
   })
   const first = (await api(`/projects/${projectId}/conversations`)).find(conversation => !conversation.historical)
+  if ((await api(`/projects/${projectId}/conversations`)).filter(conversation => !conversation.historical).length !== 1 || first.id !== `remote-${JSON.parse(retriedBodies[0]).requestId}`) throw new Error('Remote retry created a duplicate conversation')
   const id = first.id
   await api(`/conversations/${id}/model`, { provider: 'test-provider', modelId: 'alternate-model' })
   await api(`/conversations/${id}/thinking`, { thinkingLevel: 'low' })

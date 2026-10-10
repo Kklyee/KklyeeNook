@@ -31,7 +31,14 @@ function fixture() {
       submit: vi.fn(async (_id: string, _input: any) => ({})), cancel: vi.fn(async () => {}),
       update: vi.fn(async (id: string, patch: any) => Object.assign(sessions.get(id)!, patch)),
     },
-    create: vi.fn(async (input: any) => { const value = { ...session, ...input }; sessions.set(value.threadId, { ...value, id: value.threadId }); return { ...value, id: value.threadId } }),
+    create: vi.fn(async (input: any) => {
+      const existing = sessions.get(input.threadId)
+      if (existing) return existing
+      const value = { ...session, ...input, id: input.threadId }
+      sessions.set(value.threadId, value)
+      Object.assign(snapshot.agent, { model: input.model, thinkingLevel: input.thinkingLevel })
+      return value
+    }),
     configure: vi.fn(async (_id: string, patch: any) => Object.assign(snapshot.agent, patch)),
     readHistory: vi.fn(async () => [] as any[]),
     continueHistory: vi.fn(async (id: string, threadId: string) => {
@@ -94,10 +101,32 @@ test('validates configuration before creating and configures the model before fi
   expect(host.create).not.toHaveBeenCalled()
   const result = await port.createConversation('project', input)
   expect(result.permission).toBe('full-access')
-  expect(host.configure.mock.invocationCallOrder[0]).toBeLessThan(host.conversations.submit.mock.invocationCallOrder[0])
+  expect(host.create).toHaveBeenCalledWith(expect.objectContaining({ model: { provider: input.provider, modelId: input.modelId }, thinkingLevel: input.thinkingLevel }), expect.anything())
+  expect(host.configure).not.toHaveBeenCalled()
   expect(save).toHaveBeenCalledWith({ provider: input.provider, modelId: input.modelId, thinkingLevel: input.thinkingLevel })
   await port.setPermission(result.id, 'read-only')
   expect((await port.getConversation(result.id)).permission).toBe('read-only')
+})
+
+test('retries remote admissions with the same official identity without reconfiguring an existing conversation', async () => {
+  const { port, host, sessions } = fixture()
+  const input = { requestId: 'remote-request', permission: 'read-only' as const, provider: 'private-provider', modelId: 'reasoning', thinkingLevel: 'low', prompt: 'Retry me' }
+  host.conversations.submit.mockRejectedValueOnce(new Error('Acknowledgement lost'))
+  await expect(port.createConversation('project', input)).rejects.toThrow('Acknowledgement lost')
+  const created = sessions.get('remote-remote-request')!
+  created.permissionMode = 'read-only'
+  await port.createConversation('project', { ...input, permission: 'full-access' })
+  expect(sessions.size).toBe(3)
+  expect(created.permissionMode).toBe('read-only')
+  expect(host.configure).not.toHaveBeenCalled()
+  for (const call of host.conversations.submit.mock.calls) expect(call).toEqual(['remote-remote-request', expect.objectContaining({ requestId: input.requestId, whenBusy: 'reject' }), expect.anything()])
+  await port.sendMessage('chat', { requestId: 'stable-send', content: 'Same message', mode: 'steer' })
+  expect(host.conversations.submit).toHaveBeenLastCalledWith('chat', expect.objectContaining({ requestId: 'stable-send' }), expect.anything())
+  sessions.set('remote-other-project', { ...created, id: 'remote-other-project', workspaceId: 'another-project' })
+  const count = host.conversations.submit.mock.calls.length
+  await expect(port.createConversation('project', { ...input, requestId: 'other-project' })).rejects.toMatchObject({ status: 409 })
+  expect(host.conversations.submit).toHaveBeenCalledTimes(count)
+  await expect(port.sendMessage('chat', { requestId: ' ', content: 'Same message', mode: 'steer' })).rejects.toMatchObject({ status: 400 })
 })
 
 test('checks optimistic queue contents and scopes persistent approval decisions', async () => {

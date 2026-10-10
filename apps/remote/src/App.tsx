@@ -1,4 +1,4 @@
-import { lazy, Suspense, useContext, useEffect, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowLeftIcon, ChevronRightIcon, FolderIcon, MenuIcon, PlusIcon, RefreshCwIcon } from 'lucide-react'
 import type { RemoteConversationSnapshot, RemoteConversationSummary, RemoteEvent, RemoteProject, RemoteQueueItem, RemoteQueueMutation, RemoteState } from '@kklyeenook/shared/remote/index'
 import { Button } from '@kklyeenook/ui/components/button'
@@ -106,14 +106,16 @@ function Project({ projectId }: { projectId: string }) {
 function NewConversation({ state, projectId }: { state: RemoteState; projectId: string }) {
   const project = useProject(projectId)
   const [selection, setSelection] = useState<Selection>(state.defaults)
+  const pending = useRef<{ requestId: string; selection: Selection } | undefined>(undefined)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const controls = <Controls state={state} selection={selection} disabled={busy} onPermission={permission => setSelection({ ...selection, permission })} onModel={model => { const available = state.models.find(item => item.provider === model.provider && item.modelId === model.modelId)!; setSelection({ ...selection, ...model, thinkingLevel: available.thinkingLevels.includes(selection.thinkingLevel) ? selection.thinkingLevel : available.thinkingLevels[0] ?? 'off' }) }} onThinking={thinkingLevel => setSelection({ ...selection, thinkingLevel })} />
   return <div className="remote-app"><Header title="New Conversation" subtitle={project?.name} back={`/projects/${projectId}`} />
     {error && <p role="alert" className="px-4 py-2 text-sm text-destructive">{error}</p>}
-    <RemoteThread messages={[]} running={false} busy={busy} disabled={!state.models.length} controls={controls} onSend={async (prompt, _mode, attachments) => {
+    <RemoteThread messages={[]} running={false} busy={busy} disabled={!state.models.length} controls={controls} onSend={async (prompt, _mode, attachments, requestId) => {
       setBusy(true); setError('')
-      try { const result = await api<RemoteConversationSnapshot>(`/projects/${projectId}/conversations`, 'POST', { ...selection, prompt, ...(attachments.length ? { attachments } : {}) }); conversationSnapshots.set(result.id, result); navigate(`/projects/${projectId}/conversations/${result.id}`) }
+      if (pending.current?.requestId !== requestId) pending.current = { requestId, selection: { ...selection } }
+      try { const result = await api<RemoteConversationSnapshot>(`/projects/${projectId}/conversations`, 'POST', { ...pending.current.selection, requestId, prompt, ...(attachments.length ? { attachments } : {}) }); conversationSnapshots.set(result.id, result); navigate(`/projects/${projectId}/conversations/${result.id}`) }
       catch (error) { setError((error as Error).message); throw error }
       finally { setBusy(false) }
     }} />
@@ -180,7 +182,12 @@ function Conversation({ state, projectId, id }: { state: RemoteState; projectId:
   const controls = <Controls state={state} selection={selection} disabled={snapshot?.historical || !connected || busy || sending || running} onPermission={permission => { void mutate(`/conversations/${id}/permission`, { permission }, true) }} onModel={model => { void mutate(`/conversations/${id}/model`, model, true) }} onThinking={thinkingLevel => { void mutate(`/conversations/${id}/thinking`, { thinkingLevel }, true) }} />
   return <div className="remote-app"><Header title={snapshot?.title ?? ''} subtitle={project?.name} back={`/projects/${projectId}`} create={`/projects/${projectId}/new`}>{!snapshot ? <Skeleton className="h-4 w-24" /> : <span aria-label={connected ? snapshot.status : 'Reconnecting'} className={`size-2 shrink-0 rounded-full ${connected ? running ? 'animate-pulse bg-brand' : 'bg-success' : 'animate-pulse bg-warning'}`} />}</Header>
     {(error || snapshot?.error) && <p role="alert" className="px-4 py-2 text-sm text-destructive">{error || snapshot?.error}</p>}
-    <RemoteThread messages={snapshot?.messages ?? []} contextBudget={contextBudget} activities={snapshot?.activities ?? []} loading={!snapshot && !error} running={running} busy={sending} disabled={snapshot?.historical || !connected || !snapshot || busy} controls={controls} onSend={async (content, mode, attachments) => { if (!await mutate(`/conversations/${id}/messages`, { content, mode, ...(attachments.length ? { attachments } : {}) }, false, true)) throw new Error('Send failed') }} onStop={() => { void mutate(`/conversations/${id}/cancel`) }}>
+    <RemoteThread messages={snapshot?.messages ?? []} contextBudget={contextBudget} activities={snapshot?.activities ?? []} loading={!snapshot && !error} running={running} busy={sending} disabled={snapshot?.historical || !connected || !snapshot || busy} controls={controls} onSend={async (content, mode, attachments, requestId) => {
+      setSending(true); setError('')
+      try { await api(`/conversations/${id}/messages`, 'POST', { content, mode, requestId, ...(attachments.length ? { attachments } : {}) }) }
+      catch (error) { setError((error as Error).message); throw error }
+      finally { setSending(false) }
+    }} onStop={() => { void mutate(`/conversations/${id}/cancel`) }}>
       {snapshot?.historical && <div className="flex items-center gap-3 py-4 text-sm"><span className="min-w-0 flex-1 text-muted-foreground">历史会话仅供读取。继续会创建独立会话，并保留原 Workspace 和权限。</span><Button disabled={busy || !connected} onClick={async () => {
         setBusy(true); setError('')
         try {

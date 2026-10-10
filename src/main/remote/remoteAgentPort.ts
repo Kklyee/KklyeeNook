@@ -148,7 +148,7 @@ export function createRemoteAgentPort(
     const content = prepared.images.length ? [{ type: 'text' as const, text: input.content }, ...prepared.images] : input.content
     await host.conversations.submit(id, {
       type: 'input',
-      requestId: randomUUID(),
+      requestId: input.requestId ?? randomUUID(),
       content,
       whenBusy: input.mode === 'normal' ? 'reject' : input.mode,
       contextAttachmentIds: prepared.ids,
@@ -222,14 +222,16 @@ export function createRemoteAgentPort(
       const workspace = await workspaces.resolve(projectId)
       if (workspace.status !== 'attached') throw new RemoteError(409, 'Project is unavailable')
       const files = validateRemoteAttachments(input.attachments)
+      if (input.requestId !== undefined && !input.requestId.trim()) throw new RemoteError(400, 'Request ID is required')
       if (!PERMISSION_MODES.includes(input.permission) || (!input.prompt.trim() && !files.length)) throw new RemoteError(400, 'Permission and initial prompt are required')
       checkThinking(await checkModel(input), input.thinkingLevel)
       const prepared = prepareAttachments(files)
       try {
-        const session = await host.create({ threadId: randomUUID(), workspaceId: projectId, permissionMode: input.permission }, BACKGROUND_CONTEXT)
+        const requestId = input.requestId ?? randomUUID()
+        const session = await host.create({ threadId: `remote-${requestId}`, workspaceId: projectId, permissionMode: input.permission, model: { provider: input.provider, modelId: input.modelId }, thinkingLevel: input.thinkingLevel as ThinkingLevel }, BACKGROUND_CONTEXT)
+        if (session.workspaceId !== projectId) throw new RemoteError(409, 'Conversation belongs to another project')
         saveModelSelection({ provider: input.provider, modelId: input.modelId, thinkingLevel: input.thinkingLevel as ThinkingLevel })
-        await host.configure(session.id, { model: { provider: input.provider, modelId: input.modelId }, thinkingLevel: input.thinkingLevel as ThinkingLevel }, BACKGROUND_CONTEXT)
-        await sendPrepared(session.id, { content: input.prompt, mode: 'normal' }, prepared)
+        await sendPrepared(session.id, { content: input.prompt, mode: 'normal', requestId }, prepared)
         return getConversation(session.id)
       } finally { contextAttachments.release(prepared.ids) }
     },
@@ -249,6 +251,7 @@ export function createRemoteAgentPort(
     },
     async sendMessage(id, input) {
       await requireLiveSession(id)
+      if (input.requestId !== undefined && !input.requestId.trim()) throw new RemoteError(400, 'Request ID is required')
       const files = validateRemoteAttachments(input.attachments)
       if (!input.content.trim() && !files.length) throw new RemoteError(400, 'Message is required')
       if (!['normal', 'followUp', 'steer'].includes(input.mode)) throw new RemoteError(400, 'Invalid send mode')

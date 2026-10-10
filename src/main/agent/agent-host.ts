@@ -192,6 +192,8 @@ export class AgentHost {
       title?: string
       workspaceId?: string | null
       permissionMode?: PermissionMode
+      model?: ModelRef
+      thinkingLevel?: import('@earendil-works/pi-ai').ModelThinkingLevel
       history?: HistorySnapshot
     },
     context: Context,
@@ -214,6 +216,8 @@ export class AgentHost {
         },
         agent: {
           ...this.models.selection(),
+          ...(input.model ? { model: input.model } : {}),
+          ...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
           extensions: [
             workspace ? this.identities.coding : this.identities.personal,
             this.tools.extension(),

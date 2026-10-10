@@ -106,3 +106,54 @@ test('renders history as inert data without opening an execution stream', async 
   expect(Source.instances).toHaveLength(0)
   expect(store.getSnapshot().current.messages[0].content).toEqual([expect.objectContaining({ type: 'text', text: expect.stringContaining('未重放') })])
 })
+
+test('allows a fresh delivery mode after a definitive busy rejection and retains attachments', async () => {
+  const bodies: Record<string, unknown>[] = []
+  const store = setup(async (url, init) => {
+    if (url.endsWith('/submissions')) {
+      bodies.push(JSON.parse(String(init?.body)))
+      if (bodies.length === 1) return new Response('Busy', { status: 409 })
+      return response({ accepted: true })
+    }
+    return response(url.endsWith('/threads') ? [metadata('a')] : snapshot('a'))
+  })
+  await vi.waitFor(() => expect(store.getSnapshot().threadList.isLoading).toBe(false))
+  await store.switchToThread('a')
+  rememberPendingContextAttachment('attachment')
+  await expect(store.submit(message('Same intent'), 'reject')).rejects.toThrow('409')
+  await store.submit(message('Same intent'), 'steer')
+  expect(bodies[1].requestId).not.toBe(bodies[0].requestId)
+  expect(bodies[1]).toMatchObject({ whenBusy: 'steer', contextAttachmentIds: ['attachment'] })
+})
+
+test('reuses creation and historical continuation targets after acknowledgement loss', async () => {
+  const creations: string[] = []
+  const continuations: string[] = []
+  const known = [metadata('a')]
+  const store = setup(async (url, init) => {
+    if (url.endsWith('/threads') && init?.method === 'POST') {
+      const id = JSON.parse(String(init.body)).threadId
+      creations.push(id)
+      if (creations.length === 1) throw new Error('Creation acknowledgement lost')
+      known.push(metadata(id))
+      return response(metadata(id))
+    }
+    if (url.endsWith('/continue')) {
+      const id = JSON.parse(String(init?.body)).threadId
+      continuations.push(id)
+      if (continuations.length === 1) throw new Error('Continuation acknowledgement lost')
+      known.push(metadata(id))
+      return response(metadata(id))
+    }
+    return response(url.endsWith('/threads') ? known : snapshot(url.split('/').at(-1)!))
+  })
+  await vi.waitFor(() => expect(store.getSnapshot().threadList.isLoading).toBe(false))
+  await expect(store.createThread()).rejects.toThrow('Creation acknowledgement lost')
+  await store.createThread()
+  expect(creations[1]).toBe(creations[0])
+  await store.switchToThread('a')
+  await expect(store.continueThread()).rejects.toThrow('Continuation acknowledgement lost')
+  await store.continueThread()
+  expect(continuations[1]).toBe(continuations[0])
+  expect(store.getSnapshot().selectedThreadId).toBe(continuations[0])
+})
