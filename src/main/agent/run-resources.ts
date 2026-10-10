@@ -63,15 +63,14 @@ export class RunResources {
   }
 
   private async shutdown(shutdown: () => Promise<void>) {
-    await Promise.all([...this.watches.values()].map((watch) => watch.stop()))
+    const results: PromiseSettledResult<unknown>[] = await Promise.allSettled([...this.watches.values()].map((watch) => watch.stop()))
     this.watches.clear()
-    await this.tail
-    try {
-      await shutdown()
-    } finally {
-      await Promise.all([...this.known].map((runId) => this.sandbox.finishRun(runId)))
-      this.known.clear()
-    }
+    results.push(...await Promise.allSettled([this.tail]))
+    results.push(...await Promise.allSettled([shutdown()]))
+    results.push(...await Promise.allSettled([...this.known].map((runId) => this.sandbox.finishRun(runId))))
+    this.known.clear()
+    const failures = results.flatMap(result => result.status === 'rejected' ? [result.reason] : [])
+    if (failures.length) throw new AggregateError(failures, 'Agent resource cleanup failed')
   }
 
   private async observe(id: ConversationId, context: Context) {

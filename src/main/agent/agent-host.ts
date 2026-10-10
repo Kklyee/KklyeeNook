@@ -142,46 +142,52 @@ export class AgentHost {
       },
     }
     let host: AgentHost | undefined
-    engine = await AgentEngine.open(
-      options.databasePath,
-      {
-        models: models.models,
-        registry,
-        settings,
-        onReport: options.onReport,
-        conversationCreated: async (tx, conversation) => {
-          await tx.doc(approvalDoc, conversation.id)
-        },
-      },
-      context,
-      async (initializing) => {
-        engine = initializing
-        tools.connect(initializing.harness)
-        inputs.connect(initializing.harness)
-        delegation.connect(initializing.harness)
-        host = new AgentHost(
-          initializing,
-          models,
-          tools,
-          inputs,
-          delegation,
-          resources,
-          options,
+    try {
+      engine = await AgentEngine.open(
+        options.databasePath,
+        {
+          models: models.models,
           registry,
-          identities,
-          membership,
-          historyContext,
-        )
-        await resources.connect(initializing, context)
-        await initializing.harness.commit(async (tx) => { await tx.doc(approvalSignalDoc) }, context)
-        for (const id of Object.values(await initializing.links(context))) {
-          await initializing.harness.commit(async (tx) => {
-            await tx.doc(approvalDoc, id)
-          }, context)
-        }
-        await options.initialize?.(host, context)
-      },
-    )
+          settings,
+          onReport: options.onReport,
+          conversationCreated: async (tx, conversation) => {
+            await tx.doc(approvalDoc, conversation.id)
+          },
+        },
+        context,
+        async (initializing) => {
+          engine = initializing
+          tools.connect(initializing.harness)
+          inputs.connect(initializing.harness)
+          delegation.connect(initializing.harness)
+          host = new AgentHost(
+            initializing,
+            models,
+            tools,
+            inputs,
+            delegation,
+            resources,
+            options,
+            registry,
+            identities,
+            membership,
+            historyContext,
+          )
+          await resources.connect(initializing, context)
+          await initializing.harness.commit(async (tx) => { await tx.doc(approvalSignalDoc) }, context)
+          for (const id of Object.values(await initializing.links(context))) {
+            await initializing.harness.commit(async (tx) => {
+              await tx.doc(approvalDoc, id)
+            }, context)
+          }
+          await options.initialize?.(host, context)
+        },
+      )
+    } catch (error) {
+      try { await resources.close(async () => {}) }
+      catch (cleanupError) { throw new AggregateError([error, cleanupError], 'Agent initialization and resource cleanup failed') }
+      throw error
+    }
     if (!host) throw new Error('Agent host failed to initialize')
     return host
   }

@@ -83,6 +83,16 @@ export async function createAgentBackend(
   let host: AgentHost | undefined
   let scheduledTasks: AgentScheduler | undefined
   let settingsChangePending = false
+  const contextAttachments = new ContextAttachmentService()
+  const close = async () => {
+    const results = await Promise.allSettled([remote?.close(), server?.close(), scheduledTasks?.close()])
+    results.push(...await Promise.allSettled([host?.close()]))
+    results.push(...await Promise.allSettled([knowledge?.close(), mcpServerManager?.close()]))
+    contextAttachments.clear()
+    closeDb()
+    const failures = results.flatMap(result => result.status === 'rejected' ? [result.reason] : [])
+    if (failures.length) throw new AggregateError(failures, 'Agent backend cleanup failed')
+  }
   try {
     reportStartupStage('database_connected')
     const workspaceService = new WorkspaceService(new DrizzleWorkspaceRepo(db))
@@ -108,7 +118,6 @@ export async function createAgentBackend(
       () => credentialStore,
     )
     registerPiWebSearchTool(toolRegistry, () => webSearchService)
-    const contextAttachments = new ContextAttachmentService()
     const contextBuilder = new ContextBuilder(contextAttachments, memoryRepo)
     const retention = new FileToolResultRetentionPolicy(toolResultStore)
     mcpServerManager = new McpServerManager(toolRegistry, () => {
@@ -300,25 +309,11 @@ export async function createAgentBackend(
             return scheduledTasks!.setEnabled(request.id, false)
         }
       },
-      async close() {
-        await remote?.close()
-        await knowledge?.close()
-        await mcpServerManager?.close()
-        await server?.close()
-        contextAttachments.clear()
-        await scheduledTasks?.close()
-        await host?.close()
-        closeDb()
-      },
+      close,
     }
   } catch (error) {
-    await remote?.close()
-    await knowledge?.close()
-    await mcpServerManager?.close()
-    await server?.close()
-    await scheduledTasks?.close()
-    await host?.close()
-    closeDb()
+    try { await close() }
+    catch (cleanupError) { throw new AggregateError([error, cleanupError], 'Agent backend initialization and cleanup failed') }
     throw error
   }
 }

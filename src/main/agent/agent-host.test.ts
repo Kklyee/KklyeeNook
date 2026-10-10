@@ -192,6 +192,19 @@ test('creation persists the selected model atomically and retries preserve later
   expect((await restored.conversations.get('selected-model', context())).permissionMode).toBe('read-only')
 })
 
+test('initialization failure releases ownership and preserves recovered permission without effects', async () => {
+  const { host, options, workspaceId, open } = await setup()
+  await host.create({ threadId: 'initialization-thread', workspaceId, permissionMode: 'read-only' }, context())
+  await host.conversations.submit('initialization-thread', { type: 'input', content: 'Write', requestId: 'initialization-request' }, context())
+  await vi.waitFor(async () => expect(await host.pendingApprovals('initialization-thread', context())).toHaveLength(1))
+  await host.close()
+  await expect(AgentHost.open({ ...options, initialize: async () => { throw new Error('Initialization fault') } }, context())).rejects.toThrow('Initialization fault')
+  const restored = await open()
+  expect((await restored.conversations.get('initialization-thread', context())).permissionMode).toBe('read-only')
+  await restored.conversations.cancel('initialization-thread', context())
+  await expect(readFile(join(directory, 'workspace', 'file.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
+}, 30000)
+
 test('permission reductions remain authoritative when the metadata mirror fails and the host restarts', async () => {
   const { host, sessions, workspaceId, open } = await setup()
   await host.create({ threadId: 'permission-thread', workspaceId, permissionMode: 'full-access' }, context())

@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { createServer } from 'node:http'
 import { once } from 'node:events'
-import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -15,7 +15,7 @@ import { verifyRemote } from './testing/remote-browser'
 
 const execute = promisify(execFile)
 
-const scenarios = ['lifecycle', 'approval-crash', 'cancel-crash', 'unsafe-crash', 'delegation-crash', 'delegation-cancel-crash', ...(process.env.NOOK_REMOTE_ACCEPTANCE === '1' ? ['remote-acceptance'] : [])]
+const scenarios = ['lifecycle', 'initialization-failure', 'approval-crash', 'cancel-crash', 'unsafe-crash', 'delegation-crash', 'delegation-cancel-crash', ...(process.env.NOOK_REMOTE_ACCEPTANCE === '1' ? ['remote-acceptance'] : [])]
 
 test.each(scenarios)('production utility-process bootstrap and recovery: %s', async (scenario) => {
   const directory = await mkdtemp(join(process.cwd(), 'node_modules', '.nook-production-'))
@@ -70,6 +70,30 @@ test.each(scenarios)('production utility-process bootstrap and recovery: %s', as
     await mkdir(join(data, 'workspace'))
     if (process.platform === 'win32') await cp(join(process.cwd(), 'resources', 'sandbox'), join(directory, 'resources', 'sandbox'), { recursive: true })
     const utility = join(directory, 'main', 'agent-backend-entry.mjs')
+    const failureUtility = join(directory, 'main', 'initialization-failure.mjs')
+    if (scenario === 'initialization-failure') {
+      const entry = await readFile(utility, 'utf8')
+      expect(entry).toContain('backend = await createAgentBackend(')
+      await writeFile(failureUtility, entry.replace('backend = await createAgentBackend(', 'backend = await recoverInitialization(createAgentBackend,') + `
+async function recoverInitialization(factory, options, report, ...rest) {
+  let endpoint
+  await factory(options, (stage, detail) => {
+    report(stage, detail)
+    if (stage === 'http_server_listening') {
+      endpoint = detail
+      throw new Error('Injected initialization failure')
+    }
+  }, ...rest).then(() => { throw new Error('Initialization failure was ignored') }, error => {
+    if (error.message !== 'Injected initialization failure') throw error
+  })
+  if (!endpoint) throw new Error('Initialization failed before the production endpoint started')
+  await fetch('http://' + endpoint).then(() => { throw new Error('Failed initialization left HTTP open') }, () => {})
+  const reopened = await factory(options, report, ...rest)
+  process.stdout.write('INITIALIZATION_RECOVERED\\n')
+  return reopened
+}
+`)
+    }
     const script = `
 import { app, BrowserWindow, utilityProcess } from 'electron'
 import { readFile, readdir } from 'node:fs/promises'
@@ -80,8 +104,8 @@ app.on('window-all-closed', () => {})
 const options = ${JSON.stringify(options)}
 const scenario = ${JSON.stringify(scenario)}
 const children = new Set()
-const start = () => {
-  const child = utilityProcess.fork(${JSON.stringify(utility)}, [], { env: { ...process.env, USERPROFILE: ${JSON.stringify(data)}, HOME: ${JSON.stringify(data)} }, stdio: 'pipe' })
+const start = (entry = ${JSON.stringify(utility)}) => {
+  const child = utilityProcess.fork(entry, [], { env: { ...process.env, USERPROFILE: ${JSON.stringify(data)}, HOME: ${JSON.stringify(data)} }, stdio: 'pipe' })
   children.add(child)
   child.stdout.pipe(process.stdout)
   child.stderr.pipe(process.stderr)
@@ -113,7 +137,7 @@ const start = () => {
 }
 app.whenReady().then(async () => {
     try {
-      const first = start()
+      const first = start(scenario === 'initialization-failure' ? ${JSON.stringify(failureUtility)} : undefined)
       let base = (await first.ready).baseUrl
       if (!base.endsWith('/api/agent')) throw new Error('Legacy execution protocol is active')
       const unauthorized = await fetch(new URL('/wrong/api/agent/threads', base))
@@ -176,7 +200,7 @@ app.whenReady().then(async () => {
         const continuation = remote.continuationId
         if (await readFile(${JSON.stringify(join(data, 'workspace', 'never.txt'))}, 'utf8').catch(() => '') !== '') throw new Error('Historical effect was replayed')
         if (!continuation) throw new Error('Remote continuation receipt was missing')
-      } else if (scenario !== 'lifecycle') {
+      } else if (scenario !== 'lifecycle' && scenario !== 'initialization-failure') {
         const delegated = scenario.startsWith('delegation')
         const cancelled = scenario === 'cancel-crash' || scenario === 'delegation-cancel-crash'
         base = restoredBase
@@ -270,7 +294,10 @@ app.whenReady().then(async () => {
     const line = stdout.split(/\r?\n/).find((value) => value.startsWith('PRODUCTION_SMOKE='))
     expect(line).toBeDefined()
     const result = JSON.parse(line!.slice('PRODUCTION_SMOKE='.length))
-    if (scenario === 'lifecycle') expect(calls).toBe(1)
+    if (scenario === 'lifecycle' || scenario === 'initialization-failure') {
+      expect(calls).toBe(1)
+      if (scenario === 'initialization-failure') expect(stdout).toContain('INITIALIZATION_RECOVERED')
+    }
     else if (scenario === 'remote-acceptance') expect(result.remote).toMatchObject({ sent: true, queue: true, cancel: true, approval: true, configuration: true, history: true })
     else expect(result.crash).toMatchObject({ scenario, recovered: true })
     if (scenario.startsWith('delegation')) {
