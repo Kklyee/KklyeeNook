@@ -195,9 +195,10 @@ function ScheduledTaskRow({
         </div>
         <p className="text-muted-foreground mt-1 text-xs">{formatSchedule(task.schedule)}</p>
         <p className="text-muted-foreground mt-1 text-xs">Next: {formatNextRun(task)}</p>
+        {task.blockedReason === 'historical-conversation' && <p className="text-warning mt-1 text-xs">目标是只读历史会话。请先继续历史会话，再编辑任务选择新会话并重新启用。</p>}
       </div>
       <div className="flex shrink-0 items-center gap-1">
-        <Button variant="ghost" size="sm" onClick={onToggle} disabled={busy}>
+        <Button variant="ghost" size="sm" onClick={onToggle} disabled={busy || task.blockedReason === 'historical-conversation'}>
           {task.enabled ? 'Disable' : 'Enable'}
         </Button>
         <Button variant="ghost" size="icon-sm" onClick={onEdit} disabled={busy} aria-label="Edit task">

@@ -77,6 +77,7 @@ async function openHarness(options: {
   skills?: Skills
   inputWrapper?: (real: AgentInputs) => AgentInputs
   now?: () => number
+  historicalThreads?: Set<string>
 }) {
   const faux = options.faux ?? fauxProvider({ tokensPerSecond: 10_000 })
   const models = createModels()
@@ -96,6 +97,7 @@ async function openHarness(options: {
     inputs: options.inputWrapper?.(inputs) ?? inputs,
     conversations: {
       get: async (threadId: string, ctx) => {
+        if (options.historicalThreads?.has(threadId)) return { id: threadId, title: threadId, historical: true, createdAt: 1, updatedAt: 1, archived: false }
         await current.conversation(threadId, ctx)
         return { id: threadId, title: threadId, createdAt: 1, updatedAt: 1, archived: false }
       },
@@ -289,4 +291,41 @@ test('restore reconciles missing projections and cleanup doc entries', async () 
   await repo.delete('restored')
   await scheduler.restore(context())
   expect((await engine.harness.snapshot(agentSchedulerDoc, context()))?.schedules.restored).toBeUndefined()
+})
+
+test('pauses legacy-target schedules once, preserves definitions and requires an explicit live target to re-enable', async () => {
+  const repo = new MemoryScheduledTaskRepo()
+  const notify = vi.fn()
+  const scheduler = new AgentScheduler(repo, notify)
+  const { engine, faux } = await openHarness({ path: join(directory, 'historical.sqlite'), scheduler, repo, historicalThreads: new Set(['old-thread']) })
+  const now = Date.now()
+  await repo.save({ id: 'old-schedule', title: 'Preserved', prompt: 'Old prompt', schedule: { type: 'daily', time: '09:00' }, enabled: true, sessionId: 'old-thread', nextRunAt: now - 1, createdAt: now, updatedAt: now })
+  await scheduler.restore(context())
+  expect(await repo.findById('old-schedule')).toMatchObject({ title: 'Preserved', prompt: 'Old prompt', enabled: false, sessionId: 'old-thread', nextRunAt: undefined })
+  expect(await scheduler.list()).toContainEqual(expect.objectContaining({ blockedReason: 'historical-conversation' }))
+  expect(notify).toHaveBeenCalledOnce()
+  expect(notify.mock.calls[0][0].body).toContain('已暂停')
+  await scheduler.restore(context())
+  expect(notify).toHaveBeenCalledOnce()
+  expect(faux.state.callCount).toBe(0)
+  expect((await engine.harness.inspect(context())).tasks).toEqual([])
+  await expect(scheduler.setEnabled('old-schedule', true)).rejects.toThrow('Historical conversation is read-only')
+  await expect(dueTask(scheduler, { sessionId: 'old-thread' })).rejects.toThrow('Historical conversation is read-only')
+  await engine.create('explicitly-continued', { model }, context())
+  await scheduler.update('old-schedule', { sessionId: 'explicitly-continued', enabled: true })
+  expect((await repo.findById('old-schedule'))?.enabled).toBe(true)
+  expect((await scheduler.list())[0].blockedReason).toBeUndefined()
+})
+
+test('rechecks a target at dispatch and pauses it if it becomes historical after scheduling', async () => {
+  const repo = new MemoryScheduledTaskRepo()
+  const scheduler = new AgentScheduler(repo)
+  const historicalThreads = new Set<string>()
+  const { engine, faux } = await openHarness({ path: join(directory, 'dispatch.sqlite'), scheduler, repo, historicalThreads })
+  await engine.create('target-thread', { model }, context())
+  const task = await scheduler.create({ title: 'Check target', prompt: 'Do not run old history', sessionId: 'target-thread', schedule: { type: 'once', runAt: Date.now() + 250 } })
+  historicalThreads.add('target-thread')
+  await vi.waitFor(async () => expect((await repo.findById(task.id))?.enabled).toBe(false))
+  expect(faux.state.callCount).toBe(0)
+  expect((await repo.findById(task.id))?.lastRunAt).toBeUndefined()
 })

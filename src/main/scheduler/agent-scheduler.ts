@@ -123,11 +123,16 @@ export class AgentScheduler {
   }
 
   async list(): Promise<ScheduledTask[]> {
-    return this.repo.findAll()
+    return Promise.all((await this.repo.findAll()).map(async (task) => {
+      if (!this.host || !task.sessionId) return task
+      const target = await this.host.conversations.get(task.sessionId, BACKGROUND_CONTEXT)
+      return 'historical' in target && target.historical ? { ...task, blockedReason: 'historical-conversation' as const } : task
+    }))
   }
 
   async create(input: CreateScheduledTaskInput): Promise<ScheduledTask> {
     validateTaskInput(input.title, input.prompt, input.schedule, input.skillIds)
+    if (input.enabled !== false) await this.assertTarget(input.sessionId)
     const now = Date.now()
     const enabled = input.enabled ?? true
     const task: ScheduledTask = {
@@ -154,6 +159,7 @@ export class AgentScheduler {
     const prompt = input.prompt ?? existing.prompt
     const enabled = input.enabled ?? existing.enabled
     validateTaskInput(title, prompt, schedule, input.skillIds ?? existing.skillIds)
+    if (enabled) await this.assertTarget(input.sessionId === null ? undefined : input.sessionId ?? existing.sessionId)
     const now = timestamp(existing.updatedAt)
     const task: ScheduledTask = {
       ...existing,
@@ -190,6 +196,7 @@ export class AgentScheduler {
 
   async setEnabled(id: string, enabled: boolean): Promise<ScheduledTask> {
     const existing = await this.requireTask(id)
+    if (enabled) await this.assertTarget(existing.sessionId)
     const now = timestamp(existing.updatedAt)
     const task: ScheduledTask = {
       ...existing,
@@ -256,7 +263,14 @@ export class AgentScheduler {
     }
     try {
       const threadId = current.sessionId ?? scheduledThreadId(current.id)
-      if (current.sessionId) await this.requireHost().conversations.get(threadId, context)
+      if (current.sessionId) {
+        const target = await this.requireHost().conversations.get(threadId, context)
+        if ('historical' in target && target.historical) {
+          await this.pauseHistorical(current)
+          await this.complete(runtime, 'stale', context)
+          return
+        }
+      }
       else await this.requireHost().create({ threadId, title: current.title }, context)
       const conversation = await this.requireHost().engine.conversation(threadId, context)
       const handle = await runtime.conversation(conversation.id, context)
@@ -344,6 +358,14 @@ export class AgentScheduler {
   private async reconcile(task: ScheduledTask, context: Context): Promise<void> {
     if (this.closed || !this.host) return
     let current = task
+    if (current.sessionId) {
+      const target = await this.host.conversations.get(current.sessionId, context)
+      if ('historical' in target && target.historical) {
+        if (current.enabled) await this.pauseHistorical(current)
+        await this.retire(current.id, context)
+        return
+      }
+    }
     if (current.enabled && current.nextRunAt === undefined) {
       const now = timestamp(current.updatedAt)
       current = {
@@ -470,6 +492,19 @@ export class AgentScheduler {
     const task = await this.repo.findById(id)
     if (!task) throw new Error(`ScheduledTask not found: ${id}`)
     return task
+  }
+
+  private async assertTarget(sessionId: string | undefined) {
+    if (!this.host || !sessionId) return
+    const target = await this.host.conversations.get(sessionId, BACKGROUND_CONTEXT)
+    if ('historical' in target && target.historical) throw new Error('Historical conversation is read-only; continue it and select the new conversation before enabling this task')
+  }
+
+  private async pauseHistorical(task: ScheduledTask) {
+    await this.repo.save({ ...task, enabled: false, nextRunAt: undefined, updatedAt: timestamp(task.updatedAt) })
+    try {
+      this.notify({ title: 'KklyeeNook', body: `${task.title} 已暂停：目标是只读历史会话。请明确继续历史会话后，编辑任务选择新会话并重新启用。` })
+    } catch (error) { this.sendReport(error) }
   }
 
   private requireHost(): AgentHost {

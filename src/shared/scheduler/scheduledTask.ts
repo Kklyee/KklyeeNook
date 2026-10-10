@@ -15,6 +15,7 @@ export interface ScheduledTask {
   nextRunAt?: number
   createdAt: number
   updatedAt: number
+  blockedReason?: 'historical-conversation'
 }
 
 export interface CreateScheduledTaskInput {

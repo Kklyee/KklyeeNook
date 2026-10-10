@@ -246,7 +246,12 @@ async function parseLegacySessionFile(path: string, threadId: string): Promise<P
     const line = lines[index]
     if (!line.trim()) continue
     try {
-      raw.push(JSON.parse(line) as FileEntry)
+      const entry: unknown = JSON.parse(line)
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry) || !('type' in entry) || typeof entry.type !== 'string') throw new Error('Invalid legacy entry')
+      if (entry.type === 'session' && (!('id' in entry) || typeof entry.id !== 'string')) throw new Error('Invalid legacy session header')
+      if (entry.type === 'message' && (!('message' in entry) || !entry.message || typeof entry.message !== 'object' || Array.isArray(entry.message))) throw new Error('Invalid legacy message')
+      if (entry.type !== 'session' && ((raw[0] as SessionHeader | undefined)?.version ?? 1) >= 2 && (!('id' in entry) || typeof entry.id !== 'string')) throw new Error('Invalid legacy entry ID')
+      raw.push(entry as FileEntry)
     } catch (error) {
       diagnostics.push(diagnosticRecord(threadId, path, index + 1, error))
     }
@@ -258,7 +263,8 @@ async function parseLegacySessionFile(path: string, threadId: string): Promise<P
   deterministicV1Migration(migrated)
   const header = migrated.find((entry): entry is SessionHeader => entry.type === 'session')
   if (!header || header.id !== threadId) return undefined
-  return { path, header, entries: migrated.filter((entry): entry is SessionEntry => entry.type !== 'session'), diagnostics }
+  const entries = migrated.filter((entry): entry is SessionEntry => entry.type !== 'session' && typeof entry.id === 'string')
+  return { path, header, entries, diagnostics }
 }
 
 function deterministicV1Migration(entries: FileEntry[]) {

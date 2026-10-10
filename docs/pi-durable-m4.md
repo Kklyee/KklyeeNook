@@ -2,7 +2,7 @@
 
 ## 尚未完成
 
-M4 和 M5 未完成。生产 bootstrap、Chat ExternalStoreRuntime 和 Remote 尚未切换，不能删除旧执行器或其依赖，也不能将新模块的集成测试视作产品验收。
+M4 和 M5 未完成。生产 bootstrap、Chat ExternalStoreRuntime 和 Remote 已接入新 Host，正式调度 Task、历史与 Run/Trace 展示已落地；实际产品回归、SIGKILL 矩阵和备份恢复仍未验收。当前不能删除旧执行器或其依赖，也不能将模块集成测试视作完整产品验收。最新门禁以 `agent-migration-remaining.md` 为准。
 
 ## 本次已验证的 M4 实现
 
@@ -17,11 +17,15 @@ M4 和 M5 未完成。生产 bootstrap、Chat ExternalStoreRuntime 和 Remote �
 
 ## 剩余 M4
 
-- 正式定时 Task、稳定 occurrence requestId、调度定义编辑/禁用及恢复投影；当前产品仍是旧 ScheduledTaskScheduler。
+- 正式定时 Task、稳定 occurrence requestId、调度定义编辑/禁用及恢复投影的生产崩溃验证；当前生产只启动新 AgentScheduler。
 - 队列编辑/排序/提升语义及崩溃测试。
 - 子任务 HTTP/SSE、任务面板和业务运行投影的生产接线及并发上限验收。
 - Windows Sandbox 跨进程临时目录回收与新 Run 资源作用域验收。
 - 历史只读展示与明确的继续入口，禁止打开旧 JSONL 作为 Durable Storage 或重放历史工具。
+
+2026-10-10：旧历史目标定时任务在恢复时持久暂停并通知，列表派生明确原因，派发前再次检查，启用必须选择明确继续后的独立会话；定义不会删除或静默重放。历史上下文按当前模型容量限制字节预算，保留最新 compaction 摘要与近期文本，历史图片不作为 base64 prompt 文本传递，完整冻结记录保持只读。正式测试覆盖暂停/重启去重、派发重检、长 CJK、图片/签名、摘要与确定性 v1/坏行解析。
+
+本轮完整回归为 101 文件 / 537 项通过 / 2 项原有环境跳过。后续增量必须重新运行最终全量，跳过项不算安全验收。
 
 ## 剩余 M5
 

@@ -29,7 +29,7 @@ import { approvalDoc, approvalSignalDoc } from './approvals'
 import { AgentInputs } from './inputs'
 import { AgentDelegation } from './delegation'
 import { RunResources } from './run-resources'
-import { historyDoc, historyExtension, type HistorySnapshot } from './history'
+import { historyDoc, createHistoryExtension, type HistorySnapshot } from './history'
 import { createRunMembershipExtension } from './run-membership'
 import type { LegacyHistory } from './legacy-history'
 
@@ -64,6 +64,7 @@ export class AgentHost {
     private readonly registry: ReturnType<typeof createRegistry>,
     private readonly identities: { coding: Extension; personal: Extension },
     private readonly membership: Extension,
+    private readonly historyContext: Extension,
   ) {
     this.conversations = new ConversationService(engine, options.sessions, inputs)
   }
@@ -128,7 +129,8 @@ export class AgentHost {
     registry.install(tools.extension())
     registry.install(tools.approvals.extension)
     registry.install(inputs.extension)
-    registry.install(historyExtension)
+    const historyContext = createHistoryExtension((model) => models.contextWindow(model))
+    registry.install(historyContext)
     const membership = createRunMembershipExtension(() => engine.harness)
     registry.install(membership)
     registry.install(delegation.extension)
@@ -168,6 +170,7 @@ export class AgentHost {
           registry,
           identities,
           membership,
+          historyContext,
         )
         await resources.connect(initializing, context)
         await initializing.harness.commit(async (tx) => { await tx.doc(approvalSignalDoc) }, context)
@@ -216,7 +219,7 @@ export class AgentHost {
             this.tools.extension(),
             this.tools.approvals.extension,
             this.inputs.extension,
-            historyExtension,
+            this.historyContext,
             this.membership,
             this.delegation.extension,
             ...(this.options.extensions ?? []),

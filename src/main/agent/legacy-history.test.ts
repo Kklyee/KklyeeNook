@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, expect, test, vi } from 'vitest'
@@ -57,6 +57,25 @@ test('rejects numeric and traversal thread IDs before file access', async () => 
 
   await expect(history.read('12345')).rejects.toThrow('Invalid legacy thread ID')
   await expect(history.read('../legacy-a')).rejects.toThrow('Invalid legacy thread ID')
+})
+
+test('diagnoses valid JSON with invalid record shapes and preserves deterministic v1 conversion without writing source', async () => {
+  const root = await tempRoot()
+  const path = join(root, 'old.jsonl')
+  const source = [
+    JSON.stringify({ type: 'session', id: 'legacy-v1', version: 1 }),
+    'null', '7', '[]', JSON.stringify({ type: 'message', message: null }),
+    JSON.stringify({ type: 'message', message: { role: 'user', content: 'Old v1 question' } }),
+    JSON.stringify({ type: 'compaction', summary: 'V1 summary', firstKeptEntryIndex: 1 }),
+  ].join('\n')
+  await writeFile(path, source)
+  const history = new LegacyHistory(root)
+  const first = await history.read('legacy-v1')
+  expect(first.filter(record => record.kind === 'diagnostic')).toHaveLength(4)
+  expect(first.find(record => record.role === 'user')?.payload).toMatchObject({ id: 'legacy-1', parentId: null })
+  expect(first.find(record => record.source.entryType === 'compaction')?.payload).toMatchObject({ firstKeptEntryId: 'legacy-1' })
+  expect(await history.read('legacy-v1')).toEqual(first)
+  expect(await readFile(path, 'utf8')).toBe(source)
 })
 
 test('continues into an independent thread with stable frozen inert projections', async () => {
