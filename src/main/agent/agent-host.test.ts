@@ -21,11 +21,15 @@ import { ContextBuilder } from '../context/contextBuilder'
 import { SkillLoader } from '../agent-backend/skillLoader'
 import { registerPiBuiltinTools } from './pi/adapters/piBuiltinToolAdapter'
 import { AgentHost } from './agent-host'
+import { startDurableHttpServer } from '../agent-backend/durable-http'
+import type { RunningAgentHttpServer } from '../agent-backend/http-server'
+import type { DurableFrame } from '@/shared/agent/durable-protocol'
 
 let directory: string
 const hosts: AgentHost[] = []
 const databases: Array<() => void> = []
 const servers: Server[] = []
+const httpServers: RunningAgentHttpServer[] = []
 const context = () => withAbortSignal(AbortSignal.timeout(20_000), BACKGROUND_CONTEXT)
 
 beforeEach(async () => {
@@ -40,6 +44,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await Promise.all(httpServers.splice(0).map((server) => server.close()))
   await Promise.all(hosts.splice(0).map((host) => host.close()))
   await Promise.all(
     servers.splice(0).map(
@@ -311,4 +316,213 @@ test('personal identity stays separate and registry refresh changes only the dur
   setConfig({ ...config, tools: { enabled: ['read'] } })
   await host.reload(context())
   expect((await conversation.agent(context())).tools.map((tool) => tool.name)).toEqual(['read'])
+}, 30_000)
+
+async function api(host: AgentHost) {
+  const server = await startDurableHttpServer(host, {
+    secret: 'test-secret',
+    allowedOrigins: ['http://allowed.test'],
+  })
+  httpServers.push(server)
+  return {
+    baseUrl: server.baseUrl,
+    request: (path: string, method = 'GET', body?: unknown, origin?: string) =>
+      fetch(server.baseUrl + path, {
+        method,
+        headers: { 'content-type': 'application/json', ...(origin ? { origin } : {}) },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      }),
+  }
+}
+
+async function events(baseUrl: string, threadId: string) {
+  const controller = new AbortController()
+  const response = await fetch(`${baseUrl}/threads/${threadId}/events`, {
+    signal: controller.signal,
+  })
+  expect(response.status).toBe(200)
+  const reader = response.body!.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  return {
+    stop: () => controller.abort(),
+    next: async (): Promise<DurableFrame> => {
+      while (true) {
+        const end = buffer.indexOf('\n\n')
+        if (end >= 0) {
+          const lines = buffer.slice(0, end).split('\n')
+          buffer = buffer.slice(end + 2)
+          const data = lines
+            .filter((line) => line.startsWith('data: '))
+            .map((line) => line.slice(6))
+            .join('\n')
+          if (data) return JSON.parse(data)
+        } else {
+          const chunk = await reader.read()
+          if (chunk.done) throw new Error('Event stream ended')
+          buffer += decoder.decode(chunk.value, { stream: true })
+        }
+      }
+    },
+  }
+}
+
+test('durable HTTP keeps authentication, rejects passive writes and preserves scoped idempotency', async () => {
+  const { host, workspaceId, requests } = await setup()
+  const { baseUrl, request } = await api(host)
+  expect((await fetch(baseUrl.replace('test-secret', 'incorrect') + '/threads')).status).toBe(404)
+  expect((await request('/threads', 'GET', undefined, 'http://untrusted.test')).status).toBe(403)
+  const allowed = await request('/threads', 'GET', undefined, 'http://allowed.test')
+  expect(allowed.headers.get('access-control-allow-origin')).toBe('http://allowed.test')
+  expect(
+    (
+      await request('/threads', 'POST', {
+        threadId: 'thread',
+        workspaceId,
+        permissionMode: 'read-only',
+      })
+    ).status,
+  ).toBe(201)
+  expect((await request('/threads', 'POST', { threadId: 'other' })).status).toBe(201)
+  expect(
+    (
+      await request('/threads/thread/submissions', 'POST', {
+        type: 'write',
+        requestId: 'illegal',
+        entry: { kind: 'pi.user' },
+      })
+    ).status,
+  ).toBe(400)
+  expect(
+    (
+      await request('/threads/thread/submissions', 'POST', {
+        type: 'input',
+        requestId: 'illegal',
+        content: 'text',
+        entry: {},
+      })
+    ).status,
+  ).toBe(400)
+  expect(
+    (await request('/threads/thread/submissions', 'POST', { type: 'input', content: 'no id' }))
+      .status,
+  ).toBe(400)
+  expect(requests).toHaveLength(0)
+  const draft = { type: 'input', requestId: 'request', content: 'write' }
+  const accepted = await (await request('/threads/thread/submissions', 'POST', draft)).json()
+  const retry = await (
+    await request('/threads/thread/submissions', 'POST', {
+      ...draft,
+      content: 'replacement must not win',
+    })
+  ).json()
+  expect(retry).toEqual(accepted)
+  await vi.waitFor(
+    async () => expect(await (await request('/threads/thread/approvals')).json()).toHaveLength(1),
+    { timeout: 15_000 },
+  )
+  const [approval] = await (await request('/threads/thread/approvals')).json()
+  expect(
+    (await request(`/threads/other/approvals/${approval.id}`, 'POST', { state: 'approved' }))
+      .status,
+  ).toBe(404)
+  expect((await request(`/threads/other/submissions/${accepted.submissionId}`)).status).toBe(404)
+  expect(
+    (await request(`/threads/thread/approvals/${approval.id}`, 'POST', { state: 'approved' }))
+      .status,
+  ).toBe(200)
+  expect(
+    (await request(`/threads/thread/approvals/${approval.id}`, 'POST', { state: 'rejected' }))
+      .status,
+  ).toBe(409)
+  await (await host.engine.submission('thread', accepted.submissionId, context())).wait(context())
+  expect((await request(`/threads/thread/submissions/${accepted.submissionId}`)).status).toBe(200)
+  expect(JSON.stringify(await (await request('/threads/thread')).json())).not.toContain(
+    'replacement must not win',
+  )
+  expect(await readFile(join(directory, 'workspace', 'file.txt'), 'utf8')).toBe(
+    'written by durable host',
+  )
+}, 30_000)
+
+test('HTTP withdraw and cancel use official submissions and stale approval decisions are rejected', async () => {
+  const { host, workspaceId } = await setup()
+  const { request } = await api(host)
+  await host.create({ threadId: 'thread', workspaceId, permissionMode: 'read-only' }, context())
+  await request('/threads/thread/submissions', 'POST', {
+    type: 'input',
+    requestId: 'first',
+    content: 'write',
+  })
+  await vi.waitFor(
+    async () => expect(await (await request('/threads/thread/approvals')).json()).toHaveLength(1),
+    { timeout: 15_000 },
+  )
+  const [approval] = await (await request('/threads/thread/approvals')).json()
+  const queued = await (
+    await request('/threads/thread/submissions', 'POST', {
+      type: 'input',
+      requestId: 'queued',
+      content: 'queued',
+      whenBusy: 'followUp',
+    })
+  ).json()
+  expect((await (await request('/threads/thread')).json()).queue).toEqual([
+    { id: queued.submissionId, mode: 'followUp', content: 'queued' },
+  ])
+  expect(
+    await (await request(`/threads/thread/submissions/${queued.submissionId}`, 'DELETE')).json(),
+  ).toEqual({ status: 'aborted' })
+  expect((await request('/threads/thread/cancel', 'POST')).status).toBe(204)
+  expect(await (await request('/threads/thread/approvals')).json()).toEqual([])
+  expect(
+    (await request(`/threads/thread/approvals/${approval.id}`, 'POST', { state: 'approved' }))
+      .status,
+  ).toBe(409)
+  expect(
+    (await (await request(`/threads/thread/submissions/${queued.submissionId}`)).json()).status,
+  ).toBe('unanswered')
+  await expect(readFile(join(directory, 'workspace', 'file.txt'))).rejects.toThrow()
+}, 30_000)
+
+test('SSE frames reset on reconnect, preserve order and do not own execution lifetime', async () => {
+  const { host, workspaceId } = await setup()
+  const { baseUrl, request } = await api(host)
+  await host.create({ threadId: 'thread', workspaceId, permissionMode: 'read-only' }, context())
+  const first = await events(baseUrl, 'thread')
+  const initial = await first.next()
+  expect(initial.type).toBe('reset')
+  expect(initial.sequence).toBe(0)
+  expect(initial.events[0].type).toBe('snapshot')
+  const accepted = await (
+    await request('/threads/thread/submissions', 'POST', {
+      type: 'input',
+      requestId: 'request',
+      content: 'write',
+    })
+  ).json()
+  let current = initial
+  while (!current.approvals.length) {
+    const next = await first.next()
+    expect(next.epoch).toBe(initial.epoch)
+    expect(next.sequence).toBe(current.sequence + 1)
+    current = next
+  }
+  const approval = current.approvals[0]
+  first.stop()
+  const second = await events(baseUrl, 'thread')
+  const reset = await second.next()
+  expect(reset.type).toBe('reset')
+  expect(reset.sequence).toBe(0)
+  expect(reset.epoch).not.toBe(initial.epoch)
+  expect(reset.approvals[0].id).toBe(approval.id)
+  expect((await host.conversations.status('thread', accepted.submissionId, context())).status).toBe(
+    'placed',
+  )
+  await request(`/threads/thread/approvals/${approval.id}`, 'POST', { state: 'approved' })
+  await (await host.engine.submission('thread', accepted.submissionId, context())).wait(context())
+  expect(await readFile(join(directory, 'workspace', 'file.txt'), 'utf8')).toBe(
+    'written by durable host',
+  )
+  second.stop()
 }, 30_000)

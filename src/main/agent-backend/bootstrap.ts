@@ -36,7 +36,7 @@ import type {
   AgentBackendStartupStage,
 } from './protocol'
 import { updateAgentModelSelectionFromCatalog } from '@/main/settings/model-catalog'
-import { startAgentHttpServer, type RunningAgentHttpServer } from './httpServer'
+import { startAgentHttpServer, type RunningAgentHttpServer } from './http-server'
 import { createPiNodeClientAdapter } from './piNodeClientAdapter'
 import { SkillLoader } from './skillLoader'
 import type { PiSubscribeRequest } from '@/shared/pi/piClient'

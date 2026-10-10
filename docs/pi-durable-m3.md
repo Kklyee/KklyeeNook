@@ -1,0 +1,29 @@
+# Pi Durable M3：传输接入进度
+
+## 当前边界
+
+生产 Chat 仍使用旧 Pi Runtime；M3 未完成。新 Host 与 HTTP 服务可以独立组装执行，但尚未替换 `agent-backend/bootstrap.ts`。不可同时启动新旧执行器处理同一产品会话。
+
+## 已完成：HTTP / SSE 基础
+
+`src/main/agent-backend/durable-http.ts` 提供 `/agent/threads`、会话快照、稳定 requestId 提交、Submission 状态/撤回、取消及持久审批决策 API。复用原 Hono 服务的随机 secret 路径、Origin 白名单、4 MiB 请求体限制、错误响应及关闭方式，不引入第二套认证。
+
+输入只允许 SDK input draft、显式文本/图片块、Skill 与附件引用。禁止客户端通过 HTTP 提交任意 write Entry 或附加未识别字段。Submission 与审批操作均绑定 URL 中的业务 threadId，不能跨会话读取或决策。
+
+SSE 转发官方 watchEvents 初始快照及提交事件批次，官方积压溢出产生的 snapshot 同样作为 reset。每个连接拥有独立 epoch 与递增 sequence；这是连接内的传输序号，不冒充 Durable 持久 Seq。重连始终重新捕获正式快照，不猜测丢失事件或重放副作用。
+
+审批 Document watch 补充请求变化；每帧附带当前 pending 审批及正式 InboxDoc 原始队列文本。它们是独立读取的展示投影，不宣称与事件批次属于同一个持久提交。审批是否仍有效及队列撤回均由后端正式任务/Submission 操作判定。
+
+Host 在创建会话的原子事务中初始化审批文档；打开已有映射时在 resume 前补齐缺失文档。HTTP/SSE 断开只释放观察者，不取消运行、不持有审批 Promise 或代替 Durable 恢复。SSE 写入由连接的 Chord Context 约束，关闭释放两类 watch。
+
+## 已验证
+
+`src/main/agent/agent-host.test.ts` 新增三个真实 HTTP/SSE 测试，验证认证、拒绝任意 Entry 写入、requestId 幂等、跨会话隔离、正式队列状态/撤回/取消、过期审批拒绝，以及 SSE 顺序、重连 reset 与断开不终止执行。已有 HTTP 服务回归继续通过。Node/Web/Remote 类型检查、lint 与完整桌面/Remote 构建通过。全仓测试为 94 个文件、497 项通过、2 项原有环境跳过；使用已安装的 uv-managed Python 临时调整测试子进程 PATH，未修改系统 PATH 或跳过策略。
+
+## 待完成
+
+- ChatStore 的展示投影 reducer、失序/缺口恢复与前后端协议联调。
+- ExternalStoreRuntime / ExternalStoreThreadListAdapter 与桌面、Remote 的实际接线。
+- Thread metadata CRUD、模型选择、历史会话只读及继续入口的完整 API。
+- 替换生产 bootstrap，完成设置、MCP、恢复与关闭生命周期；不能将独立模块测试当作生产切换验收。
+- M4 任务/调度/历史迁移及 M5 产品、崩溃、回滚验收通过后删除旧实现和依赖。

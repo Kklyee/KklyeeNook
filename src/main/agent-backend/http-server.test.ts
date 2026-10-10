@@ -2,7 +2,7 @@ import { afterEach, expect, test, vi } from 'vitest'
 import { createPiHttpClient, type PiClientEvent, type PiThreadSnapshot } from '@assistant-ui/react-pi'
 
 import type { ContextAwarePiClient } from '@/shared/pi/piClient'
-import { startAgentHttpServer, type RunningAgentHttpServer } from './httpServer'
+import { startAgentHttpServer, type RunningAgentHttpServer } from './http-server'
 
 const snapshot = {
   metadata: {

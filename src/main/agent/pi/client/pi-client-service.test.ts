@@ -2,7 +2,7 @@ import { expect, test, vi } from 'vitest'
 
 import type { PiAssistantMessage, PiClientEvent, PiClientEventBody, PiThreadMetadata } from '@assistant-ui/react-pi/node'
 import { createPiHttpClient, createPiThreadState, reducePiThreadState } from '@assistant-ui/react-pi'
-import { startAgentHttpServer } from '@/main/agent-backend/httpServer'
+import { startAgentHttpServer } from '@/main/agent-backend/http-server'
 import { AgentConfigStore } from '@/main/settings/agentConfigStore'
 import type { AgentService } from '../../agentService'
 import type { MessageProjectionService } from '../../messageProjectionService'

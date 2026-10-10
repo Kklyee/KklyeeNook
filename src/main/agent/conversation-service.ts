@@ -1,9 +1,5 @@
 import type { Context } from '@earendil-works/chord'
-import {
-  defineDoc,
-  type AgentChange,
-  type SubmissionId,
-} from '@earendil-works/pi-durable'
+import { defineDoc, type AgentChange, type SubmissionId } from '@earendil-works/pi-durable'
 import type { AgentSessionRepo } from '../db/repositories/agentSessionRepo'
 import type { PermissionMode } from '@/shared/approval/permission'
 import { AgentEngine } from './agent-engine'
@@ -14,6 +10,7 @@ export type CreateConversation = {
   title?: string
   workspaceId?: string | null
   permissionMode?: PermissionMode
+  initialize?: Parameters<AgentEngine['create']>[3]
   agent: AgentChange
 }
 
@@ -74,6 +71,7 @@ export class ConversationService {
       context,
       async (tx, id) => {
         Object.assign(await tx.doc(creationRecord, id), initialRecord)
+        await input.initialize?.(tx, id)
       },
     )
     const record = await this.engine.harness.snapshot(creationRecord, conversationId, context)
@@ -94,11 +92,7 @@ export class ConversationService {
     return record
   }
 
-  async submit(
-    threadId: string,
-    input: ContextInput,
-    context: Context,
-  ) {
+  async submit(threadId: string, input: ContextInput, context: Context) {
     if (!input.requestId.trim()) throw new Error('A stable request ID is required')
     await this.get(threadId, context)
     const conversation = await this.engine.conversation(threadId, context)

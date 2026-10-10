@@ -11,6 +11,7 @@ docs/*
 !docs/pi-durable-m0.md
 !docs/pi-durable-m1.md
 !docs/pi-durable-m2.md
+!docs/pi-durable-m3.md
 !docs/dsh-reference.md
 !docs/dsh-reference.zh.md
 .tmp*

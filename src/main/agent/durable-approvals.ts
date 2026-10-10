@@ -14,21 +14,8 @@ import {
   type TaskId,
 } from '@earendil-works/pi-durable'
 
-export type ApprovalRequirement = {
-  request: JsonObject
-  reason: string
-}
-
-export type DurableApproval = ApprovalRequirement & {
-  id: string
-  taskId: TaskId
-  callId: string
-  toolName: string
-  arguments: JsonObject
-  state: 'pending' | 'approved' | 'rejected'
-  createdAt: number
-  decidedAt?: number
-}
+import type { ApprovalRequirement, DurableApproval } from '@/shared/agent/durable-protocol'
+export type { ApprovalRequirement, DurableApproval } from '@/shared/agent/durable-protocol'
 
 export const approvalDoc = defineDoc<{ requests: Record<string, DurableApproval> }>({
   kind: 'nook.approvals',
@@ -41,11 +28,7 @@ export const approvalDoc = defineDoc<{ requests: Record<string, DurableApproval>
 
 type Assessment = ApprovalRequirement | { block: string } | undefined
 
-type AssessTool = (
-  call: ToolCall,
-  api: HookApi,
-  context: Context,
-) => Promise<Assessment>
+type AssessTool = (call: ToolCall, api: HookApi, context: Context) => Promise<Assessment>
 
 export class DurableApprovals {
   private harness: Harness | undefined
@@ -54,7 +37,9 @@ export class DurableApprovals {
   constructor(private readonly assess: AssessTool) {
     this.extension = defineExtension({
       name: 'nook.approvals',
-      hooks: [hook(ToolTask, { beforeTool: (call, api, context) => this.before(call, api, context) })],
+      hooks: [
+        hook(ToolTask, { beforeTool: (call, api, context) => this.before(call, api, context) }),
+      ],
     })
   }
 
@@ -98,9 +83,14 @@ export class DurableApprovals {
       }
       const checkpoint = task && 'checkpoint' in task.state ? task.state.checkpoint : undefined
       if (
-        !task || task.conversationId !== conversationId || task.abortRequested ||
-        task.kind !== 'pi.tool' || typeof checkpoint !== 'object' || checkpoint === null ||
-        !('phase' in checkpoint) || checkpoint.phase !== 'call'
+        !task ||
+        task.conversationId !== conversationId ||
+        task.abortRequested ||
+        task.kind !== 'pi.tool' ||
+        typeof checkpoint !== 'object' ||
+        checkpoint === null ||
+        !('phase' in checkpoint) ||
+        checkpoint.phase !== 'call'
       ) {
         throw new Error('Approval no longer active')
       }
@@ -119,9 +109,14 @@ export class DurableApprovals {
   ) {
     const doc = await this.host().snapshot(approvalDoc, conversationId, context)
     const request = doc?.requests[`${conversationId}:${taskId}`]
-    return request?.state === 'approved' && request.callId === call.id &&
-      request.toolName === call.name && isDeepStrictEqual(request.arguments, call.arguments) &&
-      request.reason === requirement.reason && isDeepStrictEqual(request.request, requirement.request)
+    return (
+      request?.state === 'approved' &&
+      request.callId === call.id &&
+      request.toolName === call.name &&
+      isDeepStrictEqual(request.arguments, call.arguments) &&
+      request.reason === requirement.reason &&
+      isDeepStrictEqual(request.request, requirement.request)
+    )
   }
 
   private host() {
@@ -135,16 +130,22 @@ export class DurableApprovals {
     const harness = this.host()
     const id = `${api.conversationId}:${api.taskId}`
     const expected = copyJson({
-      callId: call.id, toolName: call.name, arguments: call.arguments, ...requirement,
+      callId: call.id,
+      toolName: call.name,
+      arguments: call.arguments,
+      ...requirement,
     }) as Draft<ApprovalRequirement & { callId: string; toolName: string; arguments: JsonObject }>
     const matches = (request: DurableApproval) =>
-      isDeepStrictEqual({
-        callId: request.callId,
-        toolName: request.toolName,
-        arguments: request.arguments,
-        request: request.request,
-        reason: request.reason,
-      }, expected)
+      isDeepStrictEqual(
+        {
+          callId: request.callId,
+          toolName: request.toolName,
+          arguments: request.arguments,
+          request: request.request,
+          reason: request.reason,
+        },
+        expected,
+      )
     await harness.commit(async (tx) => {
       const task = await tx.task(api.taskId)
       if (!task || task.abortRequested || task.state.status !== 'running') {
@@ -169,7 +170,9 @@ export class DurableApprovals {
           else if (request.state !== 'pending') resolve(request)
         }
         check(watch.value)
-        watch.start(async (value) => { check(value) })
+        watch.start(async (value) => {
+          check(value)
+        })
         void watch.closed.then(() => reject(new Error('Approval watch closed')))
       })
       const request = await awaitWithContext(decision, context)

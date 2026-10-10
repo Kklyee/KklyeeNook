@@ -24,6 +24,7 @@ import { AgentModels } from './agent-models'
 import { AgentInstructions, createAgentInstructions } from './agent-instructions'
 import { ConversationService } from './conversation-service'
 import { DurableTools } from './durable-tools'
+import { approvalDoc } from './durable-approvals'
 import { DurableInputs } from './durable-inputs'
 
 export type AgentHostOptions = {
@@ -124,10 +125,15 @@ export class AgentHost {
       options.databasePath,
       { models: models.models, registry, settings, onReport: options.onReport },
       context,
-      (initializing) => {
+      async (initializing) => {
         engine = initializing
         tools.connect(initializing.harness)
         inputs.connect(initializing.harness)
+        for (const id of Object.values(await initializing.links(context))) {
+          await initializing.harness.commit(async (tx) => {
+            await tx.doc(approvalDoc, id)
+          }, context)
+        }
       },
     )
     return new AgentHost(engine, models, tools, inputs, options, registry, identities)
@@ -154,6 +160,9 @@ export class AgentHost {
       {
         ...input,
         permissionMode,
+        initialize: async (tx, id) => {
+          await tx.doc(approvalDoc, id)
+        },
         agent: {
           ...this.models.selection(),
           extensions: [

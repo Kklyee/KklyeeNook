@@ -20,7 +20,7 @@ import type { PiQueueMutation } from '@/shared/pi/piClient'
 const HOST = '127.0.0.1'
 const MAX_BODY_BYTES = 4 * 1024 * 1024
 
-class HttpError extends Error {
+export class HttpError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
@@ -45,8 +45,20 @@ export async function startAgentHttpServer(
   client: ContextAwarePiClient,
   options: AgentHttpServerOptions = {},
 ): Promise<RunningAgentHttpServer> {
+  return startAuthenticatedServer(
+    'pi',
+    (context, prefix) => handleRequest(context, client, prefix),
+    options,
+  )
+}
+
+export async function startAuthenticatedServer(
+  protocol: 'pi' | 'agent',
+  handle: (context: Context, prefix: string) => Promise<Response>,
+  options: AgentHttpServerOptions = {},
+): Promise<RunningAgentHttpServer> {
   const secret = options.secret ?? randomBytes(32).toString('hex')
-  const prefix = `/${secret}/api/pi`
+  const prefix = `/${secret}/api/${protocol}`
   const allowedOrigins = new Set(options.allowedOrigins ?? [])
   const app = new Hono()
 
@@ -72,7 +84,7 @@ export async function startAgentHttpServer(
   })
 
   app.get('/health', (context) => context.json({ ok: true, service: 'kklyeenook-agent-backend' }))
-  app.all('*', async (context) => handleRequest(context, client, prefix))
+  app.all('*', async (context) => handle(context, prefix))
   app.onError((error, context) => sendUnexpectedError(context, error))
 
   const server = serve({ fetch: app.fetch, port: 0, hostname: HOST }) as Server
@@ -83,7 +95,7 @@ export async function startAgentHttpServer(
 
   const { port } = address
   return {
-    baseUrl: `http://${HOST}:${port}/${secret}/api/pi`,
+    baseUrl: `http://${HOST}:${port}${prefix}`,
     port,
     close: () => closeServer(server),
   }
@@ -288,7 +300,7 @@ function sendEvents(
   return response
 }
 
-async function readJsonBody(context: Context): Promise<unknown> {
+export async function readJsonBody(context: Context): Promise<unknown> {
   const body = await context.req.arrayBuffer()
   if (body.byteLength > MAX_BODY_BYTES) {
     throw new HttpError(413, 'payload_too_large', 'Request body is too large.')
