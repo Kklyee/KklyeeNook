@@ -68,6 +68,19 @@ Node 类型检查与相关 oxlint 通过。测试使用官方 Faux Provider 和�
 
 四个 Durable 核心文件 31 测试、全仓 typecheck/lint/build 通过。生产 bootstrap 仍未切换到此模型集合。
 
+## 已完成：Skills / ContextBuilder 输入基础
+
+`src/main/agent/durable-inputs.ts` 为每个 requestId 保存 `nook.input` Document Family，捕获原始输入、明确选择的 Skill 内容、附件文本与 Memory 快照。通过正式 Conversation.submit 准入，不实现自定义队列或调度状态机。
+
+- 输入准备先持久化，再调用官方提交；准入失败后的重试可使用原始快照，不依赖已丢失的内存附件或删除的 Skill 文件。
+- 两次提交相同 requestId 使用同一份初始输入和上下文，不能被重试的新内容覆盖。
+- Prompt sections 只读取 `pi.live.run.inputs` 中已实际放置的输入，排队输入的附件不会覆盖正在执行的上下文。
+- 用户 Transcript Entry 保持原始文本，上下文通过正式 system sections 提供。附件明确作为数据而非扩权指令。
+- 显式 Skill 和 `/review`、`/skill:review` 命令捕获当前文件内容与来源目录；后续文件更新不改写已提交快照。
+- 输入上下文不修改工具允许列表或审批策略。ConversationService 可注入此服务；未接服务时带上下文提交会明确拒绝，不能静默丢弃。
+
+七项集成测试及现有 SkillLoader/ContextBuilder、AgentEngine 回归通过；Node 类型检查与 lint 通过。SkillLoader 的 frontmatter 解析暂时仍复用旧工具包，需在 M5 替换该依赖。生产 HTTP/Chat 未接线，不能声称 M2 已发布。
+
 ## 全仓复测
 
 找到现有 uv 管理的 Python：`C:\\Users\\kk\\AppData\\Roaming\\uv\\python\\cpython-3.11.13-windows-x86_64-none\\python.exe`。只为测试子进程临时将该目录前置到 PATH，运行结束恢复，不安装软件、不永久改变 PATH、不修改 Sandbox 策略或测试 skip 条件。
@@ -79,7 +92,7 @@ Node 类型检查与相关 oxlint 通过。测试使用官方 Faux Provider 和�
 - 将已验证的 Provider/设置基础接到生产初始化与设置变更生命周期。
 - 将已验证的 ToolRegistry/Sandbox/Workspace 和持久审批基础接到生产 HTTP/UI。
 - 统一 Durable Run 的临时资源生命周期，并最终替换工具实现的旧依赖边界。
-- Skills/ContextBuilder/MCP 的实际 Registry/sections 集成。
+- 将已验证的 Skills/ContextBuilder sections 与 MCP Registry 变更接到生产 Host。
 - 正式 Agent Backend 初始化顺序、restore 与 Hono 接线。
 
 最新 `pnpm test --maxWorkers=2`：89 个文件中 88 通过，429 测试通过、30 失败、2 跳过，另有 1 个未处理拒绝。失败仍全部来自 Windows Sandbox Null 设备拒绝访问。

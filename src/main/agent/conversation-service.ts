@@ -2,12 +2,12 @@ import type { Context } from '@earendil-works/chord'
 import {
   defineDoc,
   type AgentChange,
-  type InputSubmissionDraft,
   type SubmissionId,
 } from '@earendil-works/pi-durable'
 import type { AgentSessionRepo } from '../db/repositories/agentSessionRepo'
 import type { PermissionMode } from '@/shared/approval/permission'
 import { AgentEngine } from './agent-engine'
+import type { ContextInput, DurableInputs } from './durable-inputs'
 
 export type CreateConversation = {
   threadId: string
@@ -46,6 +46,7 @@ export class ConversationService {
   constructor(
     private readonly engine: AgentEngine,
     private readonly sessions: AgentSessionRepo,
+    private readonly inputs?: DurableInputs,
   ) {}
 
   async create(input: CreateConversation, context: Context) {
@@ -95,13 +96,17 @@ export class ConversationService {
 
   async submit(
     threadId: string,
-    input: InputSubmissionDraft & { requestId: string },
+    input: ContextInput,
     context: Context,
   ) {
     if (!input.requestId.trim()) throw new Error('A stable request ID is required')
     await this.get(threadId, context)
     const conversation = await this.engine.conversation(threadId, context)
-    const submission = await conversation.submit(input, context)
+    if (!this.inputs && (input.contextAttachmentIds?.length || input.skillIds?.length))
+      throw new Error('Input context service is not configured')
+    const submission = this.inputs
+      ? await this.inputs.submit(conversation, input, context)
+      : await conversation.submit(input, context)
     return { accepted: true as const, conversationId: conversation.id, submissionId: submission.id }
   }
 
