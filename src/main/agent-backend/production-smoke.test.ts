@@ -13,22 +13,27 @@ import { build } from 'vite'
 
 const execute = promisify(execFile)
 
-test.each(['lifecycle', 'approval-crash', 'cancel-crash', 'unsafe-crash'] as const)('production utility-process bootstrap and recovery: %s', async (scenario) => {
+test.each(['lifecycle', 'approval-crash', 'cancel-crash', 'unsafe-crash', 'delegation-crash', 'delegation-cancel-crash'] as const)('production utility-process bootstrap and recovery: %s', async (scenario) => {
   const directory = await mkdtemp(join(process.cwd(), 'node_modules', '.nook-production-'))
   const data = await mkdtemp(join(tmpdir(), 'nook-production-data-'))
   let calls = 0
+  const modelRequests: any[] = []
   const server = createServer(async (request, response) => {
     const chunks: Buffer[] = []
     for await (const chunk of request) chunks.push(Buffer.from(chunk))
     const body = JSON.parse(Buffer.concat(chunks).toString())
+    modelRequests.push(body)
     calls++
     const user = JSON.stringify(body.messages.filter((message: { role: string; content?: unknown }) => message.role === 'user').at(-1)?.content)
-    const tool = !body.messages.some((message: { role: string }) => message.role === 'tool') && (user.includes('approval-effect') || user.includes('unsafe-effect'))
+    const tool = !body.messages.some((message: { role: string }) => message.role === 'tool') && (user.includes('approval-effect') || user.includes('unsafe-effect') || user.includes('delegation-effect'))
     const args = user.includes('unsafe-effect')
       ? { command: process.platform === 'win32' ? "Add-Content -LiteralPath 'effect.txt' -Value 'once'; Start-Sleep -Seconds 30" : "printf 'once\\n' >> effect.txt; sleep 30" }
-      : { path: 'effect.txt', content: 'once' }
+      : { path: /child-([0-2])/.test(user) ? `child-${/child-([0-2])/.exec(user)![1]}.txt` : 'effect.txt', content: 'once' }
+    const requested = user.includes('delegation-effect')
+      ? [0, 1, 2].map(index => ({ name: 'delegate_task', id: `delegate-${index}`, args: { task: `approval-effect child-${index}`, context: 'explicit context only' } }))
+      : [{ name: user.includes('unsafe-effect') ? 'bash' : 'write', id: 'effect-call', args }]
     response.writeHead(200, { 'content-type': 'text/event-stream' })
-    response.write('data: ' + JSON.stringify({ id: 'synthetic', object: 'chat.completion.chunk', created: 1, model: 'test-model', choices: [{ index: 0, delta: tool ? { role: 'assistant', tool_calls: [{ index: 0, id: 'effect-call', type: 'function', function: { name: user.includes('unsafe-effect') ? 'bash' : 'write', arguments: JSON.stringify(args) } }] } : { role: 'assistant', content: 'Production host accepted.' }, finish_reason: null }] }) + '\n\n')
+    response.write('data: ' + JSON.stringify({ id: 'synthetic', object: 'chat.completion.chunk', created: 1, model: 'test-model', choices: [{ index: 0, delta: tool ? { role: 'assistant', tool_calls: requested.map((call, index) => ({ index, id: call.id, type: 'function', function: { name: call.name, arguments: JSON.stringify(call.args) } })) } : { role: 'assistant', content: 'Production host accepted.' }, finish_reason: null }] }) + '\n\n')
     response.end('data: ' + JSON.stringify({ id: 'synthetic', object: 'chat.completion.chunk', created: 1, model: 'test-model', choices: [{ index: 0, delta: {}, finish_reason: tool ? 'tool_calls' : 'stop' }] }) + '\n\ndata: [DONE]\n\n')
   })
   server.listen(0, '127.0.0.1')
@@ -38,7 +43,7 @@ test.each(['lifecycle', 'approval-crash', 'cancel-crash', 'unsafe-crash'] as con
     if (!address || typeof address === 'string') throw new Error('Model server did not bind')
     const require = createRequire(import.meta.url)
     const options = {
-      config: { model: { provider: 'test-provider', modelID: 'test-model', api: 'openai-completions', baseUrl: `http://127.0.0.1:${address.port}/v1` }, tools: { enabled: scenario === 'lifecycle' ? [] : ['write', 'bash'] }, compaction: { enabled: false, reserveTokens: 1000, keepRecentTokens: 1000 } },
+      config: { model: { provider: 'test-provider', modelID: 'test-model', api: 'openai-completions', baseUrl: `http://127.0.0.1:${address.port}/v1` }, tools: { enabled: scenario === 'lifecycle' ? [] : ['write', 'bash', ...(scenario.startsWith('delegation') ? ['delegate_task'] : [])] }, compaction: { enabled: false, reserveTokens: 1000, keepRecentTokens: 1000 } },
       apiKeys: { 'test-provider': 'synthetic-key' }, databaseUrl: 'file:' + join(data, 'business.sqlite'),
       migrationsPath: fileURLToPath(new URL('../../../drizzle', import.meta.url)), sessionDir: join(data, 'sessions'), allowedOrigins: [],
     }
@@ -50,6 +55,7 @@ test.each(['lifecycle', 'approval-crash', 'cancel-crash', 'unsafe-crash'] as con
     const script = `
 import { app, utilityProcess } from 'electron'
 import { readFile, readdir } from 'node:fs/promises'
+import { join } from 'node:path'
 app.setPath('userData', ${JSON.stringify(data)})
 const options = ${JSON.stringify(options)}
 const scenario = ${JSON.stringify(scenario)}
@@ -132,10 +138,12 @@ app.whenReady().then(async () => {
       if (JSON.stringify(restoredRuns) !== JSON.stringify(runs)) throw new Error('Restart changed official run receipts')
       let crash
       if (scenario !== 'lifecycle') {
+        const delegated = scenario.startsWith('delegation')
+        const cancelled = scenario === 'cancel-crash' || scenario === 'delegation-cancel-crash'
         base = restoredBase
         const workspace = await restored.rpc('workspace:attach', { path: ${JSON.stringify(join(data, 'workspace'))} })
         await json('/threads', { threadId: 'crash-thread', workspaceId: workspace.workspace.id, permissionMode: scenario === 'unsafe-crash' ? 'workspace-write' : 'read-only' })
-        const request = { type: 'input', content: scenario === 'unsafe-crash' ? 'unsafe-effect' : 'approval-effect', requestId: 'crash-request' }
+        const request = { type: 'input', content: scenario === 'unsafe-crash' ? 'unsafe-effect' : delegated ? 'root-secret delegation-effect' : 'approval-effect', requestId: 'crash-request' }
         const admitted = await json('/threads/crash-thread/submissions', request)
         const poll = async (read, check) => {
           const until = Date.now() + 15000
@@ -148,6 +156,7 @@ app.whenReady().then(async () => {
         }
         const effect = ${JSON.stringify(join(data, 'workspace', 'effect.txt'))}
         let approval
+        let approvals
         let queued
         if (scenario === 'unsafe-crash') {
           await poll(async () => {
@@ -162,10 +171,12 @@ app.whenReady().then(async () => {
           const directories = await readdir(${JSON.stringify(join(data, 'sandbox'))})
           if (!directories.length) throw new Error('Restricted run did not allocate sandbox resources')
         } else {
-          approval = (await poll(() => json('/threads/crash-thread/approvals'), value => value.length === 1))[0]
+          approvals = await poll(() => json('/threads/crash-thread/approvals'), value => value.length === (delegated ? 2 : 1))
+          approval = approvals[0]
+          if (delegated) await poll(() => json('/threads/crash-thread'), value => JSON.stringify(value.snapshot.entries).includes('At most two child conversations'))
           queued = await json('/threads/crash-thread/submissions', { type: 'input', content: 'queued-original', requestId: 'queue-request', whenBusy: 'followUp' })
           await json('/threads/crash-thread/queue/item', { mode: 'followUp', expected: ['queued-original'], index: 0, action: 'edit', value: 'queued-edited' })
-          if (scenario === 'cancel-crash') await fetch(base + '/threads/crash-thread/cancel', { method: 'POST' }).then(response => { if (!response.ok) throw new Error('Cancel failed') })
+          if (cancelled) await fetch(base + '/threads/crash-thread/cancel', { method: 'POST' }).then(response => { if (!response.ok) throw new Error('Cancel failed') })
         }
         restored.child.kill()
         await restored.exited
@@ -173,22 +184,24 @@ app.whenReady().then(async () => {
         base = (await recovered.ready).baseUrl
         const repeated = await json('/threads/crash-thread/submissions', request)
         if (repeated.submissionId !== admitted.submissionId) throw new Error('Crash recovery duplicated submission')
-        if (scenario === 'approval-crash') {
-          const pending = await poll(() => json('/threads/crash-thread/approvals'), value => value.length === 1)
-          if (pending[0].id !== approval.id || pending[0].state !== 'pending') throw new Error('Recovery changed or auto-approved the request')
+        if (scenario === 'approval-crash' || scenario === 'delegation-crash') {
+          const pending = await poll(() => json('/threads/crash-thread/approvals'), value => value.length === (delegated ? 2 : 1))
+          if (JSON.stringify(pending.map(item => item.id).sort()) !== JSON.stringify(approvals.map(item => item.id).sort()) || pending.some(item => item.state !== 'pending')) throw new Error('Recovery changed or auto-approved the request')
           if (await readFile(effect, 'utf8').catch(() => '') !== '') throw new Error('Pending approval caused an effect')
           const state = await json('/threads/crash-thread')
           if (state.queue.length !== 1 || state.queue[0].id !== queued.submissionId || state.queue[0].content !== 'queued-edited') throw new Error('Queue was not restored from official state')
           const retry = await json('/threads/crash-thread/submissions', { type: 'input', content: 'queued-original', requestId: 'queue-request', whenBusy: 'followUp' })
           if (retry.submissionId !== queued.submissionId) throw new Error('Lost queue acknowledgement duplicated work')
-          await json('/threads/crash-thread/approvals/' + approval.id, { state: 'approved' })
+          for (const item of pending) await json('/threads/crash-thread/approvals/' + item.id, { state: 'approved' })
           await poll(() => json('/threads/crash-thread/submissions/' + queued.submissionId), value => value.status === 'done')
-          if ((await readFile(effect, 'utf8')).trim() !== 'once') throw new Error('Approved effect changed')
-        } else if (scenario === 'cancel-crash') {
+          const effects = delegated ? approvals.map(item => join(${JSON.stringify(join(data, 'workspace'))}, item.arguments.path)) : [effect]
+          for (const file of effects) if ((await readFile(file, 'utf8')).trim() !== 'once') throw new Error('Approved effect changed')
+        } else if (cancelled) {
           if ((await json('/threads/crash-thread/approvals')).length) throw new Error('Cancelled approval remained pending')
           const stale = await fetch(base + '/threads/crash-thread/approvals/' + approval.id, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ state: 'approved' }) })
           if (stale.status !== 409) throw new Error('Stale approval accepted after crash')
           if (await readFile(effect, 'utf8').catch(() => '') !== '') throw new Error('Cancelled work caused an effect')
+          if (delegated) for (const item of approvals) if (await readFile(join(${JSON.stringify(join(data, 'workspace'))}, item.arguments.path), 'utf8').catch(() => '') !== '') throw new Error('Cancelled child caused an effect')
           if ((await json('/threads/crash-thread/submissions/' + queued.submissionId)).status !== 'unanswered') throw new Error('Cancelled queued work resumed')
         } else {
           await poll(() => json('/threads/crash-thread/submissions/' + admitted.submissionId), value => value.status === 'done' || value.status === 'unanswered')
@@ -220,6 +233,11 @@ app.whenReady().then(async () => {
     const result = JSON.parse(line!.slice('PRODUCTION_SMOKE='.length))
     if (scenario === 'lifecycle') expect(calls).toBe(1)
     else expect(result.crash).toMatchObject({ scenario, recovered: true })
+    if (scenario.startsWith('delegation')) {
+      const children = modelRequests.filter(body => JSON.stringify(body.messages.filter((message: { role: string }) => message.role === 'user').at(-1)?.content).includes('approval-effect child-'))
+      expect(children.length).toBe(scenario === 'delegation-crash' ? 4 : 2)
+      for (const request of children) expect(JSON.stringify(request)).not.toContain('root-secret')
+    }
     expect(result.runs).toEqual([expect.objectContaining({ status: 'completed', result: 'Production host accepted.' })])
     expect(result.records.map((record) => record.event.type)).toEqual(['agent_started', 'text_delta', 'agent_completed'])
     expect(JSON.stringify(result.snapshot.snapshot.entries)).toContain('Production host accepted.')

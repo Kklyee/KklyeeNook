@@ -61,7 +61,8 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
-type Reply = string | { name: string; arguments: Record<string, unknown>; id?: string }
+type ToolReply = { name: string; arguments: Record<string, unknown>; id?: string }
+type Reply = string | ToolReply | ToolReply[]
 
 async function setup(write = true, respond?: (body: Record<string, any>) => Reply) {
   const requests: Record<string, unknown>[] = []
@@ -76,6 +77,7 @@ async function setup(write = true, respond?: (body: Record<string, any>) => Repl
         ? { name: 'write', arguments: { path: 'file.txt', content: 'written by durable host' } }
         : 'complete')
     const call = typeof reply !== 'string'
+    const calls = call ? Array.isArray(reply) ? reply : [reply] : []
     response.writeHead(200, { 'content-type': 'text/event-stream' })
     response.write(
       `data: ${JSON.stringify({
@@ -89,14 +91,14 @@ async function setup(write = true, respond?: (body: Record<string, any>) => Repl
             delta: call
               ? {
                   role: 'assistant',
-                  tool_calls: [
+                  tool_calls: calls.map((reply, index) => (
                     {
-                      index: 0,
+                      index,
                       id: reply.id ?? 'write-call',
                       type: 'function',
                       function: { name: reply.name, arguments: JSON.stringify(reply.arguments) },
-                    },
-                  ],
+                    }
+                  )),
                 }
               : { role: 'assistant', content: reply },
             finish_reason: null,
@@ -722,4 +724,47 @@ test('aborting a parent drains owned child work and invalidates its approvals', 
     host.tools.approvals.decide(childId, approval.id, 'approved', context()),
   ).rejects.toThrow('no longer active')
   await expect(readFile(join(directory, 'workspace', 'file.txt'))).rejects.toThrow()
+}, 30_000)
+
+test('three simultaneous delegation calls admit at most two children and recovery reuses both child identities', async () => {
+  const { host, open, workspaceId, config, setConfig, requests } = await setup(false, body => {
+    if (body.messages.some(message => message.role === 'tool')) return 'complete'
+    const user = JSON.stringify(body.messages.filter(message => message.role === 'user').at(-1)?.content)
+    if (user.includes('root-secret')) return [0, 1, 2].map(index => ({ name: 'delegate_task', id: `delegate-${index}`, arguments: { task: `child-only-${index}`, context: 'explicit context only' } }))
+    const index = /child-only-([0-2])/.exec(user)![1]
+    return { name: 'write', id: `child-write-${index}`, arguments: { path: `child-${index}.txt`, content: 'once' } }
+  })
+  setConfig({ ...config, tools: { enabled: ['delegate_task', 'write'] } })
+  await host.reload(context())
+  await host.create({ threadId: 'concurrent-thread', workspaceId, permissionMode: 'read-only' }, context())
+  const accepted = await host.conversations.submit('concurrent-thread', { type: 'input', content: 'root-secret', requestId: 'concurrent-request' }, context())
+  await vi.waitFor(async () => expect(await host.pendingApprovals('concurrent-thread', context())).toHaveLength(2), { timeout: 15_000 })
+  const approvals = await host.pendingApprovals('concurrent-thread', context())
+  const ids = await host.engine.ownedConversationIds('concurrent-thread', context())
+  expect(ids).toHaveLength(3)
+  await vi.waitFor(async () => expect(JSON.stringify((await host.conversations.snapshot('concurrent-thread', context())).entries)).toContain('At most two child conversations'), { timeout: 15_000 })
+  const child = ids.find(id => id !== accepted.conversationId)!
+  const owner = (await host.engine.harness.inspect(context())).tasks.find(({ record }) => record.conversationId === accepted.conversationId && record.kind === 'pi.tool')!.record
+  await expect(host.delegation.tool.execute({ task: 'nested attempt' }, {
+    conversationId: child, taskId: owner.id,
+    agent: () => host.engine.conversation('concurrent-thread', context()).then(conversation => conversation.agent(context())),
+    commit: (change: Parameters<typeof host.engine.harness.commit>[0]) => host.engine.harness.commit(change, context()),
+  } as never, context())).rejects.toThrow('Child conversations cannot delegate')
+  expect((await host.engine.ownedConversationIds('concurrent-thread', context())).sort((a, b) => a - b)).toEqual([...ids].sort((a, b) => a - b))
+  await host.close()
+  const recovered = await open()
+  expect((await recovered.engine.ownedConversationIds('concurrent-thread', context())).sort((a, b) => a - b)).toEqual([...ids].sort((a, b) => a - b))
+  expect((await recovered.pendingApprovals('concurrent-thread', context())).sort((a, b) => a.id.localeCompare(b.id))).toEqual([...approvals].sort((a, b) => a.id.localeCompare(b.id)))
+  for (const approval of approvals) await recovered.decideApproval('concurrent-thread', approval.id, 'approved', context())
+  await (await recovered.engine.submission('concurrent-thread', accepted.submissionId, context())).wait(context())
+  await (await recovered.engine.conversation('concurrent-thread', context())).waitForIdle(context())
+  for (const approval of approvals) expect(await readFile(join(directory, 'workspace', String(approval.arguments.path)), 'utf8')).toBe('once')
+  const children = requests.filter(body => JSON.stringify((body.messages as any[]).filter(message => message.role === 'user').at(-1)?.content).includes('child-only'))
+  expect(children).toHaveLength(4)
+  for (const request of children) {
+    expect(JSON.stringify(request)).not.toContain('root-secret')
+    expect(JSON.stringify(request)).toContain('explicit context only')
+  }
+  const runs = await new RunProjection(recovered).list('concurrent-thread', context())
+  expect(runs.filter(run => run.depth === 1)).toHaveLength(2)
 }, 30_000)
