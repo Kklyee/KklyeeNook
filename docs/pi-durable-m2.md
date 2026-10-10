@@ -68,6 +68,14 @@ Node 类型检查与相关 oxlint 通过。测试使用官方 Faux Provider 和�
 
 四个 Durable 核心文件 31 测试、全仓 typecheck/lint/build 通过。生产 bootstrap 仍未切换到此模型集合。
 
+## 已完成：Host 组装集成
+
+`src/main/agent/agent-host.ts` 组装唯一 AgentEngine、模型集合、业务 ConversationService、Workspace 上下文、两种身份、输入 sections 和审批/工具桥接。审批与输入服务在 Harness.resume 之前连接；未知业务归属的 Conversation 执行上下文会被拒绝，不回退为高权限环境。
+
+Host 提供工具 Registry 刷新与模型/Skill 设置重载，MCP 工具自动进入正式 Agent tool selection。真实 localhost HTTP + Drizzle 元数据 + 本地 Workspace 工具的四项测试通过，包括实际批准后的写入、审批等待关闭/重开、等待中解绑 Workspace 阻止写入、个人身份及动态工具选择。恢复测试为正常关闭重开；真正 SIGKILL 覆盖仍来自已有 AgentEngine/审批测试。
+
+该 Host 尚未替换 `agent-backend/bootstrap.ts` 的生产旧执行器，完整应用恢复/HTTP/Chat 验收仍待完成。
+
 ## 已完成：Skills / ContextBuilder 输入基础
 
 `src/main/agent/durable-inputs.ts` 为每个 requestId 保存 `nook.input` Document Family，捕获原始输入、明确选择的 Skill 内容、附件文本与 Memory 快照。通过正式 Conversation.submit 准入，不实现自定义队列或调度状态机。
