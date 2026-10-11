@@ -26,6 +26,7 @@ export type ContextInput = InputSubmissionDraft & {
   scheduledTaskId?: string
   groveTaskId?: string
   groveResult?: boolean
+  groveRemote?: boolean
 }
 
 type PreparedInput = {
@@ -37,6 +38,7 @@ type PreparedInput = {
   scheduledTaskId?: string
   groveTaskId?: string
   groveResult?: boolean
+  groveRemote?: boolean
 }
 
 export type BotSubmissionConfig = {
@@ -99,7 +101,8 @@ export class AgentInputs {
     this.extension = defineExtension({
       name: 'nook.context',
       sections: [
-        section('available-skills', () => {
+        section('available-skills', async (input, context) => {
+          if ((await this.active(input, context)).some((prepared) => prepared.groveRemote)) return undefined
           const skills = this.skills.listSkills()
           return skills.length
             ? JSON.stringify(
@@ -170,15 +173,16 @@ export class AgentInputs {
         }
       })
       const workspaceId = await this.workspaceId(conversation.id, context)
-      const runContext = await this.builder.build(input.contextAttachmentIds ?? [], workspaceId)
+      const runContext = input.groveRemote ? undefined : await this.builder.build(input.contextAttachmentIds ?? [], workspaceId)
       const bot = await this.capture?.(conversation.id, context)
-      const { contextAttachmentIds: _attachments, skillIds: _skills, scheduledTaskId, groveTaskId, groveResult, ...draft } = input
+      const { contextAttachmentIds: _attachments, skillIds: _skills, scheduledTaskId, groveTaskId, groveResult, groveRemote, ...draft } = input
       const candidate: PreparedInput = {
         ...(bot ? { bot: copyJson(groveResult ? { ...bot, tools: [] } : bot, { omitUndefinedProperties: true }) as BotSubmissionConfig } : {}),
         draft: copyJson(draft, { omitUndefinedProperties: true }) as PreparedInput['draft'],
         ...(scheduledTaskId ? { scheduledTaskId } : {}),
         ...(groveTaskId ? { groveTaskId } : {}),
         ...(groveResult ? { groveResult } : {}),
+        ...(groveRemote ? { groveRemote } : {}),
         context: renderContext(runContext),
         skills: selected.length
           ? 'Use the explicitly selected skill instructions below. Resolve relative references against each skill directory.\n' +

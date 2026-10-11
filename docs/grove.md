@@ -3,7 +3,7 @@
 ## 当前进度
 
 - Phase 1：本地 Bot 通信、Durable 协作执行、Chat 与 Grove 入口已实现。
-- Phase 2：已实现网络身份、Host / User 凭据校验、Social Grant、连接邀请及 PostgreSQL Relay HTTP API。Desktop Remote Transport、Host Inbox / Outbox 和管理 UI 尚未实现。
+- Phase 2：已实现网络身份、Host / User 凭据校验、Social Grant、连接邀请、PostgreSQL Relay HTTP API、Remote Transport、Host Inbox / Outbox 和 Durable Bridge。Desktop 启动配置、凭据接入和管理 UI 尚未完成。
 - Phase 3：受控远程 MCP 分享、委托安装及审批尚未实现。
 - Phase 4：不属于 v0.2 首期范围。
 
@@ -97,4 +97,18 @@ Relay 在同一事务中保存已授权 Operation 与消息，避免只消耗限
 
 Inbox 投递前复核授权与任务截止时间，撤销或过期请求不会送入目标 Bot；任务拒绝结果通过原关联 ID 返回发起 Host。远程请求默认禁止递归委托，最多同时保留 4 个未结束任务，每个发送 Bot 每分钟最多发送 30 条请求或普通消息。结果回传不消耗新的发送授权。
 
-新增 Relay 集成测试覆盖真实 TCP HTTP 请求、离线消息保留、回执权限、去重、关联结果、授权撤销、截止时间、队列和频率上限、严格身份字段校验及请求体大小限制。下一阶段必须接入 Desktop Host 的本地持久化 Inbox / Outbox 和 Durable Bridge，才能完成两台设备的 Bot 协作闭环。
+新增 Relay 集成测试覆盖真实 TCP HTTP 请求、离线消息保留、回执权限、去重、关联结果、授权撤销、截止时间、队列和频率上限、严格身份字段校验及请求体大小限制。
+
+## Host 网络执行与恢复
+
+`AgentHostOptions.groveTransport` 接收 `RemoteTransport`。Transport 要求 HTTPS，允许测试或本地部署使用 loopback HTTP，禁止 URL 内携带凭据及跟随重定向。Host 凭据由回调提供，不保存在消息、任务、身份或 Inbox / Outbox 数据中。Desktop 的设置与加密凭据接入尚待实现。
+
+Host 本地新增 `network_identity`、`remote_contacts`、`social_inbox` 与 `social_outbox`。Durable 后台网络任务注册 Bot、刷新联系人、重试待发送事件、拉取 Inbox 并处理本地恢复记录。Inbox 先持久化到 SQLite，再向 Relay ack；如果在提交或 ack 周围退出进程，持久化 Inbox 和稳定的 requestId 可恢复原始任务，避免重复 Submission。Outbox 保存原始 payload 和 Operation ID，发送失败会保留并重试；明确拒绝会记录失败，已结束任务不会继续发出。
+
+身份解析层将本 Host 的 networkId 规范化为 localBotId，跨 Host 使用全局 networkId。Relay 地址及已注册身份与本地持久化状态绑定，不能在恢复待处理记录时静默更换 Relay 或 Host 身份。
+
+远程任务进入单独的协作 Conversation，使用目标 Bot 的模型和 Instructions，不继承私有主会话。输入不加载 Memory、附件或本地 Skill 清单，也不自动关联 Workspace。远程模型工具调用目前默认拒绝，后续受控共享必须单独接入 `tool.invoke` 检查；接收协作授权不会隐式变成资源或工具执行授权。跨网络递归委托被拒绝，接收端最多使用 23 次 Generation，为发起方的一次结果汇总保留预算。
+
+接收请求、生成模型调用及工具执行前都会复核远程授权和本地接收策略。临时 Relay 故障会等待或重试，始终受原始截止时间约束；撤销或拒绝不会被当作临时故障继续执行。
+
+`apps/grove/src/host-bridge.test.ts` 通过两个独立 Node Host 子进程、各自的 SQLite 数据库、真实 Pi Durable、模拟模型服务及 TCP Relay 验证跨用户执行、模型和上下文隔离、离线接收、完整进程退出后恢复、任务 / Submission 去重、授权撤销和接收策略拒绝。下一阶段接通 Desktop 配置与管理 UI，再完成受控 MCP 分享和委托安装。

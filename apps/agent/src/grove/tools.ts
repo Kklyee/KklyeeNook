@@ -12,13 +12,13 @@ export function registerGroveTools(registry: ToolRegistry, getHost: () => AgentH
     {
       name: 'bot.send_message',
       description:
-        'Send a message to an existing local Bot by its ID. Messages are recorded without invoking its model.',
+        'Send a message to an existing local or connected remote Bot by its ID. Messages are recorded without invoking its model.',
       schema: Type.Object({ toBotId: id, content: text }, { additionalProperties: false }),
     },
     {
       name: 'bot.request_task',
       description:
-        'Request collaboration from an existing independent local Bot by its ID. It uses its own instructions, model and authorized Workspace. Returns a task ID; the result arrives automatically. Do not repeatedly poll. Built-in IDs: xiaoya, coder.',
+        'Request collaboration from an existing independent local or connected remote Bot by its ID. It uses its own instructions, model and permitted resources. Returns a task ID; the result arrives automatically. Do not repeatedly poll. Built-in local IDs: xiaoya, coder. Remote requests require a Social Grant and cannot recursively delegate.',
       schema: Type.Object({ toBotId: id, instruction: text }, { additionalProperties: false }),
     },
     {

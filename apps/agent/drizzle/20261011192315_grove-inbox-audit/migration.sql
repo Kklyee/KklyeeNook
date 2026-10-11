@@ -1,0 +1,1 @@
+ALTER TABLE `social_inbox` ADD `error` text;

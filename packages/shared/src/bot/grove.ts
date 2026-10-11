@@ -6,6 +6,7 @@ export type BotMessage = {
   content: string
   correlationId?: string
   createdAt: number
+  remote?: 'incoming' | 'outgoing'
 }
 
 export type BotTask = {
@@ -24,6 +25,7 @@ export type BotTask = {
   deadline: number
   createdAt: number
   updatedAt: number
+  remote?: { direction: 'incoming' | 'outgoing'; operationId?: string }
 }
 
 export type BotReceptionPolicy = {

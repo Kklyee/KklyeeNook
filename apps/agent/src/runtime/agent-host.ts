@@ -45,6 +45,7 @@ import { botState } from '@kklyeenook/shared/bot/bot-state'
 import type { GroveRepo } from '../db/repositories/grove-repo'
 import { BotCommunicationService } from '../grove/communication'
 import { registerGroveTools } from '../grove/tools'
+import type { RemoteTransport } from '../grove/remote-transport'
 
 export type AgentHostOptions = {
   databasePath: string
@@ -53,6 +54,7 @@ export type AgentHostOptions = {
   sessions: AgentSessionRepo
   botRepo?: BotRepo
   groveRepo?: GroveRepo
+  groveTransport?: RemoteTransport
   workspaces: WorkspaceService
   tools: ToolRegistry
   sandbox: SandboxService
@@ -117,7 +119,7 @@ export class AgentHost {
 
   static async open(options: AgentHostOptions, context: Context) {
     let host: AgentHost | undefined
-    const grove = options.botRepo && options.groveRepo ? new BotCommunicationService(options.groveRepo) : undefined
+    const grove = options.botRepo && options.groveRepo ? new BotCommunicationService(options.groveRepo, options.groveTransport) : undefined
     const unregisterGrove = grove ? registerGroveTools(options.tools, () => host!) : []
     const models = new AgentModels(options.config, options.credentials)
     const bots = options.botRepo
@@ -150,7 +152,7 @@ export class AgentHost {
       if (!record?.botId) throw new BotError(403, 'Conversation has no Bot identity')
       const captured = await inputs?.activeConfig(id, engine.harness, context)
       const groveTaskId = await inputs?.activeGroveTask(id, context)
-      if (groveTaskId && toolName) await grove?.guardExecution(groveTaskId, context)
+      if (groveTaskId && toolName) await grove?.guardExecution(groveTaskId, context, toolName)
       const workspaceId = captured ? captured.workspaceId : record.workspaceId
       const bot = await bots.assertAccess(record.botId, workspaceId, toolName)
       if (captured && toolName && !captured.tools.includes(toolName))

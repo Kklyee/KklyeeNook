@@ -212,12 +212,13 @@ export async function startGroveServer(
   await once(server, 'listening')
   const address = server.address()
   if (!address || typeof address === 'string') throw new Error('Grove failed to bind TCP port')
+  let closing: Promise<void> | undefined
   return {
     port: address.port,
     close: () =>
-      new Promise<void>((resolve, reject) => {
+      (closing ??= new Promise<void>((resolve, reject) => {
         server.closeAllConnections()
         server.close((error) => (error ? reject(error) : resolve()))
-      }),
+      })),
   }
 }

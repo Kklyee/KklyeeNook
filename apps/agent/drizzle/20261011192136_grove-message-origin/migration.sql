@@ -1,0 +1,1 @@
+ALTER TABLE `bot_messages` ADD `remote` text;
