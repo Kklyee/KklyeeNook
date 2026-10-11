@@ -48,6 +48,8 @@
 
 提交按功能分批推送；提交后的 dev 启动、类型检查、lint、全量测试与目录包验证为本轮最终门禁。
 
+启动脚本另有环境依赖：若环境中存在 `ELECTRON_RUN_AS_NODE`，`electron.exe` 会以纯 Node 模式运行，`@electron-toolkit/utils` 随即报 `does not provide an export named 'BrowserWindow'`。该变量由外部工具注入并被终端继承，不属于项目配置。实测该变量即使为空字符串仍然生效，必须真正移除，因此 `dev` 与 `start` 经 `scripts/run-electron-vite.mjs` 删除该变量后再启动；桌面与生产烟测此前已在子进程环境中做同样处理。
+
 ## 环境项
 
 Windows 文件 symlink 特权不可用。Sandbox、Preview、Backup 三项已明确跳过；目录 junction 边界通过。不能把环境跳过描述为安全验收通过。macOS/Linux 打包和断电恢复未在本次 Windows 验收中覆盖。
