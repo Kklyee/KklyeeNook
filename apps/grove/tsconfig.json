@@ -1,0 +1,9 @@
+{
+  "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
+  "include": ["src/**/*"],
+  "compilerOptions": {
+    "composite": false,
+    "types": ["node"],
+    "paths": { "@kklyeenook/shared/*": ["../../packages/shared/src/*"] }
+  }
+}

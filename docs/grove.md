@@ -3,7 +3,7 @@
 ## 当前进度
 
 - Phase 1：本地 Bot 通信、Durable 协作执行、Chat 与 Grove 入口已实现。
-- Phase 2：网络身份、Host 认证、Remote Transport、PostgreSQL Relay、Social Grant、Inbox / Outbox 尚未实现。
+- Phase 2：已实现网络身份、Host / User 凭据校验、Social Grant 授权核心及 PostgreSQL 操作存储。Relay HTTP API、Remote Transport、Inbox / Outbox 和管理 UI 尚未实现。
 - Phase 3：受控远程 MCP 分享、委托安装及审批尚未实现。
 - Phase 4：不属于 v0.2 首期范围。
 
@@ -67,4 +67,16 @@ Grove 展示本地 Bot 的接收策略、消息与协作记录。Chat 展示本�
 - 持久化 Generation 预算和执行前授权复核。
 - 空答案的明确失败结果。
 
-继续开发时先完成 Phase 2 的身份与认证设计，再将现有本地协议扩展至 Remote Transport；不能把现有 Desktop Remote Gateway 的设备访问凭据直接当作跨用户 Bot 身份。
+继续开发时将现有本地协议扩展至 Remote Transport，并接通 Relay HTTP API、Host Inbox / Outbox 和管理 UI；不能把现有 Desktop Remote Gateway 的设备访问凭据直接当作跨用户 Bot 身份。
+
+## 网络授权基础
+
+`packages/shared/src/bot/social.ts` 定义 Network Bot Identity、User / Bot Principal、Social Grant 和 Network Operation。`SocialAuthorization` 默认拒绝跨用户操作，严格匹配 Principal 类型、ID、目标 Bot 所有者和权限动作，并检查撤销、到期、使用次数与工具范围。
+
+`apps/grove` 是 Grove Server 的独立服务包。目前包含 PostgreSQL 数据结构、连接管理和存储服务，尚未提供对外 HTTP 服务。`users` 与 `host_devices` 分别存储高熵 User / Host 访问凭据的 SHA-256 摘要，Host 注册由已认证 User 发起，网络 Bot 注册由已认证 Host 发起。凭据不能互换；发送方不能代表其他 Host 的 Bot。
+
+Social Grant 仅由目标 Bot 的所有者 User 签发或撤销。User Grant 不扩展至该 User 的 Bot。一次 Operation 的授权检查、限次统计和记录写入同一个 PostgreSQL 事务，锁定 Grant 行并对 Operation ID 取事务级锁；重复请求复用原始记录，修改参数后重复使用 ID 会被拒绝。对排队操作提供目标 Host 执行前的授权复核，撤销、到期或禁用发送 Host 都会阻止后续执行。后续 Host Bridge 必须调用此复核后才执行副作用。
+
+服务器表为 `users`、`host_devices`、`network_bots`、`relationships`、`social_grants`、`network_operations` 与 `network_messages`。关系和消息表已建立，具体 Relay 投递逻辑仍需继续实现。
+
+授权单元测试及 PGlite 嵌入式 PostgreSQL 集成测试验证身份不可冒用、同名 Bot 隔离、跨主体 Grant 隔离、限次并发、Operation 去重、权限撤销和 MCP 范围边界。PGlite 使用 PostgreSQL 引擎；目前尚未在独立 Docker PostgreSQL 服务上做部署验证。

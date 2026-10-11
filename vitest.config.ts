@@ -8,5 +8,5 @@ export default defineConfig({
     alias: { '@': path('./apps/desktop/src'), '@kklyeenook/agent': path('./apps/agent/src'), '@kklyeenook/shared': path('./packages/shared/src') },
     dedupe: ['react', 'react-dom', '@assistant-ui/react', '@assistant-ui/store'],
   },
-  test: { environment: 'node', include: ['apps/agent/src/**/*.test.ts', 'apps/desktop/src/**/*.test.ts', 'packages/shared/src/**/*.test.ts'] },
+  test: { environment: 'node', include: ['apps/agent/src/**/*.test.ts', 'apps/grove/src/**/*.test.ts', 'apps/desktop/src/**/*.test.ts', 'packages/shared/src/**/*.test.ts'] },
 })
