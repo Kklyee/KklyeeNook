@@ -1,0 +1,19 @@
+{
+  "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
+  "include": [
+    "src/**/*",
+    "drizzle.config.ts"
+  ],
+  "compilerOptions": {
+    "composite": true,
+    "types": [
+      "node",
+      "electron"
+    ],
+    "paths": {
+      "@kklyeenook/shared/*": [
+        "../../packages/shared/src/*"
+      ]
+    }
+  }
+}

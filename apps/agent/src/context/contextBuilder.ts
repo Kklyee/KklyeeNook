@@ -1,0 +1,45 @@
+import type { ContextAttachmentRef, ResolvedContextAttachment } from '@kklyeenook/shared/context/contextAttachment'
+import type { AgentMemory } from '@kklyeenook/shared/memory/agentMemory'
+import type { AgentMemoryRepo } from '../db/repositories/memoryRepo'
+import type {
+  ContextAttachmentService,
+} from './contextAttachmentService'
+
+export interface AgentRunContextAttachment extends ContextAttachmentRef {
+  text: string
+}
+
+export interface AgentRunContext {
+  attachments: AgentRunContextAttachment[]
+  memories?: AgentMemory[]
+}
+
+export class ContextBuilder {
+  constructor(
+    private readonly attachmentService: ContextAttachmentService,
+    private readonly memoryRepo?: AgentMemoryRepo,
+  ) {}
+
+  async build(
+    attachmentIds: readonly string[],
+    workspaceId?: string,
+  ): Promise<AgentRunContext | undefined> {
+    const attachments: ResolvedContextAttachment[] = attachmentIds.length
+      ? this.attachmentService.resolve(attachmentIds)
+      : []
+    const memories = (await this.memoryRepo?.list(workspaceId)) ?? []
+
+    if (!attachments.length && !memories.length) return undefined
+
+    return {
+      attachments: attachments.map((attachment) => ({
+        id: attachment.id,
+        name: attachment.name,
+        mimeType: attachment.mimeType,
+        size: attachment.size,
+        text: attachment.text,
+      })),
+      ...(memories.length ? { memories } : {}),
+    }
+  }
+}

@@ -1,0 +1,37 @@
+import { Type } from 'typebox'
+import { defineExecutableTool } from './executable-tool'
+import type { ToolRegistry } from './toolRegistry'
+import { ToolResultStore } from './toolResultStore'
+import type { ReadToolResultInput } from '@kklyeenook/shared/tool/tool'
+
+export function registerToolResultTool(registry: ToolRegistry, store: ToolResultStore): void {
+  const inputSchema = Type.Object({
+    resultRef: Type.String({ pattern: '^tool-result://[^/]+/[^/]+$' }),
+    offset: Type.Optional(Type.Integer({ minimum: 0 })),
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 8 * 1024 })),
+  })
+  const definition = {
+    name: 'read_tool_result',
+    label: 'Read tool result',
+    description:
+      'Read a complete retained tool result as JSON in pages. offset and limit count characters, starting at zero. Continue using nextOffset while hasMore is true.',
+    inputSchema,
+  }
+  registry.register({
+    definition,
+    adapter: {
+      create: () =>
+        defineExecutableTool({
+          ...definition,
+          parameters: inputSchema,
+          async execute(_id, input) {
+            const page = await store.read(input as ReadToolResultInput)
+            return {
+              content: [{ type: 'text', text: page.text }],
+              details: { ...page, text: undefined },
+            }
+          },
+        }),
+    },
+  })
+}
