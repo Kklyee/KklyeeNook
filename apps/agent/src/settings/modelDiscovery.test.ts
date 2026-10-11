@@ -19,9 +19,9 @@ test('parses OpenAI-compatible model catalogs with safe defaults', () => {
       id: 'deepseek-v4.1-flash',
       name: 'DeepSeek V4.1 Flash',
       api: 'openai-completions',
-      reasoning: false,
+      reasoning: true,
       input: ['text'],
-      availableThinkingLevels: ['off'],
+      availableThinkingLevels: ['off', 'low', 'high', 'max'],
       contextWindow: 128_000,
       maxTokens: 16_384,
       builtin: false,
@@ -38,4 +38,10 @@ test('sends the API key only to the discovery request', async () => {
   await expect(
     discoverRemoteModels({ baseUrl: 'https://example.test/v1', apiKey: 'secret', fetchImpl }),
   ).resolves.toHaveLength(1)
+})
+
+
+test('discovery respects an explicit reasoning opt-out and handles unknown models conservatively', () => {
+  const models = parseDiscoveredModels({ data: [{ id: 'deepseek-flash', reasoning: false }, { id: 'unknown', reasoning: true }] })
+  expect(models.map(model => model.availableThinkingLevels)).toEqual([['off'], ['off']])
 })

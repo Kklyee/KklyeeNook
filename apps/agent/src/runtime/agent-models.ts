@@ -5,6 +5,7 @@ import {
   createProvider,
   type MutableModels,
 } from '@earendil-works/pi-ai/models'
+import { findBuiltinModel, unknownThinkingLevelMap } from '../settings/model-catalog'
 import { applicationProviders } from '../settings/model-providers'
 import { anthropicMessagesApi } from '@earendil-works/pi-ai/api/anthropic-messages.lazy'
 import { azureOpenAIResponsesApi } from '@earendil-works/pi-ai/api/azure-openai-responses.lazy'
@@ -123,7 +124,7 @@ export class AgentModels {
         for (const model of models.values()) models.set(model.id, this.model(provider, { id: model.id }, model))
       }
       for (const definition of definitions.values()) {
-        const template = models.get(definition.id) ?? builtin?.getModels()[0]
+        const template = models.get(definition.id) ?? findBuiltinModel(provider.id, definition.id)
         models.set(definition.id, this.model(provider, definition, template))
       }
       if (!models.size) continue
@@ -164,6 +165,7 @@ export class AgentModels {
       id: definition.id, name: definition.name ?? (template?.id === definition.id ? template.name : definition.id),
       provider: provider.id, api, baseUrl,
       reasoning: definition.reasoning ?? template?.reasoning ?? false,
+      thinkingLevelMap: template?.thinkingLevelMap ?? (template ? undefined : unknownThinkingLevelMap),
       input: resolveModelInput(provider.id, definition.id, definition.input ?? template?.input ?? ['text']),
       contextWindow: definition.contextWindow ?? template?.contextWindow ?? 128_000,
       maxTokens: definition.maxTokens ?? template?.maxTokens ?? 16_384,

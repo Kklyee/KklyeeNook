@@ -1,18 +1,7 @@
 import type { ModelCatalogModel } from '@kklyeenook/shared/agent/agentSettings'
-import { modelCatalogDefaults } from './model-catalog'
+import { modelCatalogDefaults, findBuiltinModel, getModelThinkingLevels } from './model-catalog'
 
 const DEFAULT_API = 'openai-completions'
-const DEFAULT_THINKING_LEVELS = ['off'] as const
-const REASONING_THINKING_LEVELS = [
-  'off',
-  'minimal',
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-  'max',
-] as const
-
 export interface DiscoverRemoteModelsOptions {
   baseUrl: string
   api?: string
@@ -61,7 +50,7 @@ export function parseDiscoveredModels(payload: unknown, api = DEFAULT_API): Mode
     const id = typeof value.id === 'string' ? value.id.trim() : ''
     if (!id || seen.has(id)) continue
 
-    const reasoning = value.reasoning === true
+    const reasoning = typeof value.reasoning === 'boolean' ? value.reasoning : findBuiltinModel('', id)?.reasoning ?? false
     const contextWindow = positiveNumber(value.context_window) ?? modelCatalogDefaults.contextWindow
     const maxTokens =
       positiveNumber(value.max_tokens) ??
@@ -78,9 +67,7 @@ export function parseDiscoveredModels(payload: unknown, api = DEFAULT_API): Mode
       api,
       reasoning,
       input: input.length ? input : ['text'],
-      availableThinkingLevels: [
-        ...(reasoning ? REASONING_THINKING_LEVELS : DEFAULT_THINKING_LEVELS),
-      ],
+      availableThinkingLevels: getModelThinkingLevels('', id, reasoning),
       contextWindow,
       maxTokens,
       builtin: false,

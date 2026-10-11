@@ -83,7 +83,7 @@ test('keeps a provider-level custom model in the same chat catalog', () => {
     baseUrl: 'https://api.deepseek.com/v1',
     modelName: 'DeepSeek V4.1 Flash',
     reasoning: true,
-    thinkingLevel: 'medium',
+    thinkingLevel: 'high',
   })
 })
 
@@ -92,6 +92,25 @@ test('public choices retain reasoning levels and capacity from saved custom prof
   const choices = getAgentModelChoices({ model, models: [{ ...model, id: 'saved-provider:saved-model' }], tools: { enabled: [] } })
   const saved = choices.catalog.find(provider => provider.id === 'saved-provider')?.models[0]
   expect(saved).toMatchObject({ id: 'saved-model', name: 'Saved reasoning model', reasoning: true, contextWindow: 65536 })
-  expect(saved?.availableThinkingLevels).toContain('low')
+  expect(saved?.availableThinkingLevels).toEqual(['off'])
   expect(choices.models[0]).toMatchObject({ provider: 'saved-provider', modelID: 'saved-model', reasoning: true, contextWindow: 65536 })
+})
+
+
+test('custom providers inherit thinking levels from model IDs and supported aliases', () => {
+  for (const id of ['deepseek-flash', 'Deepseek-V4.1-Flash', 'deepseek/Deepseek-V4.1-Flash']) {
+    const catalog = mergeConfiguredProvidersIntoCatalog(getModelCatalog(), [{ id: 'magpie', models: [{ id, reasoning: true }] }])
+    expect(catalog.find(provider => provider.id === 'magpie')?.models[0].availableThinkingLevels).toEqual(['off', 'low', 'high', 'max'])
+  }
+})
+
+test('saved custom models do not restore unsupported saved thinking levels', () => {
+  const catalog = mergeSavedModelsIntoCatalog(getModelCatalog(), [
+    { id: 'magpie:flash', provider: 'magpie', modelID: 'Deepseek-V4.1-Flash', reasoning: true, thinkingLevel: 'medium' },
+    { id: 'magpie:unknown', provider: 'magpie', modelID: 'unknown', reasoning: true, thinkingLevel: 'max' },
+    { id: 'magpie:disabled', provider: 'magpie', modelID: 'deepseek-flash', reasoning: false },
+  ])
+  expect(catalog.find(provider => provider.id === 'magpie')?.models.map(model => model.availableThinkingLevels)).toEqual([
+    ['off', 'low', 'high', 'max'], ['off'], ['off'],
+  ])
 })

@@ -13,7 +13,7 @@ function fixture() {
   const sessions = new Map<string, AgentSessionRecord>([['chat', session], ['global', { ...session, id: 'global', workspaceId: null }]])
   const project = { id: 'project', displayName: 'App', rootPath: 'C:\\private-project', status: 'attached', createdAt: 1, updatedAt: 2 }
   const workspaces = { list: vi.fn(async () => [project]), resolve: vi.fn(async () => project) }
-  const config = new AgentConfigStore({ model: { provider: 'private-provider', modelID: 'basic', thinkingLevel: 'off' }, providers: [{ id: 'private-provider', baseUrl: 'https://private-provider.test/secret', models: [{ id: 'basic', name: 'Basic', reasoning: false, contextWindow: 128000 }, { id: 'reasoning', name: 'Reasoning', reasoning: true }] }], tools: { enabled: [] } })
+  const config = new AgentConfigStore({ model: { provider: 'private-provider', modelID: 'basic', thinkingLevel: 'off' }, providers: [{ id: 'private-provider', baseUrl: 'https://private-provider.test/secret', models: [{ id: 'basic', name: 'Basic', reasoning: false, contextWindow: 128000 }, { id: 'deepseek-flash', name: 'Reasoning', reasoning: true }] }], tools: { enabled: [] } })
   const attachments = new ContextAttachmentService()
   const snapshot = emptySnapshot()
   snapshot.agent = { model: { provider: 'private-provider', modelId: 'basic' }, thinkingLevel: 'off' }
@@ -89,7 +89,7 @@ test('filters detached projects and global threads and never exposes paths or pr
 
 test('validates configuration before creating and configures the model before first submission', async () => {
   const { port, host, save } = fixture()
-  const input = { permission: 'full-access' as const, provider: 'private-provider', modelId: 'reasoning', thinkingLevel: 'low', prompt: 'Build' }
+  const input = { permission: 'full-access' as const, provider: 'private-provider', modelId: 'deepseek-flash', thinkingLevel: 'low', prompt: 'Build' }
   await expect(port.createConversation('project', { ...input, thinkingLevel: 'invalid' })).rejects.toMatchObject({ status: 400 })
   expect(host.create).not.toHaveBeenCalled()
   const result = await port.createConversation('project', input)
@@ -103,7 +103,7 @@ test('validates configuration before creating and configures the model before fi
 
 test('retries remote admissions with the same official identity without reconfiguring an existing conversation', async () => {
   const { port, host, sessions } = fixture()
-  const input = { requestId: 'remote-request', permission: 'read-only' as const, provider: 'private-provider', modelId: 'reasoning', thinkingLevel: 'low', prompt: 'Retry me' }
+  const input = { requestId: 'remote-request', permission: 'read-only' as const, provider: 'private-provider', modelId: 'deepseek-flash', thinkingLevel: 'low', prompt: 'Retry me' }
   host.conversations.submit.mockRejectedValueOnce(new Error('Acknowledgement lost'))
   await expect(port.createConversation('project', input)).rejects.toThrow('Acknowledgement lost')
   const created = sessions.get('remote-remote-request')!

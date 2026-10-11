@@ -175,3 +175,29 @@ test('Durable executes through real pi-ai HTTP dispatch without persisting crede
   expect(JSON.stringify(await conversation.agent(context()))).not.toContain('synthetic-private-key')
   expect(requests).toHaveLength(1)
 }, 20_000)
+
+
+test('custom DeepSeek aliases inherit thinking mapping in real HTTP requests', async () => {
+  const { baseUrl, requests } = await server()
+  const settings: AgentConfig = {
+    model: { provider: 'magpie', modelID: 'Deepseek-V4.1-Flash', baseUrl, reasoning: true, thinkingLevel: 'medium' },
+    tools: { enabled: [] },
+  }
+  const credentials = new MemoryCredentialStore()
+  credentials.setApiKey('magpie', 'synthetic-key')
+  const runtime = new AgentModels(() => settings, () => credentials, emptyAuth)
+  expect(runtime.selection().thinkingLevel).toBe('high')
+  const model = runtime.models.getModel('magpie', 'Deepseek-V4.1-Flash')!
+  await runtime.models.completeSimple(model, { messages: [] }, { reasoning: 'max' })
+  expect(requests[0].body).toMatchObject({ model: 'Deepseek-V4.1-Flash', reasoning_effort: 'max' })
+})
+
+
+test('unknown custom reasoning models do not advertise or retain unverified effort levels', () => {
+  const settings: AgentConfig = {
+    model: { provider: 'custom', modelID: 'unknown-reasoning', baseUrl: 'http://localhost:1234/v1', reasoning: true, thinkingLevel: 'max' },
+    tools: { enabled: [] },
+  }
+  const runtime = new AgentModels(() => settings, () => new MemoryCredentialStore(), emptyAuth)
+  expect(runtime.selection().thinkingLevel).toBe('off')
+})

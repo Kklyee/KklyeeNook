@@ -1,4 +1,4 @@
-import { getSupportedThinkingLevels } from '@earendil-works/pi-ai'
+import { getSupportedThinkingLevels, type Api, type Model } from '@earendil-works/pi-ai'
 import { createModels } from '@earendil-works/pi-ai/models'
 import { applicationProviders } from './model-providers'
 import type { ModelCatalogProvider } from '@kklyeenook/shared/agent/agentSettings'
@@ -34,6 +34,31 @@ const isUiThinkingLevel = (level: string): level is ThinkingLevel =>
 
 const DEFAULT_CONTEXT_WINDOW = 128_000
 const DEFAULT_MAX_TOKENS = 16_384
+
+function normalizedModelId(id: string): string {
+  const normalized = id.trim().toLowerCase().split('/').at(-1)!
+  return ['deepseek-v4.1-flash', 'deepseek-v41-flash', 'deepseek-v4-1-flash', 'deepseek-v4-flash', 'deepseek-v4-flash-vision-exp'].includes(normalized)
+    ? 'deepseek-flash'
+    : normalized
+}
+
+export function findBuiltinModel(provider: string, modelId: string): Model<Api> | undefined {
+  const id = normalizedModelId(modelId)
+  const matches = builtins.getModels().filter((model) => normalizedModelId(model.id) === id)
+  return matches.find((model) => model.provider === provider)
+    ?? matches.find((model) => id.startsWith(`${model.provider}-`))
+    ?? matches[0]
+}
+
+export const unknownThinkingLevelMap = {
+  minimal: null, low: null, medium: null, high: null, xhigh: null, max: null,
+} as const
+
+export function getModelThinkingLevels(provider: string, modelId: string, reasoning?: boolean): ThinkingLevel[] {
+  const model = findBuiltinModel(provider, modelId)
+  if (!model || reasoning === false) return ['off']
+  return getSupportedThinkingLevels({ ...model, reasoning: reasoning ?? model.reasoning }).filter(isUiThinkingLevel)
+}
 
 export function getModelCatalog(): ModelCatalogProvider[] {
   return builtins
@@ -96,11 +121,8 @@ export function mergeSavedModelsIntoCatalog(
 
     if (provider.models.some((model) => model.id === savedModel.modelID)) continue
 
-    const reasoning = savedModel.reasoning ?? savedModel.thinkingLevel !== 'off'
-    const availableThinkingLevels: ThinkingLevel[] = reasoning ? [...UI_THINKING_LEVELS] : ['off']
-    if (savedModel.thinkingLevel && !availableThinkingLevels.includes(savedModel.thinkingLevel)) {
-      availableThinkingLevels.push(savedModel.thinkingLevel)
-    }
+    const reasoning = savedModel.reasoning ?? findBuiltinModel(savedModel.provider, savedModel.modelID)?.reasoning ?? false
+    const availableThinkingLevels = getModelThinkingLevels(savedModel.provider, savedModel.modelID, reasoning)
 
     provider.models.push({
       id: savedModel.modelID,
@@ -218,14 +240,14 @@ function toCatalogModel(
   providerID: string,
   model: ProviderModelConfig,
 ): ModelCatalogProvider['models'][number] {
-  const reasoning = model.reasoning ?? false
+  const reasoning = model.reasoning ?? findBuiltinModel(providerID, model.id)?.reasoning ?? false
   return {
     id: model.id,
     name: model.name ?? model.id,
     ...(model.api ? { api: model.api } : {}),
     reasoning,
     input: resolveModelInput(providerID, model.id, model.input ?? ['text']),
-    availableThinkingLevels: reasoning ? [...UI_THINKING_LEVELS] : ['off'],
+    availableThinkingLevels: getModelThinkingLevels(providerID, model.id, reasoning),
     contextWindow: model.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
     maxTokens: model.maxTokens ?? DEFAULT_MAX_TOKENS,
     builtin: false,
