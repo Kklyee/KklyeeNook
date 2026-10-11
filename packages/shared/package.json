@@ -3,5 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "exports": { "./*": "./src/*.ts" }
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@earendil-works/chord": "1.1.0",
+    "@earendil-works/pi-ai": "1.1.0",
+    "@earendil-works/pi-durable": "1.1.0"
+  },
+  "devDependencies": {
+    "@assistant-ui/react": "0.15.17"
+  }
 }
