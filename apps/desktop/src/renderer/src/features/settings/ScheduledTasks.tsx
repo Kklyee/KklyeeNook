@@ -39,7 +39,7 @@ const WEEKDAYS = [
 
 const taskQueryKey = ['scheduled-tasks'] as const
 
-export function ScheduledTasksPage({ onClose }: { onClose: () => void }) {
+export function ScheduledTasks() {
   const queryClient = useQueryClient()
   const tasksQuery = useQuery({
     queryKey: taskQueryKey,
@@ -98,73 +98,64 @@ export function ScheduledTasksPage({ onClose }: { onClose: () => void }) {
   const tasks = tasksQuery.data ?? []
 
   return (
-    <section className="h-full overflow-y-auto">
-      <div className="mx-auto w-full max-w-3xl px-6 py-10 md:px-10 md:py-14">
-        <header className="mb-8 flex items-start justify-between gap-4">
-          <div>
-            <p className="text-muted-foreground mb-2 text-xs">Automation</p>
-            <h1 className="text-xl font-semibold tracking-tight">Scheduled Tasks</h1>
-            <p className="text-muted-foreground mt-1.5 text-sm">
-              Run Agent prompts automatically while the backend is active.
-            </p>
-          </div>
-          <div className="flex shrink-0 gap-2">
-            <Button variant="outline" onClick={onClose}>
-              Back
-            </Button>
-            <Button onClick={openCreate}>
-              <PlusIcon />
-              New task
-            </Button>
-          </div>
-        </header>
-
-        {tasksQuery.error ? (
-          <p role="alert" className="text-destructive text-sm">
-            {tasksQuery.error instanceof Error ? tasksQuery.error.message : String(tasksQuery.error)}
-          </p>
-        ) : tasksQuery.isLoading ? (
-          <p role="status" className="text-muted-foreground text-sm">
-            Loading scheduled tasks…
-          </p>
-        ) : tasks.length === 0 ? (
-          <div className="material-control flex flex-col items-center rounded-xl px-6 py-14 text-center">
-            <CalendarClockIcon className="text-muted-foreground size-8" />
-            <p className="mt-4 text-sm font-medium">No scheduled tasks</p>
-            <p className="text-muted-foreground mt-1 max-w-sm text-xs">
-              Create a once, daily, or weekly task to run an Agent prompt automatically.
-            </p>
-            <Button className="mt-5" onClick={openCreate}>
-              Create your first task
-            </Button>
-          </div>
-        ) : (
-          <div className="material-control divide-y divide-border overflow-hidden rounded-xl">
-            {tasks.map((task) => (
-              <ScheduledTaskRow
-                key={task.id}
-                task={task}
-                busy={toggleMutation.isPending || deleteMutation.isPending}
-                onEdit={() => openEdit(task)}
-                onToggle={() => toggleMutation.mutate({ id: task.id, enabled: !task.enabled })}
-                onDelete={() => {
-                  if (window.confirm(`Delete “${task.title}”?`)) deleteMutation.mutate(task.id)
-                }}
-              />
-            ))}
-          </div>
-        )}
+    <section aria-labelledby="scheduled-tasks-title">
+      <div className="mb-3 flex items-end justify-between gap-4">
+        <h2 id="scheduled-tasks-title" className="text-xs font-medium">
+          已配置的定时任务
+        </h2>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="text-muted-foreground text-xs">{tasks.length} 个</span>
+          <Button size="sm" onClick={openCreate}>
+            <PlusIcon />
+            新建任务
+          </Button>
+        </div>
       </div>
 
-      {editorOpen && <ScheduledTaskEditor
-        key={editingTask?.id ?? "new"}
-        task={editingTask}
-        open={editorOpen}
-        saving={saveMutation.isPending}
-        error={mutationError}
-        onOpenChange={setEditorOpen}
-        onSave={saveTask}
-      />}
+      {tasksQuery.error ? (
+        <p role="alert" className="text-destructive text-sm">
+          {tasksQuery.error instanceof Error ? tasksQuery.error.message : String(tasksQuery.error)}
+        </p>
+      ) : tasksQuery.isLoading ? (
+        <p role="status" className="text-muted-foreground text-sm">
+          正在读取定时任务…
+        </p>
+      ) : tasks.length === 0 ? (
+        <div className="material-control rounded-xl border-dashed px-6 py-14 text-center">
+          <CalendarClockIcon className="text-muted-foreground/60 mx-auto size-5" />
+          <p className="mt-3 text-sm font-medium">暂无定时任务</p>
+          <p className="text-muted-foreground mt-1 text-xs">
+            创建一个一次性、每天或每周的任务，让 Agent 自动执行提示词。
+          </p>
+        </div>
+      ) : (
+        <div className="material-control divide-y divide-border overflow-hidden rounded-xl">
+          {tasks.map((task) => (
+            <ScheduledTaskRow
+              key={task.id}
+              task={task}
+              busy={toggleMutation.isPending || deleteMutation.isPending}
+              onEdit={() => openEdit(task)}
+              onToggle={() => toggleMutation.mutate({ id: task.id, enabled: !task.enabled })}
+              onDelete={() => {
+                if (window.confirm(`删除「${task.title}」？`)) deleteMutation.mutate(task.id)
+              }}
+            />
+          ))}
+        </div>
+      )}
+
+      {editorOpen && (
+        <ScheduledTaskEditor
+          key={editingTask?.id ?? 'new'}
+          task={editingTask}
+          open={editorOpen}
+          saving={saveMutation.isPending}
+          error={mutationError}
+          onOpenChange={setEditorOpen}
+          onSave={saveTask}
+        />
+      )}
     </section>
   )
 }
@@ -186,21 +177,21 @@ function ScheduledTaskRow({
     <article className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <h2 className="truncate text-sm font-medium">{task.title}</h2>
-          <span
-            className={task.enabled ? 'text-success' : 'text-muted-foreground'}
-          >
-            {task.enabled ? 'Enabled' : 'Disabled'}
+          <h3 className="truncate text-sm font-medium">{task.title}</h3>
+          <span className={task.enabled ? 'text-success text-xs' : 'text-muted-foreground text-xs'}>
+            {task.enabled ? '已启用' : '已停用'}
           </span>
         </div>
         <p className="text-muted-foreground mt-1 text-xs">{formatSchedule(task.schedule)}</p>
-        <p className="text-muted-foreground mt-1 text-xs">Next: {formatNextRun(task)}</p>
+        <p className="text-muted-foreground mt-1 text-xs">
+          下次执行：{formatNextRun(task)}
+        </p>
       </div>
       <div className="flex shrink-0 items-center gap-1">
         <Button variant="ghost" size="sm" onClick={onToggle} disabled={busy}>
-          {task.enabled ? 'Disable' : 'Enable'}
+          {task.enabled ? '停用' : '启用'}
         </Button>
-        <Button variant="ghost" size="icon-sm" onClick={onEdit} disabled={busy} aria-label="Edit task">
+        <Button variant="ghost" size="icon-sm" onClick={onEdit} disabled={busy} aria-label="编辑任务">
           <PencilIcon />
         </Button>
         <Button
@@ -209,7 +200,7 @@ function ScheduledTaskRow({
           className="text-destructive hover:text-destructive"
           onClick={onDelete}
           disabled={busy}
-          aria-label="Delete task"
+          aria-label="删除任务"
         >
           <Trash2Icon />
         </Button>
@@ -264,23 +255,23 @@ function ScheduledTaskEditor({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{task ? 'Edit scheduled task' : 'New scheduled task'}</DialogTitle>
-          <DialogDescription>Choose a simple schedule for an Agent prompt.</DialogDescription>
+          <DialogTitle>{task ? '编辑定时任务' : '新建定时任务'}</DialogTitle>
+          <DialogDescription>为 Agent 提示词选择一个简单的执行计划。</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
-          <Field label="Title">
+          <Field label="标题">
             <Input value={form.title} onChange={(event) => update('title', event.target.value)} />
           </Field>
-          <Field label="Prompt">
+          <Field label="提示词">
             <Textarea
               value={form.prompt}
               onChange={(event) => update('prompt', event.target.value)}
               rows={5}
-              placeholder="What should the Agent do?"
+              placeholder="Agent 需要做什么？"
             />
           </Field>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Schedule">
+            <Field label="执行计划">
               <Select
                 value={form.type}
                 onValueChange={(value) => update('type', value as FormState['type'])}
@@ -289,14 +280,14 @@ function ScheduledTaskEditor({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="once">Once</SelectItem>
-                  <SelectItem value="daily">Every day</SelectItem>
-                  <SelectItem value="weekly">Every week</SelectItem>
+                  <SelectItem value="once">仅一次</SelectItem>
+                  <SelectItem value="daily">每天</SelectItem>
+                  <SelectItem value="weekly">每周</SelectItem>
                 </SelectContent>
               </Select>
             </Field>
             {form.type === 'weekly' ? (
-              <Field label="Weekday">
+              <Field label="星期">
                 <Select
                   value={String(form.weekday)}
                   onValueChange={(value) => update('weekday', Number(value))}
@@ -305,41 +296,47 @@ function ScheduledTaskEditor({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                  {WEEKDAYS.map((weekday) => (
-                    <SelectItem key={weekday.value} value={String(weekday.value)}>
-                      {weekday.label}
-                    </SelectItem>
-                  ))}
+                    {WEEKDAYS.map((weekday) => (
+                      <SelectItem key={weekday.value} value={String(weekday.value)}>
+                        {weekday.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </Field>
             ) : (
-              <Field label={form.type === 'once' ? 'Run at' : 'Time'}>
+              <Field label={form.type === 'once' ? '执行时间' : '时间'}>
                 <Input
                   type={form.type === 'once' ? 'datetime-local' : 'time'}
                   value={form.type === 'once' ? form.runAt : form.time}
-                  onChange={(event) => update(form.type === 'once' ? 'runAt' : 'time', event.target.value)}
+                  onChange={(event) =>
+                    update(form.type === 'once' ? 'runAt' : 'time', event.target.value)
+                  }
                 />
               </Field>
             )}
           </div>
           {form.type === 'weekly' && (
-            <Field label="Time">
-              <Input type="time" value={form.time} onChange={(event) => update('time', event.target.value)} />
+            <Field label="时间">
+              <Input
+                type="time"
+                value={form.time}
+                onChange={(event) => update('time', event.target.value)}
+              />
             </Field>
           )}
-          <Field label="Skill IDs">
+          <Field label="技能 ID">
             <Input
               value={form.skillIds}
               onChange={(event) => update('skillIds', event.target.value)}
-              placeholder="Optional, comma separated"
+              placeholder="可选，使用英文逗号分隔"
             />
           </Field>
-          <Field label="Session ID">
+          <Field label="会话 ID">
             <Input
               value={form.sessionId}
               onChange={(event) => update('sessionId', event.target.value)}
-              placeholder="Optional existing session ID"
+              placeholder="可选，复用已有会话"
             />
           </Field>
           {(error ?? formError) && (
@@ -350,10 +347,10 @@ function ScheduledTaskEditor({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Cancel
+            取消
           </Button>
           <Button onClick={() => void save()} disabled={saving}>
-            {saving ? 'Saving…' : 'Save task'}
+            {saving ? '正在保存…' : '保存任务'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -399,7 +396,10 @@ function createFormState(task?: ScheduledTask): FormState {
     title: task.title,
     prompt: task.prompt,
     type: task.schedule.type,
-    runAt: task.schedule.type === 'once' ? toDateTimeLocal(task.schedule.runAt) : toDateTimeLocal(Date.now()),
+    runAt:
+      task.schedule.type === 'once'
+        ? toDateTimeLocal(task.schedule.runAt)
+        : toDateTimeLocal(Date.now()),
     time: task.schedule.type === 'once' ? '09:00' : task.schedule.time,
     weekday: task.schedule.type === 'weekly' ? task.schedule.weekday : 1,
     skillIds: task.skillIds?.join(', ') ?? '',
@@ -410,7 +410,7 @@ function createFormState(task?: ScheduledTask): FormState {
 function toSchedule(form: FormState): ScheduledTaskSchedule {
   if (form.type === 'once') {
     const runAt = new Date(form.runAt).getTime()
-    if (!Number.isFinite(runAt)) throw new Error('Choose a valid run time')
+    if (!Number.isFinite(runAt)) throw new Error('请选择有效的执行时间')
     return { type: 'once', runAt }
   }
   if (form.type === 'daily') return { type: 'daily', time: form.time }
@@ -418,20 +418,20 @@ function toSchedule(form: FormState): ScheduledTaskSchedule {
 }
 
 function formatSchedule(schedule: ScheduledTaskSchedule): string {
-  if (schedule.type === 'once') return `Once · ${formatDate(schedule.runAt)}`
-  if (schedule.type === 'daily') return `Every day · ${schedule.time}`
-  return `Every ${WEEKDAYS[schedule.weekday]?.label ?? 'week'} · ${schedule.time}`
+  if (schedule.type === 'once') return `仅一次 · ${formatDate(schedule.runAt)}`
+  if (schedule.type === 'daily') return `每天 · ${schedule.time}`
+  return `每周${WEEKDAYS[schedule.weekday]?.label ?? ''} · ${schedule.time}`
 }
 
 function formatNextRun(task: ScheduledTask): string {
-  if (!task.enabled || task.nextRunAt === undefined) return 'No upcoming run'
+  if (!task.enabled || task.nextRunAt === undefined) return '暂无计划'
   const date = new Date(task.nextRunAt)
   const today = new Date()
   const tomorrow = new Date(today)
   tomorrow.setDate(tomorrow.getDate() + 1)
   const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
-  if (sameDate(date, today)) return `Today ${time}`
-  if (sameDate(date, tomorrow)) return `Tomorrow ${time}`
+  if (sameDate(date, today)) return `今天 ${time}`
+  if (sameDate(date, tomorrow)) return `明天 ${time}`
   return formatDate(task.nextRunAt)
 }
 

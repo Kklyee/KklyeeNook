@@ -3,7 +3,8 @@
   --motion-normal: 160ms;
   --motion-expand: 200ms;
   --motion-ease: cubic-bezier(0.2, 0, 0, 1);
-  --window-titlebar-height: 1.75rem;
+  --window-titlebar-height: 2.5rem;
+  --app-rail-width: var(--window-titlebar-height);
   --radius: 8px;
 
   --ui-bg: oklch(0.955 0.003 250 / 0.72);

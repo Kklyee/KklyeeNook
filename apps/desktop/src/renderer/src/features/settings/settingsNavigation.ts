@@ -1,7 +1,14 @@
 import type { ComponentType } from 'react'
-import { BotIcon, ImageIcon, PuzzleIcon, SlidersHorizontalIcon, SmartphoneIcon } from 'lucide-react'
+import {
+  BotIcon,
+  CalendarClockIcon,
+  ImageIcon,
+  PuzzleIcon,
+  SlidersHorizontalIcon,
+  SmartphoneIcon,
+} from 'lucide-react'
 
-export type SettingsTab = 'appearance' | 'remote' | 'model' | 'agent' | 'plugins'
+export type SettingsTab = 'appearance' | 'remote' | 'tasks' | 'model' | 'agent' | 'plugins'
 export type SettingsLayout = 'preferences' | 'manager'
 
 export type SettingsNavigationItem = {
@@ -32,6 +39,15 @@ export const settingsNavigation: SettingsNavigationItem[] = [
     keywords: 'remote tailscale 手机 连接',
     icon: SmartphoneIcon,
     layout: 'preferences',
+  },
+  {
+    id: 'tasks',
+    group: '应用',
+    label: '定时任务',
+    description: '让 Agent 按计划自动执行提示词。',
+    keywords: 'tasks scheduler cron automation 定时 计划 自动化',
+    icon: CalendarClockIcon,
+    layout: 'manager',
   },
   {
     id: 'model',

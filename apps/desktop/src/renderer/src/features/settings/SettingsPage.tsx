@@ -1,7 +1,6 @@
 import { useState, type ComponentType } from 'react'
-import { ArrowLeftIcon, SearchIcon } from 'lucide-react'
+import { SearchIcon } from 'lucide-react'
 import type { AgentSettingsSnapshot } from '@kklyeenook/shared/agent/agentSettings'
-import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { cn } from '../../lib/utils'
 import { AgentSettings } from './AgentSettings'
@@ -10,18 +9,17 @@ import { ModelSettings } from './ModelSettings'
 import { settingsNavigation, type SettingsTab } from './settingsNavigation'
 import { AppearanceSettings } from './AppearanceSettings'
 import { RemoteSettings } from './RemoteSettings'
+import { ScheduledTasks } from './ScheduledTasks'
 
 export function SettingsPage({
   settings,
   error,
   initialTab = 'model',
-  onClose,
   onChanged,
 }: {
   settings: AgentSettingsSnapshot | null
   error: string | null
   initialTab?: SettingsTab
-  onClose: () => void
   onChanged: () => Promise<void>
 }) {
   const [tab, setTab] = useState<SettingsTab>(initialTab)
@@ -39,18 +37,7 @@ export function SettingsPage({
       aria-label="设置"
     >
       <aside className="material-panel text-sidebar-foreground flex w-full shrink-0 flex-col border-b md:h-full md:w-60 md:border-r md:border-b-0">
-        <div className="px-3 pt-3 pb-2">
-          <Button
-            variant="ghost"
-            className="h-8 justify-start gap-2 rounded-md px-2 text-xs font-normal"
-            onClick={onClose}
-          >
-            <ArrowLeftIcon className="size-3.5" />
-            返回应用
-          </Button>
-        </div>
-
-        <div className="px-3 pb-3">
+        <div className="px-3 pt-3 pb-3">
           <div className="relative">
             <SearchIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
             <Input
@@ -119,7 +106,7 @@ export function SettingsPage({
 }
 
 const settingsPanels: Record<
-  Exclude<SettingsTab, 'appearance' | 'remote'>,
+  Exclude<SettingsTab, 'appearance' | 'remote' | 'tasks'>,
   ComponentType<{ settings: AgentSettingsSnapshot; onChanged: () => Promise<void> }>
 > = { model: ModelSettings, agent: AgentSettings, plugins: PluginSettings }
 
@@ -136,6 +123,7 @@ function SettingsContent({
 }) {
   if (tab === 'appearance') return <AppearanceSettings />
   if (tab === 'remote') return <RemoteSettings />
+  if (tab === 'tasks') return <ScheduledTasks />
   if (error)
     return (
       <p role="alert" className="text-destructive text-sm">

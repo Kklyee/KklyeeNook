@@ -169,6 +169,7 @@ body,
 
 .app-sidebar {
   top: var(--window-titlebar-height);
+  left: var(--app-rail-width);
 
   height: calc(100svh - var(--window-titlebar-height));
 }

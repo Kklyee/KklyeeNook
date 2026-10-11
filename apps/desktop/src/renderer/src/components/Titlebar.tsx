@@ -4,14 +4,12 @@ import { Button } from './ui/button'
 import { useSidebar } from './ui/sidebar'
 import type { WindowMenu } from '@kklyeenook/shared/ipc/channels'
 
-export type AppView = 'chat' | 'settings' | 'scheduled-tasks'
-
 export function Titlebar({
-  view,
-  onNavigate,
+  showSidebarToggle,
+  onOpenSettings,
 }: {
-  view: AppView
-  onNavigate: (view: AppView) => void
+  showSidebarToggle: boolean
+  onOpenSettings: () => void
 }) {
   const [maximized, setMaximized] = useState(false)
   const { toggleSidebar } = useSidebar()
@@ -31,9 +29,9 @@ export function Titlebar({
 
   useEffect(() => {
     return window.api.window.onMenuAction((action) => {
-      if (action === 'settings') onNavigate('settings')
+      if (action === 'settings') onOpenSettings()
     })
-  }, [onNavigate])
+  }, [onOpenSettings])
 
   const openMenu = (menu: WindowMenu, event: MouseEvent<HTMLButtonElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect()
@@ -41,18 +39,20 @@ export function Titlebar({
   }
 
   return (
-    <header className="titlebar-drag-region flex h-7 shrink-0 items-center border-b border-border bg-(--ui-titlebar) text-foreground">
+    <header className="titlebar-drag-region flex h-(--window-titlebar-height) shrink-0 items-center border-b border-border bg-(--ui-titlebar) text-foreground">
       <div className="titlebar-no-drag-region flex h-full shrink-0 items-center">
-        <Button
-          type="button"
-          variant="ghost"
-          aria-label={view === 'chat' ? '折叠或展开侧边栏' : '返回对话'}
-          title={view === 'chat' ? '折叠或展开侧边栏' : '返回对话'}
-          className="h-full w-9 rounded-none px-0 text-muted-foreground hover:bg-hover hover:text-foreground"
-          onClick={() => (view === 'chat' ? toggleSidebar() : onNavigate('chat'))}
-        >
-          <PanelLeftIcon className="size-3.5" />
-        </Button>
+        {showSidebarToggle && (
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label="折叠或展开侧边栏"
+            title="折叠或展开侧边栏"
+            className="h-full w-9 rounded-none px-0 text-muted-foreground hover:bg-hover hover:text-foreground"
+            onClick={toggleSidebar}
+          >
+            <PanelLeftIcon className="size-3.5" />
+          </Button>
+        )}
         <Button
           type="button"
           variant="ghost"
