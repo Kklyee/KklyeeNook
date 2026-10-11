@@ -1,5 +1,14 @@
 {
   "files": [],
-  "references": [{ "path": "./tsconfig.node.json" }, { "path": "./tsconfig.web.json" }],
-  "compilerOptions": { "baseUrl": ".", "paths": { "@/*": ["./src/*"] } }
+  "references": [
+    {
+      "path": "./apps/agent/tsconfig.json"
+    },
+    {
+      "path": "./apps/desktop/tsconfig.node.json"
+    },
+    {
+      "path": "./apps/desktop/tsconfig.web.json"
+    }
+  ]
 }

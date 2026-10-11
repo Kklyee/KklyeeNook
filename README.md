@@ -43,14 +43,14 @@ KklyeeNook 使用 Electron、React 和 TypeScript 构建，结合 [pi](https://g
 
 ## 与 pi 的结合
 
-pi 是 KklyeeNook 的核心运行时。应用通过 SDK 在 Agent 后端创建并维护 pi Session：
+pi 是 KklyeeNook 的核心运行时。应用通过 SDK 在 Agent 后端创建并维护持久化 Conversation：
 
-- `@earendil-works/pi-coding-agent` 提供会话、资源加载、Skills 和上下文压缩能力。
+- `@earendil-works/pi-durable` 管理 Conversation、Task、Submission、Entry、LiveDoc、InboxDoc，以及提交、队列、取消和恢复。
 - `@earendil-works/pi-ai` 提供模型目录、提供商接入和模型推理能力。
-- `@earendil-works/pi-agent-core` 提供 Agent 与工具执行相关基础能力。
-- `@assistant-ui/react-pi` 将 pi 会话快照和事件流接入 React 聊天界面。
+- `@earendil-works/chord` 提供执行上下文、取消与状态增量。
+- assistant-ui ExternalStoreRuntime 将 SDK 的正式快照和事件投影为现有聊天界面。
 
-KklyeeNook 在此基础上接入工作区、权限审批、Shell 沙箱、Subagent、计划、记忆、知识库和 MCP 工具。桌面端与 Remote 复用同一个 Agent 服务和 pi Session，因此在手机上发送消息、切换模型或处理审批，都会作用于电脑上的同一任务。
+KklyeeNook 在此基础上接入工作区、权限审批、Shell 沙箱、Subagent、计划、记忆、知识库和 MCP 工具。桌面端与 Remote 复用同一个 Agent 服务和 Conversation，因此在手机上发送消息、切换模型或处理审批，都会作用于电脑上的同一任务。
 
 ## 快速开始
 
@@ -143,7 +143,7 @@ Gateway 固定监听 `127.0.0.1:43127`，校验 Tailscale Serve 提供的用户�
 | `workspace-write` | 在绑定的工作区内修改文件 |
 | `full-access` | 显式允许完全权限执行 |
 
-Windows Shell 使用 PowerShell 7，受限模式通过 Rust helper、Windows restricted token、ACL 和 Job Object 执行。该沙箱的隔离级别为 `partial`：主要约束普通文件的写入与删除，读取、网络和进程可见性仍然可用。完整边界、系统授权及验证命令见 [Windows 沙箱文档](native/windows-sandbox/README.md)。
+Windows Shell 使用 PowerShell 7，受限模式通过 Rust helper、Windows restricted token、ACL 和 Job Object 执行。该沙箱的隔离级别为 `partial`：主要约束普通文件的写入与删除，读取、网络和进程可见性仍然可用。完整边界、系统授权及验证命令见 [Windows 沙箱文档](apps/desktop/native/windows-sandbox/README.md)。
 
 Windows 受限 Shell 首次使用前，运行 `pnpm run sandbox:setup`，通过 UAC 配置所需的系统对象授权。macOS 和 Linux 的受限 Shell 后端当前不可用，需要通过已有权限流程显式使用 `full-access`。
 
@@ -159,6 +159,7 @@ Windows 受限 Shell 首次使用前，运行 `pnpm run sandbox:setup`，通过 
 | `pnpm run typecheck` | 检查主进程、桌面界面和 Remote 类型 |
 | `pnpm run build` | 构建 Remote、执行类型检查并构建 Electron 应用 |
 | `pnpm run build:unpack` | 生成未封装的应用目录 |
+| `pnpm run test:package` | 验证 Windows 应用包中的 SDK、原生工具与恢复 |
 | `pnpm run build:win` | 构建 Windows 安装包 |
 | `pnpm run build:mac` | 构建 macOS 包 |
 | `pnpm run build:linux` | 构建 Linux 包 |
@@ -168,21 +169,22 @@ Windows 受限 Shell 首次使用前，运行 `pnpm run sandbox:setup`，通过 
 ### 项目结构
 
 ```text
-src/main/                Electron 主进程、Agent 后端、pi 运行时及本地服务
-src/preload/             桌面界面与主进程之间的桥接
-src/renderer/            React 桌面界面
-src/shared/              桌面共享类型与协议
+apps/desktop/src/main/   Electron 主进程、IPC 与后台进程客户端
+apps/desktop/src/preload/  桌面界面与主进程之间的桥接
+apps/desktop/src/renderer/ React 桌面界面
+apps/desktop/native/     Rust Windows 沙箱
+apps/desktop/resources/  桌面图标与沙箱资源
+apps/agent/src/          SDK 运行时、工具、调度、Gateway 与本地服务
+apps/agent/drizzle/      业务数据库迁移
 apps/remote/             手机 PWA
-packages/shared/         Desktop 与 Remote 共享类型、协议和权限定义
+packages/shared/         三端共享类型、协议与数据投影
 packages/ui/             共享视觉 tokens 与 assistant-ui 组件
-native/windows-sandbox/  Rust Windows 沙箱
-drizzle/                 数据库迁移
-patches/                 依赖兼容性补丁
+patches/                 officeparser 与打包工具补丁
 ```
 
 技术栈包括 Electron、React、TypeScript、pi、assistant-ui、shadcn/ui、Tailwind CSS、Hono、Drizzle ORM、libSQL、Transformers.js 和 Tesseract.js。
 
-仓库通过 `patch-package` 维护 pi、`officeparser` 和 `app-builder-lib` 等依赖的兼容性修复。更新依赖时应同时检查对应补丁；其中 `officeparser` 补丁处理配置合并与 OCR，`app-builder-lib` 补丁修正 pnpm hoisted 依赖的打包收集。
+仓库通过 `patch-package` 维护 `officeparser` 和 `app-builder-lib` 的修复。更新依赖时应同时检查对应补丁；其中 `officeparser` 补丁处理配置合并与 OCR，`app-builder-lib` 补丁修正 pnpm hoisted 依赖的打包收集。
 
 ## 参与贡献
 
