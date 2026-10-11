@@ -2,7 +2,9 @@ import { fileURLToPath } from 'node:url'
 import { expect, test } from 'vitest'
 
 import { connectDatabase } from '../client'
-import { DrizzleScheduledTaskRepo } from './scheduledTaskRepo'
+import { DrizzleScheduledTaskRepo } from './scheduled-task-repo'
+import { DrizzleBotRepo } from './bot-repo'
+import { defaultBot } from '@kklyeenook/shared/bot/bot'
 
 test('persists and queries scheduled tasks through SQLite', async () => {
   const migrationsFolder = fileURLToPath(new URL('../../../drizzle', import.meta.url))
@@ -10,8 +12,10 @@ test('persists and queries scheduled tasks through SQLite', async () => {
 
   try {
     const repo = new DrizzleScheduledTaskRepo(database)
+    await new DrizzleBotRepo(database).insert(defaultBot('coder', 'Coder', true))
     const task = {
       id: 'task-1',
+      botId: 'coder',
       title: 'Daily project check',
       prompt: 'Check the project',
       schedule: { type: 'daily' as const, time: '09:00' },

@@ -9,6 +9,7 @@ export interface ScheduledTask {
   prompt: string
   schedule: ScheduledTaskSchedule
   enabled: boolean
+  botId?: string
   sessionId?: string
   skillIds?: string[]
   lastRunAt?: number
@@ -22,6 +23,7 @@ export interface CreateScheduledTaskInput {
   prompt: string
   schedule: ScheduledTaskSchedule
   enabled?: boolean
+  botId?: string
   sessionId?: string
   skillIds?: string[]
 }
@@ -31,6 +33,7 @@ export interface UpdateScheduledTaskInput {
   prompt?: string
   schedule?: ScheduledTaskSchedule
   enabled?: boolean
+  botId?: string
   sessionId?: string | null
   skillIds?: string[]
 }

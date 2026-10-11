@@ -19,18 +19,36 @@ let workspaceId: string
 
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'nook-bots-'))
-  const connection = await connectDatabase('file::memory:', fileURLToPath(new URL('../../drizzle', import.meta.url)))
+  const connection = await connectDatabase(
+    'file::memory:',
+    fileURLToPath(new URL('../../drizzle', import.meta.url)),
+  )
   close = connection.close
   sessions = new DrizzleAgentSessionRepo(connection.database)
   const workspaces = new WorkspaceService(new DrizzleWorkspaceRepo(connection.database))
   workspaceId = (await workspaces.attach(directory)).workspace!.id
-  bots = new BotService(new DrizzleBotRepo(connection.database), sessions, workspaces, new ToolRegistry())
+  bots = new BotService(
+    new DrizzleBotRepo(connection.database),
+    sessions,
+    workspaces,
+    new ToolRegistry(),
+  )
 })
 
-afterEach(async () => { close(); await rm(directory, { recursive: true, force: true }) })
+afterEach(async () => {
+  close()
+  await rm(directory, { recursive: true, force: true })
+})
 
 test('seeds once and migrates old conversations without assigning Workspace-based identity to new Bots', async () => {
-  await sessions.save({ id: 'old', title: 'Old', workspaceId, createdAt: 1, updatedAt: 1, archived: false })
+  await sessions.save({
+    id: 'old',
+    title: 'Old',
+    workspaceId,
+    createdAt: 1,
+    updatedAt: 1,
+    archived: false,
+  })
   await bots.initialize()
   await bots.update('xiaoya', { name: '芽芽' })
   await bots.initialize()
@@ -47,10 +65,21 @@ test('seeds once and migrates old conversations without assigning Workspace-base
 
 test('validates defaults and tools, immediately revokes access, preserves built-ins, duplicates independently', async () => {
   await bots.initialize()
-  await expect(bots.create({ name: 'Invalid', defaultWorkspaceId: workspaceId })).rejects.toThrow('must be authorized')
-  await expect(bots.create({ name: 'Invalid', enabledTools: ['invented'] })).rejects.toThrow('Unknown tool')
-  const bot = await bots.create({ name: 'Scout', enabledTools: ['read'], workspaceIds: [workspaceId], defaultWorkspaceId: workspaceId })
-  await expect(bots.assertAccess(bot.id, workspaceId, 'read')).resolves.toMatchObject({ id: bot.id })
+  await expect(bots.create({ name: 'Invalid', defaultWorkspaceId: workspaceId })).rejects.toThrow(
+    'must be authorized',
+  )
+  await expect(bots.create({ name: 'Invalid', enabledTools: ['invented'] })).rejects.toThrow(
+    'Unknown tool',
+  )
+  const bot = await bots.create({
+    name: 'Scout',
+    enabledTools: ['read'],
+    workspaceIds: [workspaceId],
+    defaultWorkspaceId: workspaceId,
+  })
+  await expect(bots.assertAccess(bot.id, workspaceId, 'read')).resolves.toMatchObject({
+    id: bot.id,
+  })
   await bots.update(bot.id, { enabledTools: [] })
   await expect(bots.assertAccess(bot.id, workspaceId, 'read')).rejects.toThrow('not enabled')
   await bots.update(bot.id, { workspaceIds: [], defaultWorkspaceId: null })
@@ -65,4 +94,16 @@ test('validates defaults and tools, immediately revokes access, preserves built-
   await bots.remove(bot.id)
   await expect(bots.get(bot.id)).rejects.toThrow('not found')
   expect(await sessions.findAll()).toEqual([])
+})
+
+
+test('updates the untouched built-in Coding prompt and preserves customized instructions', async () => {
+  await bots.initialize()
+  expect((await bots.get('coder')).instructions).toContain("You are an expert coding assistant operating inside KKlyeeNook's durable agent runtime.")
+  await bots.update('coder', { instructions: 'Help with code development, documentation, debugging and tests. Follow the authorized workspace instructions and request approval for side effects when required.' })
+  await bots.initialize()
+  expect((await bots.get('coder')).instructions).toContain('Use only tools actually provided by the runtime.')
+  await bots.update('coder', { instructions: 'Custom coding instructions' })
+  await bots.initialize()
+  expect((await bots.get('coder')).instructions).toBe('Custom coding instructions')
 })

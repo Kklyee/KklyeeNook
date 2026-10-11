@@ -8,7 +8,7 @@ import {
   toolError,
   ToolExecutionError,
 } from '@kklyeenook/shared/tool/toolExecutionResult'
-import { SandboxService, toolPermissionResource } from '../sandbox/sandboxService'
+import { SandboxService, toolPermissionResource } from '../sandbox/sandbox-service'
 import type { SandboxExecutionResult } from '../sandbox/sandboxBackend'
 import type { ToolAdapterContext, ToolRegistry } from '../tools/toolRegistry'
 import type { ToolResultRetentionPolicy } from '../tools/toolResultRetentionPolicy'

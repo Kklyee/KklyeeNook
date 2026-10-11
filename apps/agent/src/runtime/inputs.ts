@@ -90,6 +90,7 @@ export class AgentInputs {
       context: Context,
     ) => Promise<string | undefined>,
     private readonly capture?: (id: ConversationId, context: Context) => Promise<BotSubmissionConfig | undefined>,
+    private readonly admit?: <T>(id: ConversationId, action: () => Promise<T>, context: Context) => Promise<T>,
   ) {
     this.extension = defineExtension({
       name: 'nook.context',
@@ -139,6 +140,11 @@ export class AgentInputs {
     input: ContextInput,
     context: Context,
   ) {
+    const submit = () => this.submitInput(conversation, input, context)
+    return this.admit ? this.admit(conversation.id, submit, context) : submit()
+  }
+
+  private async submitInput(conversation: Pick<Conversation, 'id' | 'submit'>, input: ContextInput, context: Context) {
     if (!input.requestId.trim()) throw new Error('A stable request ID is required')
     const harness = this.host()
     let prepared = await harness.snapshot(inputDoc, conversation.id, input.requestId, context)

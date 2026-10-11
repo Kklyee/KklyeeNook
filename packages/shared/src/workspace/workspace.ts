@@ -18,6 +18,7 @@ export interface WorkspaceAttachResult {
 }
 
 export interface AgentExecutionContext {
+  botId?: string
   conversationId: string
   workspaceId?: string
   workspace?: { id: string; rootPath: string }

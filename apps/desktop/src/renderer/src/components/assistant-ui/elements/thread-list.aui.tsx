@@ -2,7 +2,7 @@
 
 import { ThreadListRowContent, threadListRowClassName, threadListTriggerClassName } from '@kklyeenook/ui/assistant-ui/thread-list-row'
 
-import { WorkspaceThreadList } from '@/renderer/src/features/workspaces/WorkspaceThreadList'
+import { BotSidebar } from '@/renderer/src/features/bots/bot-sidebar'
 
 import { useWorkspaces } from '@/renderer/src/features/workspaces/WorkspaceProvider'
 
@@ -32,7 +32,7 @@ import {
   type FC,
 } from 'react'
 
-export const ThreadList: FC = () => <WorkspaceThreadList />
+export const ThreadList: FC = () => <BotSidebar />
 export const ThreadListRoot: FC<ComponentPropsWithoutRef<typeof ThreadListPrimitive.Root>> = ({
   className,
   ...props

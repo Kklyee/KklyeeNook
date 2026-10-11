@@ -29,6 +29,8 @@ export function agentSummary(
   return {
     id: record.id,
     projectId: record.workspaceId ?? '',
+    botId: record.botId,
+    archived: record.archived,
     title: record.title ?? 'New Conversation',
     status: running ? 'running' : 'idle',
     updatedAt: record.updatedAt,

@@ -1,8 +1,8 @@
 import { asc, desc, eq } from 'drizzle-orm'
 
 import type { Database } from '../client'
-import { scheduledTasks, type ScheduledTaskRow } from '../schema/scheduledTasks'
-import type { ScheduledTask } from '@kklyeenook/shared/scheduler/scheduledTask'
+import { scheduledTasks, type ScheduledTaskRow } from '../schema/scheduled-tasks'
+import type { ScheduledTask } from '@kklyeenook/shared/scheduler/scheduled-task'
 
 export interface ScheduledTaskRepo {
   findAll(): Promise<ScheduledTask[]>
@@ -19,6 +19,7 @@ function toScheduledTask(row: ScheduledTaskRow): ScheduledTask {
     prompt: row.prompt,
     schedule: row.schedule,
     enabled: row.enabled,
+    ...(row.botId ? { botId: row.botId } : {}),
     ...(row.sessionId ? { sessionId: row.sessionId } : {}),
     ...(row.skillIds.length ? { skillIds: row.skillIds } : {}),
     ...(row.lastRunAt !== null ? { lastRunAt: row.lastRunAt } : {}),
@@ -46,7 +47,11 @@ export class DrizzleScheduledTaskRepo implements ScheduledTaskRepo {
   }
 
   async findById(id: string): Promise<ScheduledTask | undefined> {
-    const rows = await this.db.select().from(scheduledTasks).where(eq(scheduledTasks.id, id)).limit(1)
+    const rows = await this.db
+      .select()
+      .from(scheduledTasks)
+      .where(eq(scheduledTasks.id, id))
+      .limit(1)
     return rows[0] ? toScheduledTask(rows[0]) : undefined
   }
 
@@ -59,6 +64,7 @@ export class DrizzleScheduledTaskRepo implements ScheduledTaskRepo {
         prompt: task.prompt,
         schedule: task.schedule,
         enabled: task.enabled,
+        botId: task.botId ?? null,
         sessionId: task.sessionId ?? null,
         skillIds: task.skillIds ?? [],
         lastRunAt: task.lastRunAt ?? null,
@@ -73,6 +79,7 @@ export class DrizzleScheduledTaskRepo implements ScheduledTaskRepo {
           prompt: task.prompt,
           schedule: task.schedule,
           enabled: task.enabled,
+          botId: task.botId ?? null,
           sessionId: task.sessionId ?? null,
           skillIds: task.skillIds ?? [],
           lastRunAt: task.lastRunAt ?? null,

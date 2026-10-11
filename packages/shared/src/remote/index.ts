@@ -30,6 +30,8 @@ export interface RemoteModel {
   contextWindow?: number
 }
 export interface RemoteConversationSummary {
+  botId?: string | null
+  archived?: boolean
   id: string
   projectId: string
   title: string
@@ -121,6 +123,7 @@ export interface RemoteConversationSnapshot extends RemoteConversationSummary {
   error?: string
 }
 export interface RemoteCreateConversationInput {
+  botId?: string
   requestId?: string
   permission: RemotePermissionMode
   provider: string

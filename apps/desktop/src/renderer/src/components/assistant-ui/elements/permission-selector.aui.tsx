@@ -9,10 +9,13 @@ import {
 } from '@kklyeenook/shared/approval/permission'
 import { useWorkspaces } from '@/renderer/src/features/workspaces/WorkspaceProvider'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../ui/select'
+import { useChatRuntimeSnapshot } from '@/renderer/src/features/chat/runtime/chat-runtime'
 
 export function PermissionSelector() {
   const sessionId = useAuiState((s) => s.threadListItem.remoteId)
   const running = useAuiState((s) => s.thread.isRunning)
+  const snapshot = useChatRuntimeSnapshot()
+  const bot = snapshot.bots.find((bot) => bot.id === snapshot.selectedBotId)
   const {
     workspaces,
     conversations,
@@ -55,7 +58,7 @@ export function PermissionSelector() {
           {PERMISSION_LABELS[mode]}
         </SelectTrigger>
         <SelectContent>
-          {PERMISSION_MODES.map((item) => (
+          {PERMISSION_MODES.filter((item) => !bot || PERMISSION_MODES.indexOf(item) <= PERMISSION_MODES.indexOf(bot.permissionMode)).map((item) => (
             <SelectItem key={item} value={item} disabled={item === 'workspace-write' && !workspace}>
               {PERMISSION_LABELS[item]}
               {item === 'workspace-write' && !workspace && ' · 需要关联一个项目'}

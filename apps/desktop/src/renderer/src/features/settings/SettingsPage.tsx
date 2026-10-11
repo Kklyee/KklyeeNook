@@ -9,7 +9,7 @@ import { ModelSettings } from './ModelSettings'
 import { settingsNavigation, type SettingsTab } from './settingsNavigation'
 import { AppearanceSettings } from './AppearanceSettings'
 import { RemoteSettings } from './RemoteSettings'
-import { ScheduledTasks } from './ScheduledTasks'
+import { ScheduledTasks } from './scheduled-tasks'
 
 export function SettingsPage({
   settings,

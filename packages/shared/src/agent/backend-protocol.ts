@@ -7,7 +7,7 @@ import type { ResolvedContextAttachment } from '@kklyeenook/shared/context/conte
 import type {
   CreateScheduledTaskInput,
   UpdateScheduledTaskInput,
-} from '@kklyeenook/shared/scheduler/scheduledTask'
+} from '@kklyeenook/shared/scheduler/scheduled-task'
 import type { UpdateAgentModelSelectionRequest } from '@kklyeenook/shared/agent/agentSettings'
 import type { KnowledgeSearchRequest, KnowledgeSource } from '@kklyeenook/shared/knowledge/knowledge'
 

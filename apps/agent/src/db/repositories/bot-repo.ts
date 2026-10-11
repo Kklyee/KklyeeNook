@@ -19,7 +19,13 @@ export class DrizzleBotRepo implements BotRepo {
   }
 
   async get(id: string) {
-    return (await this.db.select().from(bots).where(and(eq(bots.id, id), isNull(bots.deletedAt))).limit(1))[0]
+    return (
+      await this.db
+        .select()
+        .from(bots)
+        .where(and(eq(bots.id, id), isNull(bots.deletedAt)))
+        .limit(1)
+    )[0]
   }
 
   async insert(bot: BotProfile) {
@@ -27,7 +33,10 @@ export class DrizzleBotRepo implements BotRepo {
   }
 
   async save(bot: BotProfile) {
-    await this.db.update(bots).set(bot).where(and(eq(bots.id, bot.id), isNull(bots.deletedAt)))
+    await this.db
+      .update(bots)
+      .set(bot)
+      .where(and(eq(bots.id, bot.id), isNull(bots.deletedAt)))
   }
 
   async remove(id: string) {

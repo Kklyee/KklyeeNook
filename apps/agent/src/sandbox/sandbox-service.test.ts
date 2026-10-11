@@ -8,7 +8,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { PermissionRequest } from '@kklyeenook/shared/approval/permission'
 import { ToolRegistry } from '../tools/toolRegistry'
 import { registerBuiltinTools } from '../tools/builtin-tools'
-import { SandboxService, toolPermissionResource } from './sandboxService'
+import { SandboxService, toolPermissionResource } from './sandbox-service'
 import { LinuxSandboxBackend } from './sandboxBackend'
 
 let directory: string
@@ -152,3 +152,19 @@ test('shell fails closed and executes direct only with full access or one-shot a
   expect(executeDirect).toHaveBeenCalledTimes(2)
 })
 
+
+
+test('Bot full access stays within its Workspace and shell always uses the scoped backend', async () => {
+  const execute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'scoped' }], details: {} }))
+  const sandbox = new SandboxService({ support: () => 'partial', execute })
+  const file = { ...request(join(outside, 'escape.txt'), 'full-access'), botId: 'coder' }
+  await expect(sandbox.resolveFile(file)).rejects.toThrow('超出')
+  await expect(sandbox.resolveFile({ ...file, workspace: undefined })).rejects.toThrow('已授权')
+  const shell: PermissionRequest = { ...request('.', 'full-access'), botId: 'coder', toolName: 'bash', resource: { kind: 'command', command: 'echo scoped' } }
+  const executeDirect = vi.fn()
+  await sandbox.execute(shell, { command: 'echo scoped', cwd: root, runId: 'bot-run', executeDirect })
+  expect(executeDirect).not.toHaveBeenCalled()
+  expect(execute).toHaveBeenCalledWith(expect.objectContaining({ mode: 'workspace-write', workspaceRoot: root }))
+  await expect(sandbox.execute({ ...shell, resource: { kind: 'command', command: 'echo escaped', cwd: outside } }, { command: 'echo escaped', cwd: outside, executeDirect })).rejects.toThrow('超出')
+  await expect(new SandboxService(new LinuxSandboxBackend()).execute(shell, { command: 'echo scoped', cwd: root, executeDirect })).rejects.toThrow('沙箱')
+})

@@ -1,6 +1,7 @@
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
-import type { ScheduledTaskSchedule } from '@kklyeenook/shared/scheduler/scheduledTask'
+import type { ScheduledTaskSchedule } from '@kklyeenook/shared/scheduler/scheduled-task'
+import { bots } from './bots'
 import { conversations } from './conversations'
 
 export const scheduledTasks = sqliteTable(
@@ -11,6 +12,7 @@ export const scheduledTasks = sqliteTable(
     prompt: text('prompt').notNull(),
     schedule: text('schedule', { mode: 'json' }).$type<ScheduledTaskSchedule>().notNull(),
     enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    botId: text('bot_id').references(() => bots.id),
     sessionId: text('session_id').references(() => conversations.id, { onDelete: 'set null' }),
     skillIds: text('skill_ids', { mode: 'json' }).$type<string[]>().notNull().default([]),
     lastRunAt: integer('last_run_at'),

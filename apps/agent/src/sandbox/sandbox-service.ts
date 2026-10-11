@@ -7,7 +7,7 @@ import {
   type SandboxExecutionRequest,
   type SandboxExecutionResult,
 } from './sandboxBackend'
-import { SandboxPolicy } from './sandboxPolicy'
+import { SandboxPolicy } from './sandbox-policy'
 import { WorkspacePathPolicy } from './workspacePathPolicy'
 import { ToolExecutionError } from '@kklyeenook/shared/tool/toolExecutionResult'
 
@@ -50,11 +50,11 @@ export class SandboxService {
     toolCallId?: string,
   ): Promise<SandboxExecutionResult> {
     const authorized = await this.authorize(request, toolCallId)
-    return authorized.mode === 'full-access'
+    return authorized.mode === 'full-access' && !authorized.botId
       ? new DirectExecutionBackend().execute({ ...execution, mode: authorized.mode })
       : this.backend.execute({
           ...execution,
-          mode: authorized.mode,
+          mode: authorized.mode === 'full-access' ? 'workspace-write' : authorized.mode,
           workspaceRoot: authorized.workspace?.rootPath,
         })
   }

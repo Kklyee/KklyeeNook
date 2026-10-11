@@ -19,9 +19,22 @@ export type CreateConversation = {
 export const DEFAULT_CONVERSATION_TITLE = '新会话'
 
 const TITLE_LIMIT = 50
+type ConversationUpdate = {
+  title?: string
+  archived?: boolean
+  permissionMode?: PermissionMode
+  workspaceId?: string | null
+  deletedAt?: number
+}
 
 function titleFromInput(content: ContextInput['content']) {
-  const text = typeof content === 'string' ? content : content.filter((part) => part.type === 'text').map((part) => part.text).join(' ')
+  const text =
+    typeof content === 'string'
+      ? content
+      : content
+          .filter((part) => part.type === 'text')
+          .map((part) => part.text)
+          .join(' ')
   const normalized = text.replace(/\s+/g, ' ').trim()
   if (!normalized) return undefined
   return normalized.length > TITLE_LIMIT ? `${normalized.slice(0, TITLE_LIMIT - 3)}...` : normalized
@@ -59,7 +72,15 @@ export class ConversationService {
     private readonly engine: AgentEngine,
     private readonly sessions: AgentSessionRepo,
     private readonly inputs?: AgentInputs,
-    private readonly validateUpdate?: (threadId: string, update: { workspaceId?: string | null; permissionMode?: PermissionMode }, context: Context) => Promise<void>,
+    private readonly validateUpdate?: (
+      threadId: string,
+      update: { workspaceId?: string | null; permissionMode?: PermissionMode },
+      context: Context,
+    ) => Promise<void>,
+    private readonly exclusiveWorkspace?: <T>(
+      threadId: string,
+      action: () => Promise<T>,
+    ) => Promise<T>,
   ) {}
 
   async create(input: CreateConversation, context: Context) {
@@ -97,7 +118,9 @@ export class ConversationService {
 
   async list(context: Context) {
     const links = await this.engine.links(context)
-    return (await this.sessions.findAll()).filter((record) => !record.deletedAt && Object.hasOwn(links, record.id))
+    return (await this.sessions.findAll()).filter(
+      (record) => !record.deletedAt && Object.hasOwn(links, record.id),
+    )
   }
 
   async get(threadId: string, context: Context) {
@@ -109,7 +132,14 @@ export class ConversationService {
     return record
   }
 
-  async update(threadId: string, update: { title?: string; archived?: boolean; permissionMode?: PermissionMode; workspaceId?: string | null; deletedAt?: number }, context: Context) {
+  async update(threadId: string, update: ConversationUpdate, context: Context) {
+    const save = () => this.updateMetadata(threadId, update, context)
+    return update.workspaceId !== undefined && this.exclusiveWorkspace
+      ? this.exclusiveWorkspace(threadId, save)
+      : save()
+  }
+
+  private async updateMetadata(threadId: string, update: ConversationUpdate, context: Context) {
     const record = await this.get(threadId, context)
     await this.validateUpdate?.(threadId, update, context)
     const next = { ...record, ...update, updatedAt: Math.max(Date.now(), record.updatedAt + 1) }
@@ -140,8 +170,12 @@ export class ConversationService {
     const submission = this.inputs
       ? await this.inputs.submit(conversation, input, context)
       : await conversation.submit(input, context)
-    const title = record.title === DEFAULT_CONVERSATION_TITLE && !input.scheduledTaskId ? titleFromInput(input.content) : undefined
-    if (title && title !== DEFAULT_CONVERSATION_TITLE) await this.update(threadId, { title }, context)
+    const title =
+      record.title === DEFAULT_CONVERSATION_TITLE && !input.scheduledTaskId
+        ? titleFromInput(input.content)
+        : undefined
+    if (title && title !== DEFAULT_CONVERSATION_TITLE)
+      await this.update(threadId, { title }, context)
     return { accepted: true as const, conversationId: conversation.id, submissionId: submission.id }
   }
 

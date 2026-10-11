@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAuiEvent } from '@assistant-ui/react'
-import { ChatPanel } from '../features/chat/ChatPanel'
+import { ChatPanel } from '../features/chat/chat-panel'
 import { ThreadSidebar } from '../features/chat/ThreadSidebar'
 import { SidebarInset, SidebarProvider } from '../components/ui/sidebar'
 import { SettingsPage } from '../features/settings/SettingsPage'

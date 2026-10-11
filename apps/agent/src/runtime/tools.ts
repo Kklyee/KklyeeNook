@@ -14,7 +14,7 @@ import type { ToolCall, ToolExecutionResult } from '@kklyeenook/shared/tool/tool
 import type { ToolAdapterContext, ToolRegistry } from '../tools/toolRegistry'
 import type { ToolResultRetentionPolicy } from '../tools/toolResultRetentionPolicy'
 import type { ExecutableToolContext } from '../tools/executable-tool'
-import { SandboxService, toolPermissionResource } from '../sandbox/sandboxService'
+import { SandboxService, toolPermissionResource } from '../sandbox/sandbox-service'
 import { ToolExecutionHarness } from './tool-execution-harness'
 import { AgentApprovals } from './approvals'
 import type { RunResources } from './run-resources'

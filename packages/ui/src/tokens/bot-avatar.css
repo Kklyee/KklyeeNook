@@ -1,0 +1,56 @@
+.bot-avatar[data-state='thinking'] > svg {
+  animation: bot-think 4s ease-in-out infinite;
+}
+.bot-avatar[data-state='working'] > svg {
+  animation: bot-work 3s ease-in-out infinite;
+}
+.bot-avatar[data-state='completed'] > svg {
+  animation: bot-complete 550ms ease-out 1;
+}
+.bot-avatar[data-state='error'] > svg {
+  animation: bot-error 320ms ease-out 1;
+}
+@keyframes bot-think {
+  0%,
+  100% {
+    transform: rotate(-3deg);
+  }
+  50% {
+    transform: rotate(3deg);
+  }
+}
+@keyframes bot-work {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+@keyframes bot-complete {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.08);
+  }
+}
+@keyframes bot-error {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  30% {
+    transform: translateX(-2px);
+  }
+  70% {
+    transform: translateX(2px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bot-avatar > svg {
+    animation: none !important;
+  }
+}

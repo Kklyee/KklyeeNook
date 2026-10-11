@@ -6,7 +6,7 @@ import type { RemoteEvent } from '@kklyeenook/shared/remote/index'
 import { AgentConfigStore } from '../settings/agentConfigStore'
 import { ContextAttachmentService } from '../context/contextAttachmentService'
 import { emptySnapshot, agentRemoteSnapshot } from '../runtime/projection'
-import { createRemoteAgentPort } from './remoteAgentPort'
+import { createRemoteAgentPort } from './remote-agent-port'
 
 function fixture() {
   const session: AgentSessionRecord = { archived: false, id: 'chat', workspaceId: 'project', title: 'Existing chat', createdAt: 1, updatedAt: 2, permissionMode: 'workspace-write' as const }

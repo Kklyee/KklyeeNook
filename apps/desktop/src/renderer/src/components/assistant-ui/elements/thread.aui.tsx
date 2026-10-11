@@ -95,6 +95,7 @@ export type ThreadComponents = {
 }
 
 export type ThreadProps = {
+  composerPlaceholder?: string
   components?: ThreadComponents | undefined
   autoFocus?: boolean | undefined
   readOnly?: boolean | undefined
@@ -114,7 +115,7 @@ export type ThreadProps = {
 
 const EMPTY_COMPONENTS: ThreadComponents = {}
 
-const ThreadComponentsContext = createContext<ThreadComponents>(EMPTY_COMPONENTS)
+const ThreadComponentsContext = createContext<ThreadComponents & { composerPlaceholder?: string }>(EMPTY_COMPONENTS)
 
 // Startup exposes a loading placeholder thread; treat it as a new chat so
 // the composer mounts centered. Loads after startup keep the docked layout.
@@ -158,9 +159,10 @@ export const Thread: FC<ThreadProps> = ({
   compactionSettings = DEFAULT_AGENT_COMPACTION_SETTINGS,
   isCompacting = false,
   composerAccessory,
+  composerPlaceholder,
 }) => {
   const isEmpty = useAuiState((state) => !readOnly && isNewChatView(state))
-  const contextValue = useMemo(() => ({ ...components, readOnly }), [components, readOnly])
+  const contextValue = useMemo(() => ({ ...components, readOnly, composerPlaceholder }), [components, readOnly, composerPlaceholder])
   const Root = readOnly ? ThreadRoot : ThreadWithCommands
 
   return (
@@ -333,6 +335,7 @@ const Composer: FC<{
   isCompacting,
 }) => {
   const { commands, result, closeResult, submit } = commandSurface
+  const { composerPlaceholder } = useContext(ThreadComponentsContext)
   const budget = calculateAgentContextBudget(contextUsage, compactionSettings, {
     compacting: isCompacting,
   })
@@ -358,7 +361,7 @@ const Composer: FC<{
           >
             <ComposerAttachments />
             <ComposerPrimitive.Input
-              placeholder="描述一个任务，或提出一个问题…"
+              placeholder={composerPlaceholder ?? '描述一个任务，或提出一个问题…'}
               className="aui-composer-input text-foreground placeholder:text-foreground/35 max-h-48 min-h-11 w-full resize-none bg-transparent px-3 py-1 text-[15px] leading-6 caret-primary outline-none"
               rows={1}
               autoFocus={autoFocus}

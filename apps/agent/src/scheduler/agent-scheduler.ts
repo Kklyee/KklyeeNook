@@ -13,23 +13,18 @@ import {
 } from '@earendil-works/pi-durable'
 import type { AgentHost } from '../runtime/agent-host'
 import type { ContextInput } from '../runtime/inputs'
-import type { ScheduledTaskRepo } from '../db/repositories/scheduledTaskRepo'
+import type { ScheduledTaskRepo } from '../db/repositories/scheduled-task-repo'
 import type { AgentBackendNotification } from '@kklyeenook/shared/agentBackend'
 import type {
   CreateScheduledTaskInput,
   ScheduledTask,
   UpdateScheduledTaskInput,
-} from '@kklyeenook/shared/scheduler/scheduledTask'
+} from '@kklyeenook/shared/scheduler/scheduled-task'
 import { getNextScheduledTaskRunAt, validateScheduledTaskSchedule } from './schedule'
 
-type SchedulerDoc = {
-  schedules: Record<string, { version: number; taskId?: number }>
-}
+type SchedulerDoc = { schedules: Record<string, { version: number; taskId?: number }> }
 
-type AgentScheduleInput = {
-  id: string
-  version: number
-}
+type AgentScheduleInput = { id: string; version: number }
 
 type AgentScheduleState =
   | { phase: 'wait'; version: number }
@@ -44,9 +39,7 @@ type AgentScheduleState =
       submissionId: number
     }
 
-type AgentScheduleResult = {
-  disposition: 'completed' | 'failed' | 'stale' | 'aborted'
-}
+type AgentScheduleResult = { disposition: 'completed' | 'failed' | 'stale' | 'aborted' }
 
 type AgentScheduleRuntime = TaskRuntime<
   AgentScheduleInput,
@@ -76,11 +69,7 @@ export class AgentScheduler {
     notify?: (notification: AgentBackendNotification) => void,
   ) {
     this.notify = notify ?? (() => undefined)
-    this.agentTask = defineTask<
-      AgentScheduleInput,
-      AgentScheduleState,
-      AgentScheduleResult
-    >({
+    this.agentTask = defineTask<AgentScheduleInput, AgentScheduleState, AgentScheduleResult>({
       name: 'nook.scheduled-task',
       version: 1,
       initial: (input) => ({ phase: 'wait', version: input.version }),
@@ -90,18 +79,15 @@ export class AgentScheduler {
         finish: (task, runtime, context) => this.finish(task, runtime, context),
       },
       abort: async (_task, runtime, context) => {
-        await runtime.commit(
-          async (tx, current) => {
-            const doc = await tx.doc(agentSchedulerDoc)
-            const record = doc.schedules[current.input.id]
-            if (record?.taskId === current.id) delete doc.schedules[current.input.id]
-            return {
-              status: 'terminal',
-              outcome: { status: 'aborted', reason: 'aborted', result: { disposition: 'aborted' } },
-            }
-          },
-          context,
-        )
+        await runtime.commit(async (tx, current) => {
+          const doc = await tx.doc(agentSchedulerDoc)
+          const record = doc.schedules[current.input.id]
+          if (record?.taskId === current.id) delete doc.schedules[current.input.id]
+          return {
+            status: 'terminal',
+            outcome: { status: 'aborted', reason: 'aborted', result: { disposition: 'aborted' } },
+          }
+        }, context)
       },
     })
     this.extension = defineExtension({ name: 'nook.scheduler', tasks: [this.agentTask] })
@@ -119,7 +105,13 @@ export class AgentScheduler {
       if (task.sessionId && !Object.hasOwn(links, task.sessionId)) {
         await this.repo.delete(task.id)
         await this.retire(task.id, context)
-      } else await this.reconcile(task, context)
+      } else {
+        if (!task.botId && this.host?.bots) {
+          task.botId = await this.targetBot(task.sessionId, undefined)
+          await this.repo.save(task)
+        }
+        await this.reconcile(task, context)
+      }
     }
     const ids = new Set(tasks.map((task) => task.id))
     const doc = await this.requireHost().engine.harness.snapshot(agentSchedulerDoc, context)
@@ -134,6 +126,7 @@ export class AgentScheduler {
 
   async create(input: CreateScheduledTaskInput): Promise<ScheduledTask> {
     validateTaskInput(input.title, input.prompt, input.schedule, input.skillIds)
+    const botId = await this.targetBot(input.sessionId, input.botId)
     if (input.enabled !== false) await this.assertTarget(input.sessionId)
     const now = Date.now()
     const enabled = input.enabled ?? true
@@ -143,6 +136,7 @@ export class AgentScheduler {
       prompt: input.prompt.trim(),
       schedule: input.schedule,
       enabled,
+      ...(botId ? { botId } : {}),
       ...(input.sessionId ? { sessionId: input.sessionId } : {}),
       ...(input.skillIds?.length ? { skillIds: [...input.skillIds] } : {}),
       ...(enabled ? { nextRunAt: getNextScheduledTaskRunAt(input.schedule, now) } : {}),
@@ -161,7 +155,10 @@ export class AgentScheduler {
     const prompt = input.prompt ?? existing.prompt
     const enabled = input.enabled ?? existing.enabled
     validateTaskInput(title, prompt, schedule, input.skillIds ?? existing.skillIds)
-    if (enabled) await this.assertTarget(input.sessionId === null ? undefined : input.sessionId ?? existing.sessionId)
+    if (enabled)
+      await this.assertTarget(
+        input.sessionId === null ? undefined : (input.sessionId ?? existing.sessionId),
+      )
     const now = timestamp(existing.updatedAt)
     const task: ScheduledTask = {
       ...existing,
@@ -198,7 +195,10 @@ export class AgentScheduler {
 
   async setEnabled(id: string, enabled: boolean): Promise<ScheduledTask> {
     const existing = await this.requireTask(id)
-    if (enabled) await this.assertTarget(existing.sessionId)
+    if (enabled) {
+      await this.targetBot(existing.sessionId, existing.botId)
+      await this.assertTarget(existing.sessionId)
+    }
     const now = timestamp(existing.updatedAt)
     const task: ScheduledTask = {
       ...existing,
@@ -221,13 +221,21 @@ export class AgentScheduler {
   }
 
   private async wait(
-    task: { input: AgentScheduleInput; state: { checkpoint: Extract<AgentScheduleState, { phase: 'wait' }> } },
+    task: {
+      input: AgentScheduleInput
+      state: { checkpoint: Extract<AgentScheduleState, { phase: 'wait' }> }
+    },
     runtime: AgentScheduleRuntime,
     context: Context,
   ): Promise<void> {
     const current = await this.repo.findById(task.input.id)
     const version = task.state.checkpoint.version
-    if (!current || !current.enabled || current.updatedAt !== version || current.nextRunAt === undefined) {
+    if (
+      !current ||
+      !current.enabled ||
+      current.updatedAt !== version ||
+      current.nextRunAt === undefined
+    ) {
       await this.complete(runtime, 'stale', context)
       return
     }
@@ -248,7 +256,10 @@ export class AgentScheduler {
   }
 
   private async dispatch(
-    task: { input: AgentScheduleInput; state: { checkpoint: Extract<AgentScheduleState, { phase: 'dispatch' }> } },
+    task: {
+      input: AgentScheduleInput
+      state: { checkpoint: Extract<AgentScheduleState, { phase: 'dispatch' }> }
+    },
     runtime: AgentScheduleRuntime,
     context: Context,
   ): Promise<void> {
@@ -267,8 +278,11 @@ export class AgentScheduler {
       const threadId = current.sessionId ?? scheduledThreadId(current.id)
       if (current.sessionId) {
         await this.requireHost().conversations.get(threadId, context)
-      }
-      else await this.requireHost().create({ threadId, title: current.title }, context)
+      } else
+        await this.requireHost().create(
+          { threadId, title: current.title, botId: current.botId },
+          context,
+        )
       const conversation = await this.requireHost().engine.conversation(threadId, context)
       const handle = await runtime.conversation(conversation.id, context)
       if (!handle) throw new Error('Scheduled conversation not found')
@@ -296,14 +310,23 @@ export class AgentScheduler {
     } catch (error) {
       context.abortSignal?.throwIfAborted()
       runtime.report(error)
-      await this.finishProjection(current.id, checkpoint.version, checkpoint.dueAt, runtime.now(), false)
+      await this.finishProjection(
+        current.id,
+        checkpoint.version,
+        checkpoint.dueAt,
+        runtime.now(),
+        false,
+      )
       this.sendNotification(current.title, false)
       await this.complete(runtime, 'failed', context)
     }
   }
 
   private async finish(
-    task: { input: AgentScheduleInput; state: { checkpoint: Extract<AgentScheduleState, { phase: 'finish' }> } },
+    task: {
+      input: AgentScheduleInput
+      state: { checkpoint: Extract<AgentScheduleState, { phase: 'finish' }> }
+    },
     runtime: AgentScheduleRuntime,
     context: Context,
   ): Promise<void> {
@@ -334,22 +357,19 @@ export class AgentScheduler {
       success,
     )
     this.sendNotification(current.title, success)
-    await runtime.commit(
-      async (tx, live) => {
-        const doc = await tx.doc(agentSchedulerDoc)
-        if (projection?.enabled && projection.nextRunAt !== undefined) {
-          doc.schedules[current.id] = { version: projection.updatedAt, taskId: live.id as number }
-          return { status: 'running', checkpoint: { phase: 'wait', version: projection.updatedAt } }
-        }
-        const record = doc.schedules[current.id]
-        if (record?.taskId === live.id) delete doc.schedules[current.id]
-        return {
-          status: 'terminal',
-          outcome: { status: 'completed', result: { disposition: success ? 'completed' : 'failed' } },
-        }
-      },
-      context,
-    )
+    await runtime.commit(async (tx, live) => {
+      const doc = await tx.doc(agentSchedulerDoc)
+      if (projection?.enabled && projection.nextRunAt !== undefined) {
+        doc.schedules[current.id] = { version: projection.updatedAt, taskId: live.id as number }
+        return { status: 'running', checkpoint: { phase: 'wait', version: projection.updatedAt } }
+      }
+      const record = doc.schedules[current.id]
+      if (record?.taskId === live.id) delete doc.schedules[current.id]
+      return {
+        status: 'terminal',
+        outcome: { status: 'completed', result: { disposition: success ? 'completed' : 'failed' } },
+      }
+    }, context)
   }
 
   private async reconcile(task: ScheduledTask, context: Context): Promise<void> {
@@ -385,16 +405,13 @@ export class AgentScheduler {
       const created = await tx.createTask(
         this.agentTask,
         { id: current.id, version: current.updatedAt },
-        {
-          ownership: { kind: 'conversation' },
-          conversationId: control,
-          background: true,
-        },
+        { ownership: { kind: 'conversation' }, conversationId: control, background: true },
       )
       doc.schedules[current.id] = { version: current.updatedAt, taskId: created as number }
       return created as number
     }, context)
-    if (previousTaskId !== undefined && previousTaskId !== taskId) await this.abort(previousTaskId, context)
+    if (previousTaskId !== undefined && previousTaskId !== taskId)
+      await this.abort(previousTaskId, context)
   }
 
   private async retire(id: string, context: Context): Promise<void> {
@@ -410,13 +427,20 @@ export class AgentScheduler {
   }
 
   private async ensureControlConversation(context: Context): Promise<ConversationId> {
-    await this.requireHost().engine.create(controlThreadId, { extensions: [this.extension] }, context)
+    await this.requireHost().engine.create(
+      controlThreadId,
+      { extensions: [this.extension] },
+      context,
+    )
     return (await this.requireHost().engine.conversation(controlThreadId, context)).id
   }
 
   private async abort(taskId: number, context: Context): Promise<void> {
     try {
-      await this.requireHost().engine.harness.abortTask(taskId as TaskId<AgentScheduleResult>, context)
+      await this.requireHost().engine.harness.abortTask(
+        taskId as TaskId<AgentScheduleResult>,
+        context,
+      )
     } catch (error) {
       this.sendReport(error)
     }
@@ -435,13 +459,7 @@ export class AgentScheduler {
     const lastRunAt = current.lastRunAt ?? admittedAt
     const task: ScheduledTask =
       current.schedule.type === 'once'
-        ? {
-            ...current,
-            enabled: false,
-            lastRunAt,
-            nextRunAt: undefined,
-            updatedAt: now,
-          }
+        ? { ...current, enabled: false, lastRunAt, nextRunAt: undefined, updatedAt: now }
         : {
             ...current,
             lastRunAt,
@@ -467,24 +485,31 @@ export class AgentScheduler {
     disposition: AgentScheduleResult['disposition'],
     context: Context,
   ): Promise<void> {
-    await runtime.commit(
-      async (tx, current) => {
-        const doc = await tx.doc(agentSchedulerDoc)
-        const record = doc.schedules[current.input.id]
-        if (record?.taskId === current.id) delete doc.schedules[current.input.id]
-        return {
-          status: 'terminal',
-          outcome: { status: 'completed', result: { disposition } },
-        }
-      },
-      context,
-    )
+    await runtime.commit(async (tx, current) => {
+      const doc = await tx.doc(agentSchedulerDoc)
+      const record = doc.schedules[current.input.id]
+      if (record?.taskId === current.id) delete doc.schedules[current.input.id]
+      return { status: 'terminal', outcome: { status: 'completed', result: { disposition } } }
+    }, context)
   }
 
   private async requireTask(id: string): Promise<ScheduledTask> {
     const task = await this.repo.findById(id)
     if (!task) throw new Error(`ScheduledTask not found: ${id}`)
     return task
+  }
+
+  private async targetBot(sessionId: string | undefined, botId: string | undefined) {
+    const host = this.host
+    if (!host?.bots) return botId
+    if (sessionId) {
+      const target = await host.conversations.get(sessionId, BACKGROUND_CONTEXT)
+      if (botId && botId !== target.botId)
+        throw new Error('Scheduled conversation belongs to another Bot')
+      botId = target.botId ?? undefined
+    }
+    const bot = await host.bots.get(botId ?? 'xiaoya')
+    return bot.id
   }
 
   private async assertTarget(sessionId: string | undefined) {

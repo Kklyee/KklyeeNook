@@ -35,7 +35,7 @@ import type {
   CreateScheduledTaskInput,
   ScheduledTask,
   UpdateScheduledTaskInput,
-} from '@kklyeenook/shared/scheduler/scheduledTask'
+} from '@kklyeenook/shared/scheduler/scheduled-task'
 
 interface API {
   remote: {

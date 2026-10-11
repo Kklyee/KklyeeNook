@@ -22,17 +22,78 @@ test('built desktop renders the real runtime, submits from the composer and rest
     const body = JSON.parse(Buffer.concat(chunks).toString())
     calls++
     response.writeHead(200, { 'content-type': 'text/event-stream' })
-    if (!body.messages.some((message: { role: string }) => message.role === 'tool')) {
-      response.write('data: ' + JSON.stringify({ id: 'desktop', object: 'chat.completion.chunk', created: 1, model: 'test-model', choices: [{ index: 0, delta: { role: 'assistant', tool_calls: [{ index: 0, id: 'desktop-read', type: 'function', function: { name: 'read', arguments: JSON.stringify({ path: 'sample.txt' }) } }] }, finish_reason: null }] }) + '\n\n')
-      response.end('data: ' + JSON.stringify({ id: 'desktop', object: 'chat.completion.chunk', created: 1, model: 'test-model', choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }] }) + '\n\ndata: [DONE]\n\n')
+    if (
+      JSON.stringify(
+        body.messages.filter((message: { role: string }) => message.role === 'user').at(-1),
+      ).includes('Desktop request') &&
+      !body.messages.some((message: { role: string }) => message.role === 'tool')
+    ) {
+      response.write(
+        'data: ' +
+          JSON.stringify({
+            id: 'desktop',
+            object: 'chat.completion.chunk',
+            created: 1,
+            model: 'test-model',
+            choices: [
+              {
+                index: 0,
+                delta: {
+                  role: 'assistant',
+                  tool_calls: [
+                    {
+                      index: 0,
+                      id: 'desktop-read',
+                      type: 'function',
+                      function: { name: 'read', arguments: JSON.stringify({ path: 'sample.txt' }) },
+                    },
+                  ],
+                },
+                finish_reason: null,
+              },
+            ],
+          }) +
+          '\n\n',
+      )
+      response.end(
+        'data: ' +
+          JSON.stringify({
+            id: 'desktop',
+            object: 'chat.completion.chunk',
+            created: 1,
+            model: 'test-model',
+            choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }],
+          }) +
+          '\n\ndata: [DONE]\n\n',
+      )
       return
     }
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    await new Promise((resolve) => setTimeout(resolve, 1500))
     for (const text of ['Desktop ', 'production reply.']) {
-      response.write('data: ' + JSON.stringify({ id: 'desktop', object: 'chat.completion.chunk', created: 1, model: 'test-model', choices: [{ index: 0, delta: { content: text }, finish_reason: null }] }) + '\n\n')
-      await new Promise(resolve => setTimeout(resolve, 100))
+      response.write(
+        'data: ' +
+          JSON.stringify({
+            id: 'desktop',
+            object: 'chat.completion.chunk',
+            created: 1,
+            model: 'test-model',
+            choices: [{ index: 0, delta: { content: text }, finish_reason: null }],
+          }) +
+          '\n\n',
+      )
+      await new Promise((resolve) => setTimeout(resolve, 100))
     }
-    response.end('data: ' + JSON.stringify({ id: 'desktop', object: 'chat.completion.chunk', created: 1, model: 'test-model', choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] }) + '\n\ndata: [DONE]\n\n')
+    response.end(
+      'data: ' +
+        JSON.stringify({
+          id: 'desktop',
+          object: 'chat.completion.chunk',
+          created: 1,
+          model: 'test-model',
+          choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+        }) +
+        '\n\ndata: [DONE]\n\n',
+    )
   })
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
@@ -41,16 +102,53 @@ test('built desktop renders the real runtime, submits from the composer and rest
     if (!address || typeof address === 'string') throw new Error('Model server did not bind')
     await mkdir(join(data, 'workspace'))
     await writeFile(join(data, 'workspace', 'sample.txt'), 'Desktop tool context')
-    await writeFile(join(data, 'agent-settings.json'), JSON.stringify({ model: { provider: 'test-provider', modelID: 'test-model', api: 'openai-completions', baseUrl: `http://127.0.0.1:${address.port}/v1` }, tools: { enabled: ['read'] }, compaction: { enabled: false, reserveTokens: 1000, keepRecentTokens: 1000 } }))
+    await writeFile(
+      join(data, 'agent-settings.json'),
+      JSON.stringify({
+        model: {
+          provider: 'test-provider',
+          modelID: 'test-model',
+          api: 'openai-completions',
+          baseUrl: `http://127.0.0.1:${address.port}/v1`,
+        },
+        tools: { enabled: ['read'] },
+        compaction: { enabled: false, reserveTokens: 1000, keepRecentTokens: 1000 },
+      }),
+    )
     await mkdir(join(directory, 'apps', 'desktop'), { recursive: true })
     await writeFile(join(directory, 'package.json'), JSON.stringify({ type: 'module' }))
-    await cp(join(process.cwd(), 'apps', 'agent', 'drizzle'), join(directory, 'apps', 'agent', 'drizzle'), { recursive: true })
+    await cp(
+      join(process.cwd(), 'apps', 'agent', 'drizzle'),
+      join(directory, 'apps', 'agent', 'drizzle'),
+      { recursive: true },
+    )
     await mkdir(join(directory, 'resources'))
-    await cp(join(process.cwd(), 'apps', 'desktop', 'resources', 'sandbox'), join(directory, 'resources', 'sandbox'), { recursive: true })
-    const config = await resolveConfig({ root: join(process.cwd(), 'apps', 'desktop'), configFile: join(process.cwd(), 'apps', 'desktop', 'electron.vite.config.ts'), build: { outDir: directory }, logLevel: 'silent' }, 'build', 'production')
-    for (const target of [config.config!.main!, config.config!.preload!, config.config!.renderer!]) await build(target)
+    await cp(
+      join(process.cwd(), 'apps', 'desktop', 'resources', 'sandbox'),
+      join(directory, 'resources', 'sandbox'),
+      { recursive: true },
+    )
+    const config = await resolveConfig(
+      {
+        root: join(process.cwd(), 'apps', 'desktop'),
+        configFile: join(process.cwd(), 'apps', 'desktop', 'electron.vite.config.ts'),
+        build: { outDir: directory },
+        logLevel: 'silent',
+      },
+      'build',
+      'production',
+    )
+    for (const target of [config.config!.main!, config.config!.preload!]) await build(target)
+    await build({
+      ...config.config!.renderer!,
+      define: {
+        ...config.config!.renderer!.define,
+        'process.env.NODE_ENV': JSON.stringify('development'),
+      },
+    })
     const script = `
 import { app } from 'electron'
+import { join } from 'node:path'
 app.setPath('userData', ${JSON.stringify(data)})
 app.setAppPath(${JSON.stringify(join(directory, 'apps', 'desktop'))})
 app.on('browser-window-created', (_event, window) => {
@@ -65,6 +163,13 @@ app.on('browser-window-created', (_event, window) => {
   window.webContents.once('did-finish-load', async () => {
     try {
       const result = await window.webContents.executeJavaScript(${JSON.stringify(`(${verifyDesktop.toString()})(${JSON.stringify(join(data, 'workspace'))})`)})
+      const screenshotRoot = ${JSON.stringify(process.env.NOOK_BOT_SCREENSHOTS ?? '')}
+      if (screenshotRoot) {
+        const { mkdir, writeFile } = await import('node:fs/promises')
+        await mkdir(screenshotRoot, { recursive: true })
+        await new Promise(resolve => setTimeout(resolve, 500))
+        await writeFile(join(screenshotRoot, 'bot-chat.png'), (await window.webContents.capturePage()).toPNG())
+      }
       const click = async point => {
         await window.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point })
         await window.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 })
@@ -78,7 +183,14 @@ app.on('browser-window-created', (_event, window) => {
       window.webContents.reload()
       await loaded
       const restored = await window.webContents.executeJavaScript(${JSON.stringify(`(${verifyDesktopRefresh.toString()})()`)})
-      process.stdout.write('DESKTOP_SMOKE=' + JSON.stringify({ ...result, restored }) + '\\n')
+      await window.webContents.executeJavaScript(${JSON.stringify(`(${verifyBotEditor.toString()})()`)})
+      if (screenshotRoot) {
+        const { writeFile } = await import('node:fs/promises')
+        await new Promise(resolve => setTimeout(resolve, 500))
+        await writeFile(join(screenshotRoot, 'bot-editor.png'), (await window.webContents.capturePage()).toPNG())
+      }
+      const created = await window.webContents.executeJavaScript(${JSON.stringify('(' + verifyDesktopCreateBot.toString() + ')()')})
+      process.stdout.write('DESKTOP_SMOKE=' + JSON.stringify({ ...result, restored, created }) + '\\n')
       app.quit()
     } catch (error) { console.error(error); app.exit(1) }
   })
@@ -88,17 +200,33 @@ await import('./main/index.mjs')
     const path = join(directory, 'main.mjs')
     await writeFile(path, script)
     await execute(process.execPath, ['--check', path], { windowsHide: true })
-    const env: NodeJS.ProcessEnv = { ...process.env, API_KEY: 'synthetic-key', HOME: data, USERPROFILE: data }
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      API_KEY: 'synthetic-key',
+      HOME: data,
+      USERPROFILE: data,
+    }
     delete env.ELECTRON_RUN_AS_NODE
     Reflect.deleteProperty(env, 'ELECTRON_RENDERER_URL')
-    const { stdout } = await execute(createRequire(import.meta.url)('electron'), [path], { env, windowsHide: true, timeout: 60000 }).catch(error => { throw new Error(error.message + '\n' + error.stdout) })
-    const line = stdout.split(/\r?\n/).find(value => value.startsWith('DESKTOP_SMOKE='))
+    const { stdout } = await execute(createRequire(import.meta.url)('electron'), [path], {
+      env,
+      windowsHide: true,
+      timeout: 60000,
+    }).catch((error) => {
+      throw new Error(error.message + '\n' + error.stdout)
+    })
+    const line = stdout.split(/\r?\n/).find((value) => value.startsWith('DESKTOP_SMOKE='))
     expect(line).toBeDefined()
-    expect(JSON.parse(line!.slice('DESKTOP_SMOKE='.length))).toMatchObject({ submitted: true, restored: true, protocol: 'agent' })
-    expect(calls).toBe(2)
+    expect(JSON.parse(line!.slice('DESKTOP_SMOKE='.length))).toMatchObject({
+      submitted: true,
+      restored: true,
+      protocol: 'agent',
+      created: true,
+    })
+    expect(calls).toBe(3)
   } finally {
     server.closeAllConnections()
-    await new Promise<void>(resolve => server.close(() => resolve()))
+    await new Promise<void>((resolve) => server.close(() => resolve()))
     await rm(directory, { recursive: true, force: true })
     await rm(data, { recursive: true, force: true })
   }
@@ -111,53 +239,135 @@ async function verifyDesktop(workspacePath: string) {
     while (Date.now() < until) {
       const value = await condition()
       if (value) return value
-      await new Promise(resolve => setTimeout(resolve, 50))
+      await new Promise((resolve) => setTimeout(resolve, 50))
     }
-    throw new Error('Desktop condition timed out: ' + condition.toString() + ' ' + document.body.innerText.slice(0, 1500) + ' ' + document.body.innerHTML.slice(0, 500))
+    throw new Error(
+      'Desktop condition timed out: ' +
+        condition.toString() +
+        ' ' +
+        document.body.innerText.slice(0, 1500) +
+        ' ' +
+        document.body.innerHTML.slice(0, 500),
+    )
   }
-  const status = await wait(async () => { const status = await api.agentBackend.getStatus(); return status.state === 'ready' && status }) as { info: { baseUrl: string } }
-  if (!status.info.baseUrl.endsWith('/api/agent')) throw new Error('Desktop selected the legacy protocol')
+  const status = (await wait(async () => {
+    const status = await api.agentBackend.getStatus()
+    return status.state === 'ready' && status
+  })) as { info: { baseUrl: string } }
+  if (!status.info.baseUrl.endsWith('/api/agent'))
+    throw new Error('Desktop selected the legacy protocol')
   const attached = await api.workspaces.attach({ path: workspacePath })
   if (!attached.workspace) throw new Error('Desktop workspace did not attach')
   window.dispatchEvent(new Event('nook:workspace-changed'))
-  await wait(() => [...document.querySelectorAll<HTMLElement>('[title]')].some(element => element.tagName === 'DIV' && element.title === workspacePath && element.textContent?.includes('workspace')))
-  const input = await wait(() => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message input"]')) as HTMLTextAreaElement
-  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(input, 'Desktop request')
+  const configured = await fetch(status.info.baseUrl + '/bots/coder', {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ workspaceIds: [attached.workspace.id], enabledTools: ['read'] }),
+  })
+  if (!configured.ok) throw new Error('Coder Workspace authorization failed')
+  const coder = (await wait(() =>
+    document.querySelector<HTMLButtonElement>('[aria-label="Coder"]'),
+  )) as HTMLButtonElement
+  coder.click()
+  const group = (await wait(() =>
+    [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'workspace',
+    ),
+  )) as HTMLButtonElement
+  group.click()
+  const create = (await wait(() =>
+    [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => !button.disabled && button.textContent?.trim() === '新建开发会话',
+    ),
+  )) as HTMLButtonElement
+  create.click()
+  await wait(async () =>
+    (await api.conversations.list()).some(
+      (thread: { botId: string; id: string }) =>
+        thread.botId === 'coder' && thread.id !== 'bot:coder:main',
+    ),
+  )
+  const input = (await wait(() =>
+    document.querySelector<HTMLTextAreaElement>(
+      'textarea[aria-label="Message input"]:not(:disabled)',
+    ),
+  )) as HTMLTextAreaElement
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+    input,
+    'Desktop request',
+  )
   input.dispatchEvent(new Event('input', { bubbles: true }))
-  const send = await wait(() => document.querySelector<HTMLButtonElement>('.aui-composer-send:not(:disabled)')) as HTMLButtonElement
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  const send = (await wait(() =>
+    document.querySelector<HTMLButtonElement>('.aui-composer-send:not(:disabled)'),
+  )) as HTMLButtonElement
   send.click()
-  await wait(() => document.querySelector('[data-slot="agent-activity-summary"]')?.textContent?.includes('sample.txt'))
-  if (!document.querySelector('.aui-composer-cancel')) throw new Error('Desktop tool activity did not update during execution')
-  await wait(() => document.querySelector('[data-slot="aui_assistant-message-root"]')?.textContent?.includes('Desktop production reply.'))
+  await wait(() =>
+    document
+      .querySelector('[data-slot="agent-activity-summary"]')
+      ?.textContent?.includes('sample.txt'),
+  )
+  if (!document.querySelector('.aui-composer-cancel'))
+    throw new Error('Desktop tool activity did not update during execution')
+  await wait(() =>
+    document
+      .querySelector('[data-slot="aui_assistant-message-root"]')
+      ?.textContent?.includes('Desktop production reply.'),
+  )
   await wait(() => !document.querySelector('.aui-composer-cancel'))
   const sessions = await api.conversations.list()
-  if (sessions.length !== 1) throw new Error('Composer created duplicate conversations')
-  const id = sessions[0].id
-  if (sessions[0].workspaceId !== attached.workspace.id) throw new Error('Desktop composer lost its selected workspace')
-  await wait(() => document.querySelector('[data-slot="agent-activity-slot"][data-running="false"] [data-slot="agent-activity-summary"]'))
+  const development = sessions.filter(
+    (session: { botId?: string; id: string }) =>
+      session.botId === 'coder' && session.id !== 'bot:coder:main',
+  )
+  if (
+    development.length !== 1 ||
+    sessions.filter((session: { id: string }) => session.id === 'bot:coder:main').length !== 1
+  )
+    throw new Error('Composer created duplicate conversations')
+  const id = development[0].id
+  if (development[0].workspaceId !== attached.workspace.id)
+    throw new Error('Desktop composer lost its selected workspace')
+  await wait(() =>
+    document.querySelector(
+      '[data-slot="agent-activity-slot"][data-running="false"] [data-slot="agent-activity-summary"]',
+    ),
+  )
   const json = async (path: string) => {
     const response = await fetch(status.info.baseUrl + path)
     if (!response.ok) throw new Error('Desktop snapshot request failed')
     return response.json()
   }
   const persisted = await json('/threads/' + id)
-  if (!JSON.stringify(persisted.snapshot.entries).includes('Desktop production reply.')) throw new Error('Displayed message was not persisted')
-  const row = await wait(() => document.querySelector<HTMLButtonElement>('[data-slot="aui_thread-list-item-trigger"]')) as HTMLButtonElement
+  if (!JSON.stringify(persisted.snapshot.entries).includes('Desktop production reply.'))
+    throw new Error('Displayed message was not persisted')
+  const row = (await wait(() =>
+    document.querySelector<HTMLButtonElement>('[data-slot="aui_thread-list-item-trigger"]'),
+  )) as HTMLButtonElement
   row.click()
-  const more = await wait(() => document.querySelector<HTMLButtonElement>('[data-slot="aui_thread-list-item-more"]')) as HTMLButtonElement
+  const more = (await wait(() =>
+    document.querySelector<HTMLButtonElement>('[data-slot="aui_thread-list-item-more"]'),
+  )) as HTMLButtonElement
   const box = more.getBoundingClientRect()
-  return { submitted: true, protocol: 'agent', id, more: { x: box.x + box.width / 2, y: box.y + box.height / 2 } }
+  return {
+    submitted: true,
+    protocol: 'agent',
+    id,
+    more: { x: box.x + box.width / 2, y: box.y + box.height / 2 },
+  }
 }
 
 async function findRename() {
   const until = Date.now() + 10000
   while (Date.now() < until) {
-    const rename = [...document.querySelectorAll<HTMLElement>('[data-slot="aui_thread-list-item-more-item"]')].find(item => item.textContent?.trim() === 'Rename')
+    const rename = [
+      ...document.querySelectorAll<HTMLElement>('[data-slot="aui_thread-list-item-more-item"]'),
+    ].find((item) => item.textContent?.trim() === 'Rename')
     if (rename) {
       const box = rename.getBoundingClientRect()
       return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
     }
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await new Promise((resolve) => setTimeout(resolve, 50))
   }
   throw new Error('Desktop rename menu did not open: ' + document.body.innerText.slice(0, 1500))
 }
@@ -168,34 +378,162 @@ async function verifyRename() {
   let title: HTMLInputElement | null = null
   while (Date.now() < until && !title) {
     title = document.querySelector<HTMLInputElement>('[aria-label="Rename thread"]')
-    if (!title) await new Promise(resolve => setTimeout(resolve, 50))
+    if (!title) await new Promise((resolve) => setTimeout(resolve, 50))
   }
   if (!title) throw new Error('Rename input did not mount')
-  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(title, 'Desktop renamed')
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+    title,
+    'Desktop renamed',
+  )
   title.dispatchEvent(new Event('input', { bubbles: true }))
-  await new Promise(resolve => setTimeout(resolve, 0))
+  await new Promise((resolve) => setTimeout(resolve, 0))
   title.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
   while (Date.now() < until) {
-    if ((await api.conversations.list())[0]?.title === 'Desktop renamed' && document.querySelector('[data-slot="aui_thread-list-item-trigger"]')?.textContent?.includes('Desktop renamed')) return true
-    await new Promise(resolve => setTimeout(resolve, 50))
+    if (
+      (await api.conversations.list()).some(
+        (thread: { title: string }) => thread.title === 'Desktop renamed',
+      ) &&
+      document
+        .querySelector('[data-slot="aui_thread-list-item-trigger"]')
+        ?.textContent?.includes('Desktop renamed')
+    )
+      return true
+    await new Promise((resolve) => setTimeout(resolve, 50))
   }
   throw new Error('Rename was not persisted and projected into the sidebar')
 }
 
 async function verifyDesktopRefresh() {
   const until = Date.now() + 20000
+  let opened = false
+  let expanded = false
   while (Date.now() < until) {
-    const row = document.querySelector<HTMLButtonElement>('[data-slot="aui_thread-list-item-trigger"]')
+    const coder = document.querySelector<HTMLButtonElement>('[aria-label="Coder"]')
+    if (coder && !opened) {
+      coder.click()
+      opened = true
+    }
+    const group = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'workspace',
+    )
+    if (group && !expanded) {
+      group.click()
+      expanded = true
+    }
+    const row = document.querySelector<HTMLButtonElement>(
+      '[data-slot="aui_thread-list-item-trigger"]',
+    )
     if (row?.textContent?.includes('Desktop renamed')) {
       row.click()
       break
     }
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await new Promise((resolve) => setTimeout(resolve, 50))
   }
   while (Date.now() < until) {
     const messages = document.querySelectorAll('[data-slot="aui_assistant-message-root"]')
-    if (messages.length === 1 && messages[0].textContent?.includes('Desktop production reply.') && document.querySelector('[data-slot="agent-activity-slot"][data-running="false"] [data-slot="agent-activity-summary"]')) return true
-    await new Promise(resolve => setTimeout(resolve, 50))
+    if (
+      messages.length === 1 &&
+      messages[0].textContent?.includes('Desktop production reply.') &&
+      document.querySelector(
+        '[data-slot="agent-activity-slot"][data-running="false"] [data-slot="agent-activity-summary"]',
+      )
+    )
+      return true
+    await new Promise((resolve) => setTimeout(resolve, 50))
   }
-  throw new Error('Renderer refresh did not restore the persisted conversation: ' + document.body.innerText.slice(0, 1500))
+  throw new Error(
+    'Renderer refresh did not restore the persisted conversation: ' +
+      document.body.innerText.slice(0, 1500),
+  )
+}
+
+async function verifyBotEditor() {
+  const wait = async (condition: () => unknown) => {
+    const until = Date.now() + 15000
+    while (Date.now() < until) {
+      const value = condition()
+      if (value) return value
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    throw new Error('Bot editor condition timed out: ' + document.body.innerText.slice(0, 1500))
+  }
+  const settings = (await wait(() =>
+    document.querySelector<HTMLButtonElement>('[aria-label="Manage Bots"]'),
+  )) as HTMLButtonElement
+  settings.click()
+  await wait(
+    () =>
+      document.body.innerText.includes('Avatar Preview') &&
+      document.body.innerText.includes('Workspace Access'),
+  )
+  if (!document.querySelector('.bot-avatar svg'))
+    throw new Error('Bot avatar SVG did not render locally')
+  const accent = document.querySelector<HTMLInputElement>('[aria-label="强调色"]')
+  if (!accent?.value.startsWith('#')) throw new Error('Bot appearance controls did not mount')
+  return true
+}
+
+async function verifyDesktopCreateBot() {
+  const wait = async (condition: () => unknown | Promise<unknown>) => {
+    const until = Date.now() + 20000
+    while (Date.now() < until) {
+      const value = await condition()
+      if (value) return value
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    throw new Error('Desktop Bot creation timed out: ' + document.body.innerText.slice(0, 1500))
+  }
+  const button = async (label: string) =>
+    (await wait(() =>
+      [...document.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')].find(
+        (button) => button.textContent?.trim() === label,
+      ),
+    )) as HTMLButtonElement
+  ;(await button('返回 Chat')).click()
+  ;(
+    (await wait(() =>
+      document.querySelector<HTMLButtonElement>('[aria-label="返回 My Bots"]'),
+    )) as HTMLButtonElement
+  ).click()
+  ;(
+    (await wait(() =>
+      document.querySelector<HTMLButtonElement>('[aria-label="Create Bot"]'),
+    )) as HTMLButtonElement
+  ).click()
+  const name = (await wait(() =>
+    document.querySelector<HTMLInputElement>('input[placeholder="例如：Nova"]'),
+  )) as HTMLInputElement
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+    name,
+    'Desktop Scout',
+  )
+  name.dispatchEvent(new Event('input', { bubbles: true }))
+  ;(await button('保存并开始对话')).click()
+  await wait(() => document.querySelector('textarea[placeholder*="Desktop Scout"]'))
+  const api = (window as unknown as { api: any }).api
+  const status = await api.agentBackend.getStatus()
+  const bots = await (await fetch(status.info.baseUrl + '/bots')).json()
+  const bot = bots.find((bot: { name: string }) => bot.name === 'Desktop Scout')
+  if (!bot) throw new Error('Created desktop Bot was not persisted')
+  const main = await (
+    await fetch(status.info.baseUrl + '/bots/' + bot.id + '/main-thread', { method: 'POST' })
+  ).json()
+  if (
+    (await api.conversations.list()).filter((thread: { id: string }) => thread.id === main.id)
+      .length !== 1
+  )
+    throw new Error('Created Bot has no unique main conversation')
+  const input = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message input"]')!
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+    input,
+    'Hello Scout',
+  )
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  ;(
+    (await wait(() =>
+      document.querySelector<HTMLButtonElement>('.aui-composer-send:not(:disabled)'),
+    )) as HTMLButtonElement
+  ).click()
+  await wait(() => document.body.innerText.includes('Desktop production reply.'))
+  return true
 }

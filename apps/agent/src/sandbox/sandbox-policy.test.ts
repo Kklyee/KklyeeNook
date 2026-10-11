@@ -7,7 +7,7 @@ import { ToolExecutionHarness } from '../runtime/tool-execution-harness'
 import { ToolRegistry } from '../tools/toolRegistry'
 import { registerBuiltinTools } from '../tools/builtin-tools'
 import { ToolExecutionError } from '@kklyeenook/shared/tool/toolExecutionResult'
-import { SandboxService } from './sandboxService'
+import { SandboxService } from './sandbox-service'
 import {
   DirectExecutionBackend,
   LinuxSandboxBackend,

@@ -208,7 +208,9 @@ app.whenReady().then(async () => {
         const cancelled = scenario === 'cancel-crash' || scenario === 'delegation-cancel-crash'
         base = restoredBase
         const workspace = await restored.rpc('workspace:attach', { path: ${JSON.stringify(join(data, 'workspace'))} })
-        await json('/threads', { threadId: 'crash-thread', workspaceId: workspace.workspace.id, permissionMode: scenario === 'unsafe-crash' ? 'workspace-write' : 'read-only' })
+        const configuredBot = await fetch(base + '/bots/coder', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ workspaceIds: [workspace.workspace.id], enabledTools: options.config.tools.enabled }) })
+        if (!configuredBot.ok) throw new Error('Coding Bot authorization failed')
+        await json('/threads', { threadId: 'crash-thread', botId: 'coder', workspaceId: workspace.workspace.id, permissionMode: scenario === 'unsafe-crash' ? 'workspace-write' : 'read-only' })
         const request = { type: 'input', content: scenario === 'unsafe-crash' ? 'unsafe-effect' : delegated ? 'root-secret delegation-effect' : 'approval-effect', requestId: 'crash-request' }
         const poll = async (read, check) => {
           const until = Date.now() + 15000

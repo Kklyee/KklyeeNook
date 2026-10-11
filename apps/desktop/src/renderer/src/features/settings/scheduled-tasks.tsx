@@ -1,3 +1,4 @@
+import { useChatRuntimeSnapshot } from '../chat/runtime/chat-runtime'
 import { useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarClockIcon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react'
@@ -25,7 +26,7 @@ import type {
   ScheduledTask,
   ScheduledTaskSchedule,
   UpdateScheduledTaskInput,
-} from '@kklyeenook/shared/scheduler/scheduledTask'
+} from '@kklyeenook/shared/scheduler/scheduled-task'
 
 const WEEKDAYS = [
   { value: 0, label: 'Sunday' },
@@ -183,15 +184,19 @@ function ScheduledTaskRow({
           </span>
         </div>
         <p className="text-muted-foreground mt-1 text-xs">{formatSchedule(task.schedule)}</p>
-        <p className="text-muted-foreground mt-1 text-xs">
-          下次执行：{formatNextRun(task)}
-        </p>
+        <p className="text-muted-foreground mt-1 text-xs">下次执行：{formatNextRun(task)}</p>
       </div>
       <div className="flex shrink-0 items-center gap-1">
         <Button variant="ghost" size="sm" onClick={onToggle} disabled={busy}>
           {task.enabled ? '停用' : '启用'}
         </Button>
-        <Button variant="ghost" size="icon-sm" onClick={onEdit} disabled={busy} aria-label="编辑任务">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={onEdit}
+          disabled={busy}
+          aria-label="编辑任务"
+        >
           <PencilIcon />
         </Button>
         <Button
@@ -224,6 +229,7 @@ function ScheduledTaskEditor({
   onOpenChange: (open: boolean) => void
   onSave: (input: CreateScheduledTaskInput | UpdateScheduledTaskInput) => Promise<void>
 }) {
+  const { bots } = useChatRuntimeSnapshot()
   const [form, setForm] = useState<FormState>(() => createFormState(task))
   const [formError, setFormError] = useState<string | null>(null)
 
@@ -239,6 +245,7 @@ function ScheduledTaskEditor({
         .map((id) => id.trim())
         .filter(Boolean)
       const common = {
+        botId: form.botId,
         title: form.title,
         prompt: form.prompt,
         schedule,
@@ -332,6 +339,25 @@ function ScheduledTaskEditor({
               placeholder="可选，使用英文逗号分隔"
             />
           </Field>
+          <Field label="Bot">
+            <Select
+              value={form.botId}
+              onValueChange={(value) => {
+                if (value) update('botId', value)
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {bots.map((bot) => (
+                  <SelectItem key={bot.id} value={bot.id}>
+                    {bot.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
           <Field label="会话 ID">
             <Input
               value={form.sessionId}
@@ -375,6 +401,7 @@ type FormState = {
   time: string
   weekday: number
   skillIds: string
+  botId: string
   sessionId: string
 }
 
@@ -388,6 +415,7 @@ function createFormState(task?: ScheduledTask): FormState {
       time: '09:00',
       weekday: 1,
       skillIds: '',
+      botId: 'xiaoya',
       sessionId: '',
     }
   }
@@ -403,6 +431,7 @@ function createFormState(task?: ScheduledTask): FormState {
     time: task.schedule.type === 'once' ? '09:00' : task.schedule.time,
     weekday: task.schedule.type === 'weekly' ? task.schedule.weekday : 1,
     skillIds: task.skillIds?.join(', ') ?? '',
+    botId: task.botId ?? 'xiaoya',
     sessionId: task.sessionId ?? '',
   }
 }
@@ -439,7 +468,10 @@ function formatDate(value: number): string {
   return dateFormatter.format(value)
 }
 
-const dateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+const dateFormatter = new Intl.DateTimeFormat(undefined, {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+})
 
 function sameDate(left: Date, right: Date): boolean {
   return (

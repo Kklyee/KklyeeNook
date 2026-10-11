@@ -1,5 +1,5 @@
 import type { PermissionDecision, PermissionRequest } from '@kklyeenook/shared/approval/permission'
-import type { SandboxPolicy } from '../sandbox/sandboxPolicy'
+import type { SandboxPolicy } from '../sandbox/sandbox-policy'
 
 export class PermissionPolicy {
   constructor(private readonly sandbox: SandboxPolicy) {}

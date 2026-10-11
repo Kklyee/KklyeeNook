@@ -9,9 +9,9 @@ import { createRegistry, InboxDoc, type ConversationHandle } from '@earendil-wor
 import type { AgentHost } from '../runtime/agent-host'
 import { AgentEngine } from '../runtime/agent-engine'
 import { AgentInputs, type ContextInput } from '../runtime/inputs'
-import type { ScheduledTaskRepo } from '../db/repositories/scheduledTaskRepo'
+import type { ScheduledTaskRepo } from '../db/repositories/scheduled-task-repo'
 import type { AgentRunContext } from '../context/contextBuilder'
-import type { ScheduledTask } from '@kklyeenook/shared/scheduler/scheduledTask'
+import type { ScheduledTask } from '@kklyeenook/shared/scheduler/scheduled-task'
 import { AgentScheduler, agentSchedulerDoc } from './agent-scheduler'
 
 class MemoryScheduledTaskRepo implements ScheduledTaskRepo {

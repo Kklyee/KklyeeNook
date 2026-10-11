@@ -1,5 +1,5 @@
 import { acceptsTextAttachment, REMOTE_ATTACHMENT_LIMITS, type RemoteFileAttachment } from '@kklyeenook/shared/remote/attachments'
-import { RemoteError } from './remoteAgentPort'
+import { RemoteError } from './remote-agent-port'
 
 export function validateRemoteAttachments(input: unknown): RemoteFileAttachment[] {
   if (input === undefined) return []

@@ -3,8 +3,8 @@ import { mkdtemp, writeFile, rm, mkdir } from 'node:fs/promises'
 import { gunzipSync } from 'node:zlib'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createRemoteGatewayApp, startRemoteGateway } from './remoteGateway'
-import { RemoteError, type RemoteAgentPort } from './remoteAgentPort'
+import { createRemoteGatewayApp, startRemoteGateway } from './remote-gateway'
+import { RemoteError, type RemoteAgentPort } from './remote-agent-port'
 import type { RemoteConversationSnapshot, RemoteEvent } from '@kklyeenook/shared/remote/index'
 import { ConversationBusy } from '@earendil-works/pi-durable'
 
@@ -35,6 +35,7 @@ function fixture() {
   let listener: ((event: RemoteEvent) => void) | undefined
   const unsubscribe = vi.fn()
   const port: RemoteAgentPort = {
+    listBots: vi.fn(async () => []), saveBot: vi.fn(), botAction: vi.fn(), botOptions: vi.fn(), botMain: vi.fn(), botConversations: vi.fn(async () => []), createBotConversation: vi.fn(), archiveConversation: vi.fn(), deleteConversation: vi.fn(), setWorkspace: vi.fn(),
     assertConversation: vi.fn(),
     getState: vi.fn(async () => ({ models: [], permissions: ['read-only' as const], defaults: { permission: 'read-only' as const, provider: 'test', modelId: 'test', thinkingLevel: 'off' } })),
     listProjects: vi.fn(async () => [{ id: 'project', name: 'App', conversationCount: 1, activeRunCount: 1 }]),
@@ -213,4 +214,19 @@ test('SSE snapshots on every reconnect, streams updates and disconnects without 
   expect(port.cancel).not.toHaveBeenCalled()
   expect(port.assertConversation).toHaveBeenCalledTimes(2)
   expect(port.getConversation).not.toHaveBeenCalled()
+})
+
+
+test('Bot APIs require authenticated identity and validate immutable profile fields and deletion strategy', async () => {
+  const { app, port } = fixture()
+  expect((await app.request('/api/bots')).status).toBe(401)
+  expect((await app.request('/api/bots', { headers })).status).toBe(200)
+  for (const input of [{ name: 'Bot', isBuiltIn: true }, { name: 'Bot', id: 'coder' }, { name: 'Bot', avatar: { seed: 'x', variant: 'beam', colors: ['invalid'], accentColor: '#000000' } }]) {
+    expect((await app.request('/api/bots', { method: 'POST', headers, body: JSON.stringify(input) })).status).toBe(400)
+  }
+  expect(port.saveBot).not.toHaveBeenCalled()
+  expect((await app.request('/api/bots/custom', { method: 'DELETE', headers, body: '{}' })).status).toBe(400)
+  expect(port.botAction).not.toHaveBeenCalled()
+  await app.request('/api/bots/coder/main', { method: 'POST', headers })
+  expect(port.botMain).toHaveBeenCalledWith('coder')
 })

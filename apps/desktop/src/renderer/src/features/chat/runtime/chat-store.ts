@@ -1,7 +1,15 @@
-import type { AppendMessage, ExternalStoreThreadListAdapter, ThreadMessageLike } from '@assistant-ui/react'
+import type {
+  AppendMessage,
+  ExternalStoreThreadListAdapter,
+  ThreadMessageLike,
+} from '@assistant-ui/react'
 import type { ExternalThreadQueueAdapter } from '@assistant-ui/react'
 import type { QueueItemState } from '@assistant-ui/react'
 import type { PermissionMode } from '@kklyeenook/shared/approval/permission'
+import type { BotInput, BotProfile, BotSummary } from '@kklyeenook/shared/bot/bot'
+import { botState } from '@kklyeenook/shared/bot/bot-state'
+import type { BotState } from '@kklyeenook/shared/bot/bot'
+import type { Workspace } from '@kklyeenook/shared/workspace/workspace'
 import type {
   AgentFrame,
   AgentQueueMutation,
@@ -27,12 +35,18 @@ import type { Message, ModelThinkingLevel } from '@earendil-works/pi-ai'
 type Listener = () => void
 
 class AgentRequestError extends Error {
-  constructor(readonly status: number, message: string) { super(message) }
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message)
+  }
 }
 
 type SendingState = { creating: boolean; threads: Set<string> }
 
 type CreateOptions = {
+  botId?: string
   workspaceId?: string | null
   permissionMode?: PermissionMode | null
   title?: string
@@ -49,16 +63,24 @@ export type ChatExtras = {
   compaction: AgentProjectedThread['compaction']
   refresh(): Promise<void>
   clearQueue(): Promise<void>
-  setModel(input: { provider: string; modelId: string; thinkingLevel?: ModelThinkingLevel }): Promise<void>
+  setModel(input: {
+    provider: string
+    modelId: string
+    thinkingLevel?: ModelThinkingLevel
+  }): Promise<void>
   setThinkingLevel(level: ModelThinkingLevel): Promise<void>
   updateQueue(input: AgentQueueMutation): Promise<void>
   respondToApproval(id: string, approved: boolean): Promise<void>
 }
 
 export type ChatSnapshot = {
+  bots: readonly BotSummary[]
+  selectedBotId?: string
+  botEditorId?: string
   selectedThreadId?: string
   threads: readonly AgentThreadSummary[]
   current: {
+    state: BotState
     messages: readonly ThreadMessageLike[]
     projected: AgentProjectedThread
     approvals: AgentProjectionState['approvals']
@@ -81,6 +103,12 @@ export class ChatStore {
   private endpoint: string
   private getCreateOptions: () => CreateOptions
   private threads: readonly AgentThreadSummary[] = []
+  private bots: readonly BotSummary[] = []
+  private selectedBotId: string | undefined
+  private botEditorId: string | undefined
+  private botSelectionVersion = 0
+  private disposed = false
+  private botTimer: ReturnType<typeof setInterval> | undefined
   private selectedThreadId: string | undefined
   private projection: AgentProjectionState = emptyDurableProjectionState()
   private projected: AgentProjectedThread = emptyProjected
@@ -90,13 +118,27 @@ export class ChatStore {
   private error: string | undefined
   private source: EventSource | undefined
   private sending: SendingState = { creating: false, threads: new Set() }
-  private pendingAdmission: { threadId: string; fingerprint: string; input: AgentSubmissionInput } | undefined
+  private pendingAdmission:
+    | { threadId: string; fingerprint: string; input: AgentSubmissionInput }
+    | undefined
   private pendingCreation: { fingerprint: string; id: string } | undefined
 
-  constructor(baseUrl: string, getCreateOptions: () => CreateOptions) {
+  constructor(baseUrl: string, getCreateOptions: () => CreateOptions, autoStart = true) {
     this.endpoint = baseUrl.replace(/\/+$/, '')
     this.getCreateOptions = getCreateOptions
-    void this.reloadThreads()
+    if (autoStart) this.start()
+  }
+
+  start() {
+    if (this.botTimer) return
+    this.disposed = false
+    void (this.selectedThreadId ? this.refresh() : this.initialize()).catch((error) => {
+      this.error = error instanceof Error ? error.message : 'Chat load failed'
+      this.emit()
+    })
+    this.botTimer = setInterval(() => {
+      void this.reloadBots().catch(() => undefined)
+    }, 2000)
   }
 
   subscribe = (listener: Listener) => {
@@ -104,17 +146,28 @@ export class ChatStore {
     return () => this.listeners.delete(listener)
   }
 
-  getSnapshot = (): ChatSnapshot => this.snapshotCache ??= this.buildSnapshot()
+  getSnapshot = (): ChatSnapshot => (this.snapshotCache ??= this.buildSnapshot())
 
   private buildSnapshot = (): ChatSnapshot => ({
+    bots: this.bots,
+    selectedBotId: this.selectedBotId,
+    botEditorId: this.botEditorId,
     selectedThreadId: this.selectedThreadId,
     threads: this.threads,
     current: {
+      state: this.projection.snapshot
+        ? botState(
+            this.projection.snapshot,
+            this.projection.approvals.some((approval) => approval.state === 'pending'),
+          )
+        : 'idle',
       messages: this.projected.messages,
       projected: this.projected,
       approvals: this.projection.approvals,
       loading: this.loading,
-      metadata: this.metadata ? { ...this.metadata, ...this.projection.snapshot?.agent } : undefined,
+      metadata: this.metadata
+        ? { ...this.metadata, ...this.projection.snapshot?.agent }
+        : undefined,
       error: this.error,
     },
     threadList: this.threadListAdapter(),
@@ -124,8 +177,113 @@ export class ChatStore {
   })
 
   dispose() {
+    this.disposed = true
+    clearInterval(this.botTimer)
+    this.botTimer = undefined
+    this.botSelectionVersion++
     this.connectionVersion++
     this.source?.close()
+  }
+
+  private async initialize() {
+    await Promise.all([this.reloadThreads(), this.reloadBots()])
+    if (this.disposed || this.selectedBotId || this.selectedThreadId) return
+    const bot = this.bots.find((bot) => bot.id === 'xiaoya') ?? this.bots[0]
+    if (bot) await this.selectBot(bot.id)
+  }
+
+  async reloadBots() {
+    const bots = await this.request<BotSummary[]>('/bots')
+    if (this.disposed) return
+    this.bots = bots
+    this.emit()
+  }
+
+  editBot(id?: string) {
+    this.botEditorId = id
+    this.emit()
+  }
+
+  async selectBot(id: string) {
+    const version = ++this.botSelectionVersion
+    this.connectionVersion++
+    this.source?.close()
+    this.source = undefined
+    this.selectedThreadId = undefined
+    this.metadata = undefined
+    this.projection = emptyDurableProjectionState()
+    this.projected = emptyProjected
+    this.selectedBotId = id
+    this.botEditorId = undefined
+    this.loading = true
+    this.error = undefined
+    this.emit()
+    try {
+      const thread = await this.request<AgentThreadSummary>(
+        `/bots/${encodeURIComponent(id)}/main-thread`,
+        { method: 'POST' },
+      )
+      if (this.disposed || version !== this.botSelectionVersion) return
+      this.threads = [thread, ...this.threads.filter((item) => item.id !== thread.id)]
+      await this.switchToThread(thread.id, true)
+    } catch (error) {
+      if (version !== this.botSelectionVersion || this.disposed) return
+      this.loading = false
+      this.error = error instanceof Error ? error.message : 'Bot load failed'
+      this.emit()
+      throw error
+    }
+  }
+
+  botOptions() {
+    return this.request<{
+      workspaces: Workspace[]
+      tools: { name: string; description: string }[]
+    }>('/bot-options')
+  }
+
+  async saveBot(input: BotInput, id?: string) {
+    const profile = await this.request<BotProfile>(
+      id ? `/bots/${encodeURIComponent(id)}` : '/bots',
+      { method: id ? 'PATCH' : 'POST', body: input },
+    )
+    await this.reloadBots()
+    this.editBot(profile.id)
+    return profile
+  }
+
+  async duplicateBot(id: string) {
+    const bot = await this.request<BotProfile>(`/bots/${encodeURIComponent(id)}/duplicate`, {
+      method: 'POST',
+    })
+    await this.reloadBots()
+    this.editBot(bot.id)
+  }
+
+  async resetBot(id: string) {
+    await this.request(`/bots/${encodeURIComponent(id)}/reset`, { method: 'POST' })
+    await this.reloadBots()
+  }
+
+  async deleteBot(id: string) {
+    await this.request(`/bots/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      body: { strategy: 'archive-conversations' },
+    })
+    await Promise.all([this.reloadBots(), this.reloadThreads()])
+    this.editBot(undefined)
+    if (this.selectedBotId === id) await this.selectBot('xiaoya')
+  }
+
+  async setWorkspace(workspaceId: string | null) {
+    if (!this.selectedThreadId) return
+    await this.request(`/threads/${encodeURIComponent(this.selectedThreadId)}`, {
+      method: 'PATCH',
+      body: { workspaceId },
+    })
+    await this.refresh()
+    await this.reloadThreads()
+    notifyWorkspaceChanged()
   }
 
   async reloadThreads() {
@@ -133,8 +291,14 @@ export class ChatStore {
     this.emit()
     try {
       this.threads = await this.request<AgentThreadSummary[]>('/threads')
-      if (this.selectedThreadId && !this.threads.some((thread) => thread.id === this.selectedThreadId)) {
-        await this.switchToNewThread()
+      const selected = this.threads.find((thread) => thread.id === this.selectedThreadId)
+      if (selected && this.metadata) this.metadata = { ...this.metadata, ...selected }
+      if (
+        this.selectedThreadId &&
+        !this.threads.some((thread) => thread.id === this.selectedThreadId)
+      ) {
+        if (this.selectedBotId) await this.selectBot(this.selectedBotId)
+        else await this.switchToNewThread()
       }
     } finally {
       this.listLoading = false
@@ -143,6 +307,10 @@ export class ChatStore {
   }
 
   async switchToNewThread() {
+    if (this.selectedBotId) {
+      await this.createThread({ botId: this.selectedBotId })
+      return
+    }
     this.connectionVersion++
     this.source?.close()
     this.source = undefined
@@ -158,18 +326,24 @@ export class ChatStore {
   async switchToThread(threadId: string, force = false) {
     if (this.selectedThreadId === threadId && !this.loading && !force) return
     const version = ++this.connectionVersion
+    this.botSelectionVersion++
     this.source?.close()
     this.source = undefined
     this.selectedThreadId = threadId
     this.projection = emptyDurableProjectionState()
     this.projected = emptyProjected
+    this.metadata = undefined
     this.loading = true
     this.error = undefined
     this.emit()
     try {
-      const value = await this.request<AgentThreadSnapshot>(`/threads/${encodeURIComponent(threadId)}`)
+      const value = await this.request<AgentThreadSnapshot>(
+        `/threads/${encodeURIComponent(threadId)}`,
+      )
       if (this.selectedThreadId !== threadId || version !== this.connectionVersion) return
       this.metadata = value.metadata ?? this.threads.find((thread) => thread.id === threadId)
+      this.selectedBotId = this.metadata?.botId ?? this.selectedBotId
+      this.botEditorId = undefined
       this.projection = {
         snapshot: value.snapshot,
         contextWindow: value.contextWindow,
@@ -190,9 +364,19 @@ export class ChatStore {
   }
 
   async createThread(options: CreateOptions = {}) {
-    const input = { ...this.getCreateOptions(), ...options }
+    const selectionVersion = this.botSelectionVersion
+    const bot = this.bots.find((bot) => bot.id === (options.botId ?? this.selectedBotId))
+    const input = {
+      ...(bot
+        ? { botId: bot.id, workspaceId: bot.defaultWorkspaceId, permissionMode: bot.permissionMode }
+        : this.getCreateOptions()),
+      ...options,
+    }
     const fingerprint = JSON.stringify(input)
-    const creation = this.pendingCreation?.fingerprint === fingerprint ? this.pendingCreation : { fingerprint, id: crypto.randomUUID() }
+    const creation =
+      this.pendingCreation?.fingerprint === fingerprint
+        ? this.pendingCreation
+        : { fingerprint, id: crypto.randomUUID() }
     this.pendingCreation = creation
     this.setSending(undefined, true)
     try {
@@ -200,6 +384,7 @@ export class ChatStore {
         method: 'POST',
         body: {
           threadId: creation.id,
+          botId: input.botId,
           title: input.title,
           workspaceId: input.workspaceId ?? undefined,
           permissionMode: input.permissionMode ?? undefined,
@@ -207,11 +392,18 @@ export class ChatStore {
       })
       if (this.pendingCreation === creation) this.pendingCreation = undefined
       this.threads = [created, ...this.threads.filter((thread) => thread.id !== created.id)]
-      await this.switchToThread(created.id)
+      if (!this.disposed && selectionVersion === this.botSelectionVersion)
+        await this.switchToThread(created.id)
       notifyWorkspaceChanged()
       return created.id
     } catch (error) {
-      if (error instanceof AgentRequestError && error.status >= 400 && error.status < 500 && this.pendingCreation === creation) this.pendingCreation = undefined
+      if (
+        error instanceof AgentRequestError &&
+        error.status >= 400 &&
+        error.status < 500 &&
+        this.pendingCreation === creation
+      )
+        this.pendingCreation = undefined
       throw error
     } finally {
       this.setSending(undefined, false)
@@ -219,22 +411,38 @@ export class ChatStore {
   }
 
   async submit(message: AppendMessage, whenBusy?: 'steer' | 'followUp' | 'reject') {
+    if (!this.selectedThreadId && this.selectedBotId) await this.selectBot(this.selectedBotId)
     const threadId = this.selectedThreadId ?? (await this.createThread())
     const pendingIds = takePendingContextAttachmentIds()
-    const intent = { type: 'input' as const, content: agentContent(message), ...(pendingIds.length ? { contextAttachmentIds: pendingIds } : {}) }
+    const intent = {
+      type: 'input' as const,
+      content: agentContent(message),
+      ...(pendingIds.length ? { contextAttachmentIds: pendingIds } : {}),
+    }
     const fingerprint = JSON.stringify(intent)
-    const admission = this.pendingAdmission?.threadId === threadId && this.pendingAdmission.fingerprint === fingerprint
-      ? this.pendingAdmission
-      : { threadId, fingerprint, input: { ...intent, requestId: crypto.randomUUID(), whenBusy } }
+    const admission =
+      this.pendingAdmission?.threadId === threadId &&
+      this.pendingAdmission.fingerprint === fingerprint
+        ? this.pendingAdmission
+        : { threadId, fingerprint, input: { ...intent, requestId: crypto.randomUUID(), whenBusy } }
     this.pendingAdmission = admission
     this.setSending(threadId, true)
     try {
-      await this.request(`/threads/${encodeURIComponent(threadId)}/submissions`, { method: 'POST', body: admission.input })
+      await this.request(`/threads/${encodeURIComponent(threadId)}/submissions`, {
+        method: 'POST',
+        body: admission.input,
+      })
       if (this.pendingAdmission === admission) this.pendingAdmission = undefined
       notifyWorkspaceChanged()
       void this.reloadThreads().catch(() => undefined)
     } catch (error) {
-      if (error instanceof AgentRequestError && error.status >= 400 && error.status < 500 && this.pendingAdmission === admission) this.pendingAdmission = undefined
+      if (
+        error instanceof AgentRequestError &&
+        error.status >= 400 &&
+        error.status < 500 &&
+        this.pendingAdmission === admission
+      )
+        this.pendingAdmission = undefined
       restorePendingContextAttachmentIds(pendingIds)
       throw error
     } finally {
@@ -244,7 +452,9 @@ export class ChatStore {
 
   async cancel() {
     if (!this.selectedThreadId) return
-    await this.request(`/threads/${encodeURIComponent(this.selectedThreadId)}/cancel`, { method: 'POST' })
+    await this.request(`/threads/${encodeURIComponent(this.selectedThreadId)}/cancel`, {
+      method: 'POST',
+    })
   }
 
   async refresh() {
@@ -253,16 +463,26 @@ export class ChatStore {
   }
 
   async rename(threadId: string, title: string) {
-    await this.request(`/threads/${encodeURIComponent(threadId)}`, { method: 'PATCH', body: { title } })
-    this.threads = this.threads.map((thread) => (thread.id === threadId ? { ...thread, title } : thread))
+    await this.request(`/threads/${encodeURIComponent(threadId)}`, {
+      method: 'PATCH',
+      body: { title },
+    })
+    this.threads = this.threads.map((thread) =>
+      thread.id === threadId ? { ...thread, title } : thread,
+    )
     if (this.metadata?.id === threadId) this.metadata = { ...this.metadata, title }
     this.emit()
     notifyWorkspaceChanged()
   }
 
   async archive(threadId: string, archived: boolean) {
-    await this.request(`/threads/${encodeURIComponent(threadId)}`, { method: 'PATCH', body: { archived } })
-    this.threads = this.threads.map((thread) => (thread.id === threadId ? { ...thread, archived } : thread))
+    await this.request(`/threads/${encodeURIComponent(threadId)}`, {
+      method: 'PATCH',
+      body: { archived },
+    })
+    this.threads = this.threads.map((thread) =>
+      thread.id === threadId ? { ...thread, archived } : thread,
+    )
     this.emit()
     notifyWorkspaceChanged()
   }
@@ -270,7 +490,10 @@ export class ChatStore {
   async delete(threadId: string) {
     await this.request(`/threads/${encodeURIComponent(threadId)}`, { method: 'DELETE' })
     this.threads = this.threads.filter((thread) => thread.id !== threadId)
-    if (this.selectedThreadId === threadId) await this.switchToNewThread()
+    if (this.selectedThreadId === threadId) {
+      if (this.selectedBotId) await this.selectBot(this.selectedBotId)
+      else await this.switchToNewThread()
+    }
     this.emit()
     notifyWorkspaceChanged()
   }
@@ -281,7 +504,11 @@ export class ChatStore {
       method: 'POST',
       body: input,
     })
-    this.patchMetadata({ model: { provider: input.provider, modelId: input.modelId }, thinkingLevel: input.thinkingLevel })
+    this.patchMetadata({
+      model: { provider: input.provider, modelId: input.modelId },
+      thinkingLevel: input.thinkingLevel,
+    })
+    await this.reloadBots()
   }
 
   async setThinkingLevel(level: ModelThinkingLevel) {
@@ -291,11 +518,14 @@ export class ChatStore {
       body: { level },
     })
     this.patchMetadata({ thinkingLevel: level })
+    await this.reloadBots()
   }
 
   async clearQueue() {
     if (!this.selectedThreadId) return
-    await this.request(`/threads/${encodeURIComponent(this.selectedThreadId)}/queue/clear`, { method: 'POST' })
+    await this.request(`/threads/${encodeURIComponent(this.selectedThreadId)}/queue/clear`, {
+      method: 'POST',
+    })
   }
 
   async updateQueue(input: AgentQueueMutation) {
@@ -316,7 +546,9 @@ export class ChatStore {
 
   private connect(threadId: string) {
     this.source?.close()
-    const source = new EventSource(`${this.endpoint}/threads/${encodeURIComponent(threadId)}/events`)
+    const source = new EventSource(
+      `${this.endpoint}/threads/${encodeURIComponent(threadId)}/events`,
+    )
     this.source = source
     source.onmessage = (message) => {
       if (this.selectedThreadId !== threadId || this.source !== source) return
@@ -350,7 +582,10 @@ export class ChatStore {
       threadId: this.selectedThreadId,
       isLoading: this.listLoading,
       threads: regular.map(toThreadData),
-      archivedThreads: archived.map((thread) => ({ ...toThreadData(thread), status: 'archived' as const })),
+      archivedThreads: archived.map((thread) => ({
+        ...toThreadData(thread),
+        status: 'archived' as const,
+      })),
       onSwitchToNewThread: () => this.switchToNewThread(),
       onSwitchToThread: (threadId) => this.switchToThread(threadId),
       onRename: (threadId, title) => this.rename(threadId, title),
@@ -366,11 +601,21 @@ export class ChatStore {
     return {
       items: followUp,
       steerItems: steer,
-      enqueue: (message) => { void this.submit(message, 'followUp') },
-      steer: (message) => { void this.submit(message, 'steer') },
-      move: (id, placement) => { void this.queuePlacement(id, placement.lane === 'steer' ? 'steer' : 'followUp') },
-      edit: (id, message) => { void this.queueEdit(id, message) },
-      remove: (id) => { void this.queueRemove(id) },
+      enqueue: (message) => {
+        void this.submit(message, 'followUp')
+      },
+      steer: (message) => {
+        void this.submit(message, 'steer')
+      },
+      move: (id, placement) => {
+        void this.queuePlacement(id, placement.lane === 'steer' ? 'steer' : 'followUp')
+      },
+      edit: (id, message) => {
+        void this.queueEdit(id, message)
+      },
+      remove: (id) => {
+        void this.queueRemove(id)
+      },
     }
   }
 
@@ -410,7 +655,12 @@ export class ChatStore {
   private async queueRemove(id: string) {
     const parsed = this.parseQueueId(id)
     if (!parsed) return
-    await this.updateQueue({ mode: parsed.mode, expected: parsed.expected, index: parsed.index, action: 'remove' })
+    await this.updateQueue({
+      mode: parsed.mode,
+      expected: parsed.expected,
+      index: parsed.index,
+      action: 'remove',
+    })
   }
 
   private async queueEdit(id: string, message: AppendMessage) {
@@ -466,7 +716,10 @@ export class ChatStore {
     this.emit()
   }
 
-  private async request<T = unknown>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+  private async request<T = unknown>(
+    path: string,
+    init: { method?: string; body?: unknown } = {},
+  ): Promise<T> {
     const response = await fetch(`${this.endpoint}${path}`, {
       method: init.method ?? 'GET',
       headers: init.body === undefined ? undefined : { 'content-type': 'application/json' },
@@ -474,7 +727,10 @@ export class ChatStore {
     })
     if (!response.ok) {
       const body = await response.text().catch(() => '')
-      throw new AgentRequestError(response.status, `${response.status} ${response.statusText}${body ? ` — ${body}` : ''}`)
+      throw new AgentRequestError(
+        response.status,
+        `${response.status} ${response.statusText}${body ? ` — ${body}` : ''}`,
+      )
     }
     if (response.status === 204) return undefined as T
     return response.json() as Promise<T>
@@ -497,27 +753,44 @@ function toThreadData(thread: AgentThreadSummary) {
 }
 
 function agentContent(message: AppendMessage): AgentSubmissionInput['content'] {
-  const parts = [...message.content, ...(message.attachments?.flatMap((attachment) => attachment.content) ?? [])]
+  const parts = [
+    ...message.content,
+    ...(message.attachments?.flatMap((attachment) => attachment.content) ?? []),
+  ]
     .map((part) => {
       if (part.type === 'text') return { type: 'text' as const, text: part.text }
       if (part.type === 'image' && typeof part.image === 'string') {
         const match = /^data:([^;,]+);base64,(.*)$/i.exec(part.image)
-        return { type: 'image' as const, data: match?.[2] ?? part.image, mimeType: match?.[1] ?? 'image/png' }
+        return {
+          type: 'image' as const,
+          data: match?.[2] ?? part.image,
+          mimeType: match?.[1] ?? 'image/png',
+        }
       }
       return undefined
     })
-    .filter((part): part is { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string } => Boolean(part))
+    .filter(
+      (
+        part,
+      ): part is
+        | { type: 'text'; text: string }
+        | { type: 'image'; data: string; mimeType: string } => Boolean(part),
+    )
   if (parts.length === 1 && parts[0].type === 'text') return parts[0].text
   return parts
 }
 
 function agentText(message: AppendMessage): string {
-  return message.content.filter((part) => part.type === 'text').map((part) => part.text).join('\n')
+  return message.content
+    .filter((part) => part.type === 'text')
+    .map((part) => part.text)
+    .join('\n')
 }
 
 function queueItemText(item: { content?: unknown; entry?: unknown }): string {
   const content = item.content
   if (typeof content === 'string') return content
-  if (Array.isArray(content)) return content.map((part) => (part?.type === 'text' ? part.text : '[image]')).join('\n')
+  if (Array.isArray(content))
+    return content.map((part) => (part?.type === 'text' ? part.text : '[image]')).join('\n')
   return ''
 }

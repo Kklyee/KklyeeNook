@@ -37,7 +37,7 @@ import type {
   CreateScheduledTaskInput,
   ScheduledTask,
   UpdateScheduledTaskInput,
-} from '@kklyeenook/shared/scheduler/scheduledTask'
+} from '@kklyeenook/shared/scheduler/scheduled-task'
 
 const context = {
   stage(request: StageContextAttachmentRequest): Promise<ContextAttachmentRef> {

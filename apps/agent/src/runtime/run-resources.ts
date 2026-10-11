@@ -8,7 +8,7 @@ import {
   type LiveState,
   type SubmissionId,
 } from '@earendil-works/pi-durable'
-import type { SandboxService } from '../sandbox/sandboxService'
+import type { SandboxService } from '../sandbox/sandbox-service'
 import type { AgentEngine } from './agent-engine'
 
 const leases = defineDoc<{

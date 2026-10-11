@@ -4,7 +4,7 @@ import type {
   CreateScheduledTaskInput,
   ScheduledTask,
   UpdateScheduledTaskInput,
-} from '@kklyeenook/shared/scheduler/scheduledTask'
+} from '@kklyeenook/shared/scheduler/scheduled-task'
 import { IPC_CHANNELS } from '@kklyeenook/shared/ipc/channels'
 import type { AgentBackendProcess } from '../agent/process'
 

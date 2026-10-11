@@ -1,4 +1,4 @@
-import type { ScheduledTaskSchedule } from '@kklyeenook/shared/scheduler/scheduledTask'
+import type { ScheduledTaskSchedule } from '@kklyeenook/shared/scheduler/scheduled-task'
 
 export function getNextScheduledTaskRunAt(
   schedule: ScheduledTaskSchedule,

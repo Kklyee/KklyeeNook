@@ -3,8 +3,8 @@ import { existsSync } from 'node:fs'
 import { promisify } from 'node:util'
 import { win32 } from 'node:path'
 import type { RemoteSettings, RemoteStatus } from '@kklyeenook/shared/remote/index'
-import type { RemoteAgentPort } from './remoteAgentPort'
-import { startRemoteGateway, type RunningRemoteGateway } from './remoteGateway'
+import type { RemoteAgentPort } from './remote-agent-port'
+import { startRemoteGateway, type RunningRemoteGateway } from './remote-gateway'
 
 const exec = promisify(execFile)
 

@@ -9,7 +9,7 @@ import { fauxAssistantMessage, fauxProvider, fauxToolCall, type FauxResponseStep
 import { createRegistry, type JsonObject } from '@earendil-works/pi-durable'
 import { registerBuiltinTools } from '../tools/builtin-tools'
 import { ToolRegistry, type ToolAdapterContext } from '../tools/toolRegistry'
-import { SandboxService } from '../sandbox/sandboxService'
+import { SandboxService } from '../sandbox/sandbox-service'
 import type { SandboxBackend } from '../sandbox/sandboxBackend'
 import { AgentEngine } from './agent-engine'
 import { AgentTools } from './tools'

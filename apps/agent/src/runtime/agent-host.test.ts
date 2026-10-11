@@ -14,7 +14,7 @@ import { DrizzleBotRepo } from '../db/repositories/bot-repo'
 import { DrizzleWorkspaceRepo } from '../db/repositories/workspaceRepo'
 import { DrizzleAgentMemoryRepo } from '../db/repositories/memoryRepo'
 import { WorkspaceService } from '../workspace/workspaceService'
-import { SandboxService } from '../sandbox/sandboxService'
+import { SandboxService } from '../sandbox/sandbox-service'
 import { ToolRegistry } from '../tools/toolRegistry'
 import { MemoryCredentialStore } from '../settings/credentialStore'
 import { ContextAttachmentService } from '../context/contextAttachmentService'
@@ -22,10 +22,19 @@ import { ContextBuilder } from '../context/contextBuilder'
 import { SkillLoader } from '../backend/skillLoader'
 import { registerBuiltinTools } from '../tools/builtin-tools'
 import { AgentHost } from './agent-host'
+import { AgentScheduler } from '../scheduler/agent-scheduler'
+import type { ScheduledTask } from '@kklyeenook/shared/scheduler/scheduled-task'
 import { RunProjection } from './run-projection'
 import { startAgentHttpServer } from '../backend/agent-http'
 import type { RunningAgentHttpServer } from '../backend/http-server'
 import type { AgentFrame } from '@kklyeenook/shared/agent/chat-protocol'
+import { execFile } from 'node:child_process'
+import { createRequire } from 'node:module'
+import { promisify } from 'node:util'
+import { createRemoteAgentPort } from '../remote/remote-agent-port'
+import { startRemoteGateway } from '../remote/remote-gateway'
+import { AgentConfigStore } from '../settings/agentConfigStore'
+import { verifyRemote, verifyRemoteMobile } from '../backend/testing/remote-browser'
 
 let directory: string
 const hosts: AgentHost[] = []
@@ -64,7 +73,12 @@ afterEach(async () => {
 type ToolReply = { name: string; arguments: Record<string, unknown>; id?: string }
 type Reply = string | ToolReply | ToolReply[]
 
-async function setup(write = true, respond?: (body: Record<string, any>) => Reply, stream?: (response: ServerResponse) => Promise<void>, botProfiles = false) {
+async function setup(
+  write = true,
+  respond?: (body: Record<string, any>) => Reply,
+  stream?: (response: ServerResponse) => Promise<void>,
+  botProfiles = false,
+) {
   const requests: Record<string, unknown>[] = []
   const server = createServer(async (request, response) => {
     const chunks: Buffer[] = []
@@ -81,7 +95,7 @@ async function setup(write = true, respond?: (body: Record<string, any>) => Repl
         ? { name: 'write', arguments: { path: 'file.txt', content: 'written by durable host' } }
         : 'complete')
     const call = typeof reply !== 'string'
-    const calls = call ? Array.isArray(reply) ? reply : [reply] : []
+    const calls = call ? (Array.isArray(reply) ? reply : [reply]) : []
     response.writeHead(200, { 'content-type': 'text/event-stream' })
     response.write(
       `data: ${JSON.stringify({
@@ -95,14 +109,12 @@ async function setup(write = true, respond?: (body: Record<string, any>) => Repl
             delta: call
               ? {
                   role: 'assistant',
-                  tool_calls: calls.map((reply, index) => (
-                    {
-                      index,
-                      id: reply.id ?? 'write-call',
-                      type: 'function',
-                      function: { name: reply.name, arguments: JSON.stringify(reply.arguments) },
-                    }
-                  )),
+                  tool_calls: calls.map((reply, index) => ({
+                    index,
+                    id: reply.id ?? 'write-call',
+                    type: 'function',
+                    function: { name: reply.name, arguments: JSON.stringify(reply.arguments) },
+                  })),
                 }
               : { role: 'assistant', content: reply },
             finish_reason: null,
@@ -184,65 +196,165 @@ async function setup(write = true, respond?: (body: Record<string, any>) => Repl
 
 test('creation persists the selected model atomically and retries preserve later configuration', async () => {
   const { host, config, setConfig, workspaceId, open } = await setup(false)
-  setConfig({ ...config, models: [{ ...config.model, id: 'custom:custom-model' }, { ...config.model, id: 'custom:alternate', modelID: 'alternate', reasoning: true }] })
+  setConfig({
+    ...config,
+    models: [
+      { ...config.model, id: 'custom:custom-model' },
+      { ...config.model, id: 'custom:alternate', modelID: 'alternate', reasoning: true },
+    ],
+  })
   await host.reload(context())
-  await host.create({ threadId: 'selected-model', workspaceId, permissionMode: 'read-only', model: { provider: 'custom', modelId: 'alternate' }, thinkingLevel: 'low' }, context())
-  expect((await host.conversations.snapshot('selected-model', context())).agent).toMatchObject({ model: { provider: 'custom', modelId: 'alternate' }, thinkingLevel: 'low' })
+  await host.create(
+    {
+      threadId: 'selected-model',
+      workspaceId,
+      permissionMode: 'read-only',
+      model: { provider: 'custom', modelId: 'alternate' },
+      thinkingLevel: 'low',
+    },
+    context(),
+  )
+  expect((await host.conversations.snapshot('selected-model', context())).agent).toMatchObject({
+    model: { provider: 'custom', modelId: 'alternate' },
+    thinkingLevel: 'low',
+  })
   await host.close()
   const restored = await open()
-  expect((await restored.conversations.snapshot('selected-model', context())).agent).toMatchObject({ model: { provider: 'custom', modelId: 'alternate' }, thinkingLevel: 'low' })
-  await restored.configure('selected-model', { model: { provider: 'custom', modelId: 'custom-model' }, thinkingLevel: 'off' }, context())
-  await restored.create({ threadId: 'selected-model', workspaceId, permissionMode: 'full-access', model: { provider: 'custom', modelId: 'alternate' }, thinkingLevel: 'low' }, context())
-  expect((await restored.conversations.snapshot('selected-model', context())).agent).toMatchObject({ model: { provider: 'custom', modelId: 'custom-model' }, thinkingLevel: 'off' })
-  expect((await restored.conversations.get('selected-model', context())).permissionMode).toBe('read-only')
+  expect((await restored.conversations.snapshot('selected-model', context())).agent).toMatchObject({
+    model: { provider: 'custom', modelId: 'alternate' },
+    thinkingLevel: 'low',
+  })
+  await restored.configure(
+    'selected-model',
+    { model: { provider: 'custom', modelId: 'custom-model' }, thinkingLevel: 'off' },
+    context(),
+  )
+  await restored.create(
+    {
+      threadId: 'selected-model',
+      workspaceId,
+      permissionMode: 'full-access',
+      model: { provider: 'custom', modelId: 'alternate' },
+      thinkingLevel: 'low',
+    },
+    context(),
+  )
+  expect((await restored.conversations.snapshot('selected-model', context())).agent).toMatchObject({
+    model: { provider: 'custom', modelId: 'custom-model' },
+    thinkingLevel: 'off',
+  })
+  expect((await restored.conversations.get('selected-model', context())).permissionMode).toBe(
+    'read-only',
+  )
 })
 
 test('initialization failure releases ownership and preserves recovered permission without effects', async () => {
   const { host, options, workspaceId, open } = await setup()
-  await host.create({ threadId: 'initialization-thread', workspaceId, permissionMode: 'read-only' }, context())
-  await host.conversations.submit('initialization-thread', { type: 'input', content: 'Write', requestId: 'initialization-request' }, context())
-  await vi.waitFor(async () => expect(await host.pendingApprovals('initialization-thread', context())).toHaveLength(1), { timeout: 15_000 })
+  await host.create(
+    { threadId: 'initialization-thread', workspaceId, permissionMode: 'read-only' },
+    context(),
+  )
+  await host.conversations.submit(
+    'initialization-thread',
+    { type: 'input', content: 'Write', requestId: 'initialization-request' },
+    context(),
+  )
+  await vi.waitFor(
+    async () =>
+      expect(await host.pendingApprovals('initialization-thread', context())).toHaveLength(1),
+    { timeout: 15_000 },
+  )
   await host.close()
-  await expect(AgentHost.open({ ...options, initialize: async () => { throw new Error('Initialization fault') } }, context())).rejects.toThrow('Initialization fault')
+  await expect(
+    AgentHost.open(
+      {
+        ...options,
+        initialize: async () => {
+          throw new Error('Initialization fault')
+        },
+      },
+      context(),
+    ),
+  ).rejects.toThrow('Initialization fault')
   const restored = await open()
-  expect((await restored.conversations.get('initialization-thread', context())).permissionMode).toBe('read-only')
+  expect(
+    (await restored.conversations.get('initialization-thread', context())).permissionMode,
+  ).toBe('read-only')
   await restored.conversations.cancel('initialization-thread', context())
-  await expect(readFile(join(directory, 'workspace', 'file.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
+  await expect(readFile(join(directory, 'workspace', 'file.txt'))).rejects.toMatchObject({
+    code: 'ENOENT',
+  })
 }, 30000)
 
 test('permission reductions remain authoritative when the metadata mirror fails and the host restarts', async () => {
   const { host, sessions, workspaceId, open } = await setup()
-  await host.create({ threadId: 'permission-thread', workspaceId, permissionMode: 'full-access' }, context())
+  await host.create(
+    { threadId: 'permission-thread', workspaceId, permissionMode: 'full-access' },
+    context(),
+  )
   const conversation = await host.engine.conversation('permission-thread', context())
-  const mirror = vi.spyOn(conversation, 'commit').mockRejectedValueOnce(new Error('Mirror unavailable'))
+  const mirror = vi
+    .spyOn(conversation, 'commit')
+    .mockRejectedValueOnce(new Error('Mirror unavailable'))
   const resolve = vi.spyOn(host.engine, 'conversation').mockResolvedValue(conversation)
-  await expect(host.conversations.update('permission-thread', { permissionMode: 'read-only' }, context())).rejects.toThrow('Mirror unavailable')
+  await expect(
+    host.conversations.update('permission-thread', { permissionMode: 'read-only' }, context()),
+  ).rejects.toThrow('Mirror unavailable')
   expect((await sessions.findById('permission-thread'))?.permissionMode).toBe('read-only')
   mirror.mockRestore()
   resolve.mockRestore()
   await host.close()
   const recovered = await open()
-  const accepted = await recovered.conversations.submit('permission-thread', { type: 'input', content: 'Write', requestId: 'permission-request' }, context())
-  await vi.waitFor(async () => expect(await recovered.pendingApprovals('permission-thread', context())).toHaveLength(1), { timeout: 15_000 })
-  await expect(readFile(join(directory, 'workspace', 'file.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
+  const accepted = await recovered.conversations.submit(
+    'permission-thread',
+    { type: 'input', content: 'Write', requestId: 'permission-request' },
+    context(),
+  )
+  await vi.waitFor(
+    async () =>
+      expect(await recovered.pendingApprovals('permission-thread', context())).toHaveLength(1),
+    { timeout: 15_000 },
+  )
+  await expect(readFile(join(directory, 'workspace', 'file.txt'))).rejects.toMatchObject({
+    code: 'ENOENT',
+  })
   const [approval] = await recovered.pendingApprovals('permission-thread', context())
   await recovered.decideApproval('permission-thread', approval.id, 'rejected', context())
-  await (await recovered.engine.submission('permission-thread', accepted.submissionId, context())).wait(context())
+  await (
+    await recovered.engine.submission('permission-thread', accepted.submissionId, context())
+  ).wait(context())
 }, 30_000)
 
 test('run and trace projections derive identities and outcomes from official task receipts across restart', async () => {
   const { host, open, workspaceId } = await setup()
-  await host.create({ threadId: 'projection-thread', workspaceId, permissionMode: 'workspace-write' }, context())
-  const accepted = await host.conversations.submit('projection-thread', { type: 'input', content: 'Write', requestId: 'projection-request' }, context())
-  await (await host.engine.submission('projection-thread', accepted.submissionId, context())).wait(context())
+  await host.create(
+    { threadId: 'projection-thread', workspaceId, permissionMode: 'workspace-write' },
+    context(),
+  )
+  const accepted = await host.conversations.submit(
+    'projection-thread',
+    { type: 'input', content: 'Write', requestId: 'projection-request' },
+    context(),
+  )
+  await (
+    await host.engine.submission('projection-thread', accepted.submissionId, context())
+  ).wait(context())
   await (await host.engine.conversation('projection-thread', context())).waitForIdle(context())
   const projection = new RunProjection(host)
   const [run] = await projection.list('projection-thread', context())
   expect(run).toMatchObject({ status: 'completed', depth: 0, rootRunId: run.id })
   expect(run.toolCalls).toEqual([expect.objectContaining({ id: 'write-call', toolName: 'write' })])
-  expect(run.toolResults).toEqual([expect.objectContaining({ toolCallId: 'write-call', status: 'success' })])
+  expect(run.toolResults).toEqual([
+    expect.objectContaining({ toolCallId: 'write-call', status: 'success' }),
+  ])
   const records = await projection.records(run.id, context())
-  expect(records.map((record) => record.event.type)).toEqual(['agent_started', 'tool_started', 'tool_finished', 'text_delta', 'agent_completed'])
+  expect(records.map((record) => record.event.type)).toEqual([
+    'agent_started',
+    'tool_started',
+    'tool_finished',
+    'text_delta',
+    'agent_completed',
+  ])
   await host.close()
   const recovered = new RunProjection(await open())
   expect(await recovered.list('projection-thread', context())).toEqual([run])
@@ -447,19 +559,70 @@ async function events(baseUrl: string, threadId: string) {
 test('HTTP reports busy and stale queues as conflicts and cancels execution before deletion', async () => {
   const { host, workspaceId } = await setup()
   const { request } = await api(host)
-  await host.create({ threadId: 'continued-thread', workspaceId, permissionMode: 'read-only' }, context())
+  await host.create(
+    { threadId: 'continued-thread', workspaceId, permissionMode: 'read-only' },
+    context(),
+  )
   await host.create({ threadId: 'unrelated-thread' }, context())
   expect((await host.conversations.snapshot('continued-thread', context())).entries).toEqual([])
-  const first = await (await request('/threads/continued-thread/submissions', 'POST', { type: 'input', content: 'Write', requestId: 'first' })).json()
-  await vi.waitFor(async () => expect(await host.pendingApprovals('continued-thread', context())).toHaveLength(1), { timeout: 15_000 })
-  expect((await request('/threads/continued-thread/submissions', 'POST', { type: 'input', content: 'Busy', requestId: 'busy' })).status).toBe(409)
-  const queued = await (await request('/threads/continued-thread/submissions', 'POST', { type: 'input', content: 'Queued', requestId: 'queued', whenBusy: 'followUp' })).json()
-  expect((await request('/threads/continued-thread/queue/item', 'POST', { mode: 'followUp', expected: ['stale'], index: 0, action: 'remove' })).status).toBe(409)
-  expect((await request('/threads/continued-thread/queue/item', 'POST', { mode: 'followUp', expected: ['Queued'], index: 0, action: 'move', value: 1 })).status).toBe(400)
-  expect((await request(`/threads/unrelated-thread/submissions/${queued.submissionId}`, 'DELETE')).status).toBe(404)
+  const first = await (
+    await request('/threads/continued-thread/submissions', 'POST', {
+      type: 'input',
+      content: 'Write',
+      requestId: 'first',
+    })
+  ).json()
+  await vi.waitFor(
+    async () => expect(await host.pendingApprovals('continued-thread', context())).toHaveLength(1),
+    { timeout: 15_000 },
+  )
+  expect(
+    (
+      await request('/threads/continued-thread/submissions', 'POST', {
+        type: 'input',
+        content: 'Busy',
+        requestId: 'busy',
+      })
+    ).status,
+  ).toBe(409)
+  const queued = await (
+    await request('/threads/continued-thread/submissions', 'POST', {
+      type: 'input',
+      content: 'Queued',
+      requestId: 'queued',
+      whenBusy: 'followUp',
+    })
+  ).json()
+  expect(
+    (
+      await request('/threads/continued-thread/queue/item', 'POST', {
+        mode: 'followUp',
+        expected: ['stale'],
+        index: 0,
+        action: 'remove',
+      })
+    ).status,
+  ).toBe(409)
+  expect(
+    (
+      await request('/threads/continued-thread/queue/item', 'POST', {
+        mode: 'followUp',
+        expected: ['Queued'],
+        index: 0,
+        action: 'move',
+        value: 1,
+      })
+    ).status,
+  ).toBe(400)
+  expect(
+    (await request(`/threads/unrelated-thread/submissions/${queued.submissionId}`, 'DELETE'))
+      .status,
+  ).toBe(404)
   await request('/threads/continued-thread', 'DELETE')
   expect(await host.pendingApprovals('continued-thread', context())).toEqual([])
-  expect((await host.conversations.status('continued-thread', first.submissionId, context())).status).toBe('unanswered')
+  expect(
+    (await host.conversations.status('continued-thread', first.submissionId, context())).status,
+  ).toBe('unanswered')
 }, 30_000)
 
 test('durable HTTP keeps authentication, rejects passive writes and preserves scoped idempotency', async () => {
@@ -720,60 +883,129 @@ test('aborting a parent drains owned child work and invalidates its approvals', 
 }, 30_000)
 
 test('three simultaneous delegation calls admit at most two children and recovery reuses both child identities', async () => {
-  const { host, open, workspaceId, config, setConfig, requests } = await setup(false, body => {
-    if (body.messages.some(message => message.role === 'tool')) return 'complete'
-    const user = JSON.stringify(body.messages.filter(message => message.role === 'user').at(-1)?.content)
-    if (user.includes('root-secret')) return [0, 1, 2].map(index => ({ name: 'delegate_task', id: `delegate-${index}`, arguments: { task: `child-only-${index}`, context: 'explicit context only' } }))
+  const { host, open, workspaceId, config, setConfig, requests } = await setup(false, (body) => {
+    if (body.messages.some((message) => message.role === 'tool')) return 'complete'
+    const user = JSON.stringify(
+      body.messages.filter((message) => message.role === 'user').at(-1)?.content,
+    )
+    if (user.includes('root-secret'))
+      return [0, 1, 2].map((index) => ({
+        name: 'delegate_task',
+        id: `delegate-${index}`,
+        arguments: { task: `child-only-${index}`, context: 'explicit context only' },
+      }))
     const index = /child-only-([0-2])/.exec(user)![1]
-    return { name: 'write', id: `child-write-${index}`, arguments: { path: `child-${index}.txt`, content: 'once' } }
+    return {
+      name: 'write',
+      id: `child-write-${index}`,
+      arguments: { path: `child-${index}.txt`, content: 'once' },
+    }
   })
   setConfig({ ...config, tools: { enabled: ['delegate_task', 'write'] } })
   await host.reload(context())
-  await host.create({ threadId: 'concurrent-thread', workspaceId, permissionMode: 'read-only' }, context())
-  const accepted = await host.conversations.submit('concurrent-thread', { type: 'input', content: 'root-secret', requestId: 'concurrent-request' }, context())
-  await vi.waitFor(async () => expect(await host.pendingApprovals('concurrent-thread', context())).toHaveLength(2), { timeout: 15_000 })
+  await host.create(
+    { threadId: 'concurrent-thread', workspaceId, permissionMode: 'read-only' },
+    context(),
+  )
+  const accepted = await host.conversations.submit(
+    'concurrent-thread',
+    { type: 'input', content: 'root-secret', requestId: 'concurrent-request' },
+    context(),
+  )
+  await vi.waitFor(
+    async () => expect(await host.pendingApprovals('concurrent-thread', context())).toHaveLength(2),
+    { timeout: 15_000 },
+  )
   const approvals = await host.pendingApprovals('concurrent-thread', context())
   const ids = await host.engine.ownedConversationIds('concurrent-thread', context())
   expect(ids).toHaveLength(3)
-  await vi.waitFor(async () => expect(JSON.stringify((await host.conversations.snapshot('concurrent-thread', context())).entries)).toContain('At most two child conversations'), { timeout: 15_000 })
-  const child = ids.find(id => id !== accepted.conversationId)!
-  const owner = (await host.engine.harness.inspect(context())).tasks.find(({ record }) => record.conversationId === accepted.conversationId && record.kind === 'pi.tool')!.record
-  await expect(host.delegation.tool.execute({ task: 'nested attempt' }, {
-    conversationId: child, taskId: owner.id,
-    agent: () => host.engine.conversation('concurrent-thread', context()).then(conversation => conversation.agent(context())),
-    commit: (change: Parameters<typeof host.engine.harness.commit>[0]) => host.engine.harness.commit(change, context()),
-  } as never, context())).rejects.toThrow('Child conversations cannot delegate')
-  expect((await host.engine.ownedConversationIds('concurrent-thread', context())).sort((a, b) => a - b)).toEqual([...ids].sort((a, b) => a - b))
+  await vi.waitFor(
+    async () =>
+      expect(
+        JSON.stringify((await host.conversations.snapshot('concurrent-thread', context())).entries),
+      ).toContain('At most two child conversations'),
+    { timeout: 15_000 },
+  )
+  const child = ids.find((id) => id !== accepted.conversationId)!
+  const owner = (await host.engine.harness.inspect(context())).tasks.find(
+    ({ record }) => record.conversationId === accepted.conversationId && record.kind === 'pi.tool',
+  )!.record
+  await expect(
+    host.delegation.tool.execute(
+      { task: 'nested attempt' },
+      {
+        conversationId: child,
+        taskId: owner.id,
+        agent: () =>
+          host.engine
+            .conversation('concurrent-thread', context())
+            .then((conversation) => conversation.agent(context())),
+        commit: (change: Parameters<typeof host.engine.harness.commit>[0]) =>
+          host.engine.harness.commit(change, context()),
+      } as never,
+      context(),
+    ),
+  ).rejects.toThrow('Child conversations cannot delegate')
+  expect(
+    (await host.engine.ownedConversationIds('concurrent-thread', context())).sort((a, b) => a - b),
+  ).toEqual([...ids].sort((a, b) => a - b))
   await host.close()
   const recovered = await open()
-  expect((await recovered.engine.ownedConversationIds('concurrent-thread', context())).sort((a, b) => a - b)).toEqual([...ids].sort((a, b) => a - b))
-  expect((await recovered.pendingApprovals('concurrent-thread', context())).sort((a, b) => a.id.localeCompare(b.id))).toEqual([...approvals].sort((a, b) => a.id.localeCompare(b.id)))
-  for (const approval of approvals) await recovered.decideApproval('concurrent-thread', approval.id, 'approved', context())
-  await (await recovered.engine.submission('concurrent-thread', accepted.submissionId, context())).wait(context())
+  expect(
+    (await recovered.engine.ownedConversationIds('concurrent-thread', context())).sort(
+      (a, b) => a - b,
+    ),
+  ).toEqual([...ids].sort((a, b) => a - b))
+  expect(
+    (await recovered.pendingApprovals('concurrent-thread', context())).sort((a, b) =>
+      a.id.localeCompare(b.id),
+    ),
+  ).toEqual([...approvals].sort((a, b) => a.id.localeCompare(b.id)))
+  for (const approval of approvals)
+    await recovered.decideApproval('concurrent-thread', approval.id, 'approved', context())
+  await (
+    await recovered.engine.submission('concurrent-thread', accepted.submissionId, context())
+  ).wait(context())
   await (await recovered.engine.conversation('concurrent-thread', context())).waitForIdle(context())
-  for (const approval of approvals) expect(await readFile(join(directory, 'workspace', String(approval.arguments.path)), 'utf8')).toBe('once')
-  const children = requests.filter(body => JSON.stringify((body.messages as any[]).filter(message => message.role === 'user').at(-1)?.content).includes('child-only'))
+  for (const approval of approvals)
+    expect(
+      await readFile(join(directory, 'workspace', String(approval.arguments.path)), 'utf8'),
+    ).toBe('once')
+  const children = requests.filter((body) =>
+    JSON.stringify(
+      (body.messages as any[]).filter((message) => message.role === 'user').at(-1)?.content,
+    ).includes('child-only'),
+  )
   expect(children).toHaveLength(4)
   for (const request of children) {
     expect(JSON.stringify(request)).not.toContain('root-secret')
     expect(JSON.stringify(request)).toContain('explicit context only')
   }
   const runs = await new RunProjection(recovered).list('concurrent-thread', context())
-  expect(runs.filter(run => run.depth === 1)).toHaveLength(2)
+  expect(runs.filter((run) => run.depth === 1)).toHaveLength(2)
 }, 30_000)
-
 
 test('activity projection shows reasoning before text and completion over a custom streaming endpoint', async () => {
   let releaseText!: () => void
   let releaseFinish!: () => void
-  const textReady = new Promise<void>(resolve => { releaseText = resolve })
-  const finishReady = new Promise<void>(resolve => { releaseFinish = resolve })
-  const { host, workspaceId } = await setup(false, undefined, async response => {
+  const textReady = new Promise<void>((resolve) => {
+    releaseText = resolve
+  })
+  const finishReady = new Promise<void>((resolve) => {
+    releaseFinish = resolve
+  })
+  const { host, workspaceId } = await setup(false, undefined, async (response) => {
     response.writeHead(200, { 'content-type': 'text/event-stream' })
-    const chunk = (delta: Record<string, string>, finish_reason: string | null = null) => response.write(`data: ${JSON.stringify({
-      id: 'stream-test', object: 'chat.completion.chunk', created: 1, model: 'custom-model',
-      choices: [{ index: 0, delta, finish_reason }],
-    })}\n\n`)
+    const chunk = (delta: Record<string, string>, finish_reason: string | null = null) =>
+      response.write(
+        `data: ${JSON.stringify({
+          id: 'stream-test',
+          object: 'chat.completion.chunk',
+          created: 1,
+          model: 'custom-model',
+          choices: [{ index: 0, delta, finish_reason }],
+        })}\n\n`,
+      )
     chunk({ role: 'assistant', reasoning_content: 'Live reasoning' })
     await textReady
     chunk({ content: 'Live answer' })
@@ -782,49 +1014,95 @@ test('activity projection shows reasoning before text and completion over a cust
     response.end('data: [DONE]\n\n')
   })
   try {
-    await host.create({ threadId: 'stream-activity', workspaceId, permissionMode: 'read-only' }, context())
-    const accepted = await host.conversations.submit('stream-activity', { type: 'input', content: 'Think', requestId: 'stream-request' }, context())
+    await host.create(
+      { threadId: 'stream-activity', workspaceId, permissionMode: 'read-only' },
+      context(),
+    )
+    const accepted = await host.conversations.submit(
+      'stream-activity',
+      { type: 'input', content: 'Think', requestId: 'stream-request' },
+      context(),
+    )
     const projection = new RunProjection(host)
     let runId = ''
-    await vi.waitFor(async () => {
-      const runs = await projection.list('stream-activity', context())
-      runId = runs[0]?.id ?? ''
-      expect(runId).not.toBe('')
-      const records = await projection.records(runId, context())
-      expect(records.some(record => record.event.type === 'thinking_delta' && record.event.text === 'Live reasoning')).toBe(true)
-      expect(records.some(record => record.event.type === 'agent_completed')).toBe(false)
-      expect(records.some(record => record.event.type === 'text_delta')).toBe(false)
-    }, { timeout: 10000 })
+    await vi.waitFor(
+      async () => {
+        const runs = await projection.list('stream-activity', context())
+        runId = runs[0]?.id ?? ''
+        expect(runId).not.toBe('')
+        const records = await projection.records(runId, context())
+        expect(
+          records.some(
+            (record) =>
+              record.event.type === 'thinking_delta' && record.event.text === 'Live reasoning',
+          ),
+        ).toBe(true)
+        expect(records.some((record) => record.event.type === 'agent_completed')).toBe(false)
+        expect(records.some((record) => record.event.type === 'text_delta')).toBe(false)
+      },
+      { timeout: 10000 },
+    )
     releaseText()
-    await vi.waitFor(async () => {
-      const records = await projection.records(runId, context())
-      expect(records.map(record => record.event.type)).toEqual(['agent_started', 'thinking_delta', 'text_delta'])
-    }, { timeout: 10000 })
+    await vi.waitFor(
+      async () => {
+        const records = await projection.records(runId, context())
+        expect(records.map((record) => record.event.type)).toEqual([
+          'agent_started',
+          'thinking_delta',
+          'text_delta',
+        ])
+      },
+      { timeout: 10000 },
+    )
     releaseFinish()
-    await (await host.engine.submission('stream-activity', accepted.submissionId, context())).wait(context())
+    await (
+      await host.engine.submission('stream-activity', accepted.submissionId, context())
+    ).wait(context())
     await (await host.engine.conversation('stream-activity', context())).waitForIdle(context())
-    expect((await projection.records(runId, context())).map(record => record.event.type)).toEqual(['agent_started', 'thinking_delta', 'text_delta', 'agent_completed'])
+    expect((await projection.records(runId, context())).map((record) => record.event.type)).toEqual(
+      ['agent_started', 'thinking_delta', 'text_delta', 'agent_completed'],
+    )
   } finally {
     releaseText()
     releaseFinish()
   }
 }, 30000)
 
-
 test('Bot HTTP CRUD persists stable main references and prevents built-in deletion', async () => {
   const { host, open } = await setup(false, undefined, undefined, true)
   const server = await startAgentHttpServer(host)
   httpServers.push(server)
-  const request = (path: string, method = 'GET', body?: unknown) => fetch(server.baseUrl + path, { method, headers: { 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) })
-  expect((await (await request('/bots')).json()).map((bot: any) => bot.name)).toEqual(['小芽', 'Coder'])
+  const request = (path: string, method = 'GET', body?: unknown) =>
+    fetch(server.baseUrl + path, {
+      method,
+      headers: { 'content-type': 'application/json' },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    })
+  expect((await (await request('/bots')).json()).map((bot: any) => bot.name)).toEqual([
+    '小芽',
+    'Coder',
+  ])
   const created = await (await request('/bots', 'POST', { name: 'Scout' })).json()
   expect(created.isBuiltIn).toBe(false)
-  expect((await request('/bots', 'POST', { name: 'Invalid', avatar: { seed: 'x', variant: 'remote-api', colors: [], accentColor: 'red' } })).status).toBe(400)
+  expect(
+    (
+      await request('/bots', 'POST', {
+        name: 'Invalid',
+        avatar: { seed: 'x', variant: 'remote-api', colors: [], accentColor: 'red' },
+      })
+    ).status,
+  ).toBe(400)
   expect((await request('/bots/' + created.id, 'PATCH', { id: 'other' })).status).toBe(400)
-  const main = await Promise.all(Array.from({ length: 5 }, () => request('/bots/' + created.id + '/main-thread', 'POST').then(response => response.json())))
-  expect(new Set(main.map(thread => thread.id)).size).toBe(1)
+  const main = await Promise.all(
+    Array.from({ length: 5 }, () =>
+      request('/bots/' + created.id + '/main-thread', 'POST').then((response) => response.json()),
+    ),
+  )
+  expect(new Set(main.map((thread) => thread.id)).size).toBe(1)
   expect(main[0].botId).toBe(created.id)
-  expect((await request('/bots/coder', 'DELETE', { strategy: 'archive-conversations' })).status).toBe(409)
+  expect(
+    (await request('/bots/coder', 'DELETE', { strategy: 'archive-conversations' })).status,
+  ).toBe(409)
   await server.close()
   await host.close()
   const reopened = await open()
@@ -834,68 +1112,378 @@ test('Bot HTTP CRUD persists stable main references and prevents built-in deleti
   expect((await reopened.conversations.get(main[0].id, context())).archived).toBe(true)
 })
 
-
 test('Bot identity and tool loadouts stay independent of Workspace; Coding Bot loads authorized instructions', async () => {
-  const { host, workspaceId, requests, config, setConfig } = await setup(false, undefined, undefined, true)
-  setConfig({ ...config, models: [{ ...config.model, id: 'custom:custom-model' }, { ...config.model, id: 'custom:alternate', modelID: 'alternate', reasoning: true }] })
+  const { host, workspaceId, requests, config, setConfig } = await setup(
+    false,
+    undefined,
+    undefined,
+    true,
+  )
+  setConfig({
+    ...config,
+    models: [
+      { ...config.model, id: 'custom:custom-model' },
+      { ...config.model, id: 'custom:alternate', modelID: 'alternate', reasoning: true },
+    ],
+  })
   await host.reload(context())
-  await host.bots!.update('xiaoya', { workspaceIds: [workspaceId], enabledTools: ['read'], instructions: 'PERSONAL_IDENTITY_SENTINEL' })
+  await host.bots!.update('xiaoya', {
+    workspaceIds: [workspaceId],
+    enabledTools: ['read'],
+    instructions: 'PERSONAL_IDENTITY_SENTINEL',
+  })
   await host.create({ threadId: 'personal-bot', botId: 'xiaoya', workspaceId }, context())
-  const personal = await host.conversations.submit('personal-bot', { type: 'input', requestId: 'personal-input', content: 'Hello' }, context())
-  await (await host.engine.submission('personal-bot', personal.submissionId, context())).wait(context())
+  const personal = await host.conversations.submit(
+    'personal-bot',
+    { type: 'input', requestId: 'personal-input', content: 'Hello' },
+    context(),
+  )
+  await (
+    await host.engine.submission('personal-bot', personal.submissionId, context())
+  ).wait(context())
   expect(JSON.stringify(requests[0])).toContain('PERSONAL_IDENTITY_SENTINEL')
   expect(JSON.stringify(requests[0])).not.toContain('Actual host workspace instructions')
-  expect((requests[0].tools as any[]).map(tool => tool.function.name)).toEqual(['read'])
-  await host.bots!.update('coder', { workspaceIds: [workspaceId], enabledTools: ['read', 'write'], model: { provider: 'custom', modelId: 'alternate' }, thinkingLevel: 'low' })
+  expect((requests[0].tools as any[]).map((tool) => tool.function.name)).toEqual(['read'])
+  await host.bots!.update('coder', {
+    workspaceIds: [workspaceId],
+    enabledTools: ['read', 'write'],
+    model: { provider: 'custom', modelId: 'alternate' },
+    thinkingLevel: 'low',
+  })
   await host.create({ threadId: 'coding-bot', botId: 'coder', workspaceId }, context())
-  const coding = await host.conversations.submit('coding-bot', { type: 'input', requestId: 'coding-input', content: 'Hello' }, context())
+  const coding = await host.conversations.submit(
+    'coding-bot',
+    { type: 'input', requestId: 'coding-input', content: 'Hello' },
+    context(),
+  )
   await (await host.engine.submission('coding-bot', coding.submissionId, context())).wait(context())
   expect(JSON.stringify(requests.at(-1))).toContain('Actual host workspace instructions')
   expect(requests.at(-1)?.model).toBe('alternate')
-  await expect(host.create({ threadId: 'coding-bot', botId: 'xiaoya', workspaceId }, context())).rejects.toThrow('another Bot')
-  await expect(host.create({ threadId: 'unsafe', botId: 'xiaoya', workspaceId, permissionMode: 'full-access' }, context())).rejects.toThrow('exceeds Bot')
+  await expect(
+    host.create({ threadId: 'coding-bot', botId: 'xiaoya', workspaceId }, context()),
+  ).rejects.toThrow('another Bot')
+  await expect(
+    host.create(
+      { threadId: 'unsafe', botId: 'xiaoya', workspaceId, permissionMode: 'full-access' },
+      context(),
+    ),
+  ).rejects.toThrow('exceeds Bot')
   await host.bots!.update('xiaoya', { workspaceIds: [] })
-  await expect(host.conversations.submit('personal-bot', { type: 'input', requestId: 'revoked-input', content: 'Read' }, context())).rejects.toThrow('revoked')
+  await expect(
+    host.conversations.submit(
+      'personal-bot',
+      { type: 'input', requestId: 'revoked-input', content: 'Read' },
+      context(),
+    ),
+  ).rejects.toThrow('revoked')
 })
 
 test('running Submissions retain configuration and queued Submissions capture edits across restart', async () => {
-  const { host, open, workspaceId, requests, config, setConfig } = await setup(true, undefined, undefined, true)
-  setConfig({ ...config, models: [{ ...config.model, id: 'custom:custom-model' }, { ...config.model, id: 'custom:alternate', modelID: 'alternate', reasoning: true }] })
+  const { host, open, workspaceId, requests, config, setConfig } = await setup(
+    true,
+    undefined,
+    undefined,
+    true,
+  )
+  setConfig({
+    ...config,
+    models: [
+      { ...config.model, id: 'custom:custom-model' },
+      { ...config.model, id: 'custom:alternate', modelID: 'alternate', reasoning: true },
+    ],
+  })
   await host.reload(context())
-  await host.bots!.update('coder', { workspaceIds: [workspaceId], enabledTools: ['read', 'write'], instructions: 'OLD_BOT_INSTRUCTIONS' })
-  await host.create({ threadId: 'captured-bot', botId: 'coder', workspaceId, permissionMode: 'read-only' }, context())
-  const first = await host.conversations.submit('captured-bot', { type: 'input', requestId: 'captured-first', content: 'Write' }, context())
-  await vi.waitFor(async () => expect(await host.pendingApprovals('captured-bot', context())).toHaveLength(1), { timeout: 15_000 })
-  await host.bots!.update('coder', { instructions: 'NEW_BOT_INSTRUCTIONS', model: { provider: 'custom', modelId: 'alternate' } })
-  const second = await host.conversations.submit('captured-bot', { type: 'input', requestId: 'captured-second', content: 'Review', whenBusy: 'followUp' }, context())
+  await host.bots!.update('coder', {
+    workspaceIds: [workspaceId],
+    enabledTools: ['read', 'write'],
+    instructions: 'OLD_BOT_INSTRUCTIONS',
+  })
+  await host.create(
+    { threadId: 'captured-bot', botId: 'coder', workspaceId, permissionMode: 'read-only' },
+    context(),
+  )
+  const first = await host.conversations.submit(
+    'captured-bot',
+    { type: 'input', requestId: 'captured-first', content: 'Write' },
+    context(),
+  )
+  await vi.waitFor(
+    async () => expect(await host.pendingApprovals('captured-bot', context())).toHaveLength(1),
+    { timeout: 15_000 },
+  )
+  await host.bots!.update('coder', {
+    instructions: 'NEW_BOT_INSTRUCTIONS',
+    model: { provider: 'custom', modelId: 'alternate' },
+  })
+  const second = await host.conversations.submit(
+    'captured-bot',
+    { type: 'input', requestId: 'captured-second', content: 'Review', whenBusy: 'followUp' },
+    context(),
+  )
   await host.close()
   const restored = await open()
   const [approval] = await restored.pendingApprovals('captured-bot', context())
   await restored.decideApproval('captured-bot', approval.id, 'approved', context())
-  await (await restored.engine.submission('captured-bot', first.submissionId, context())).wait(context())
-  await (await restored.engine.submission('captured-bot', second.submissionId, context())).wait(context())
-  expect(requests.map(request => request.model)).toEqual(['custom-model', 'custom-model', 'alternate'])
+  await (
+    await restored.engine.submission('captured-bot', first.submissionId, context())
+  ).wait(context())
+  await (
+    await restored.engine.submission('captured-bot', second.submissionId, context())
+  ).wait(context())
+  expect(requests.map((request) => request.model)).toEqual([
+    'custom-model',
+    'custom-model',
+    'alternate',
+  ])
   expect(JSON.stringify(requests[1])).toContain('OLD_BOT_INSTRUCTIONS')
   expect(JSON.stringify(requests[1])).not.toContain('NEW_BOT_INSTRUCTIONS')
   expect(JSON.stringify(requests[2])).toContain('NEW_BOT_INSTRUCTIONS')
-  const retry = await restored.conversations.submit('captured-bot', { type: 'input', requestId: 'captured-second', content: 'Review', whenBusy: 'followUp' }, context())
+  const retry = await restored.conversations.submit(
+    'captured-bot',
+    { type: 'input', requestId: 'captured-second', content: 'Review', whenBusy: 'followUp' },
+    context(),
+  )
   expect(retry.submissionId).toBe(second.submissionId)
   expect(requests).toHaveLength(3)
 }, 30_000)
 
-test.each(['tool', 'workspace', 'detach'])('pending approval cannot outlive %s revocation or restart', async (change) => {
-  const { host, open, workspaceId, workspaces } = await setup(true, undefined, undefined, true)
-  await host.bots!.update('coder', { workspaceIds: [workspaceId], enabledTools: ['write'] })
-  await host.create({ threadId: 'revoked-bot', botId: 'coder', workspaceId, permissionMode: 'read-only' }, context())
-  const submitted = await host.conversations.submit('revoked-bot', { type: 'input', requestId: 'revocation-request', content: 'Write' }, context())
-  await vi.waitFor(async () => expect(await host.pendingApprovals('revoked-bot', context())).toHaveLength(1), { timeout: 15_000 })
-  if (change === 'tool') await host.bots!.update('coder', { enabledTools: [] })
-  else if (change === 'workspace') await host.bots!.update('coder', { workspaceIds: [] })
-  else await workspaces.detach(workspaceId)
-  await host.close()
-  const restored = await open()
-  const approvals = await restored.pendingApprovals('revoked-bot', context())
-  if (approvals[0]) await restored.decideApproval('revoked-bot', approvals[0].id, 'approved', context()).catch(() => undefined)
-  await (await restored.engine.submission('revoked-bot', submitted.submissionId, context())).wait(context())
-  await expect(readFile(join(directory, 'workspace', 'file.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
-}, 30_000)
+test.each(['tool', 'workspace', 'detach'])(
+  'pending approval cannot outlive %s revocation or restart',
+  async (change) => {
+    const { host, open, workspaceId, workspaces } = await setup(true, undefined, undefined, true)
+    await host.bots!.update('coder', { workspaceIds: [workspaceId], enabledTools: ['write'] })
+    await host.create(
+      { threadId: 'revoked-bot', botId: 'coder', workspaceId, permissionMode: 'read-only' },
+      context(),
+    )
+    const submitted = await host.conversations.submit(
+      'revoked-bot',
+      { type: 'input', requestId: 'revocation-request', content: 'Write' },
+      context(),
+    )
+    await vi.waitFor(
+      async () => expect(await host.pendingApprovals('revoked-bot', context())).toHaveLength(1),
+      { timeout: 15_000 },
+    )
+    if (change === 'tool') await host.bots!.update('coder', { enabledTools: [] })
+    else if (change === 'workspace') await host.bots!.update('coder', { workspaceIds: [] })
+    else await workspaces.detach(workspaceId)
+    await host.close()
+    const restored = await open()
+    const approvals = await restored.pendingApprovals('revoked-bot', context())
+    if (approvals[0])
+      await restored
+        .decideApproval('revoked-bot', approvals[0].id, 'approved', context())
+        .catch(() => undefined)
+    await (
+      await restored.engine.submission('revoked-bot', submitted.submissionId, context())
+    ).wait(context())
+    await expect(readFile(join(directory, 'workspace', 'file.txt'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    })
+  },
+  30_000,
+)
+
+test('Bot deletion and Workspace changes cannot race new admissions', async () => {
+  const { host, workspaceId } = await setup(true, undefined, undefined, true)
+  const bot = await host.bots!.create({
+    name: 'Developer',
+    kind: 'coding',
+    workspaceIds: [workspaceId],
+    enabledTools: ['write'],
+    permissionMode: 'workspace-write',
+  })
+  await host.create(
+    { threadId: 'lifecycle-bot', botId: bot.id, workspaceId, permissionMode: 'read-only' },
+    context(),
+  )
+  const admitted = await host.conversations.submit(
+    'lifecycle-bot',
+    { type: 'input', requestId: 'lifecycle-admitted', content: 'Write' },
+    context(),
+  )
+  await vi.waitFor(
+    async () => expect(await host.pendingApprovals('lifecycle-bot', context())).toHaveLength(1),
+    { timeout: 15_000 },
+  )
+  await expect(host.deleteBot(bot.id, context())).rejects.toThrow('running or queued')
+  await expect(
+    host.conversations.update('lifecycle-bot', { workspaceId: null }, context()),
+  ).rejects.toThrow('while Tasks are running')
+  await host.conversations.cancel('lifecycle-bot', context())
+  await host.deleteBot(bot.id, context())
+  await expect(
+    host.conversations.submit(
+      'lifecycle-bot',
+      { type: 'input', requestId: 'lifecycle-after-delete', content: 'Write' },
+      context(),
+    ),
+  ).rejects.toThrow('not found')
+  expect(
+    (await host.conversations.status('lifecycle-bot', admitted.submissionId, context())).status,
+  ).toBe('unanswered')
+  await expect(readFile(join(directory, 'workspace', 'file.txt'))).rejects.toMatchObject({
+    code: 'ENOENT',
+  })
+})
+
+test('Remote browser uses durable Bots, model overrides, queued inputs, cancellation and approvals', async () => {
+  const fixture = await setup(
+    false,
+    (body) => {
+      const user = JSON.stringify(
+        body.messages.filter((message: any) => message.role === 'user').at(-1)?.content,
+      )
+      return user.includes('approval-effect') && body.messages.at(-1)?.role !== 'tool'
+        ? { name: 'write', id: 'effect-call', arguments: { path: 'effect.txt', content: 'once' } }
+        : 'Production host accepted.'
+    },
+    undefined,
+    true,
+  )
+  const configured = {
+    ...fixture.config,
+    models: [
+      { ...fixture.config.model, id: 'custom:custom-model', modelName: 'Test', reasoning: true },
+      {
+        ...fixture.config.model,
+        id: 'test-provider:gpt-5.4',
+        provider: 'test-provider',
+        modelID: 'gpt-5.4',
+        modelName: 'Alternate',
+        reasoning: true,
+        contextWindow: 65536,
+      },
+    ],
+  }
+  fixture.setConfig(configured)
+  fixture.options.credentials().setApiKey('test-provider', 'synthetic-key')
+  await fixture.host.reload(context())
+  const config = new AgentConfigStore(configured)
+  const port = createRemoteAgentPort(
+    fixture.workspaces,
+    fixture.host,
+    config,
+    () => {},
+    fixture.attachments,
+  )
+  let base = ''
+  const gateway = await startRemoteGateway(port, {
+    port: 0,
+    staticRoot: join(process.cwd(), 'apps/remote/dist'),
+    identity: () => ({ allowedLogin: 'test@local', origin: base }),
+  })
+  base = 'http://127.0.0.1:' + gateway.port
+  try {
+    const path = join(directory, 'remote-browser.mjs')
+    const script = `
+import { app, BrowserWindow } from 'electron'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+app.setPath('userData', ${JSON.stringify(join(directory, 'browser-data'))})
+app.whenReady().then(async () => {
+  const browser = new BrowserWindow({ show: false, width: 1100, height: 820, webPreferences: { contextIsolation: true, sandbox: true, backgroundThrottling: false } })
+  browser.webContents.session.webRequest.onBeforeSendHeaders({ urls: [${JSON.stringify(base + '/*')}] }, (details, callback) => callback({ requestHeaders: { ...details.requestHeaders, 'tailscale-user-login': 'test@local' } }))
+  try {
+    await browser.loadURL(${JSON.stringify(base)})
+    const result = await browser.webContents.executeJavaScript(${JSON.stringify('(' + verifyRemote.toString() + ')("gpt-5.4")')})
+    const screenshots = ${JSON.stringify(process.env.NOOK_BOT_SCREENSHOTS ?? '')}
+    if (screenshots) {
+      await mkdir(screenshots, { recursive: true })
+      await new Promise(resolve => setTimeout(resolve, 500))
+      await writeFile(join(screenshots, 'remote-bot-chat.png'), (await browser.webContents.capturePage()).toPNG())
+    }
+    browser.setSize(390, 844)
+    const mobile = await browser.webContents.executeJavaScript(${JSON.stringify('(' + verifyRemoteMobile.toString() + ')()')})
+    if (!mobile.created) throw new Error('Mobile Bot creation failed')
+    if (screenshots) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      await writeFile(join(screenshots, 'mobile-bot-chat.png'), (await browser.webContents.capturePage()).toPNG())
+    }
+    process.stdout.write('REMOTE_BOT_SMOKE=' + JSON.stringify(result) + '\\n')
+    browser.destroy()
+    app.exit(0)
+  } catch (error) { console.error(error); app.exit(1) }
+})
+`
+    await writeFile(path, script)
+    await promisify(execFile)(process.execPath, ['--check', path], { windowsHide: true })
+    const env = { ...process.env }
+    delete env.ELECTRON_RUN_AS_NODE
+    const { stdout } = await promisify(execFile)(
+      createRequire(import.meta.url)('electron'),
+      [path],
+      { env, windowsHide: true, timeout: 90000 },
+    )
+    expect(stdout).toContain('REMOTE_BOT_SMOKE=')
+    const result = JSON.parse(
+      stdout
+        .split(/\r?\n/)
+        .find((line) => line.startsWith('REMOTE_BOT_SMOKE='))!
+        .slice('REMOTE_BOT_SMOKE='.length),
+    )
+    expect(result).toMatchObject({
+      sent: true,
+      queue: true,
+      cancel: true,
+      approval: true,
+      configuration: true,
+    })
+    expect(await readFile(join(directory, 'workspace', 'effect.txt'), 'utf8')).toBe('once')
+  } finally {
+    await gateway.close()
+  }
+}, 120000)
+
+test('scheduled tasks persist their Bot and dispatch using its identity', async () => {
+  const fixture = await setup(false, undefined, undefined, true)
+  await fixture.host.close()
+  const tasks = new Map<string, ScheduledTask>()
+  const scheduler = new AgentScheduler({
+    findAll: async () => [...tasks.values()],
+    findEnabled: async () => [...tasks.values()].filter((task) => task.enabled),
+    findById: async (id) => tasks.get(id),
+    save: async (task) => {
+      tasks.set(task.id, task)
+    },
+    delete: async (id) => {
+      tasks.delete(id)
+    },
+  })
+  const host = await AgentHost.open(
+    {
+      ...fixture.options,
+      extensions: [scheduler.extension],
+      initialize: async (initializing) => {
+        scheduler.connect(initializing)
+      },
+    },
+    context(),
+  )
+  hosts.push(host)
+  const task = await scheduler.create({
+    title: 'Coding review',
+    prompt: 'Review the project',
+    botId: 'coder',
+    schedule: { type: 'once', runAt: Date.now() - 1 },
+  })
+  expect(task.botId).toBe('coder')
+  await vi.waitFor(() => expect(tasks.get(task.id)?.lastRunAt).toBeDefined(), { timeout: 15000 })
+  const thread = (await host.conversations.list(context())).find(
+    (thread) => thread.title === task.title,
+  )
+  expect(thread?.botId).toBe('coder')
+  expect(JSON.stringify(fixture.requests)).toContain(
+    'expert coding assistant operating inside KKlyeeNook',
+  )
+  await expect(
+    scheduler.create({
+      title: 'Wrong Bot',
+      prompt: 'Review',
+      botId: 'xiaoya',
+      sessionId: thread!.id,
+      schedule: { type: 'once', runAt: Date.now() + 10000 },
+    }),
+  ).rejects.toThrow('another Bot')
+})

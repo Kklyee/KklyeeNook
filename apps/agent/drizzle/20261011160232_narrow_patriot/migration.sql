@@ -1,0 +1,1 @@
+ALTER TABLE `scheduled_tasks` ADD `bot_id` text REFERENCES bots(id);

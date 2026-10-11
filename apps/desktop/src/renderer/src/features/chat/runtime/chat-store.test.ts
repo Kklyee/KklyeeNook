@@ -2,8 +2,12 @@ import { afterEach, expect, test, vi } from 'vitest'
 import type { AppendMessage } from '@assistant-ui/react'
 import { emptySnapshot } from '@kklyeenook/agent/runtime/projection'
 import { ChatStore } from './chat-store'
-import { clearPendingContextAttachmentIds, rememberPendingContextAttachment } from '../context/pendingContextAttachments'
+import {
+  clearPendingContextAttachmentIds,
+  rememberPendingContextAttachment,
+} from '../context/pendingContextAttachments'
 import type { AgentFrame } from '@kklyeenook/shared/agent/chat-protocol'
+import { defaultBot, type BotSummary } from '@kklyeenook/shared/bot/bot'
 
 vi.mock('../../workspaces/WorkspaceProvider', () => ({ notifyWorkspaceChanged: vi.fn() }))
 
@@ -12,9 +16,15 @@ class Source {
   onmessage?: (event: MessageEvent) => void
   onerror?: () => void
   closed = false
-  constructor(readonly url: string) { Source.instances.push(this) }
-  close() { this.closed = true }
-  send(frame: AgentFrame) { this.onmessage?.({ data: JSON.stringify(frame) } as MessageEvent) }
+  constructor(readonly url: string) {
+    Source.instances.push(this)
+  }
+  close() {
+    this.closed = true
+  }
+  send(frame: AgentFrame) {
+    this.onmessage?.({ data: JSON.stringify(frame) } as MessageEvent)
+  }
 }
 
 const stores: ChatStore[] = []
@@ -26,14 +36,53 @@ afterEach(() => {
 })
 
 const metadata = (id: string) => ({ id, title: id, archived: false, createdAt: 1, updatedAt: 1 })
-const snapshot = (id: string) => ({ threadId: id, snapshot: emptySnapshot(), metadata: metadata(id), approvals: [], queue: [] })
-const response = (value: unknown) => new Response(JSON.stringify(value), { headers: { 'content-type': 'application/json' } })
-const frame = (threadId: string, sequence = 0, epoch = 'first'): AgentFrame => ({ type: sequence === 0 ? 'reset' : 'events', threadId, epoch, sequence, events: sequence === 0 ? [emptySnapshot()] : [], approvals: [], queue: [] })
-const message = (text: string): AppendMessage => ({ role: 'user', content: [{ type: 'text', text }], parentId: null, sourceId: null, runConfig: {}, createdAt: new Date(), metadata: { custom: {} } })
+const snapshot = (id: string) => ({
+  threadId: id,
+  snapshot: emptySnapshot(),
+  metadata: metadata(id),
+  approvals: [],
+  queue: [],
+})
+const response = (value: unknown) =>
+  new Response(JSON.stringify(value), { headers: { 'content-type': 'application/json' } })
+const frame = (threadId: string, sequence = 0, epoch = 'first'): AgentFrame => ({
+  type: sequence === 0 ? 'reset' : 'events',
+  threadId,
+  epoch,
+  sequence,
+  events: sequence === 0 ? [emptySnapshot()] : [],
+  approvals: [],
+  queue: [],
+})
+const message = (text: string): AppendMessage => ({
+  role: 'user',
+  content: [{ type: 'text', text }],
+  parentId: null,
+  sourceId: null,
+  runConfig: {},
+  createdAt: new Date(),
+  metadata: { custom: {} },
+})
 
-function setup(fetcher?: (url: string, init?: RequestInit) => Promise<Response>) {
+function setup(
+  fetcher?: (url: string, init?: RequestInit) => Promise<Response>,
+  bots: BotSummary[] = [],
+) {
   vi.stubGlobal('EventSource', Source)
-  vi.stubGlobal('fetch', vi.fn(fetcher ?? (async (url: string) => response(url.endsWith('/threads') ? [metadata('a'), metadata('b')] : snapshot(url.split('/').at(-1)!)))))
+  const request =
+    fetcher ??
+    (async (url: string) =>
+      response(
+        url.endsWith('/threads')
+          ? [metadata('a'), metadata('b')]
+          : snapshot(url.split('/').at(-1)!),
+      ))
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string, init?: RequestInit) =>
+      url.endsWith('/bots') ? Promise.resolve(response(bots)) : request(url, init),
+    ),
+  )
   const store = new ChatStore('http://localhost/secret/api/agent', () => ({}))
   stores.push(store)
   return store
@@ -41,7 +90,15 @@ function setup(fetcher?: (url: string, init?: RequestInit) => Promise<Response>)
 
 test('caches external-store snapshots and rejects stale thread loads and stale connections', async () => {
   let finish!: (value: Response) => void
-  const store = setup(async (url) => url.endsWith('/threads') ? response([metadata('a'), metadata('b')]) : url.endsWith('/a') ? new Promise((resolve) => { finish = resolve }) : response(snapshot('b')))
+  const store = setup(async (url) =>
+    url.endsWith('/threads')
+      ? response([metadata('a'), metadata('b')])
+      : url.endsWith('/a')
+        ? new Promise((resolve) => {
+            finish = resolve
+          })
+        : response(snapshot('b')),
+  )
   await vi.waitFor(() => expect(store.getSnapshot().threadList.isLoading).toBe(false))
   expect(store.getSnapshot()).toBe(store.getSnapshot())
   const first = store.switchToThread('a')
@@ -134,4 +191,68 @@ test('reuses a creation target after acknowledgement loss and creates a fresh ta
   await store.createThread()
   expect(creations[2]).not.toBe(creations[0])
   expect(store.getSnapshot().selectedThreadId).toBe(creations[2])
+})
+
+test('Bot-first entry restores one main Thread and rejects late responses from another Bot', async () => {
+  const bots: BotSummary[] = ['xiaoya', 'coder', 'slow'].map((id) => ({
+    ...defaultBot(id, id, id === 'coder'),
+    state: 'idle',
+  }))
+  const threads = bots.map((bot) => ({ ...metadata(bot.mainThreadId), botId: bot.id }))
+  let slow!: (value: Response) => void
+  const store = setup(async (url) => {
+    if (url.endsWith('/threads')) return response(threads)
+    if (url.endsWith('/main-thread')) {
+      const id = url.split('/').at(-2)!
+      if (id === 'slow')
+        return new Promise((resolve) => {
+          slow = resolve
+        })
+      return response(threads.find((thread) => thread.botId === id))
+    }
+    const id = decodeURIComponent(url.split('/').at(-1)!)
+    return response({ ...snapshot(id), metadata: threads.find((thread) => thread.id === id) })
+  }, bots)
+  await vi.waitFor(() => expect(store.getSnapshot().selectedThreadId).toBe(bots[0].mainThreadId))
+  const old = Source.instances.at(-1)!
+  const pending = store.selectBot('slow')
+  expect(old.closed).toBe(true)
+  expect(store.getSnapshot().current.metadata).toBeUndefined()
+  await store.selectBot('coder')
+  slow(response(threads[2]))
+  await pending
+  expect(store.getSnapshot().selectedBotId).toBe('coder')
+  expect(store.getSnapshot().selectedThreadId).toBe(bots[1].mainThreadId)
+  await store.selectBot('xiaoya')
+  expect(store.getSnapshot().selectedThreadId).toBe(bots[0].mainThreadId)
+  expect(store.getSnapshot().threads).toHaveLength(3)
+})
+
+test('restarts after StrictMode cleanup and keeps Bot creation and main conversations usable', async () => {
+  const bot = { ...defaultBot('xiaoya', '小芽'), state: 'idle' as const }
+  const main = { ...metadata(bot.mainThreadId), botId: bot.id }
+  const created = { ...defaultBot('custom', 'Scout'), state: 'idle' as const }
+  const store = setup(
+    async (url) => {
+      if (url.endsWith('/threads')) return response([main])
+      if (url.endsWith('/main-thread'))
+        return response({
+          ...main,
+          id: url.includes('/custom/') ? created.mainThreadId : main.id,
+          botId: url.includes('/custom/') ? created.id : bot.id,
+        })
+      return response(snapshot(url.split('/').at(-1)!))
+    },
+    [bot],
+  )
+  store.dispose()
+  store.start()
+  await vi.waitFor(() => expect(store.getSnapshot().selectedThreadId).toBe(main.id))
+  expect(store.getSnapshot().bots.map((item) => item.id)).toEqual(['xiaoya'])
+  store.dispose()
+  store.start()
+  await vi.waitFor(() => expect(Source.instances.at(-1)?.closed).toBe(false))
+  await store.selectBot('custom')
+  expect(store.getSnapshot().selectedThreadId).toBe(created.mainThreadId)
+  expect(store.getSnapshot().current.loading).toBe(false)
 })
