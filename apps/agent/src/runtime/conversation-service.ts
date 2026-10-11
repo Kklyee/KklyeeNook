@@ -14,6 +14,17 @@ export type CreateConversation = {
   agent: AgentChange
 }
 
+export const DEFAULT_CONVERSATION_TITLE = '新会话'
+
+const TITLE_LIMIT = 50
+
+function titleFromInput(content: ContextInput['content']) {
+  const text = typeof content === 'string' ? content : content.filter((part) => part.type === 'text').map((part) => part.text).join(' ')
+  const normalized = text.replace(/\s+/g, ' ').trim()
+  if (!normalized) return undefined
+  return normalized.length > TITLE_LIMIT ? `${normalized.slice(0, TITLE_LIMIT - 3)}...` : normalized
+}
+
 export const creationRecord = defineDoc<{
   id: string
   title: string
@@ -114,13 +125,15 @@ export class ConversationService {
 
   async submit(threadId: string, input: ContextInput, context: Context) {
     if (!input.requestId.trim()) throw new Error('A stable request ID is required')
-    await this.get(threadId, context)
+    const record = await this.get(threadId, context)
     const conversation = await this.engine.conversation(threadId, context)
     if (!this.inputs && (input.contextAttachmentIds?.length || input.skillIds?.length))
       throw new Error('Input context service is not configured')
     const submission = this.inputs
       ? await this.inputs.submit(conversation, input, context)
       : await conversation.submit(input, context)
+    const title = record.title === DEFAULT_CONVERSATION_TITLE && !input.scheduledTaskId ? titleFromInput(input.content) : undefined
+    if (title && title !== DEFAULT_CONVERSATION_TITLE) await this.update(threadId, { title }, context)
     return { accepted: true as const, conversationId: conversation.id, submissionId: submission.id }
   }
 

@@ -7,7 +7,6 @@ import type { AgentSettingsSnapshot } from '@kklyeenook/shared/agent/agentSettin
 import type { ThinkingLevel } from '@kklyeenook/shared/agent/agentConfig'
 import { Thread } from '../../components/assistant-ui/elements/thread.aui'
 import { cn } from '@/renderer/src/lib/utils'
-import { RunHistoryPanel } from '../runs/RunHistoryPanel'
 import { AgentRunFocusProvider } from '../runs/AgentRunFocusContext'
 import { ApprovalPrompt } from './runtime/approval-prompt'
 import { SubagentSessionPanel } from '../../components/assistant-ui/elements/subagent-session-panel.aui'
@@ -36,7 +35,7 @@ export function ChatPanel({
   settings: AgentSettingsSnapshot | null
   onSettingsChanged?: () => Promise<void>
 }) {
-  const [view, setView] = useState<'chat' | 'trace' | 'subagent'>('chat')
+  const [view, setView] = useState<'chat' | 'subagent'>('chat')
   const [focusedRunId, setFocusedRunId] = useState<string>()
   const threadItemId = useAuiState((state) => state.threadListItem.id)
   const sessionId = useAuiState((state) => state.threadListItem.remoteId)
@@ -82,9 +81,6 @@ export function ChatPanel({
               <ViewTab active={view === 'chat'} onClick={() => setView('chat')}>
                 对话
               </ViewTab>
-              <ViewTab active={view === 'trace'} onClick={() => setView('trace')}>
-                轨迹
-              </ViewTab>
               {focusedRunId && (
                 <ViewTab active={view === 'subagent'} onClick={() => setView('subagent')}>
                   子 Agent
@@ -108,8 +104,6 @@ export function ChatPanel({
                   }}
                 />
               </div>
-            ) : view === 'trace' ? (
-              <RunHistoryPanel sessionId={sessionId} focusedRunId={focusedRunId} />
             ) : focusedRunId && sessionId ? (
               <SubagentSessionPanel
                 sessionId={sessionId}

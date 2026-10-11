@@ -110,6 +110,45 @@ test('persists business metadata and atomic ID mappings without duplicate concur
   expect(faux.state.callCount).toBe(1)
 })
 
+test('names a conversation from its first input and keeps later or manual titles', async () => {
+  const { faux, service } = await setup()
+  faux.setResponses([fauxAssistantMessage('one'), fauxAssistantMessage('two'), fauxAssistantMessage('three')])
+  await service.create({ threadId: 'named', agent: { model } }, context())
+  expect((await service.get('named', context())).title).toBe('新会话')
+  await service.submit('named', { type: 'input', content: '  Fix   the preload loader  ', requestId: 'first' }, context())
+  expect((await service.get('named', context())).title).toBe('Fix the preload loader')
+  await service.submit('named', { type: 'input', content: 'Second message', requestId: 'second' }, context())
+  expect((await service.get('named', context())).title).toBe('Fix the preload loader')
+
+  await service.create({ threadId: 'manual', title: 'Manual title', agent: { model } }, context())
+  await service.submit('manual', { type: 'input', content: 'Ignored input', requestId: 'manual-first' }, context())
+  expect((await service.get('manual', context())).title).toBe('Manual title')
+
+  await service.create({ threadId: 'truncated', agent: { model } }, context())
+  await service.submit('truncated', { type: 'input', content: 'x'.repeat(120), requestId: 'long' }, context())
+  const truncated = (await service.get('truncated', context())).title
+  expect(truncated).toHaveLength(50)
+  expect(truncated.endsWith('...')).toBe(true)
+
+  await service.create({ threadId: 'empty', agent: { model } }, context())
+  await service.submit('empty', { type: 'input', content: [{ type: 'image', data: 'aGk=', mimeType: 'image/png' }], requestId: 'image-only' }, context())
+  expect((await service.get('empty', context())).title).toBe('新会话')
+
+  await service.create({ threadId: 'scheduled', agent: { model } }, context())
+  await service.submit('scheduled', { type: 'input', content: 'Scheduled prompt', requestId: 'scheduled-first', scheduledTaskId: 'task-1' }, context())
+  expect((await service.get('scheduled', context())).title).toBe('新会话')
+})
+
+test('persists an auto-generated title across reopen', async () => {
+  const { engine, open, faux, repo, service } = await setup()
+  faux.setResponses([fauxAssistantMessage('done')])
+  await service.create({ threadId: 'durable-title', agent: { model } }, context())
+  await service.submit('durable-title', { type: 'input', content: 'Persist this title', requestId: 'first' }, context())
+  await engine.close()
+  const restored = await open()
+  expect((await new ConversationService(restored, repo).get('durable-title', context())).title).toBe('Persist this title')
+})
+
 test('hides an unpublished conversation and safely retries metadata publication after reopen', async () => {
   const { engine, open, repo } = await setup()
   const failing: AgentSessionRepo = {

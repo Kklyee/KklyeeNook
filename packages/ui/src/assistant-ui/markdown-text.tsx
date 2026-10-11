@@ -10,7 +10,7 @@ import {
   useIsStreamdownCodeBlock,
 } from '@assistant-ui/react-streamdown'
 import remarkGfm from 'remark-gfm'
-import { type FC, lazy, memo, Suspense, useMemo } from 'react'
+import { type FC, isValidElement, lazy, memo, type ReactNode, Suspense, useMemo } from 'react'
 import {
   TextMessagePartProvider,
   type TextMessagePartProps,
@@ -118,6 +118,14 @@ const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
     </div>
   )
 }
+
+const nodeText = (node: ReactNode): string => {
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(nodeText).join('')
+  return isValidElement<{ children?: ReactNode }>(node) ? nodeText(node.props.children) : ''
+}
+
+const diskPath = /^(?:[a-z]:[\\/]|\\\\|~[\\/]|\.{1,2}[\\/]|\/(?:[^/\s]+\/)+)/i
 
 const defaultComponents = memoizeMarkdownComponents({
   SyntaxHighlighter,
@@ -263,17 +271,23 @@ const defaultComponents = memoizeMarkdownComponents({
       {...props}
     />
   ),
-  code: function Code({ className, ...props }) {
+  code: function Code({ className, children, ...props }) {
     const isCodeBlock = useIsStreamdownCodeBlock()
+    const isPath = !isCodeBlock && diskPath.test(nodeText(children).trim())
     return (
       <code
         className={cn(
           !isCodeBlock &&
-            'aui-md-inline-code bg-brand-muted text-(--markdown-accent) rounded-md px-1.5 py-0.5 font-mono text-[0.85em]',
+            'aui-md-inline-code rounded-md px-1.5 py-0.5 font-mono text-[0.85em]',
+          isPath
+            ? 'bg-brand-muted text-(--markdown-accent)'
+            : !isCodeBlock && 'bg-muted text-muted-foreground',
           className,
         )}
         {...props}
-      />
+      >
+        {children}
+      </code>
     )
   },
   CodeHeader,
