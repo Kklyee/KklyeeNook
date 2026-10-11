@@ -4,6 +4,7 @@ import type { AgentSessionRepo } from '../db/repositories/agent-session-repo'
 import type { PermissionMode } from '@kklyeenook/shared/approval/permission'
 import { AgentEngine } from './agent-engine'
 import type { ContextInput, AgentInputs } from './inputs'
+import { BotError } from '../bots/bot-service'
 
 export type CreateConversation = {
   threadId: string
@@ -29,6 +30,7 @@ function titleFromInput(content: ContextInput['content']) {
 export const creationRecord = defineDoc<{
   id: string
   botId?: string | null
+  deletedAt?: number | null
   title: string
   workspaceId: string | null
   permissionMode: PermissionMode
@@ -57,6 +59,7 @@ export class ConversationService {
     private readonly engine: AgentEngine,
     private readonly sessions: AgentSessionRepo,
     private readonly inputs?: AgentInputs,
+    private readonly validateUpdate?: (threadId: string, update: { workspaceId?: string | null; permissionMode?: PermissionMode }, context: Context) => Promise<void>,
   ) {}
 
   async create(input: CreateConversation, context: Context) {
@@ -94,7 +97,7 @@ export class ConversationService {
 
   async list(context: Context) {
     const links = await this.engine.links(context)
-    return (await this.sessions.findAll()).filter((record) => Object.hasOwn(links, record.id))
+    return (await this.sessions.findAll()).filter((record) => !record.deletedAt && Object.hasOwn(links, record.id))
   }
 
   async get(threadId: string, context: Context) {
@@ -106,8 +109,9 @@ export class ConversationService {
     return record
   }
 
-  async update(threadId: string, update: { title?: string; archived?: boolean; permissionMode?: PermissionMode }, context: Context) {
+  async update(threadId: string, update: { title?: string; archived?: boolean; permissionMode?: PermissionMode; workspaceId?: string | null; deletedAt?: number }, context: Context) {
     const record = await this.get(threadId, context)
+    await this.validateUpdate?.(threadId, update, context)
     const next = { ...record, ...update, updatedAt: Math.max(Date.now(), record.updatedAt + 1) }
     await this.sessions.save(next)
     const conversation = await this.engine.conversation(threadId, context)
@@ -123,12 +127,13 @@ export class ConversationService {
 
   async tombstone(threadId: string, context: Context) {
     await this.cancel(threadId, context)
-    return this.archive(threadId, true, context)
+    return this.update(threadId, { archived: true, deletedAt: Date.now() }, context)
   }
 
   async submit(threadId: string, input: ContextInput, context: Context) {
     if (!input.requestId.trim()) throw new Error('A stable request ID is required')
     const record = await this.get(threadId, context)
+    if (record.deletedAt) throw new BotError(404, 'Conversation was deleted')
     const conversation = await this.engine.conversation(threadId, context)
     if (!this.inputs && (input.contextAttachmentIds?.length || input.skillIds?.length))
       throw new Error('Input context service is not configured')

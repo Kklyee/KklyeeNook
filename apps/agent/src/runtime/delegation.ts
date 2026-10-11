@@ -15,7 +15,7 @@ export class AgentDelegation {
   readonly tool
   readonly extension
 
-  constructor(private readonly inputs: AgentInputs) {
+  constructor(private readonly inputs: AgentInputs, private readonly authorize?: (id: ConversationId, context: Context) => Promise<void>) {
     this.tool = defineTool({
       name: 'delegate_task',
       description:
@@ -27,6 +27,7 @@ export class AgentDelegation {
       }),
       replay: 'safe',
       execute: async (args, api, context) => {
+        await this.authorize?.(api.conversationId, context)
         if (!args.task.trim()) throw new Error('Task is required')
         const agent = await api.agent(context)
         const id = await api.commit(async (tx) => {

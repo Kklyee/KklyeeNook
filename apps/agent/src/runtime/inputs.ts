@@ -10,7 +10,11 @@ import {
   type Harness,
   type InputSubmissionDraft,
   type PromptInput,
+  type AgentState,
+  type DocumentReader,
 } from '@earendil-works/pi-durable'
+import type { BotProfile } from '@kklyeenook/shared/bot/bot'
+import type { PermissionMode } from '@kklyeenook/shared/approval/permission'
 import type { ContextAttachmentRef } from '@kklyeenook/shared/context/contextAttachment'
 import type { AgentRunContext, ContextBuilder } from '../context/contextBuilder'
 import type { SkillLoader } from '../backend/skillLoader'
@@ -23,11 +27,20 @@ export type ContextInput = InputSubmissionDraft & {
 }
 
 type PreparedInput = {
+  bot?: BotSubmissionConfig
   draft: JsonRepresentation<Omit<InputSubmissionDraft, 'entry'> & { requestId: string }>
   context: string
   skills: string
   attachments: JsonRepresentation<ContextAttachmentRef[]>
   scheduledTaskId?: string
+}
+
+export type BotSubmissionConfig = {
+  profile: BotProfile
+  workspaceId: string | null
+  permissionMode: PermissionMode
+  tools: string[]
+  agent: Pick<AgentState, 'model' | 'thinkingLevel' | 'instructions' | 'cwd'>
 }
 
 export const inputDoc = defineDocFamily<PreparedInput, PreparedInput>({
@@ -76,6 +89,7 @@ export class AgentInputs {
       id: ConversationId,
       context: Context,
     ) => Promise<string | undefined>,
+    private readonly capture?: (id: ConversationId, context: Context) => Promise<BotSubmissionConfig | undefined>,
   ) {
     this.extension = defineExtension({
       name: 'nook.context',
@@ -147,8 +161,10 @@ export class AgentInputs {
       })
       const workspaceId = await this.workspaceId(conversation.id, context)
       const runContext = await this.builder.build(input.contextAttachmentIds ?? [], workspaceId)
+      const bot = await this.capture?.(conversation.id, context)
       const { contextAttachmentIds: _attachments, skillIds: _skills, scheduledTaskId, ...draft } = input
       const candidate: PreparedInput = {
+        ...(bot ? { bot: copyJson(bot, { omitUndefinedProperties: true }) as BotSubmissionConfig } : {}),
         draft: copyJson(draft, { omitUndefinedProperties: true }) as PreparedInput['draft'],
         ...(scheduledTaskId ? { scheduledTaskId } : {}),
         context: renderContext(runContext),
@@ -174,6 +190,16 @@ export class AgentInputs {
   private host() {
     if (!this.harness) throw new Error('Input service is not connected')
     return this.harness
+  }
+
+  async activeConfig(id: ConversationId, read: DocumentReader, context: Context): Promise<BotSubmissionConfig | undefined> {
+    const live = await read.snapshot(LiveDoc, id, context)
+    const first = live?.run?.inputs[0]
+    if (first === undefined) return undefined
+    const submission = await this.host().submission(first, context)
+    const record = await submission?.status(context)
+    if (!record?.requestId) return undefined
+    return (await read.snapshot(inputDoc, id, record.requestId, context))?.bot
   }
 
   private async active(input: PromptInput, context: Context) {

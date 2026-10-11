@@ -15,7 +15,7 @@ import type { ToolAdapterContext, ToolRegistry } from '../tools/toolRegistry'
 import type { ToolResultRetentionPolicy } from '../tools/toolResultRetentionPolicy'
 import type { ExecutableToolContext } from '../tools/executable-tool'
 import { SandboxService, toolPermissionResource } from '../sandbox/sandboxService'
-import { ToolExecutionHarness } from './toolExecutionHarness'
+import { ToolExecutionHarness } from './tool-execution-harness'
 import { AgentApprovals } from './approvals'
 import type { RunResources } from './run-resources'
 
@@ -32,6 +32,7 @@ type ExecutableTool = {
 type ResolveContext = (
   conversationId: ConversationId,
   context: Context,
+  toolName?: string,
 ) => Promise<ToolAdapterContext>
 
 function permission(call: ToolCall, context: ToolAdapterContext): PermissionRequest {
@@ -55,7 +56,7 @@ export class AgentTools {
     private readonly resources?: RunResources,
   ) {
     this.approvals = new AgentApprovals(async (call, api, context) => {
-      const adapter = await this.resolveContext(api.conversationId, context)
+      const adapter = await this.resolveContext(api.conversationId, context, call.name)
       const request = permission(
         { id: call.id, toolName: call.name, args: call.arguments },
         adapter,
@@ -96,7 +97,7 @@ export class AgentTools {
   }
 
   private async execute(name: string, args: unknown, api: ToolExecutionApi, context: Context) {
-    const adapter = await this.resolveContext(api.conversationId, context)
+    const adapter = await this.resolveContext(api.conversationId, context, name)
     const runId = this.resources
       ? await this.resources.acquire(api.conversationId, context)
       : `durable:${api.conversationId}:${api.taskId}`
@@ -119,6 +120,10 @@ export class AgentTools {
           },
           context,
         ),
+      async () => {
+        const current = await this.resolveContext(api.conversationId, context, name)
+        if (current.executionContext?.mode !== adapter.executionContext?.mode) throw new Error('Permission changed while awaiting execution; submit again')
+      },
     )
     const [tool] = this.registry.resolve<ExecutableTool>([name], {
       ...adapter,

@@ -77,7 +77,8 @@ const decisionSchema = Type.Object(
   { additionalProperties: false },
 )
 const metadataSchema = Type.Partial(
-  Type.Object({ title: Type.String(), archived: Type.Boolean() }, { additionalProperties: false }),
+  Type.Object({ title: Type.String({ minLength: 1 }), archived: Type.Boolean(), workspaceId: Type.Union([Type.String({ minLength: 1 }), Type.Null()]) }, { additionalProperties: false }),
+  { additionalProperties: false },
 )
 const thinkingLevelSchema = Type.Union((['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const).map((level) => Type.Literal(level)))
 const modelSchema = Type.Object(
@@ -129,7 +130,7 @@ async function handle(context: Context, prefix: string, host: AgentHost): Promis
   const ctx = withAbortSignal(context.req.raw.signal, BACKGROUND_CONTEXT)
   const method = context.req.method
   if (parts[0] === 'bots' && host.bots) {
-    if (parts.length === 1 && method === 'GET') return context.json(await host.bots.list())
+    if (parts.length === 1 && method === 'GET') return context.json(await host.botSummaries(ctx))
     if (parts.length === 1 && method === 'POST') return context.json(await host.bots.create(await parse(context, botSchema)), 201)
     const id = parts[1]
     if (parts.length === 2 && method === 'GET') return context.json(await host.bots.get(id))
@@ -168,13 +169,16 @@ async function handle(context: Context, prefix: string, host: AgentHost): Promis
   }
   if (parts.length === 2 && method === 'PATCH') {
     const input = await parse(context, metadataSchema)
+    if (input.archived) await host.assertExtraThread(threadId, ctx)
     return context.json(await host.conversations.update(threadId, input, ctx))
   }
   if (parts.length === 2 && method === 'DELETE') {
+    await host.assertExtraThread(threadId, ctx)
     await host.conversations.tombstone(threadId, ctx)
     return context.body(null, 204)
   }
   if (parts.length === 3 && (action === 'archive' || action === 'unarchive') && method === 'POST') {
+    if (action === 'archive') await host.assertExtraThread(threadId, ctx)
     await host.conversations.archive(threadId, action === 'archive', ctx)
     return context.body(null, 204)
   }

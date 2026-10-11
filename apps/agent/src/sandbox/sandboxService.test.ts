@@ -1,4 +1,4 @@
-import { ToolExecutionHarness } from '../runtime/toolExecutionHarness'
+import { ToolExecutionHarness } from '../runtime/tool-execution-harness'
 import { FileToolResultRetentionPolicy } from '../tools/toolResultRetentionPolicy'
 import { ToolResultStore } from '../tools/toolResultStore'
 import { mkdtemp, mkdir, readFile, rm, symlink } from 'node:fs/promises'

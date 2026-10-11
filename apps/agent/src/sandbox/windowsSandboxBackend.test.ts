@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { WindowsSandboxBackend } from './windowsSandboxBackend'
 import type { SandboxExecutionRequest } from './sandboxBackend'
 import { SandboxService } from './sandboxService'
-import { ToolExecutionHarness } from '../runtime/toolExecutionHarness'
+import { ToolExecutionHarness } from '../runtime/tool-execution-harness'
 import { ToolRegistry } from '../tools/toolRegistry'
 import { registerBuiltinTools } from '../tools/builtin-tools'
 

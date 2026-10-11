@@ -10,7 +10,7 @@ import { SandboxService } from '../sandbox/sandboxService'
 import { registerBuiltinTools } from '../tools/builtin-tools'
 import { registerMcpTool } from '../tools/mcp-tool'
 import { registerToolResultTool } from '../tools/result-tool'
-import { ToolExecutionHarness } from './toolExecutionHarness'
+import { ToolExecutionHarness } from './tool-execution-harness'
 import type { ToolResult } from '@kklyeenook/shared/tool/tool'
 
 let directory: string

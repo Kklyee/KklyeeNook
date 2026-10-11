@@ -27,6 +27,7 @@ export class ToolExecutionHarness {
     private readonly sandbox: SandboxService,
     private readonly retention: ToolResultRetentionPolicy,
     private readonly approve?: ApproveTool,
+    private readonly revalidate?: () => Promise<void>,
   ) {}
 
   async execute(
@@ -102,8 +103,10 @@ export class ToolExecutionHarness {
               if (!approved) throw new ToolExecutionError('PERMISSION_DENIED', '用户拒绝本次执行')
               this.sandbox.elevate(call.id, request, decision.requestedMode)
             }
+            await this.revalidate?.()
             if (request.resource.kind === 'path') {
               const path = await this.sandbox.resolveFile(request, call.id)
+              await this.revalidate?.()
               controller.signal.throwIfAborted()
               return execute({ ...args, path }, controller.signal)
             }
@@ -117,6 +120,7 @@ export class ToolExecutionHarness {
                   ).path
                 : executionContext.workspace?.rootPath
               controller.signal.throwIfAborted()
+              await this.revalidate?.()
               return this.sandbox.execute(
                 request,
                 {
@@ -132,6 +136,7 @@ export class ToolExecutionHarness {
               )
             }
             await this.sandbox.authorize(request, call.id)
+            await this.revalidate?.()
             controller.signal.throwIfAborted()
             return execute(call.args, controller.signal)
           }
