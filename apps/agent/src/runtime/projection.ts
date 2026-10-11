@@ -55,7 +55,7 @@ export function agentRemoteSnapshot(input: {
     model: agent.model ? { provider: agent.model.provider, modelId: agent.model.modelId } : undefined,
     thinkingLevel: agent.thinkingLevel ?? 'off',
     contextUsage,
-    contextBudget: calculateAgentContextBudget({ tokens: contextUsage.tokens ?? undefined, contextWindow: contextUsage.contextWindow || undefined }, input.compaction ?? DEFAULT_AGENT_COMPACTION_SETTINGS, { compacting: input.snapshot.compactions.length > 0 }),
+    contextBudget: calculateAgentContextBudget({ ...contextUsage, tokens: contextUsage.tokens ?? undefined, contextWindow: contextUsage.contextWindow || undefined, percent: contextUsage.percent ?? undefined }, input.compaction ?? DEFAULT_AGENT_COMPACTION_SETTINGS, { compacting: input.snapshot.compactions.length > 0 }),
     messages: agentMessages(input.snapshot),
     activities: agentActivities(input.snapshot, input.taskRuns),
     queue: agentQueue(input.queue),

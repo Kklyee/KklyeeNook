@@ -116,7 +116,7 @@ export function SessionStats({ messages, compact = false, children }: {
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-4">
-                <dt className="text-muted-foreground">缓存命中率</dt>
+                <dt className="text-muted-foreground">累计缓存命中率</dt>
                 <dd className="text-foreground tabular-nums">{stats.cacheRate}</dd>
               </div>
             </dl>
@@ -126,7 +126,7 @@ export function SessionStats({ messages, compact = false, children }: {
           ·
         </span>
         <span title="缓存命中率 = 缓存读取 Token ÷（输入 + 缓存读取 + 缓存写入 Token）；用量在模型返回后更新，统计范围为当前会话分支的已加载消息">
-          缓存 {stats.cacheRate}
+          累计缓存 {stats.cacheRate}
         </span>
         {children}
       </div>

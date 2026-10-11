@@ -1,9 +1,10 @@
 import type { AgentCompactionSettings } from '@kklyeenook/shared/agent/agentConfig'
 import type { AgentContextUsage } from '@kklyeenook/shared/agent/agentContextUsage'
+import type { ContextDetails } from './contextUsage'
 
 export type AgentContextBudgetState = 'unknown' | 'normal' | 'warning' | 'critical' | 'compacting'
 
-export interface AgentContextBudget {
+export interface AgentContextBudget extends ContextDetails {
   tokens?: number
   contextWindow?: number
   reserveTokens: number
@@ -25,6 +26,9 @@ export function calculateAgentContextBudget(
   const contextWindow = nonNegativeFinite(usage?.contextWindow)
   const reserveTokens = nonNegativeFinite(compaction.reserveTokens) ?? 0
   const budget: AgentContextBudget = {
+    ...(usage?.breakdown ? { breakdown: usage.breakdown } : {}),
+    ...(usage?.latestRequest ? { latestRequest: usage.latestRequest } : {}),
+    ...(usage?.estimated !== undefined ? { estimated: usage.estimated } : {}),
     tokens,
     contextWindow,
     reserveTokens,

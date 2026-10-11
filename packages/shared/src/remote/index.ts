@@ -100,6 +100,9 @@ export interface RemoteContextUsage {
   percent: number | null
 }
 export interface RemoteContextBudget {
+  breakdown?: { system: number; tools: number; files: number; toolResults: number; conversation: number }
+  latestRequest?: { input: number; output: number; cacheRead: number; cacheWrite: number }
+  estimated?: boolean
   tokens?: number
   contextWindow?: number
   usedPercent?: number

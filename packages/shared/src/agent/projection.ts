@@ -3,6 +3,7 @@ import { applyImmutable } from '@earendil-works/chord/delta'
 import type { AgentEvent, EntryRecord, InboxItem, SnapshotEvent } from '@earendil-works/pi-durable'
 import type { AssistantMessage, Message, ToolCall, ToolResultMessage, Usage } from '@earendil-works/pi-ai'
 import type { AgentApproval, AgentFrame } from './chat-protocol'
+import { snapshotContextDetails, type ContextDetails } from './contextUsage'
 
 type ContentPart = Exclude<ThreadMessageLike['content'], string>[number]
 type ToolCallPart = Extract<ContentPart, { type: 'tool-call' }>
@@ -25,7 +26,7 @@ type AssistantGroup = {
   pendingTool: boolean
 }
 
-export type AgentContextUsage = {
+export type AgentContextUsage = ContextDetails & {
   tokens: number | null
   contextWindow: number
   percent: number | null
@@ -521,10 +522,8 @@ function queueText(queue: readonly InboxItem[]) {
 }
 
 export function snapshotContextUsage(snapshot: SnapshotEvent, contextWindow = 0): AgentContextUsage {
-  const messages = snapshot.entries.flatMap((entry) => entry.model ?? [])
-  const latest = messages.findLast((message) => message.role === 'assistant')
-  const tokens = snapshot.generation?.message?.usage.totalTokens ?? (latest?.role === 'assistant' ? latest.usage.totalTokens : null)
-  return { tokens, contextWindow, percent: tokens !== null && contextWindow > 0 ? tokens / contextWindow * 100 : null }
+  const details = snapshotContextDetails(snapshot)
+  return { ...details, contextWindow, percent: details.tokens !== null && contextWindow > 0 ? details.tokens / contextWindow * 100 : null }
 }
 
 function isSnapshotRunning(snapshot: SnapshotEvent): boolean {
