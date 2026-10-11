@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react'
 import { cn } from '../lib/utils'
-import { ghostButton, mono } from '../lib/surfaces'
+import { ghostButton } from '../lib/surfaces'
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '../components/popover'
 
 interface ContextBudget {
@@ -42,6 +42,7 @@ export function ComposerContext({ budget, className, ...props }: Omit<ComponentP
     ['工具结果', budget.breakdown.toolResults, 'bg-pink-400'],
     ['会话内容', budget.breakdown.conversation, 'bg-indigo-400'],
   ] : []
+  const categoryTokens = categories.reduce((sum, [, tokens]) => sum + tokens, 0)
   const request = budget.latestRequest
 
   return (
@@ -58,42 +59,40 @@ export function ComposerContext({ budget, className, ...props }: Omit<ComponentP
           </svg>
           <span>上下文 {percent}</span>
         </PopoverTrigger>
-        <PopoverContent side="top" align="end" sideOffset={8} className="w-64 gap-3 rounded-2xl p-4">
+        <PopoverContent side="top" align="end" sideOffset={8} className="w-72 gap-3 rounded-xl p-4 text-xs leading-5">
           <div className="flex items-baseline justify-between">
             <PopoverTitle className="text-[13.5px]">当前上下文</PopoverTitle>
-            <p className={cn(mono, 'text-right tabular-nums', warn ? 'text-red-500 dark:text-red-400' : 'text-foreground/35')}>
+            <p className={cn('text-right tabular-nums', warn ? 'text-red-500 dark:text-red-400' : 'text-foreground/55')}>
               {percent}
             </p>
           </div>
           <div className="bg-foreground/[0.06] flex h-[5px] w-full overflow-hidden rounded-full">
             <span className="bg-foreground/80 h-full transition-[width] duration-700 motion-reduce:transition-none" style={{ width: `${clamped * 100}%` }} />
           </div>
-          <div className="text-foreground/55 flex items-center justify-between text-[13px]">
+          <div className="text-foreground/55 flex items-center justify-between">
             <span>占用 / 容量</span>
-            <span title={budget.tokens?.toLocaleString('en-US')} className={cn(mono, 'text-foreground/40 text-right tabular-nums')}>{budget.estimated && '~'}{formatTokens(budget.tokens)} / {formatTokens(budget.contextWindow)}</span>
+            <span title={budget.tokens?.toLocaleString('en-US')} className="text-right tabular-nums">{budget.estimated && '~'}{formatTokens(budget.tokens)} / {formatTokens(budget.contextWindow)}</span>
           </div>
           {categories.length > 0 && (
             <div className="border-border/60 flex flex-col gap-2 border-t pt-3">
-              <p className="text-muted-foreground text-xs">分类估算</p>
-              <div className="flex h-1.5 items-center gap-0.5" aria-hidden>
-                {categories.filter(([, tokens]) => tokens > 0).map(([label, tokens, color]) => (
-                  <span key={label} className={cn('block h-1.5 min-w-1 shrink-0 basis-0 rounded-sm', color)} style={{ flexGrow: tokens }} />
-                ))}
-              </div>
-              <dl className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 text-xs">
+              <p className="text-foreground/40">分类估算</p>
+              <dl className="grid grid-cols-[minmax(0,1fr)_3rem_3.5rem] items-center gap-x-3 gap-y-2">
                 {categories.map(([label, tokens, color]) => (
                   <div key={label} className="contents">
-                    <dt className="text-muted-foreground grid grid-cols-[0.375rem_1fr] items-center gap-2"><span className={cn('size-1.5 rounded-sm', color)} />{label}</dt>
-                    <dd title={tokens.toLocaleString('en-US')} className={cn(mono, 'text-right tabular-nums')}>~{formatTokens(tokens)}</dd>
+                    <dt className="text-muted-foreground flex items-center gap-2"><span className={cn('size-1.5 shrink-0 rounded-[1px]', color)} />{label}</dt>
+                    <dd className="bg-foreground/[0.06] h-1 overflow-hidden rounded-full" aria-hidden>
+                      <span className={cn('block h-full rounded-full opacity-75', color)} style={{ width: `${categoryTokens > 0 ? tokens / categoryTokens * 100 : 0}%`, minWidth: tokens > 0 ? 2 : 0 }} />
+                    </dd>
+                    <dd title={tokens.toLocaleString('en-US')} className="text-right tabular-nums">~{formatTokens(tokens)}</dd>
                   </div>
                 ))}
               </dl>
             </div>
           )}
           {request && (
-            <dl className="border-border/60 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 border-t pt-3 text-xs">
-              <dt className="text-muted-foreground">最近输入</dt><dd title={request.input.toLocaleString('en-US')} className={cn(mono, 'text-right tabular-nums')}>{formatTokens(request.input)}</dd>
-              <dt className="text-muted-foreground">缓存命中</dt><dd className={cn(mono, 'text-right tabular-nums')}>{request.input > 0 ? `${(request.cacheRead / request.input * 100).toFixed(1)}%` : '—'}</dd>
+            <dl className="border-border/60 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 border-t pt-3">
+              <dt className="text-muted-foreground">最近输入</dt><dd title={request.input.toLocaleString('en-US')} className="text-right tabular-nums">{formatTokens(request.input)}</dd>
+              <dt className="text-muted-foreground">缓存命中</dt><dd className="text-right tabular-nums">{request.input > 0 ? `${(request.cacheRead / request.input * 100).toFixed(1)}%` : '—'}</dd>
             </dl>
           )}
         </PopoverContent>
