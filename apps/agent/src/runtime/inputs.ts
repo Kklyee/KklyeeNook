@@ -24,6 +24,8 @@ export type ContextInput = InputSubmissionDraft & {
   contextAttachmentIds?: readonly string[]
   skillIds?: readonly string[]
   scheduledTaskId?: string
+  groveTaskId?: string
+  groveResult?: boolean
 }
 
 type PreparedInput = {
@@ -33,6 +35,8 @@ type PreparedInput = {
   skills: string
   attachments: JsonRepresentation<ContextAttachmentRef[]>
   scheduledTaskId?: string
+  groveTaskId?: string
+  groveResult?: boolean
 }
 
 export type BotSubmissionConfig = {
@@ -168,11 +172,13 @@ export class AgentInputs {
       const workspaceId = await this.workspaceId(conversation.id, context)
       const runContext = await this.builder.build(input.contextAttachmentIds ?? [], workspaceId)
       const bot = await this.capture?.(conversation.id, context)
-      const { contextAttachmentIds: _attachments, skillIds: _skills, scheduledTaskId, ...draft } = input
+      const { contextAttachmentIds: _attachments, skillIds: _skills, scheduledTaskId, groveTaskId, groveResult, ...draft } = input
       const candidate: PreparedInput = {
-        ...(bot ? { bot: copyJson(bot, { omitUndefinedProperties: true }) as BotSubmissionConfig } : {}),
+        ...(bot ? { bot: copyJson(groveResult ? { ...bot, tools: [] } : bot, { omitUndefinedProperties: true }) as BotSubmissionConfig } : {}),
         draft: copyJson(draft, { omitUndefinedProperties: true }) as PreparedInput['draft'],
         ...(scheduledTaskId ? { scheduledTaskId } : {}),
+        ...(groveTaskId ? { groveTaskId } : {}),
+        ...(groveResult ? { groveResult } : {}),
         context: renderContext(runContext),
         skills: selected.length
           ? 'Use the explicitly selected skill instructions below. Resolve relative references against each skill directory.\n' +
@@ -206,6 +212,25 @@ export class AgentInputs {
     const record = await submission?.status(context)
     if (!record?.requestId) return undefined
     return (await read.snapshot(inputDoc, id, record.requestId, context))?.bot
+  }
+
+  async activeGroveTask(id: ConversationId, context: Context): Promise<string | undefined> {
+    const live = await this.host().snapshot(LiveDoc, id, context)
+    const first = live?.run?.inputs[0]
+    if (first === undefined) return undefined
+    const submission = await this.host().submission(first, context)
+    const record = await submission?.status(context)
+    return record?.requestId
+      ? (await this.host().snapshot(inputDoc, id, record.requestId, context))?.groveTaskId
+      : undefined
+  }
+
+  async isGroveResult(id: ConversationId, context: Context): Promise<boolean> {
+    const live = await this.host().snapshot(LiveDoc, id, context)
+    const first = live?.run?.inputs[0]
+    if (first === undefined) return false
+    const record = await (await this.host().submission(first, context))?.status(context)
+    return record?.requestId ? (await this.host().snapshot(inputDoc, id, record.requestId, context))?.groveResult === true : false
   }
 
   private async active(input: PromptInput, context: Context) {

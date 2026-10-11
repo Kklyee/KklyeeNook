@@ -54,7 +54,7 @@ export async function startAuthenticatedServer(
       context.header('Access-Control-Allow-Private-Network', 'true')
     }
     if (context.req.method === 'OPTIONS') {
-      context.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS')
+      context.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
       context.header('Access-Control-Allow-Headers', 'content-type')
       context.header('Access-Control-Max-Age', '600')
       return context.body(null, 204)

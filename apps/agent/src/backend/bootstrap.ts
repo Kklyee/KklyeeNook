@@ -45,6 +45,7 @@ import { RunProjection } from '../runtime/run-projection'
 import { AgentHost } from '../runtime/agent-host'
 import { AgentModels } from '../runtime/agent-models'
 import { DrizzleBotRepo } from '../db/repositories/bot-repo'
+import { DrizzleGroveRepo } from '../db/repositories/grove-repo'
 
 export interface AgentBackendRuntime {
   baseUrl: string
@@ -123,6 +124,7 @@ export async function createAgentBackend(
       credentials: () => credentialStore,
       sessions: sessionRepo,
       botRepo: new DrizzleBotRepo(db),
+      groveRepo: new DrizzleGroveRepo(db),
       workspaces: workspaceService,
       tools: toolRegistry,
       sandbox,

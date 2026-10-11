@@ -13,6 +13,7 @@ docs/*
 !docs/pi-durable-m2.md
 !docs/pi-durable-m3.md
 !docs/pi-durable-m4.md
+!docs/grove.md
 !docs/dsh-reference.md
 !docs/dsh-reference.zh.md
 .tmp*

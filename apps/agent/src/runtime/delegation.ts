@@ -90,6 +90,7 @@ export class AgentDelegation {
               args.task +
               (args.context?.trim() ? '\n\nExplicit context:\n' + args.context.trim() : ''),
             skillIds: args.skillIds,
+            groveTaskId: await this.inputs.activeGroveTask(api.conversationId, context),
           },
           context,
         )

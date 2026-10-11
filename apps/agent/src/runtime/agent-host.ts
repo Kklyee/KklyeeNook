@@ -42,6 +42,9 @@ import { submissionRegistry } from './submission-config'
 import type { BotSubmissionConfig } from './inputs'
 import type { BotProfile } from '@kklyeenook/shared/bot/bot'
 import { botState } from '@kklyeenook/shared/bot/bot-state'
+import type { GroveRepo } from '../db/repositories/grove-repo'
+import { BotCommunicationService } from '../grove/communication'
+import { registerGroveTools } from '../grove/tools'
 
 export type AgentHostOptions = {
   databasePath: string
@@ -49,6 +52,7 @@ export type AgentHostOptions = {
   credentials: () => CredentialStore
   sessions: AgentSessionRepo
   botRepo?: BotRepo
+  groveRepo?: GroveRepo
   workspaces: WorkspaceService
   tools: ToolRegistry
   sandbox: SandboxService
@@ -63,6 +67,7 @@ export type AgentHostOptions = {
 export class AgentHost {
   readonly conversations: ConversationService
   readonly bots?: BotService
+  readonly grove?: BotCommunicationService
 
   private constructor(
     readonly engine: AgentEngine,
@@ -76,8 +81,10 @@ export class AgentHost {
     private readonly identities: { coding: Extension; personal: Extension },
     private readonly membership: Extension,
     bots?: BotService,
+    grove?: BotCommunicationService,
   ) {
     this.bots = bots
+    this.grove = grove
     this.conversations = new ConversationService(
       engine,
       options.sessions,
@@ -109,6 +116,9 @@ export class AgentHost {
   }
 
   static async open(options: AgentHostOptions, context: Context) {
+    let host: AgentHost | undefined
+    const grove = options.botRepo && options.groveRepo ? new BotCommunicationService(options.groveRepo) : undefined
+    const unregisterGrove = grove ? registerGroveTools(options.tools, () => host!) : []
     const models = new AgentModels(options.config, options.credentials)
     const bots = options.botRepo
       ? new BotService(
@@ -139,6 +149,8 @@ export class AgentHost {
       const record = await options.sessions.findById(owner.threadId)
       if (!record?.botId) throw new BotError(403, 'Conversation has no Bot identity')
       const captured = await inputs?.activeConfig(id, engine.harness, context)
+      const groveTaskId = await inputs?.activeGroveTask(id, context)
+      if (groveTaskId && toolName) await grove?.guardExecution(groveTaskId, context)
       const workspaceId = captured ? captured.workspaceId : record.workspaceId
       const bot = await bots.assertAccess(record.botId, workspaceId, toolName)
       if (captured && toolName && !captured.tools.includes(toolName))
@@ -256,6 +268,7 @@ export class AgentHost {
     registry.install(identities.personal)
     const botIdentity = defineExtension({ name: 'nook.bot' })
     registry.install(botIdentity)
+    if (grove) registry.install(grove.extension)
     for (const extension of options.extensions ?? []) registry.install(extension)
     registry.install(tools.extension())
     registry.install(tools.approvals.extension)
@@ -270,13 +283,12 @@ export class AgentHost {
         return getAgentCompactionSettings(options.config())
       },
     }
-    let host: AgentHost | undefined
     try {
       engine = await AgentEngine.open(
         options.databasePath,
         {
           models: models.models,
-          registry: bots ? submissionRegistry(registry, inputs) : registry,
+          registry: bots ? submissionRegistry(registry, inputs, (taskId, generationId, result, context) => grove?.guardGeneration(taskId, generationId, result, context) ?? Promise.resolve()) : registry,
           settings,
           onReport: options.onReport,
           conversationCreated: async (tx, conversation) => {
@@ -301,6 +313,7 @@ export class AgentHost {
             identities,
             membership,
             bots,
+            grove,
           )
           await resources.connect(initializing, context)
           await initializing.harness.commit(async (tx) => {
@@ -311,10 +324,12 @@ export class AgentHost {
               await tx.doc(approvalDoc, id)
             }, context)
           }
+          await grove?.connect(host, context)
           await options.initialize?.(host, context)
         },
       )
     } catch (error) {
+      for (const unregister of unregisterGrove) unregister()
       try {
         await resources.close(async () => {})
       } catch (cleanupError) {
@@ -326,6 +341,7 @@ export class AgentHost {
       throw error
     }
     if (!host) throw new Error('Agent host failed to initialize')
+    host.unregisterGrove = unregisterGrove
     return host
   }
 
@@ -551,8 +567,12 @@ export class AgentHost {
   }
 
   close() {
-    return this.resources.close(() => this.engine.close())
+    return this.resources.close(() => this.engine.close()).finally(() => {
+      for (const unregister of this.unregisterGrove) unregister()
+    })
   }
+
+  private unregisterGrove: Array<() => void> = []
 
   private enabledTools(bot?: BotProfile) {
     const config = this.options.config()

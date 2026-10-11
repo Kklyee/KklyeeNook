@@ -129,6 +129,24 @@ async function handle(context: Context, prefix: string, host: AgentHost): Promis
   }
   const ctx = withAbortSignal(context.req.raw.signal, BACKGROUND_CONTEXT)
   const method = context.req.method
+  if (parts[0] === 'grove' && host.grove) {
+    if (parts.length === 1 && method === 'GET') return context.json(await host.grove.list(ctx))
+    if (parts.length === 3 && parts[1] === 'policies' && method === 'PUT') {
+      const policy = await parse(context, Type.Object({ messages: Type.Boolean(), tasks: Type.Boolean(), allowedBotIds: Type.Union([Type.Null(), Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { maxItems: 100 })]) }, { additionalProperties: false }))
+      return context.json(await host.grove.setPolicy(parts[2], policy, ctx))
+    }
+    if (parts.length === 2 && method === 'POST' && (parts[1] === 'messages' || parts[1] === 'tasks')) {
+      const common = { threadId: Type.String({ minLength: 1, maxLength: 200 }), toBotId: Type.String({ minLength: 1, maxLength: 200 }), operationId: Type.String({ minLength: 1, maxLength: 200 }) }
+      if (parts[1] === 'messages') {
+        const input = await parse(context, Type.Object({ ...common, content: Type.String({ minLength: 1, maxLength: 64000 }) }, { additionalProperties: false }))
+        return context.json(await host.grove.sendMessage({ threadId: input.threadId }, input, ctx), 201)
+      }
+      const input = await parse(context, Type.Object({ ...common, instruction: Type.String({ minLength: 1, maxLength: 64000 }) }, { additionalProperties: false }))
+      const conversation = await host.engine.conversation(input.threadId, ctx)
+      const parentTaskId = await host.inputs.activeGroveTask(conversation.id, ctx)
+      return context.json(await host.grove.requestTask({ threadId: input.threadId, parentTaskId }, input, ctx), 202)
+    }
+  }
   if (parts[0] === 'bots' && host.bots) {
     if (parts.length === 1 && method === 'GET') return context.json(await host.botSummaries(ctx))
     if (parts.length === 1 && method === 'POST') return context.json(await host.bots.create(await parse(context, botSchema)), 201)

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { defaultBot, type BotInput, type BotProfile } from '@kklyeenook/shared/bot/bot'
+import { GROVE_TOOLS } from '@kklyeenook/shared/bot/grove'
 import type { BotRepo } from '../db/repositories/bot-repo'
 import type { AgentSessionRepo } from '../db/repositories/agent-session-repo'
 import type { WorkspaceService } from '../workspace/workspaceService'
@@ -32,6 +33,15 @@ export class BotService {
     ]
     await this.repo.insert(defaultBot('xiaoya', '小芽'))
     await this.repo.insert(coder)
+    if (GROVE_TOOLS.every((name) => this.tools.get(name))) {
+      for (const id of ['xiaoya', 'coder']) {
+        const bot = await this.get(id)
+        const defaults = defaultBot(id, '', id === 'coder').enabledTools
+        const legacy = defaults.filter((name) => !GROVE_TOOLS.includes(name as typeof GROVE_TOOLS[number]))
+        if (bot.enabledTools.length === legacy.length && legacy.every((name) => bot.enabledTools.includes(name)))
+          await this.repo.save({ ...bot, enabledTools: defaults, updatedAt: Date.now() })
+      }
+    }
     const existingCoder = await this.get('coder')
     if (
       existingCoder.instructions ===

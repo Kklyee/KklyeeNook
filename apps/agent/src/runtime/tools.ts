@@ -88,7 +88,7 @@ export class AgentTools {
             name: definition.name,
             description: definition.description,
             parameters: definition.inputSchema as TSchema,
-            replay: 'unsafe',
+            replay: definition.replay ?? 'unsafe',
             execute: async (args, api, context) =>
               this.execute(definition.name, args, api, context),
           }),

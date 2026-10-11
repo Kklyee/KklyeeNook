@@ -11,6 +11,7 @@ import type { AgentConfig } from '@kklyeenook/shared/agent/agentConfig'
 import { connectDatabase } from '../db/client'
 import { DrizzleAgentSessionRepo } from '../db/repositories/agent-session-repo'
 import { DrizzleBotRepo } from '../db/repositories/bot-repo'
+import { DrizzleGroveRepo } from '../db/repositories/grove-repo'
 import { DrizzleWorkspaceRepo } from '../db/repositories/workspaceRepo'
 import { DrizzleAgentMemoryRepo } from '../db/repositories/memoryRepo'
 import { WorkspaceService } from '../workspace/workspaceService'
@@ -42,6 +43,130 @@ const databases: Array<() => void> = []
 const servers: Server[] = []
 const httpServers: RunningAgentHttpServer[] = []
 const context = () => withAbortSignal(AbortSignal.timeout(20_000), BACKGROUND_CONTEXT)
+
+test('Grove records ordinary messages without running models and rejects impersonation input', async () => {
+  const { host, requests } = await setup(false, undefined, undefined, true)
+  const source = await host.mainThread('xiaoya', context())
+  const caller = { threadId: source.id }
+  const input = { toBotId: 'coder', content: 'Hello Coder', operationId: 'message-1' }
+  const message = await host.grove!.sendMessage(caller, input, context())
+  expect(await host.grove!.sendMessage(caller, input, context())).toEqual(message)
+  expect(message.fromBotId).toBe('xiaoya')
+  expect((await host.grove!.list(context())).messages).toHaveLength(1)
+  expect(requests).toHaveLength(0)
+  await expect(host.grove!.sendMessage(caller, { ...input, content: 'changed' }, context())).rejects.toThrow('different input')
+  await host.grove!.setPolicy('coder', { messages: false, tasks: false, allowedBotIds: null }, context())
+  await expect(host.grove!.sendMessage(caller, { ...input, operationId: 'message-2' }, context())).rejects.toThrow('reception policy')
+  const server = await startAgentHttpServer(host)
+  httpServers.push(server)
+  const response = await fetch(`${server.baseUrl}/grove/tasks`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ threadId: source.id, fromBotId: 'coder', toBotId: 'xiaoya', instruction: 'spoof', operationId: 'spoof' }),
+  })
+  expect(response.status).toBe(400)
+})
+
+test('Grove executes with target Bot configuration and returns a correlated result exactly once across restart', async () => {
+  const fixture = await setup(false, (body) => body.messages.some((message) => message.content?.includes?.('TARGET_ONLY')) ? 'Coder independent result' : 'Summary for user', undefined, true)
+  let host = fixture.host
+  fixture.setConfig({ ...fixture.config, models: [
+    { ...fixture.config.model, id: 'custom:custom-model' },
+    { ...fixture.config.model, id: 'custom:coder-model', modelID: 'coder-model' },
+  ] })
+  await host.reload(context())
+  await host.bots!.update('coder', { instructions: 'TARGET_ONLY', model: { provider: 'custom', modelId: 'coder-model' }, workspaceIds: [fixture.workspaceId], defaultWorkspaceId: fixture.workspaceId })
+  const source = await host.mainThread('xiaoya', context())
+  const caller = { threadId: source.id }
+  const input = { toBotId: 'coder', instruction: 'Review the project', operationId: 'task-1' }
+  const task = await host.grove!.requestTask(caller, input, context())
+  await vi.waitFor(async () => expect((await host.grove!.getTask(caller, task.id, context())).status).toBe('completed'), { timeout: 15000 })
+  const finished = await host.grove!.getTask(caller, task.id, context())
+  expect(finished.result).toBe('Coder independent result')
+  expect(fixture.requests.some((request) => request.model === 'coder-model')).toBe(true)
+  expect(finished.targetThreadId).toBe('bot:coder:main')
+  const target = await host.conversations.get(finished.targetThreadId!, context())
+  expect(target.workspaceId).toBe(fixture.workspaceId)
+  expect((await host.conversations.get(source.id, context())).workspaceId).toBeNull()
+  await vi.waitFor(async () => expect(JSON.stringify(await host.conversations.snapshot(source.id, context()))).toContain('Summary for user'), { timeout: 15000 })
+  await host.close()
+  hosts.splice(hosts.indexOf(host), 1)
+  host = await fixture.open()
+  const retried = await host.grove!.requestTask(caller, input, context())
+  expect(retried.submissionId).toBe(finished.submissionId)
+  const state = await host.grove!.list(context())
+  expect(state.tasks).toHaveLength(1)
+  expect(state.messages.filter((message) => message.type === 'result' && message.correlationId === task.id)).toHaveLength(1)
+  const other = await host.bots!.create({ name: 'Other' })
+  const otherThread = await host.mainThread(other.id, context())
+  await expect(host.grove!.getTask({ threadId: otherThread.id }, task.id, context())).rejects.toThrow('other Bots')
+  await expect(host.grove!.requestTask(caller, { ...input, toBotId: 'xiaoya', operationId: 'self' }, context())).rejects.toThrow('itself')
+  await expect(host.grove!.requestTask({ threadId: target.id, parentTaskId: task.id }, { ...input, toBotId: 'xiaoya', operationId: 'cycle' }, context())).rejects.toThrow('cycle')
+}, 30_000)
+
+test('Grove tools use caller identity through the existing execution harness and summarize the independent result', async () => {
+  const fixture = await setup(false, (body) => {
+    const system = body.messages.filter((message) => message.role === 'system').map((message) => message.content).join('')
+    if (system.includes('TARGET_TOOL_TEST')) return 'Independent tool result'
+    if (body.messages.some((message) => JSON.stringify(message.content).includes('Collaboration ') && JSON.stringify(message.content).includes('Summarize this result'))) return 'Final collaboration summary'
+    if (body.messages.some((message) => message.role === 'tool')) return 'Waiting for Coder'
+    return { name: 'bot.request_task', arguments: { toBotId: 'coder', instruction: 'Review independently' } }
+  }, undefined, true)
+  await fixture.host.bots!.update('coder', { instructions: 'TARGET_TOOL_TEST' })
+  const source = await fixture.host.mainThread('xiaoya', context())
+  await fixture.host.conversations.submit(source.id, { type: 'input', requestId: 'grove-tool-test', content: 'Ask Coder for review' }, context())
+  await vi.waitFor(async () => {
+    const tasks = (await fixture.host.grove!.list(context())).tasks
+    expect(tasks).toHaveLength(1)
+    expect(tasks[0]).toMatchObject({ fromBotId: 'xiaoya', toBotId: 'coder', status: 'completed', result: 'Independent tool result' })
+    expect(JSON.stringify(await fixture.host.conversations.snapshot(source.id, context()))).toContain('Final collaboration summary')
+  }, { timeout: 15000 })
+}, 25_000)
+
+test('Grove restores queued work without duplicate submissions and rechecks revoked reception policy', async () => {
+  const fixture = await setup(false, undefined, undefined, true)
+  let host = fixture.host
+  const source = await host.mainThread('xiaoya', context())
+  const caller = { threadId: source.id }
+  const first = await host.grove!.requestTask(caller, { toBotId: 'coder', instruction: 'Queued review', operationId: 'queued-1' }, context())
+  const second = await host.grove!.requestTask(caller, { toBotId: 'coder', instruction: 'Blocked review', operationId: 'queued-2' }, context())
+  await host.close()
+  hosts.splice(hosts.indexOf(host), 1)
+  host = await fixture.open()
+  await vi.waitFor(async () => expect((await host.grove!.getTask(caller, first.id, context())).status).toBe('completed'), { timeout: 15000 })
+  const tasks = (await host.grove!.list(context())).tasks
+  expect(tasks).toHaveLength(2)
+  expect(tasks.find((task) => task.id === first.id)?.submissionId).not.toBe(tasks.find((task) => task.id === second.id)?.submissionId)
+  await host.close()
+  hosts.splice(hosts.indexOf(host), 1)
+  let blockedId = ''
+  host = await fixture.open(async (initializing) => {
+    const blocked = await initializing.grove!.requestTask(caller, { toBotId: 'coder', instruction: 'Policy revoked', operationId: 'queued-3' }, context())
+    blockedId = blocked.id
+    await initializing.grove!.setPolicy('coder', { messages: true, tasks: false, allowedBotIds: null }, context())
+  })
+  await vi.waitFor(async () => expect((await host.grove!.getTask(caller, blockedId, context())).status).toBe('rejected'), { timeout: 15000 })
+  expect((await host.grove!.getTask(caller, blockedId, context())).submissionId).toBeUndefined()
+}, 30_000)
+
+test('Grove enforces a persistent generation budget and reception checks before side effects', async () => {
+  const fixture = await setup(false, undefined, undefined, true)
+  const source = await fixture.host.mainThread('xiaoya', context())
+  const caller = { threadId: source.id }
+  const task = await fixture.host.grove!.requestTask(caller, { toBotId: 'coder', instruction: 'Review', operationId: 'budget' }, context())
+  for (let generation = 1000; generation < 1024; generation++) await fixture.host.grove!.guardGeneration(task.id, generation, true, context())
+  await expect(fixture.host.grove!.guardGeneration(task.id, 1024, true, context())).rejects.toThrow('model budget')
+  await fixture.host.grove!.guardGeneration(task.id, 1000, true, context())
+  await fixture.host.grove!.setPolicy('coder', { messages: true, tasks: false, allowedBotIds: null }, context())
+  await expect(fixture.host.grove!.guardExecution(task.id, context())).rejects.toThrow('reception policy')
+})
+
+test('Grove persists an explicit failure when a target returns no valid answer', async () => {
+  const { host } = await setup(false, () => '', undefined, true)
+  const source = await host.mainThread('xiaoya', context())
+  const caller = { threadId: source.id }
+  const task = await host.grove!.requestTask(caller, { toBotId: 'coder', instruction: 'Review', operationId: 'empty-answer' }, context())
+  await vi.waitFor(async () => expect(await host.grove!.getTask(caller, task.id, context())).toMatchObject({ status: 'failed', result: 'Bot did not return a valid answer' }), { timeout: 15000 })
+}, 20_000)
 
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'nook-host-'))
@@ -163,7 +288,7 @@ async function setup(
     config: () => config,
     credentials: () => credentials,
     sessions,
-    ...(botProfiles ? { botRepo: new DrizzleBotRepo(database.database) } : {}),
+    ...(botProfiles ? { botRepo: new DrizzleBotRepo(database.database), groveRepo: new DrizzleGroveRepo(database.database) } : {}),
     workspaces,
     tools: registry,
     sandbox: new SandboxService({ support: () => 'partial', execute: vi.fn() }),
@@ -171,8 +296,8 @@ async function setup(
     contextBuilder: new ContextBuilder(attachments, memory),
     skills: new SkillLoader(join(directory, 'skills')),
   }
-  const open = async () => {
-    const host = await AgentHost.open(options, BACKGROUND_CONTEXT)
+  const open = async (initialize?: (host: AgentHost) => Promise<void>) => {
+    const host = await AgentHost.open({ ...options, ...(initialize ? { initialize } : {}) }, BACKGROUND_CONTEXT)
     hosts.push(host)
     return host
   }

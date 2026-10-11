@@ -5,6 +5,7 @@ export interface ToolDefinition {
   inputSchema: unknown
   outputSchema?: unknown
   timeoutMs?: number
+  replay?: 'safe' | 'unsafe'
   origin?: ToolOrigin
 }
 

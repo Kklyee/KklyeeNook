@@ -1,5 +1,6 @@
 import type { ThinkingLevel } from '../agent/agentConfig'
 import type { PermissionMode } from '../approval/permission'
+import { GROVE_TOOLS } from './grove'
 
 export const AVATAR_VARIANTS = ['beam', 'bauhaus', 'marble', 'pixel', 'ring', 'sunset'] as const
 export const BOT_COLORS = ['#6bbfaf', '#f3b66d', '#ad9ee9', '#e89bad', '#f8f5ed']
@@ -58,7 +59,7 @@ Follow applicable workspace instructions unless they conflict with higher-priori
     model: null,
     thinkingLevel: null,
     enabledTools: coding
-      ? ['read', 'write', 'edit', 'bash', 'find', 'grep', 'update_plan', 'read_tool_result']
+      ? ['read', 'write', 'edit', 'bash', 'find', 'grep', 'update_plan', 'read_tool_result', ...GROVE_TOOLS]
       : [
           'save_memory',
           'update_plan',
@@ -66,6 +67,7 @@ Follow applicable workspace instructions unless they conflict with higher-priori
           'search_knowledge',
           'read_knowledge',
           'read_tool_result',
+          ...GROVE_TOOLS,
         ],
     workspaceIds: [],
     defaultWorkspaceId: null,

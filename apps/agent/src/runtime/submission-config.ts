@@ -6,7 +6,7 @@ import {
 } from '@earendil-works/pi-durable'
 import type { AgentInputs } from './inputs'
 
-export function submissionRegistry(registry: RegistryReader, inputs: AgentInputs): RegistryReader {
+export function submissionRegistry(registry: RegistryReader, inputs: AgentInputs, guard?: (taskId: string, generationId: number, result: boolean, context: import('@earendil-works/chord').Context) => Promise<void>): RegistryReader {
   const task: typeof GenerationTask = {
     ...GenerationTask,
     definition: {
@@ -14,6 +14,8 @@ export function submissionRegistry(registry: RegistryReader, inputs: AgentInputs
       phases: {
         ...GenerationTask.definition.phases,
         async prepare(task, runtime, context) {
+          const groveTaskId = await inputs.activeGroveTask(runtime.conversationId, context)
+          if (groveTaskId) await guard?.(groveTaskId, task.id, await inputs.isGroveResult(runtime.conversationId, context), context)
           const captured = await inputs.activeConfig(runtime.conversationId, runtime, context)
           if (captured)
             await runtime.commit(async (tx) => {

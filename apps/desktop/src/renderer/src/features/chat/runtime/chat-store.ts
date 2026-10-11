@@ -7,6 +7,7 @@ import type { ExternalThreadQueueAdapter } from '@assistant-ui/react'
 import type { QueueItemState } from '@assistant-ui/react'
 import type { PermissionMode } from '@kklyeenook/shared/approval/permission'
 import type { BotInput, BotProfile, BotSummary } from '@kklyeenook/shared/bot/bot'
+import type { BotMessage, BotTask, BotReceptionPolicy } from '@kklyeenook/shared/bot/grove'
 import { botState } from '@kklyeenook/shared/bot/bot-state'
 import type { BotState } from '@kklyeenook/shared/bot/bot'
 import type { Workspace } from '@kklyeenook/shared/workspace/workspace'
@@ -240,6 +241,24 @@ export class ChatStore {
       workspaces: Workspace[]
       tools: { name: string; description: string }[]
     }>('/bot-options')
+  }
+
+  grove() {
+    return this.request<{ messages: BotMessage[]; tasks: BotTask[]; policies: Record<string, BotReceptionPolicy> }>('/grove')
+  }
+
+  setGrovePolicy(botId: string, policy: BotReceptionPolicy) {
+    return this.request(`/grove/policies/${encodeURIComponent(botId)}`, { method: 'PUT', body: policy })
+  }
+
+  async collaborate(toBotId: string, content: string, type: 'tasks' | 'messages', operationId: string) {
+    if (!this.selectedThreadId) throw new Error('请先选择发起协作的 Bot 会话')
+    return this.request(`/grove/${type}`, {
+      method: 'POST', body: {
+        threadId: this.selectedThreadId, toBotId, operationId,
+        ...(type === 'tasks' ? { instruction: content } : { content }),
+      },
+    })
   }
 
   async saveBot(input: BotInput, id?: string) {
