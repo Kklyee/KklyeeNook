@@ -1,0 +1,592 @@
+import { PERMISSION_MODES } from '@kklyeenook/shared/approval/permission'
+import { getAgentCompactionSettingsErrors } from '@kklyeenook/shared/agent/agentContextBudget'
+import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import type {
+  AgentSettingsSnapshot,
+  DiscoverModelsRequest,
+  TestWebSearchConnectionRequest,
+  UpdateAgentModelSelectionRequest,
+  UpdateAgentSettingsRequest,
+  UpdateWebSearchCredentialRequest,
+} from '@kklyeenook/shared/agent/agentSettings'
+import { IPC_CHANNELS } from '@kklyeenook/shared/ipc/channels'
+import type { ApprovalPolicy } from '@kklyeenook/agent/approval/approvalPolicy'
+import type { CredentialStore } from '@kklyeenook/agent/settings/credentialStore'
+import type { DeletePermissionGrantRequest } from '@kklyeenook/shared/approval/approvalTypes'
+import type {
+  AgentCompactionSettings,
+  AgentConfig,
+  ProviderConfig,
+  ProviderModelConfig,
+  SavedModelConfig,
+  ThinkingLevel,
+} from '@kklyeenook/shared/agent/agentConfig'
+import type { AgentConfigStore } from '@kklyeenook/agent/settings/agentConfigStore'
+import type { McpServerConfig } from '@kklyeenook/shared/mcp/mcpServer'
+import {
+  getAgentCompactionSettings,
+  getActiveModel,
+  getConfiguredProviders,
+  getSavedModels,
+  modelConfigId,
+} from '@kklyeenook/shared/agent/agentConfig'
+import {
+  getAgentModelChoices,
+  getConfiguredModelConfigs,
+  getModelCatalog,
+  hasBuiltinModel,
+  hasBuiltinProvider,
+  mergeConfiguredProvidersIntoCatalog,
+  mergeSavedModelsIntoCatalog,
+  updateAgentModelSelectionFromCatalog,
+} from '@kklyeenook/agent/settings/model-catalog'
+import { discoverRemoteModels } from '@kklyeenook/agent/settings/modelDiscovery'
+import { webSearchErrorCode } from '@kklyeenook/agent/web-search/webSearchErrors'
+import { WebSearchService } from '@kklyeenook/agent/web-search/webSearchService'
+import { DEFAULT_KNOWLEDGE_SETTINGS } from '@kklyeenook/shared/knowledge/knowledge'
+import {
+  DEFAULT_WEB_SEARCH_SETTINGS,
+  WEB_SEARCH_PROVIDER_LABELS,
+  WEB_SEARCH_PROVIDER_NAMES,
+  isWebSearchProviderId,
+  isWebSearchProviderName,
+  webSearchCredentialId,
+  type WebSearchSettings,
+} from '@kklyeenook/shared/web-search/webSearch'
+
+export interface AgentSettingsChangeHooks {
+  prepare(): void | Promise<void>
+  commit(): void | Promise<void>
+  cancel(): void | Promise<void>
+  updateModelSelection(request: UpdateAgentModelSelectionRequest): void | Promise<void>
+}
+
+export function registerSettingsIpc(
+  window: BrowserWindow,
+  configStore: AgentConfigStore,
+  credentials: CredentialStore,
+  policy: ApprovalPolicy,
+  settingsChange: AgentSettingsChangeHooks,
+) {
+  const assertTrustedSender = (event: IpcMainInvokeEvent) => {
+    if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) {
+      throw new Error('不允许读取配置')
+    }
+  }
+
+  const webSearch = new WebSearchService(
+    () => configStore.get().webSearch ?? DEFAULT_WEB_SEARCH_SETTINGS,
+    () => credentials,
+  )
+
+  const snapshot = async (): Promise<AgentSettingsSnapshot> => {
+    const config = configStore.get()
+    const { providers: configuredProviders, catalog, models: savedModels } =
+      getAgentModelChoices(config)
+    const activeModel =
+      savedModels.find((model) => model.id === config.activeModelId) ??
+      savedModels.find(
+        (model) =>
+          model.provider === config.model.provider && model.modelID === config.model.modelID,
+      ) ??
+      getActiveModel({ ...config, models: savedModels })
+    const providerNames = new Map(catalog.map((provider) => [provider.id, provider.name]))
+    const modelNames = new Map(
+      catalog.flatMap((provider) =>
+        provider.models.map((model) => [`${provider.id}:${model.id}`, model.name] as const),
+      ),
+    )
+    return {
+      provider: activeModel.provider,
+      modelID: activeModel.modelID,
+      baseUrl: activeModel.baseUrl,
+      providerName: providerNames.get(activeModel.provider),
+      contextWindow:
+        activeModel.contextWindow ??
+        catalog
+          .find((provider) => provider.id === activeModel.provider)?.models
+          .find((model) => model.id === activeModel.modelID)?.contextWindow,
+      maxTokens: activeModel.maxTokens,
+      thinkingLevel: activeModel.thinkingLevel ?? 'medium',
+      defaultPermissionMode: config.defaultPermissionMode ?? 'workspace-write',
+      hasApiKey: credentials.hasApiKey(activeModel.provider),
+      activeModelId: activeModel.id,
+      models: savedModels.map((model) => ({
+        ...model,
+        providerName: providerNames.get(model.provider) ?? model.providerName ?? model.provider,
+        modelName:
+          modelNames.get(`${model.provider}:${model.modelID}`) ?? model.modelName ?? model.modelID,
+        hasApiKey: credentials.hasApiKey(model.provider),
+      })),
+      providers: configuredProviders.map((provider) => ({
+        ...provider,
+        name: provider.name ?? catalog.find((item) => item.id === provider.id)?.name ?? provider.id,
+        models: (provider.models ?? []).map((model) => ({ ...model })),
+        builtin: hasBuiltinProvider(provider.id),
+        hasApiKey: credentials.hasApiKey(provider.id),
+      })),
+      catalog,
+      credentialPersistenceAvailable: credentials.isPersistenceAvailable(),
+      tools: config.tools.enabled.map((name) => ({
+        name,
+        requiresApproval: policy.protects(name),
+      })),
+      permissionGrants: await policy.listGrants(),
+      compaction: getAgentCompactionSettings(config),
+      mcpServers: config.mcpServers ?? [],
+      knowledge: config.knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS,
+      webSearch: {
+        provider: config.webSearch?.provider ?? 'disabled',
+        providers: WEB_SEARCH_PROVIDER_NAMES.map((id) => ({
+          id,
+          name: WEB_SEARCH_PROVIDER_LABELS[id],
+          hasApiKey: credentials.hasApiKey(webSearchCredentialId(id)),
+        })),
+      },
+    }
+  }
+
+  ipcMain.handle(IPC_CHANNELS.SETTINGS_GET, async (event): Promise<AgentSettingsSnapshot> => {
+    assertTrustedSender(event)
+    return snapshot()
+  })
+  ipcMain.handle(
+    IPC_CHANNELS.SETTINGS_UPDATE,
+    async (event, request: UpdateAgentSettingsRequest): Promise<AgentSettingsSnapshot> => {
+      assertTrustedSender(event)
+      if (
+        !request ||
+        (!Array.isArray(request.providers) &&
+          !Array.isArray(request.models) &&
+          request.compaction === undefined &&
+          request.mcpServers === undefined &&
+          request.knowledge === undefined &&
+          request.defaultPermissionMode === undefined &&
+          request.webSearch === undefined &&
+          request.webSearchCredential === undefined) ||
+        (request.mcpServers !== undefined && !Array.isArray(request.mcpServers))
+      ) {
+        throw new Error('Agent 设置格式无效')
+      }
+      const current = configStore.get()
+      if (request.defaultPermissionMode && !PERMISSION_MODES.includes(request.defaultPermissionMode)) throw new Error('权限模式无效')
+      if (request.knowledge && (!request.knowledge.embeddingModel?.trim() || !request.knowledge.rerankModel?.trim())) throw new Error('Knowledge 模型名称不能为空')
+      const providerUpdate = Array.isArray(request.providers)
+      const providers = providerUpdate
+        ? (request.providers as ProviderConfig[]).map(validateProvider)
+        : getConfiguredProviders(current)
+      if (providerUpdate && providers.length === 0) {
+        throw new Error('至少需要配置一个模型提供商')
+      }
+      if (new Set(providers.map((provider) => provider.id)).size !== providers.length) {
+        throw new Error('不能重复添加同一个提供商')
+      }
+      const mcpServers =
+        request.mcpServers === undefined
+          ? current.mcpServers
+          : request.mcpServers.map(validateMcpServer)
+      if (mcpServers && new Set(mcpServers.map((server) => server.id)).size !== mcpServers.length) {
+        throw new Error('不能重复添加同一个 MCP Server')
+      }
+
+      let models: ReturnType<typeof validateModel>[]
+      let activeModel: ReturnType<typeof validateModel> | undefined
+      if (providerUpdate) {
+        const catalog = mergeConfiguredProvidersIntoCatalog(getModelCatalog(), providers)
+        const expanded = getConfiguredModelConfigs(providers, catalog)
+        models = (expanded.length ? expanded : getSavedModels(current)).map(validateModel)
+        const requestedActiveModelId = request.activeModelId ?? current.activeModelId
+        activeModel =
+          models.find((model) => model.id === requestedActiveModelId) ??
+          models.find(
+            (model) =>
+              model.provider === current.model.provider && model.modelID === current.model.modelID,
+          ) ??
+          models[0]
+      } else if (Array.isArray(request.models)) {
+        if (!request.models?.length) throw new Error('至少需要配置一个模型')
+        models = request.models.map(validateModel)
+        activeModel = models.find((model) => model.id === request.activeModelId)
+      } else {
+        models = getSavedModels(current).map(validateModel)
+        activeModel =
+          models.find((model) => model.id === current.activeModelId) ??
+          models.find(
+            (model) =>
+              model.provider === current.model.provider && model.modelID === current.model.modelID,
+          ) ??
+          models[0]
+      }
+      if (new Set(models.map((model) => model.id)).size !== models.length) {
+        throw new Error('不能重复添加同一个模型')
+      }
+      if (!activeModel) throw new Error('没有可用的活动模型')
+      const contextWindow =
+        activeModel.contextWindow ??
+        getAgentModelChoices({
+          ...current,
+          ...(providerUpdate ? { providers } : {}),
+          model: activeModel,
+          models,
+          activeModelId: activeModel.id,
+        }).catalog
+          .find((provider) => provider.id === activeModel.provider)?.models
+          .find((model) => model.id === activeModel.modelID)?.contextWindow
+
+      const nextConfig: AgentConfig = {
+        ...current,
+        ...(request.defaultPermissionMode ? { defaultPermissionMode: request.defaultPermissionMode } : {}),
+        models,
+        activeModelId: activeModel.id,
+        model: activeModel,
+        ...(mcpServers ? { mcpServers } : {}),
+        ...(providerUpdate ? { providers } : {}),
+        ...(request.knowledge ? { knowledge: request.knowledge } : {}),
+        ...(request.webSearch ? { webSearch: validateWebSearchSettings(request.webSearch) } : {}),
+        compaction:
+          request.compaction === undefined
+            ? getAgentCompactionSettings(current)
+            : validateCompaction(request.compaction, contextWindow),
+      }
+      const credentialProvider = request.credential?.provider
+      const previousApiKey = credentialProvider
+        ? credentials.getApiKey(credentialProvider)
+        : undefined
+      const webSearchCredential =
+        request.webSearchCredential === undefined
+          ? undefined
+          : validateWebSearchCredential(request.webSearchCredential)
+      const previousWebSearchApiKey = webSearchCredential
+        ? credentials.getApiKey(webSearchCredentialId(webSearchCredential.provider))
+        : undefined
+
+      await settingsChange.prepare()
+      try {
+        configStore.set(nextConfig)
+        if (request.credential?.deleteApiKey) {
+          credentials.deleteApiKey(request.credential.provider)
+        } else if (request.credential?.apiKey?.trim()) {
+          credentials.setApiKey(request.credential.provider, request.credential.apiKey.trim())
+        }
+        if (webSearchCredential) {
+          const credentialId = webSearchCredentialId(webSearchCredential.provider)
+          if (webSearchCredential.deleteApiKey) credentials.deleteApiKey(credentialId)
+          else if (webSearchCredential.apiKey) credentials.setApiKey(credentialId, webSearchCredential.apiKey)
+        }
+        await settingsChange.commit()
+      } catch (error) {
+        configStore.set(current)
+        if (credentialProvider) {
+          if (previousApiKey) credentials.setApiKey(credentialProvider, previousApiKey)
+          else credentials.deleteApiKey(credentialProvider)
+        }
+        if (webSearchCredential) {
+          const credentialId = webSearchCredentialId(webSearchCredential.provider)
+          if (previousWebSearchApiKey) credentials.setApiKey(credentialId, previousWebSearchApiKey)
+          else credentials.deleteApiKey(credentialId)
+        }
+        await Promise.resolve(settingsChange.cancel()).catch(() => undefined)
+        throw error
+      }
+      return snapshot()
+    },
+  )
+  ipcMain.handle(
+    IPC_CHANNELS.SETTINGS_UPDATE_MODEL_SELECTION,
+    async (
+      event,
+      request: UpdateAgentModelSelectionRequest,
+    ): Promise<AgentSettingsSnapshot> => {
+      assertTrustedSender(event)
+      const selection = validateModelSelection(request)
+      const current = configStore.get()
+      const nextConfig = updateAgentModelSelectionFromCatalog(current, {
+        provider: selection.provider,
+        modelID: selection.modelId,
+        thinkingLevel: selection.thinkingLevel,
+      })
+
+      configStore.set(nextConfig)
+      try {
+        await settingsChange.updateModelSelection(selection)
+      } catch (error) {
+        configStore.set(current)
+        throw error
+      }
+      return snapshot()
+    },
+  )
+  ipcMain.handle(
+    IPC_CHANNELS.SETTINGS_DISCOVER_MODELS,
+    async (event, request: DiscoverModelsRequest) => {
+      assertTrustedSender(event)
+      if (!request || typeof request.provider !== 'string' || !request.provider.trim()) {
+        throw new Error('提供商配置无效')
+      }
+
+      const provider = request.provider.trim()
+      const baseUrl = request.baseUrl?.trim()
+      if (!baseUrl && hasBuiltinProvider(provider)) {
+        return (
+          mergeSavedModelsIntoCatalog(getModelCatalog(), []).find((item) => item.id === provider)
+            ?.models ?? []
+        )
+      }
+
+      return discoverRemoteModels({
+        baseUrl: baseUrl ?? '',
+        api: request.api?.trim() || undefined,
+        apiKey: request.apiKey?.trim() || credentials.getApiKey(provider),
+      })
+    },
+  )
+  ipcMain.handle(
+    IPC_CHANNELS.SETTINGS_TEST_WEB_SEARCH,
+    async (event, request: TestWebSearchConnectionRequest) => {
+      assertTrustedSender(event)
+      if (!request || !isWebSearchProviderName(request.provider)) {
+        throw new Error('Web Search 提供商无效')
+      }
+      try {
+        await webSearch.testConnection(request.provider, request.apiKey)
+        return { ok: true as const }
+      } catch (error) {
+        return { ok: false as const, code: webSearchErrorCode(error) }
+      }
+    },
+  )
+  ipcMain.handle(
+    IPC_CHANNELS.PERMISSION_GRANT_DELETE,
+    async (event, request: DeletePermissionGrantRequest): Promise<void> => {
+      assertTrustedSender(event)
+      await policy.revoke(request.id)
+    },
+  )
+  window.once('closed', () => {
+    ipcMain.removeHandler(IPC_CHANNELS.SETTINGS_GET)
+    ipcMain.removeHandler(IPC_CHANNELS.SETTINGS_UPDATE)
+    ipcMain.removeHandler(IPC_CHANNELS.SETTINGS_UPDATE_MODEL_SELECTION)
+    ipcMain.removeHandler(IPC_CHANNELS.SETTINGS_DISCOVER_MODELS)
+    ipcMain.removeHandler(IPC_CHANNELS.SETTINGS_TEST_WEB_SEARCH)
+    ipcMain.removeHandler(IPC_CHANNELS.PERMISSION_GRANT_DELETE)
+  })
+}
+
+function validateWebSearchSettings(settings: WebSearchSettings): WebSearchSettings {
+  if (!isWebSearchProviderId(settings.provider)) throw new Error('Web Search 提供商无效')
+  return { provider: settings.provider }
+}
+
+function validateWebSearchCredential(
+  request: UpdateWebSearchCredentialRequest,
+): UpdateWebSearchCredentialRequest {
+  if (!request || !isWebSearchProviderName(request.provider)) {
+    throw new Error('Web Search 提供商无效')
+  }
+  const apiKey = request.apiKey?.trim()
+  if (!request.deleteApiKey && !apiKey) throw new Error('API Key 不能为空')
+  return {
+    provider: request.provider,
+    ...(request.deleteApiKey ? { deleteApiKey: true } : {}),
+    ...(apiKey ? { apiKey } : {}),
+  }
+}
+
+function validateModelSelection(
+  request: UpdateAgentModelSelectionRequest,
+): UpdateAgentModelSelectionRequest {
+  const provider = request?.provider?.trim()
+  const modelId = request?.modelId?.trim()
+  const thinkingLevel = request?.thinkingLevel
+  if (!provider || !modelId || !isThinkingLevel(thinkingLevel)) {
+    throw new Error('模型选择无效')
+  }
+  return { provider, modelId, thinkingLevel }
+}
+
+function isThinkingLevel(value: unknown): value is ThinkingLevel {
+  return ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(value as string)
+}
+
+function validateProvider(provider: ProviderConfig): ProviderConfig {
+  const id = provider?.id?.trim()
+  const name = provider?.name?.trim()
+  const baseUrl = provider?.baseUrl?.trim()
+  const api = provider?.api?.trim()
+
+  if (
+    !provider ||
+    !id ||
+    (name !== undefined && !name) ||
+    (baseUrl !== undefined && !isValidHttpUrl(baseUrl)) ||
+    (api !== undefined && !api) ||
+    (!hasBuiltinProvider(id) && !baseUrl) ||
+    (provider.models !== undefined && !Array.isArray(provider.models))
+  ) {
+    throw new Error('提供商配置无效，请检查提供商 ID 和 API 地址')
+  }
+
+  const models = (provider.models ?? []).map(validateProviderModel)
+  if (new Set(models.map((model) => model.id)).size !== models.length) {
+    throw new Error('不能重复添加同一个提供商模型')
+  }
+
+  return {
+    id,
+    ...(name ? { name } : {}),
+    ...(baseUrl ? { baseUrl } : {}),
+    ...(api ? { api } : {}),
+    ...(models.length ? { models } : {}),
+  }
+}
+
+function validateCompaction(
+  compaction: AgentCompactionSettings,
+  contextWindow?: number,
+): AgentCompactionSettings {
+  if (!compaction || typeof compaction.enabled !== 'boolean') {
+    throw new Error('上下文压缩设置无效')
+  }
+  const errors = getAgentCompactionSettingsErrors(compaction, contextWindow)
+  const error = errors.reserveTokens ?? errors.keepRecentTokens
+  if (error) throw new Error(error)
+  return {
+    enabled: compaction.enabled,
+    reserveTokens: compaction.reserveTokens,
+    keepRecentTokens: compaction.keepRecentTokens,
+  }
+}
+
+function validateMcpServer(server: McpServerConfig): McpServerConfig {
+  if (
+    !server ||
+    typeof server.id !== 'string' ||
+    !server.id.trim() ||
+    typeof server.name !== 'string' ||
+    !server.name.trim() ||
+    typeof server.enabled !== 'boolean' ||
+    server.transport !== 'stdio' ||
+    typeof server.command !== 'string' ||
+    !server.command.trim() ||
+    !Array.isArray(server.args) ||
+    !server.args.every((arg) => typeof arg === 'string') ||
+    (server.cwd !== undefined && typeof server.cwd !== 'string') ||
+    (server.disabledTools !== undefined &&
+      (!Array.isArray(server.disabledTools) ||
+        !server.disabledTools.every((toolName) => typeof toolName === 'string'))) ||
+    (server.env !== undefined &&
+      (!server.env ||
+        typeof server.env !== 'object' ||
+        Array.isArray(server.env) ||
+        !Object.entries(server.env).every(
+          ([key, value]) => key.trim() && typeof value === 'string',
+        )))
+  ) {
+    throw new Error('MCP Server 配置无效')
+  }
+  return {
+    id: server.id.trim(),
+    name: server.name.trim(),
+    enabled: server.enabled,
+    transport: 'stdio',
+    command: server.command.trim(),
+    args: [...server.args],
+    ...(server.env ? { env: { ...server.env } } : {}),
+    ...(server.cwd?.trim() ? { cwd: server.cwd.trim() } : {}),
+    ...(server.disabledTools ? { disabledTools: [...new Set(server.disabledTools)] } : {}),
+  }
+}
+
+function validateProviderModel(model: ProviderModelConfig): ProviderModelConfig {
+  const id = model?.id?.trim()
+  const name = model?.name?.trim()
+  const api = model?.api?.trim()
+
+  if (
+    !model ||
+    !id ||
+    (name !== undefined && !name) ||
+    (api !== undefined && !api) ||
+    (model.reasoning !== undefined && typeof model.reasoning !== 'boolean') ||
+    (model.input !== undefined &&
+      (!Array.isArray(model.input) ||
+        model.input.length === 0 ||
+        model.input.some((input) => input !== 'text' && input !== 'image'))) ||
+    (model.contextWindow !== undefined && !isPositiveInteger(model.contextWindow)) ||
+    (model.maxTokens !== undefined && !isPositiveInteger(model.maxTokens))
+  ) {
+    throw new Error('自定义模型配置无效，请检查模型 ID 和模型参数')
+  }
+
+  return {
+    id,
+    ...(name ? { name } : {}),
+    ...(api ? { api } : {}),
+    ...(model.reasoning !== undefined ? { reasoning: model.reasoning } : {}),
+    ...(model.input ? { input: [...model.input] } : {}),
+    ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}),
+    ...(model.maxTokens ? { maxTokens: model.maxTokens } : {}),
+  }
+}
+
+function validateModel(model: SavedModelConfig) {
+  const provider = model?.provider?.trim()
+  const modelID = model?.modelID?.trim()
+  const baseUrl = model?.baseUrl?.trim()
+  const isBuiltin = provider && modelID ? hasBuiltinModel(provider, modelID) : false
+  const isBuiltinProvider = provider ? hasBuiltinProvider(provider) : false
+
+  if (
+    !model ||
+    !provider ||
+    !modelID ||
+    typeof model.id !== 'string' ||
+    model.id !== modelConfigId(provider, modelID) ||
+    !['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(
+      model.thinkingLevel ?? 'medium',
+    ) ||
+    (!isBuiltin && !isBuiltinProvider && !baseUrl) ||
+    (baseUrl !== undefined && !isValidHttpUrl(baseUrl)) ||
+    (model.api !== undefined && (typeof model.api !== 'string' || !model.api.trim())) ||
+    (model.providerName !== undefined &&
+      (typeof model.providerName !== 'string' || !model.providerName.trim())) ||
+    (model.modelName !== undefined &&
+      (typeof model.modelName !== 'string' || !model.modelName.trim())) ||
+    (model.reasoning !== undefined && typeof model.reasoning !== 'boolean') ||
+    (model.input !== undefined &&
+      (!Array.isArray(model.input) ||
+        model.input.length === 0 ||
+        model.input.some((input) => input !== 'text' && input !== 'image'))) ||
+    (model.contextWindow !== undefined && !isPositiveInteger(model.contextWindow)) ||
+    (model.maxTokens !== undefined && !isPositiveInteger(model.maxTokens))
+  ) {
+    throw new Error('模型配置无效，请检查提供商、API 地址和模型信息')
+  }
+  return {
+    id: modelConfigId(provider, modelID),
+    provider,
+    modelID,
+    thinkingLevel: model.thinkingLevel ?? 'medium',
+    ...(baseUrl ? { baseUrl } : {}),
+    ...(model.providerName?.trim() ? { providerName: model.providerName.trim() } : {}),
+    ...(model.modelName?.trim() ? { modelName: model.modelName.trim() } : {}),
+    ...(model.api?.trim() ? { api: model.api.trim() } : {}),
+    ...(model.reasoning !== undefined ? { reasoning: model.reasoning } : {}),
+    ...(model.input ? { input: [...model.input] } : {}),
+    ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}),
+    ...(model.maxTokens ? { maxTokens: model.maxTokens } : {}),
+  }
+}
+
+function isValidHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
+}
