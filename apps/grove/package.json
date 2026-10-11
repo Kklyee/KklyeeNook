@@ -4,11 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "start": "tsx src/main.ts",
+    "user:create": "tsx src/main.ts create-user",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@hono/node-server": "2.1.1",
     "@kklyeenook/shared": "workspace:*",
-    "pg": "8.23.1"
+    "hono": "4.13.9",
+    "pg": "8.23.1",
+    "typebox": "1.3.30"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8",

@@ -211,3 +211,44 @@ test('expiry and disabled sending devices invalidate an already admitted operati
   await store.disableHost(alice.token, aliceHost.id)
   await expect(store.revalidate(bobHost.token, operation.id)).rejects.toThrow('Sending Host')
 })
+
+test('connections require a recipient User decision and do not confer task permission', async () => {
+  const { alice, bob, aliceHost, coder, designer } = await fixture()
+  expect((await store.connections(alice.token)).bots.map((bot) => bot.networkId)).toEqual([
+    coder.networkId,
+  ])
+  const invitation = await store.invite(alice.token, bob.id)
+  expect(await store.invite(alice.token, bob.id)).toMatchObject({
+    id: invitation.id,
+    state: 'pending',
+  })
+  await expect(store.decideRelationship(alice.token, invitation.id, 'accepted')).rejects.toThrow(
+    'not authorized',
+  )
+  await expect(
+    store.decideRelationship(aliceHost.token, invitation.id, 'accepted'),
+  ).rejects.toThrow('authentication')
+  await store.decideRelationship(bob.token, invitation.id, 'accepted')
+  expect((await store.connections(alice.token)).bots.map((bot) => bot.networkId).sort()).toEqual(
+    [coder.networkId, designer.networkId].sort(),
+  )
+  await expect(
+    store.admit({
+      token: aliceHost.token,
+      fromBotId: coder.networkId,
+      targetBotId: designer.networkId,
+      action: 'task.request',
+      operationId: 'connection-only',
+      payload: 'review',
+    }),
+  ).rejects.toThrow('Social Grant')
+  await store.decideRelationship(alice.token, invitation.id, 'revoked')
+  expect((await store.hostDirectory(aliceHost.token)).map((bot) => bot.networkId)).toEqual([
+    coder.networkId,
+  ])
+  expect(await store.invite(bob.token, alice.id)).toMatchObject({
+    requesterUserId: bob.id,
+    recipientUserId: alice.id,
+    state: 'pending',
+  })
+})

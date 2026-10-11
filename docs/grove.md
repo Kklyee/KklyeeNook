@@ -3,7 +3,7 @@
 ## 当前进度
 
 - Phase 1：本地 Bot 通信、Durable 协作执行、Chat 与 Grove 入口已实现。
-- Phase 2：已实现网络身份、Host / User 凭据校验、Social Grant 授权核心及 PostgreSQL 操作存储。Relay HTTP API、Remote Transport、Inbox / Outbox 和管理 UI 尚未实现。
+- Phase 2：已实现网络身份、Host / User 凭据校验、Social Grant、连接邀请及 PostgreSQL Relay HTTP API。Desktop Remote Transport、Host Inbox / Outbox 和管理 UI 尚未实现。
 - Phase 3：受控远程 MCP 分享、委托安装及审批尚未实现。
 - Phase 4：不属于 v0.2 首期范围。
 
@@ -73,10 +73,28 @@ Grove 展示本地 Bot 的接收策略、消息与协作记录。Chat 展示本�
 
 `packages/shared/src/bot/social.ts` 定义 Network Bot Identity、User / Bot Principal、Social Grant 和 Network Operation。`SocialAuthorization` 默认拒绝跨用户操作，严格匹配 Principal 类型、ID、目标 Bot 所有者和权限动作，并检查撤销、到期、使用次数与工具范围。
 
-`apps/grove` 是 Grove Server 的独立服务包。目前包含 PostgreSQL 数据结构、连接管理和存储服务，尚未提供对外 HTTP 服务。`users` 与 `host_devices` 分别存储高熵 User / Host 访问凭据的 SHA-256 摘要，Host 注册由已认证 User 发起，网络 Bot 注册由已认证 Host 发起。凭据不能互换；发送方不能代表其他 Host 的 Bot。
+`apps/grove` 是 Grove Server 的独立服务包，包含 PostgreSQL 数据结构、连接管理、存储服务和 HTTP Relay。`users` 与 `host_devices` 分别存储高熵 User / Host 访问凭据的 SHA-256 摘要，Host 注册由已认证 User 发起，网络 Bot 注册由已认证 Host 发起。凭据不能互换；发送方不能代表其他 Host 的 Bot。
 
 Social Grant 仅由目标 Bot 的所有者 User 签发或撤销。User Grant 不扩展至该 User 的 Bot。一次 Operation 的授权检查、限次统计和记录写入同一个 PostgreSQL 事务，锁定 Grant 行并对 Operation ID 取事务级锁；重复请求复用原始记录，修改参数后重复使用 ID 会被拒绝。对排队操作提供目标 Host 执行前的授权复核，撤销、到期或禁用发送 Host 都会阻止后续执行。后续 Host Bridge 必须调用此复核后才执行副作用。
 
-服务器表为 `users`、`host_devices`、`network_bots`、`relationships`、`social_grants`、`network_operations` 与 `network_messages`。关系和消息表已建立，具体 Relay 投递逻辑仍需继续实现。
+服务器表为 `users`、`host_devices`、`network_bots`、`relationships`、`social_grants`、`network_operations` 与 `network_messages`。
 
 授权单元测试及 PGlite 嵌入式 PostgreSQL 集成测试验证身份不可冒用、同名 Bot 隔离、跨主体 Grant 隔离、限次并发、Operation 去重、权限撤销和 MCP 范围边界。PGlite 使用 PostgreSQL 引擎；目前尚未在独立 Docker PostgreSQL 服务上做部署验证。
+
+## Relay HTTP 服务
+
+设置 `GROVE_DATABASE_URL` 后，在仓库根目录运行 `pnpm --filter @kklyeenook/grove user:create "Alice"` 生成 User 身份及一次输出的访问凭据，再运行 `pnpm --filter @kklyeenook/grove start`。服务默认绑定 `127.0.0.1:43128`，可通过 `GROVE_HOST` 和 `GROVE_PORT` 设置监听地址。网络部署须通过 HTTPS 反向代理访问；Desktop 的连接配置和凭据持久化仍待实现。
+
+所有受保护 API 使用 Bearer 凭据。User 管理操作与 Host 通信操作分别认证；HTTP 输入使用严格 Schema，禁止请求体伪造 User、Host、Grant 签发者或消息来源。
+
+User API：`GET /me`、`POST /hosts`、`DELETE /hosts/:id`、`GET /connections`、`POST /relationships`、`POST /relationships/:id/decision`、`POST /grants`、`DELETE /grants/:id`。
+
+Host API：`POST /bots`、`GET /host/bots`、`POST /messages`、`GET /inbox`、`POST /inbox/:id/ack`、`POST /operations/:id/authorize`、`POST /operations/:id/result`。
+
+连接邀请只能由接收 User 同意或拒绝，任一参与 User 可撤销连接。联系人目录仅显示自己的 Bot 与已接受连接的远程 Bot；建立连接不会自动授予任务或工具权限。
+
+Relay 在同一事务中保存已授权 Operation 与消息，避免只消耗限次授权却丢失消息。请求重复发送时复用原消息，接收方确认已持久化到本地后才发送 ack，未确认的消息仍保留在 Inbox。任务结果仅允许原始目标 Host 回传，服务器固定其来源、目标和 correlationId；重复结果幂等，修改已持久化结果会被拒绝。
+
+Inbox 投递前复核授权与任务截止时间，撤销或过期请求不会送入目标 Bot；任务拒绝结果通过原关联 ID 返回发起 Host。远程请求默认禁止递归委托，最多同时保留 4 个未结束任务，每个发送 Bot 每分钟最多发送 30 条请求或普通消息。结果回传不消耗新的发送授权。
+
+新增 Relay 集成测试覆盖真实 TCP HTTP 请求、离线消息保留、回执权限、去重、关联结果、授权撤销、截止时间、队列和频率上限、严格身份字段校验及请求体大小限制。下一阶段必须接入 Desktop Host 的本地持久化 Inbox / Outbox 和 Durable Bridge，才能完成两台设备的 Bot 协作闭环。

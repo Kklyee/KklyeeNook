@@ -43,3 +43,31 @@ export type NetworkOperation = {
   updatedAt: number
   error?: string
 }
+
+export type NetworkTaskRequest = {
+  taskId: string
+  chainId: string
+  depth: number
+  deadline: number
+}
+
+export type TaskOutcome = { status: 'completed' | 'failed' | 'rejected'; result: string }
+
+export type RelayEnvelope = {
+  message: import('./grove').BotMessage
+  operation: NetworkOperation
+  sender: NetworkBotIdentity
+  target: NetworkBotIdentity
+  sourceHostId: string
+  task?: NetworkTaskRequest
+  outcome?: TaskOutcome
+}
+
+export type SocialRelationship = {
+  id: string
+  requesterUserId: string
+  recipientUserId: string
+  state: 'pending' | 'accepted' | 'rejected' | 'revoked'
+  createdAt: number
+  updatedAt: number
+}

@@ -6,6 +6,7 @@ import type {
   Principal,
   SocialAction,
   SocialGrant,
+  SocialRelationship,
 } from '@kklyeenook/shared/bot/social'
 import type { GroveDatabase, SqlConnection } from './database'
 
@@ -163,16 +164,85 @@ export class GroveStore {
     if (!result.rows.length) throw new GroveError(404, 'Grant not found')
   }
 
-  async admit(input: {
-    token: string
-    fromBotId?: string
-    targetBotId: string
-    action: SocialAction
-    operationId: string
-    payload: unknown
-    toolId?: string
-    mcpServerId?: string
-  }): Promise<NetworkOperation> {
+  async invite(userToken: string, recipientUserId: string): Promise<SocialRelationship> {
+    const owner = await this.authenticateUser(userToken)
+    if (owner === recipientUserId) throw new GroveError(400, 'Cannot invite yourself')
+    if (!(await this.db.query('SELECT id FROM users WHERE id=$1', [recipientUserId])).rows.length)
+      throw new GroveError(404, 'Recipient User not found')
+    const id = hash(JSON.stringify([owner, recipientUserId].sort()))
+    const now = Date.now()
+    const row = (
+      await this.db.query<RelationshipRow>(
+        "INSERT INTO relationships (id,requester_user_id,recipient_user_id,state,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$5) ON CONFLICT (id) DO UPDATE SET requester_user_id=CASE WHEN relationships.state IN ('rejected','revoked') THEN EXCLUDED.requester_user_id ELSE relationships.requester_user_id END, recipient_user_id=CASE WHEN relationships.state IN ('rejected','revoked') THEN EXCLUDED.recipient_user_id ELSE relationships.recipient_user_id END, state=CASE WHEN relationships.state IN ('rejected','revoked') THEN EXCLUDED.state ELSE relationships.state END, updated_at=EXCLUDED.updated_at RETURNING *",
+        [id, owner, recipientUserId, 'pending', now],
+      )
+    ).rows[0]!
+    return relationshipRecord(row)
+  }
+
+  async decideRelationship(
+    userToken: string,
+    id: string,
+    state: 'accepted' | 'rejected' | 'revoked',
+  ) {
+    const owner = await this.authenticateUser(userToken)
+    const row = (
+      await this.db.query<RelationshipRow>(
+        "UPDATE relationships SET state=$1,updated_at=$2 WHERE id=$3 AND (($1 IN ('accepted','rejected') AND recipient_user_id=$4 AND state='pending') OR ($1='revoked' AND (recipient_user_id=$4 OR requester_user_id=$4))) RETURNING *",
+        [state, Date.now(), id, owner],
+      )
+    ).rows[0]
+    if (!row) throw new GroveError(403, 'Relationship decision is not authorized')
+    return relationshipRecord(row)
+  }
+
+  async connections(userToken: string) {
+    const owner = await this.authenticateUser(userToken)
+    const relationships = (
+      await this.db.query<RelationshipRow>(
+        'SELECT * FROM relationships WHERE requester_user_id=$1 OR recipient_user_id=$1 ORDER BY updated_at DESC',
+        [owner],
+      )
+    ).rows.map(relationshipRecord)
+    const bots = await this.directory(owner)
+    const grants = (
+      await this.db.query<{ definition: SocialGrant; revoked_at: string | null }>(
+        'SELECT definition,revoked_at FROM social_grants WHERE issuer_user_id=$1 ORDER BY created_at DESC',
+        [owner],
+      )
+    ).rows.map((row) => ({
+      ...row.definition,
+      ...(row.revoked_at !== null ? { revokedAt: Number(row.revoked_at) } : {}),
+    }))
+    return { userId: owner, relationships, bots, grants }
+  }
+
+  async hostDirectory(hostToken: string) {
+    return this.directory((await this.authenticateHost(hostToken)).ownerUserId)
+  }
+
+  private async directory(owner: string) {
+    return (
+      await this.db.query<BotRow>(
+        "SELECT b.* FROM network_bots b JOIN host_devices h ON h.id=b.host_id AND h.disabled_at IS NULL WHERE b.owner_user_id=$1 OR EXISTS (SELECT 1 FROM relationships r WHERE r.state='accepted' AND ((r.requester_user_id=$1 AND r.recipient_user_id=b.owner_user_id) OR (r.recipient_user_id=$1 AND r.requester_user_id=b.owner_user_id))) ORDER BY b.name,b.network_id",
+        [owner],
+      )
+    ).rows.map(botIdentity)
+  }
+
+  async admit(
+    input: {
+      token: string
+      fromBotId?: string
+      targetBotId: string
+      action: SocialAction
+      operationId: string
+      payload: unknown
+      toolId?: string
+      mcpServerId?: string
+    },
+    enqueue?: (connection: SqlConnection, operation: NetworkOperation) => Promise<void>,
+  ): Promise<NetworkOperation> {
     let subject: Principal
     let ownerUserId: string
     if (input.fromBotId) {
@@ -205,7 +275,9 @@ export class GroveStore {
       if (existing) {
         if (existing.fingerprint !== fingerprint)
           throw new GroveError(409, 'Operation ID already used with different input')
-        return operationRecord(existing)
+        const operation = operationRecord(existing)
+        await enqueue?.(connection, operation)
+        return operation
       }
       const target = await this.getBot(input.targetBotId, connection)
       const grants = (
@@ -256,7 +328,9 @@ export class GroveStore {
           ],
         )
       ).rows[0]!
-      return operationRecord(row)
+      const operation = operationRecord(row)
+      await enqueue?.(connection, operation)
+      return operation
     })
   }
 
@@ -337,5 +411,24 @@ function operationRecord(row: OperationRow): NetworkOperation {
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
     error: row.error ?? undefined,
+  }
+}
+
+type RelationshipRow = {
+  id: string
+  requester_user_id: string
+  recipient_user_id: string
+  state: SocialRelationship['state']
+  created_at: string
+  updated_at: string
+}
+function relationshipRecord(row: RelationshipRow): SocialRelationship {
+  return {
+    id: row.id,
+    requesterUserId: row.requester_user_id,
+    recipientUserId: row.recipient_user_id,
+    state: row.state,
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
   }
 }
