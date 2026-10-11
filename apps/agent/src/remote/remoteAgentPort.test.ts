@@ -1,5 +1,5 @@
 import { expect, test, vi } from 'vitest'
-import type { AgentSessionRecord } from '../db/repositories/agentSessionRepo'
+import type { AgentSessionRecord } from '../db/repositories/agent-session-repo'
 import type { AgentHost } from '../runtime/agent-host'
 import type { WorkspaceService } from '../workspace/workspaceService'
 import type { RemoteEvent } from '@kklyeenook/shared/remote/index'

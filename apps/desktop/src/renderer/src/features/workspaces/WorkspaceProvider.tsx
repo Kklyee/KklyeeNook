@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react'
 import type { Workspace } from '@kklyeenook/shared/workspace/workspace'
-import type { AgentSessionSummary } from '@kklyeenook/shared/agent/agentSession'
+import type { AgentSessionSummary } from '@kklyeenook/shared/agent/agent-session'
 
 export const WORKSPACE_CHANGED = 'nook:workspace-changed'
 const WORKSPACE_DISPLAY_MODE_KEY = 'nook:workspace-display-mode'

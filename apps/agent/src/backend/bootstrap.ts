@@ -12,7 +12,7 @@ import { ContextAttachmentService } from '../context/contextAttachmentService'
 import { ContextBuilder } from '../context/contextBuilder'
 import { connectDatabase } from '../db/client'
 import { DrizzleAgentMemoryRepo } from '../db/repositories/memoryRepo'
-import { DrizzleAgentSessionRepo } from '../db/repositories/agentSessionRepo'
+import { DrizzleAgentSessionRepo } from '../db/repositories/agent-session-repo'
 import { DrizzleScheduledTaskRepo } from '../db/repositories/scheduledTaskRepo'
 import { AgentConfigStore } from '../settings/agentConfigStore'
 import { MemoryCredentialStore } from '../settings/credentialStore'
@@ -44,6 +44,7 @@ import { FileToolResultRetentionPolicy } from '../tools/toolResultRetentionPolic
 import { RunProjection } from '../runtime/run-projection'
 import { AgentHost } from '../runtime/agent-host'
 import { AgentModels } from '../runtime/agent-models'
+import { DrizzleBotRepo } from '../db/repositories/bot-repo'
 
 export interface AgentBackendRuntime {
   baseUrl: string
@@ -121,6 +122,7 @@ export async function createAgentBackend(
       config: () => configStore.get(),
       credentials: () => credentialStore,
       sessions: sessionRepo,
+      botRepo: new DrizzleBotRepo(db),
       workspaces: workspaceService,
       tools: toolRegistry,
       sandbox,

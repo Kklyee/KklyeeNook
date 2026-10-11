@@ -9,7 +9,8 @@ import { Type } from 'typebox'
 import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/chord/context'
 import type { AgentConfig } from '@kklyeenook/shared/agent/agentConfig'
 import { connectDatabase } from '../db/client'
-import { DrizzleAgentSessionRepo } from '../db/repositories/agentSessionRepo'
+import { DrizzleAgentSessionRepo } from '../db/repositories/agent-session-repo'
+import { DrizzleBotRepo } from '../db/repositories/bot-repo'
 import { DrizzleWorkspaceRepo } from '../db/repositories/workspaceRepo'
 import { DrizzleAgentMemoryRepo } from '../db/repositories/memoryRepo'
 import { WorkspaceService } from '../workspace/workspaceService'
@@ -63,7 +64,7 @@ afterEach(async () => {
 type ToolReply = { name: string; arguments: Record<string, unknown>; id?: string }
 type Reply = string | ToolReply | ToolReply[]
 
-async function setup(write = true, respond?: (body: Record<string, any>) => Reply, stream?: (response: ServerResponse) => Promise<void>) {
+async function setup(write = true, respond?: (body: Record<string, any>) => Reply, stream?: (response: ServerResponse) => Promise<void>, botProfiles = false) {
   const requests: Record<string, unknown>[] = []
   const server = createServer(async (request, response) => {
     const chunks: Buffer[] = []
@@ -150,6 +151,7 @@ async function setup(write = true, respond?: (body: Record<string, any>) => Repl
     config: () => config,
     credentials: () => credentials,
     sessions,
+    ...(botProfiles ? { botRepo: new DrizzleBotRepo(database.database) } : {}),
     workspaces,
     tools: registry,
     sandbox: new SandboxService({ support: () => 'partial', execute: vi.fn() }),
@@ -807,3 +809,27 @@ test('activity projection shows reasoning before text and completion over a cust
     releaseFinish()
   }
 }, 30000)
+
+
+test('Bot HTTP CRUD persists stable main references and prevents built-in deletion', async () => {
+  const { host, open } = await setup(false, undefined, undefined, true)
+  const server = await startAgentHttpServer(host)
+  httpServers.push(server)
+  const request = (path: string, method = 'GET', body?: unknown) => fetch(server.baseUrl + path, { method, headers: { 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) })
+  expect((await (await request('/bots')).json()).map((bot: any) => bot.name)).toEqual(['小芽', 'Coder'])
+  const created = await (await request('/bots', 'POST', { name: 'Scout' })).json()
+  expect(created.isBuiltIn).toBe(false)
+  expect((await request('/bots', 'POST', { name: 'Invalid', avatar: { seed: 'x', variant: 'remote-api', colors: [], accentColor: 'red' } })).status).toBe(400)
+  expect((await request('/bots/' + created.id, 'PATCH', { id: 'other' })).status).toBe(400)
+  const main = await Promise.all(Array.from({ length: 5 }, () => request('/bots/' + created.id + '/main-thread', 'POST').then(response => response.json())))
+  expect(new Set(main.map(thread => thread.id)).size).toBe(1)
+  expect(main[0].botId).toBe(created.id)
+  expect((await request('/bots/coder', 'DELETE', { strategy: 'archive-conversations' })).status).toBe(409)
+  await server.close()
+  await host.close()
+  const reopened = await open()
+  expect((await reopened.bots!.get(created.id)).mainThreadId).toBe(main[0].id)
+  await reopened.deleteBot(created.id, context())
+  await expect(reopened.bots!.get(created.id)).rejects.toThrow('not found')
+  expect((await reopened.conversations.get(main[0].id, context())).archived).toBe(true)
+})

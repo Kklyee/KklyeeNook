@@ -6,6 +6,7 @@ import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import type { Context } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
+import { BotError } from '../bots/bot-service'
 
 const HOST = '127.0.0.1'
 const MAX_BODY_BYTES = 4 * 1024 * 1024
@@ -97,6 +98,7 @@ function sendError(context: Context, status: number, code: string, message: stri
 }
 
 function sendUnexpectedError(context: Context, error: unknown): Response {
+  if (error instanceof BotError) return sendError(context, error.status, 'bot_error', error.message)
   if (error instanceof HttpError) {
     return sendError(context, error.status, error.code, error.message)
   }

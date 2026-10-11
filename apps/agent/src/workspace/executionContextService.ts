@@ -1,6 +1,6 @@
 import { effectivePermissionMode, type PermissionMode } from '@kklyeenook/shared/approval/permission'
 import type { AgentExecutionContext } from '@kklyeenook/shared/workspace/workspace'
-import type { AgentSessionRepo } from '../db/repositories/agentSessionRepo'
+import type { AgentSessionRepo } from '../db/repositories/agent-session-repo'
 import type { WorkspaceService } from './workspaceService'
 
 export class ExecutionContextService {

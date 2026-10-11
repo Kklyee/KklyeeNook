@@ -7,6 +7,7 @@ import { conversations } from '../schema/conversations'
 
 export interface AgentSessionRecord {
   id: string
+  botId?: string | null
   title: string
   createdAt: number
   updatedAt: number
@@ -41,7 +42,7 @@ export class DrizzleAgentSessionRepo implements AgentSessionRepo {
       .values(session)
       .onConflictDoUpdate({
         target: conversations.id,
-        set: { title: session.title, updatedAt: session.updatedAt, archived: session.archived, workspaceId: session.workspaceId ?? null, permissionMode: session.permissionMode ?? null },
+        set: { title: session.title, updatedAt: session.updatedAt, archived: session.archived, botId: session.botId ?? null, workspaceId: session.workspaceId ?? null, permissionMode: session.permissionMode ?? null },
       })
   }
 

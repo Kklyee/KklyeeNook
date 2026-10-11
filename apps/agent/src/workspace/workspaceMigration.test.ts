@@ -7,7 +7,7 @@ import { expect, test } from 'vitest'
 import { connectDatabase } from '../db/client'
 import { DrizzleWorkspaceRepo } from '../db/repositories/workspaceRepo'
 import { DrizzleAgentMemoryRepo } from '../db/repositories/memoryRepo'
-import { DrizzleAgentSessionRepo } from '../db/repositories/agentSessionRepo'
+import { DrizzleAgentSessionRepo } from '../db/repositories/agent-session-repo'
 import { KnowledgeRepo } from '../db/repositories/knowledgeRepo'
 
 test('upgrades legacy path scopes without losing histories or turning workspace knowledge global', async () => {

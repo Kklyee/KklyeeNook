@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url'
 import { expect, test } from 'vitest'
 
-import { DrizzleAgentSessionRepo } from './repositories/agentSessionRepo'
+import { DrizzleAgentSessionRepo } from './repositories/agent-session-repo'
 import { connectDatabase } from './client'
 
 test('applies pending migrations before repositories access the database', async () => {

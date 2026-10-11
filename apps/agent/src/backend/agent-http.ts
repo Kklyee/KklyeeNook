@@ -19,6 +19,7 @@ import {
 } from '@earendil-works/pi-durable'
 import type { AgentFrame } from '@kklyeenook/shared/agent/chat-protocol'
 import { AgentHost } from '../runtime/agent-host'
+import { botSchema } from '../bots/bot-schema'
 import { approvalSignalDoc } from '../runtime/approvals'
 import { contentText } from '../runtime/projection'
 import {
@@ -31,6 +32,7 @@ import {
 const createSchema = Type.Object(
   {
     threadId: Type.String({ minLength: 1 }),
+    botId: Type.Optional(Type.String({ minLength: 1 })),
     title: Type.Optional(Type.String()),
     workspaceId: Type.Optional(Type.Union([Type.String({ minLength: 1 }), Type.Null()])),
     permissionMode: Type.Optional(
@@ -126,6 +128,24 @@ async function handle(context: Context, prefix: string, host: AgentHost): Promis
   }
   const ctx = withAbortSignal(context.req.raw.signal, BACKGROUND_CONTEXT)
   const method = context.req.method
+  if (parts[0] === 'bots' && host.bots) {
+    if (parts.length === 1 && method === 'GET') return context.json(await host.bots.list())
+    if (parts.length === 1 && method === 'POST') return context.json(await host.bots.create(await parse(context, botSchema)), 201)
+    const id = parts[1]
+    if (parts.length === 2 && method === 'GET') return context.json(await host.bots.get(id))
+    if (parts.length === 2 && method === 'PATCH') return context.json(await host.bots.update(id, await parse(context, Type.Partial(botSchema, { additionalProperties: false }))))
+    if (parts.length === 2 && method === 'DELETE') {
+      await parse(context, Type.Object({ strategy: Type.Literal('archive-conversations') }, { additionalProperties: false }))
+      await host.deleteBot(id, ctx)
+      return context.body(null, 204)
+    }
+    if (parts.length === 3 && method === 'POST') {
+      if (parts[2] === 'main-thread') return context.json(await host.mainThread(id, ctx))
+      if (parts[2] === 'duplicate') return context.json(await host.bots.duplicate(id), 201)
+      if (parts[2] === 'reset') return context.json(await host.bots.reset(id))
+    }
+  }
+  if (parts[0] === 'bot-options' && method === 'GET') return context.json({ workspaces: await host.workspaces(), tools: host.availableTools() })
   if (parts[0] !== 'threads') throw new HttpError(404, 'not_found', 'Route not found.')
   if (parts.length === 1) {
     if (method === 'GET') return context.json(await host.conversations.list(ctx))

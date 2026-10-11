@@ -11,7 +11,7 @@ import { getAgentCompactionSettings } from '@kklyeenook/shared/agent/agentConfig
 import { effectivePermissionMode, type PermissionMode } from '@kklyeenook/shared/approval/permission'
 import { webSearchCredentialId } from '@kklyeenook/shared/web-search/webSearch'
 import type { CredentialStore } from '../settings/credentialStore'
-import type { AgentSessionRepo } from '../db/repositories/agentSessionRepo'
+import type { AgentSessionRepo } from '../db/repositories/agent-session-repo'
 import type { ToolRegistry } from '../tools/toolRegistry'
 import type { ToolResultRetentionPolicy } from '../tools/toolResultRetentionPolicy'
 import type { SandboxService } from '../sandbox/sandboxService'
@@ -30,12 +30,16 @@ import { AgentInputs } from './inputs'
 import { AgentDelegation } from './delegation'
 import { RunResources } from './run-resources'
 import { createRunMembershipExtension } from './run-membership'
+import type { BotRepo } from '../db/repositories/bot-repo'
+import { BotService, BotError } from '../bots/bot-service'
+import { isDurableRunning } from './projection'
 
 export type AgentHostOptions = {
   databasePath: string
   config: () => AgentConfig
   credentials: () => CredentialStore
   sessions: AgentSessionRepo
+  botRepo?: BotRepo
   workspaces: WorkspaceService
   tools: ToolRegistry
   sandbox: SandboxService
@@ -49,6 +53,7 @@ export type AgentHostOptions = {
 
 export class AgentHost {
   readonly conversations: ConversationService
+  readonly bots?: BotService
 
   private constructor(
     readonly engine: AgentEngine,
@@ -61,12 +66,18 @@ export class AgentHost {
     private readonly registry: ReturnType<typeof createRegistry>,
     private readonly identities: { coding: Extension; personal: Extension },
     private readonly membership: Extension,
+    bots?: BotService,
   ) {
     this.conversations = new ConversationService(engine, options.sessions, inputs)
+    this.bots = bots
   }
 
   static async open(options: AgentHostOptions, context: Context) {
     const models = new AgentModels(options.config, options.credentials)
+    const bots = options.botRepo ? new BotService(options.botRepo, options.sessions, options.workspaces, options.tools, (bot) => {
+      if (bot.model && !models.models.getModel(bot.model.provider, bot.model.modelId)) throw new BotError(400, 'Model is not configured')
+    }) : undefined
+    await bots?.initialize()
     const registry = createRegistry()
     const contexts = new ExecutionContextService(
       options.sessions,
@@ -165,6 +176,7 @@ export class AgentHost {
             registry,
             identities,
             membership,
+            bots,
           )
           await resources.connect(initializing, context)
           await initializing.harness.commit(async (tx) => { await tx.doc(approvalSignalDoc) }, context)
@@ -188,6 +200,7 @@ export class AgentHost {
   async create(
     input: {
       threadId: string
+      botId?: string
       title?: string
       workspaceId?: string | null
       permissionMode?: PermissionMode
@@ -234,6 +247,28 @@ export class AgentHost {
 
   install(extension: Extension) {
     this.registry.install(extension)
+  }
+
+  workspaces() { return this.options.workspaces.list() }
+  availableTools() { return this.options.tools.list().map(({ name, description }) => ({ name, description })) }
+
+  async mainThread(botId: string, context: Context) {
+    if (!this.bots) throw new BotError(404, 'Bot service not configured')
+    const bot = await this.bots.get(botId)
+    return this.create({ threadId: bot.mainThreadId, botId: bot.id, title: '主会话', workspaceId: bot.defaultWorkspaceId }, context)
+  }
+
+  async deleteBot(botId: string, context: Context) {
+    if (!this.bots) throw new BotError(404, 'Bot service not configured')
+    const bot = await this.bots.get(botId)
+    if (bot.isBuiltIn) throw new BotError(409, 'Built-in Bots cannot be deleted')
+    const threads = (await this.conversations.list(context)).filter((thread) => thread.botId === botId)
+    for (const thread of threads) {
+      const snapshot = await this.conversations.snapshot(thread.id, context)
+      if (isDurableRunning(snapshot)) throw new BotError(409, 'Bot has running Tasks')
+    }
+    for (const thread of threads) await this.conversations.archive(thread.id, true, context)
+    await this.bots.remove(botId)
   }
 
   async refreshTools(context: Context) {

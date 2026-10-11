@@ -11,7 +11,7 @@ import { createModels } from '@earendil-works/pi-ai/models'
 import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux'
 import { createRegistry } from '@earendil-works/pi-durable'
 import { connectDatabase } from '../db/client'
-import { DrizzleAgentSessionRepo, type AgentSessionRepo } from '../db/repositories/agentSessionRepo'
+import { DrizzleAgentSessionRepo, type AgentSessionRepo } from '../db/repositories/agent-session-repo'
 import { AgentEngine } from './agent-engine'
 import { ConversationService } from './conversation-service'
 

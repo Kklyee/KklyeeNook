@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { expect, test } from 'vitest'
 import { connectDatabase } from '../db/client'
 import { DrizzleWorkspaceRepo } from '../db/repositories/workspaceRepo'
-import { DrizzleAgentSessionRepo } from '../db/repositories/agentSessionRepo'
+import { DrizzleAgentSessionRepo } from '../db/repositories/agent-session-repo'
 import { WorkspaceService } from './workspaceService'
 
 test('reattaches renamed directories with their original identity and detects missing directories', async () => {

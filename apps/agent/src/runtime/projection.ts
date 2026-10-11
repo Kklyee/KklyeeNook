@@ -12,7 +12,7 @@ import type {
   RemoteMessage,
   RemoteQueueItem,
 } from '@kklyeenook/shared/remote/index'
-import type { AgentSessionRecord } from '../db/repositories/agentSessionRepo'
+import type { AgentSessionRecord } from '../db/repositories/agent-session-repo'
 import type { AgentApproval } from '@kklyeenook/shared/agent/chat-protocol'
 import type { PermissionMode } from '@kklyeenook/shared/approval/permission'
 import { deriveAgentActivities } from '@kklyeenook/shared/agent/deriveAgentActivities'

@@ -1,12 +1,13 @@
 import type { Context } from '@earendil-works/chord'
 import { defineDoc, type AgentChange, type SubmissionId } from '@earendil-works/pi-durable'
-import type { AgentSessionRepo } from '../db/repositories/agentSessionRepo'
+import type { AgentSessionRepo } from '../db/repositories/agent-session-repo'
 import type { PermissionMode } from '@kklyeenook/shared/approval/permission'
 import { AgentEngine } from './agent-engine'
 import type { ContextInput, AgentInputs } from './inputs'
 
 export type CreateConversation = {
   threadId: string
+  botId?: string
   title?: string
   workspaceId?: string | null
   permissionMode?: PermissionMode
@@ -27,6 +28,7 @@ function titleFromInput(content: ContextInput['content']) {
 
 export const creationRecord = defineDoc<{
   id: string
+  botId?: string | null
   title: string
   workspaceId: string | null
   permissionMode: PermissionMode
@@ -67,6 +69,7 @@ export class ConversationService {
     const now = Date.now()
     const initialRecord = {
       id: input.threadId,
+      botId: input.botId ?? null,
       title: input.title ?? '新会话',
       workspaceId: input.workspaceId ?? null,
       permissionMode: input.permissionMode ?? 'read-only',

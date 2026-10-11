@@ -33,6 +33,7 @@ export type AgentFrame = {
 
 export type AgentThreadSummary = {
   id: string
+  botId?: string | null
   title?: string
   createdAt?: number
   updatedAt?: number
