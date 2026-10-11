@@ -395,7 +395,7 @@ function ModelSelectorContent({
             <div className="flex min-h-48">
               <div
                 aria-label="Providers"
-                className="flex max-h-72 w-14 shrink-0 flex-col gap-1 overflow-y-auto border-r p-1.5"
+                className="flex max-h-72 w-12 shrink-0 flex-col items-center gap-1.5 overflow-y-auto border-r p-1.5"
               >
                 {providers.map((id) => {
                   const model = models.find(
@@ -415,10 +415,10 @@ function ModelSelectorContent({
                       aria-pressed={activeProvider === id}
                       title={name}
                       onClick={() => setProvider(id)}
-                      className="flex size-10 shrink-0 items-center justify-center rounded-lg text-xs font-medium text-muted-foreground outline-none hover:bg-hover focus-visible:ring-1 focus-visible:ring-ring aria-pressed:bg-selected aria-pressed:text-foreground"
+                      className="flex size-8 shrink-0 items-center justify-center rounded-md text-[10px] font-medium text-muted-foreground outline-none hover:bg-hover focus-visible:ring-1 focus-visible:ring-ring aria-pressed:bg-selected aria-pressed:text-foreground"
                     >
                       {icon ? (
-                        <img src={icon} alt="" className="size-5 dark:invert" />
+                        <img src={icon} alt="" className="size-4 dark:invert" />
                       ) : (
                         name.slice(0, 2)
                       )}
@@ -434,7 +434,7 @@ function ModelSelectorContent({
                 </div>
                 <ModelSelectorFocusAnchor />
                 <ModelSelectorList className="max-h-60">
-                  <CommandGroup>
+                  <CommandGroup className="**:[[cmdk-group-items]]:flex **:[[cmdk-group-items]]:flex-col **:[[cmdk-group-items]]:gap-1.5">
                     {models
                       .filter(
                         (model) =>
