@@ -1,4 +1,4 @@
-import { createServer, type Server } from 'node:http'
+import { createServer, type Server, type ServerResponse } from 'node:http'
 import { once } from 'node:events'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -63,13 +63,17 @@ afterEach(async () => {
 type ToolReply = { name: string; arguments: Record<string, unknown>; id?: string }
 type Reply = string | ToolReply | ToolReply[]
 
-async function setup(write = true, respond?: (body: Record<string, any>) => Reply) {
+async function setup(write = true, respond?: (body: Record<string, any>) => Reply, stream?: (response: ServerResponse) => Promise<void>) {
   const requests: Record<string, unknown>[] = []
   const server = createServer(async (request, response) => {
     const chunks: Buffer[] = []
     for await (const chunk of request) chunks.push(chunk)
     const body = JSON.parse(Buffer.concat(chunks).toString('utf8'))
     requests.push(body)
+    if (stream) {
+      await stream(response)
+      return
+    }
     const reply =
       respond?.(body) ??
       (write && !body.messages.some((message) => message.role === 'tool')
@@ -755,3 +759,51 @@ test('three simultaneous delegation calls admit at most two children and recover
   const runs = await new RunProjection(recovered).list('concurrent-thread', context())
   expect(runs.filter(run => run.depth === 1)).toHaveLength(2)
 }, 30_000)
+
+
+test('activity projection shows reasoning before text and completion over a custom streaming endpoint', async () => {
+  let releaseText!: () => void
+  let releaseFinish!: () => void
+  const textReady = new Promise<void>(resolve => { releaseText = resolve })
+  const finishReady = new Promise<void>(resolve => { releaseFinish = resolve })
+  const { host, workspaceId } = await setup(false, undefined, async response => {
+    response.writeHead(200, { 'content-type': 'text/event-stream' })
+    const chunk = (delta: Record<string, string>, finish_reason: string | null = null) => response.write(`data: ${JSON.stringify({
+      id: 'stream-test', object: 'chat.completion.chunk', created: 1, model: 'custom-model',
+      choices: [{ index: 0, delta, finish_reason }],
+    })}\n\n`)
+    chunk({ role: 'assistant', reasoning_content: 'Live reasoning' })
+    await textReady
+    chunk({ content: 'Live answer' })
+    await finishReady
+    chunk({}, 'stop')
+    response.end('data: [DONE]\n\n')
+  })
+  try {
+    await host.create({ threadId: 'stream-activity', workspaceId, permissionMode: 'read-only' }, context())
+    const accepted = await host.conversations.submit('stream-activity', { type: 'input', content: 'Think', requestId: 'stream-request' }, context())
+    const projection = new RunProjection(host)
+    let runId = ''
+    await vi.waitFor(async () => {
+      const runs = await projection.list('stream-activity', context())
+      runId = runs[0]?.id ?? ''
+      expect(runId).not.toBe('')
+      const records = await projection.records(runId, context())
+      expect(records.some(record => record.event.type === 'thinking_delta' && record.event.text === 'Live reasoning')).toBe(true)
+      expect(records.some(record => record.event.type === 'agent_completed')).toBe(false)
+      expect(records.some(record => record.event.type === 'text_delta')).toBe(false)
+    }, { timeout: 10000 })
+    releaseText()
+    await vi.waitFor(async () => {
+      const records = await projection.records(runId, context())
+      expect(records.map(record => record.event.type)).toEqual(['agent_started', 'thinking_delta', 'text_delta'])
+    }, { timeout: 10000 })
+    releaseFinish()
+    await (await host.engine.submission('stream-activity', accepted.submissionId, context())).wait(context())
+    await (await host.engine.conversation('stream-activity', context())).waitForIdle(context())
+    expect((await projection.records(runId, context())).map(record => record.event.type)).toEqual(['agent_started', 'thinking_delta', 'text_delta', 'agent_completed'])
+  } finally {
+    releaseText()
+    releaseFinish()
+  }
+}, 30000)

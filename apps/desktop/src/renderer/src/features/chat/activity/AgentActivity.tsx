@@ -38,6 +38,7 @@ export const ActivityDuration = memo(function ActivityDuration({
     const timer = setInterval(() => setNow(Date.now()), 200)
     return () => clearInterval(timer)
   }, [startedAt, endedAt])
+  if (startedAt === undefined || (endedAt !== undefined && endedAt <= startedAt)) return null
   return (
     <span className="shrink-0 text-[11px] tabular-nums text-faint-foreground">
       {formatDuration(activityDuration({ startedAt, endedAt }, now))}

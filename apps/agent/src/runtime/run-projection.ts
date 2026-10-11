@@ -3,6 +3,7 @@ import { GenerationTask, watchEvents, type ConversationId, type ConversationReco
 import type { AgentEvent } from '@kklyeenook/shared/agent/agentEvent'
 import type { AgentRun } from '@kklyeenook/shared/agent/agentRun'
 import type { AgentExecutionRecord } from '@kklyeenook/shared/agent/agentExecutionRecord'
+import type { AssistantMessage } from '@earendil-works/pi-ai'
 import type { ToolResult } from '@kklyeenook/shared/tool/tool'
 import type { AgentHost } from './agent-host'
 import { runMembershipDoc } from './run-membership'
@@ -98,17 +99,20 @@ export class RunProjection {
     const push = (event: AgentEvent, timestamp: number) => output.push({
       id: output.length + 1, seq: output.length + 1, runId: group.id, sessionId: threadId, timestamp, event,
     })
+    const assistant = (message: AssistantMessage, live = false) => {
+      for (const part of message.content) {
+        if (part.type === 'text') push({ type: 'text_delta', text: part.text }, message.timestamp)
+        else if (part.type === 'thinking') push({ type: 'thinking_delta', text: part.redacted ? '[reasoning redacted]' : part.thinking }, message.timestamp)
+        else if (part.type === 'toolCall' && !live) push({ type: 'tool_started', call: { id: part.id, toolName: part.name, args: part.arguments } }, message.timestamp)
+      }
+    }
     push({ type: 'agent_started' }, group.tasks[0].startedAt ?? 0)
     for (const entry of group.snapshot.entries) {
       const owner = entry.byTaskId ? tasks.find((item) => item.id === entry.byTaskId) : undefined
       if (!entry.byTaskId || (!ids.has(entry.byTaskId) && (!owner?.owner || !ids.has(owner.owner)))) continue
       for (const message of entry.model ?? []) {
         if (message.role === 'assistant') {
-          for (const part of message.content) {
-            if (part.type === 'text') push({ type: 'text_delta', text: part.text }, message.timestamp)
-            else if (part.type === 'thinking') push({ type: 'thinking_delta', text: part.thinking }, message.timestamp)
-            else if (part.type === 'toolCall') push({ type: 'tool_started', call: { id: part.id, toolName: part.name, args: part.arguments } }, message.timestamp)
-          }
+          assistant(message)
         } else if (message.role === 'toolResult') {
           const result: ToolResult = {
             toolCallId: message.toolCallId, toolName: message.toolName,
@@ -117,6 +121,10 @@ export class RunProjection {
           push({ type: 'tool_finished', result }, message.timestamp)
         }
       }
+    }
+    const liveTask = tasks.filter((task) => task.conversationId === group.conversation.id && task.kind === GenerationTask.definition.name && task.state.status !== 'terminal' && task.state.status !== 'completing').sort((a, b) => b.id - a.id)[0]
+    if (liveTask && ids.has(liveTask.id) && group.snapshot.generation?.message) {
+      assistant(group.snapshot.generation.message, true)
     }
     const last = group.tasks.at(-1)!
     if (last.state.status === 'terminal') {
