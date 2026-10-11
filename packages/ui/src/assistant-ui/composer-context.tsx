@@ -42,7 +42,6 @@ export function ComposerContext({ budget, className, ...props }: Omit<ComponentP
     ['工具结果', budget.breakdown.toolResults, 'bg-pink-400'],
     ['会话内容', budget.breakdown.conversation, 'bg-indigo-400'],
   ] : []
-  const categoryTokens = categories.reduce((sum, [, tokens]) => sum + tokens, 0)
   const request = budget.latestRequest
 
   return (
@@ -76,9 +75,9 @@ export function ComposerContext({ budget, className, ...props }: Omit<ComponentP
           {categories.length > 0 && (
             <div className="border-border/60 flex flex-col gap-2 border-t pt-3">
               <p className="text-muted-foreground text-xs">分类估算</p>
-              <div className="flex h-1.5 items-stretch overflow-hidden" aria-hidden>
-                {categories.map(([label, tokens, color]) => (
-                  <span key={label} className={cn('block h-full shrink-0', color)} style={{ width: `${categoryTokens > 0 ? tokens / categoryTokens * 100 : 0}%` }} />
+              <div className="flex h-1.5 items-center gap-0.5" aria-hidden>
+                {categories.filter(([, tokens]) => tokens > 0).map(([label, tokens, color]) => (
+                  <span key={label} className={cn('block h-1.5 min-w-1 shrink-0 basis-0 rounded-sm', color)} style={{ flexGrow: tokens }} />
                 ))}
               </div>
               <dl className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 text-xs">
