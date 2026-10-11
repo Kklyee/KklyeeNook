@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-const preloadPath = path.join(__dirname, '../preload/index.js')
+const preloadPath = path.join(__dirname, '../preload/index.cjs')
 const materials = new WeakMap<BrowserWindow, SystemMaterial>()
 const materialSwitches = new WeakMap<BrowserWindow, (enabled: boolean) => SystemMaterial>()
 

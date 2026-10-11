@@ -25,7 +25,7 @@ export default defineConfig({
     resolve: { alias },
     build: {
       externalizeDeps: { exclude: ['@kklyeenook/shared'] },
-      rollupOptions: { output: { format: 'cjs', entryFileNames: 'index.js' } },
+      rollupOptions: { output: { format: 'cjs', entryFileNames: 'index.cjs' } },
     },
   },
   renderer: { root: path('./src/renderer'), resolve: { alias, dedupe: ['react', 'react-dom', '@assistant-ui/react', '@assistant-ui/store'] }, plugins: [react(), tailwindcss()] },

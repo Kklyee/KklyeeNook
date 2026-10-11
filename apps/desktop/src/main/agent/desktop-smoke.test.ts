@@ -43,6 +43,7 @@ test('built desktop renders the real runtime, submits from the composer and rest
     await writeFile(join(data, 'workspace', 'sample.txt'), 'Desktop tool context')
     await writeFile(join(data, 'agent-settings.json'), JSON.stringify({ model: { provider: 'test-provider', modelID: 'test-model', api: 'openai-completions', baseUrl: `http://127.0.0.1:${address.port}/v1` }, tools: { enabled: ['read'] }, compaction: { enabled: false, reserveTokens: 1000, keepRecentTokens: 1000 } }))
     await mkdir(join(directory, 'apps', 'desktop'), { recursive: true })
+    await writeFile(join(directory, 'package.json'), JSON.stringify({ type: 'module' }))
     await cp(join(process.cwd(), 'apps', 'agent', 'drizzle'), join(directory, 'apps', 'agent', 'drizzle'), { recursive: true })
     await mkdir(join(directory, 'resources'))
     await cp(join(process.cwd(), 'apps', 'desktop', 'resources', 'sandbox'), join(directory, 'resources', 'sandbox'), { recursive: true })
