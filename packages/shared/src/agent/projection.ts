@@ -45,7 +45,6 @@ export type AgentProjectedThread = {
   transcript: readonly Message[]
   contextUsage?: AgentContextUsage
   compaction: { active: boolean }
-  hostUiRequests: readonly never[]
   isRunning: boolean
   queue: { steering: readonly string[]; followUp: readonly string[] }
 }
@@ -91,7 +90,6 @@ export function projectDurableThread(state: AgentProjectionState): AgentProjecte
       messages: [],
       transcript: [],
       compaction: { active: false },
-      hostUiRequests: [],
       isRunning: false,
       queue: { steering: [], followUp: [] },
     }
@@ -104,7 +102,6 @@ export function projectDurableThread(state: AgentProjectionState): AgentProjecte
     transcript,
     contextUsage: snapshotContextUsage(snapshot, state.contextWindow),
     compaction: { active: snapshot.compactions.length > 0 },
-    hostUiRequests: [],
     isRunning: isSnapshotRunning(snapshot),
     queue: queueText(state.queue),
   }

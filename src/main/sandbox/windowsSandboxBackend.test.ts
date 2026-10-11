@@ -18,7 +18,7 @@ import type { SandboxExecutionRequest } from './sandboxBackend'
 import { SandboxService } from './sandboxService'
 import { ToolExecutionHarness } from '@/main/agent/toolExecutionHarness'
 import { ToolRegistry } from '@/main/tools/toolRegistry'
-import { registerPiBuiltinTools } from '@/main/agent/pi/adapters/piBuiltinToolAdapter'
+import { registerBuiltinTools } from '../tools/builtin-tools'
 
 describe.skipIf(process.platform !== 'win32')('Windows filesystem sandbox', () => {
   let directory: string
@@ -77,7 +77,7 @@ describe.skipIf(process.platform !== 'win32')('Windows filesystem sandbox', () =
 
   test('workspace-write Shell runs through the harness without full-access approval', async () => {
     const registry = new ToolRegistry()
-    registerPiBuiltinTools(registry, workspace)
+    registerBuiltinTools(registry, workspace)
     const approve = vi.fn()
     const harness = new ToolExecutionHarness(
       registry,

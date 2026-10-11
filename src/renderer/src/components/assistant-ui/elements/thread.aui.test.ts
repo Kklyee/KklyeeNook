@@ -45,7 +45,7 @@ vi.mock('@/renderer/src/features/chat/commands/useComposerCommands', () => ({
 
 vi.mock('@/renderer/src/features/chat/runtime/chat-runtime', () => ({
   useChatRuntimeExtras: () => ({ state: { messages: [] }, metadata: { id: 'thread' }, compaction: { active: false }, queue: { steering: [], followUp: [] } }),
-  useChatRuntimeSnapshot: () => ({ current: { approvals: [], historical: false } }),
+  useChatRuntimeSnapshot: () => ({ current: { approvals: [],  } }),
 }))
 
 import { Thread } from './thread.aui'

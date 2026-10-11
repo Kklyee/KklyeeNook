@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { copyFile, lstat, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
-import { basename, dirname, join, relative, resolve, sep } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { backup as sqliteBackup, DatabaseSync } from 'node:sqlite'
 
 export type MigrationProof = {
@@ -23,6 +23,7 @@ export type BackupManifest = {
   sourceRoot: string
   createdAt: string
   entries: BackupManifestEntry[]
+  included?: string[]
 }
 
 export type CreateBackupOptions = {
@@ -30,6 +31,7 @@ export type CreateBackupOptions = {
   backupDir: string
   stopped: boolean
   proof: MigrationProof
+  include?: readonly string[]
 }
 
 export type RestoreBackupOptions = {
@@ -54,11 +56,15 @@ export async function createBackup(options: CreateBackupOptions): Promise<Backup
   const source = resolve(options.sourceDir)
   const backup = resolve(options.backupDir)
   if (!options.stopped) throw new Error('Backup requires stopped-app confirmation')
+  for (const name of options.include ?? []) {
+    assertRelativePath(name)
+    if (/[\\/]/.test(name)) throw new Error('Backup selection must name top-level entries')
+  }
   assertProof(options.proof, source)
   await assertRealDirectory(source, 'Backup source')
   await assertFreshDirectory(backup, 'Backup target')
-  if (isInside(source, backup) || isInside(backup, source)) throw new Error('Backup target must be separate from source')
-  const before = await snapshot(source)
+  if (relative(source, backup) === '' || isInside(source, backup) || isInside(backup, source)) throw new Error('Backup target must be separate from source')
+  const before = await snapshot(source, options.include)
   await mkdir(backup, { recursive: true })
   const entries: BackupManifestEntry[] = []
   for (const file of before.files) {
@@ -80,13 +86,14 @@ export async function createBackup(options: CreateBackupOptions): Promise<Backup
       sqlite: file.sqlite,
     })
   }
-  const after = await snapshot(source)
+  const after = await snapshot(source, options.include)
   assertUnchanged(before, after)
   const manifest: BackupManifest = {
     version: 1,
     sourceRoot: source,
     createdAt: new Date().toISOString(),
     entries: entries.sort((a, b) => a.path.localeCompare(b.path)),
+    ...(options.include ? { included: [...new Set(options.include)].sort() } : {}),
   }
   await writeFile(join(backup, manifestName), JSON.stringify(manifest, null, 2), 'utf8')
   return manifest
@@ -144,12 +151,13 @@ async function verifyRestored(root: string, manifest: BackupManifest) {
   }
 }
 
-async function snapshot(root: string) {
+async function snapshot(root: string, include?: readonly string[]) {
   const files: Array<{ path: string; relativePath: string; size: number; mtimeMs: number; sqlite: boolean }> = []
   const visit = async (dir: string) => {
     assertInside(root, dir)
     const items = await readdir(dir)
     for (const name of items) {
+      if (dir === root && include && !include.includes(name)) continue
       const full = join(dir, name)
       assertInside(root, full)
       const item = await lstat(full)
@@ -266,5 +274,5 @@ function assertInside(root: string, candidate: string) {
 
 function isInside(root: string, candidate: string) {
   const rel = relative(resolve(root), resolve(candidate))
-  return rel !== '' && !rel.startsWith('..') && !rel.includes(`..${sep}`) && !resolve(rel).startsWith('..')
+  return rel !== '' && !isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`)
 }

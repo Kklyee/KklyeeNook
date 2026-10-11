@@ -12,10 +12,12 @@ import { resolveConfig } from 'electron-vite'
 import { build } from 'vite'
 import type { AgentBackendInitOptions } from './protocol'
 import { verifyRemote } from './testing/remote-browser'
+import { createBackup, createMigrationProof, restoreBackup } from '../migration/backup'
+import { ToolResultStore } from '../tools/toolResultStore'
 
 const execute = promisify(execFile)
 
-const scenarios = ['lifecycle', 'initialization-failure', 'approval-crash', 'cancel-crash', 'unsafe-crash', 'delegation-crash', 'delegation-cancel-crash', ...(process.env.NOOK_REMOTE_ACCEPTANCE === '1' ? ['remote-acceptance'] : [])]
+const scenarios = ['lifecycle', 'initialization-failure', 'backup-rehearsal', 'approval-crash', 'cancel-crash', 'unsafe-crash', 'delegation-crash', 'delegation-cancel-crash', ...(process.env.NOOK_REMOTE_ACCEPTANCE === '1' ? ['remote-acceptance'] : [])]
 
 test.each(scenarios)('production utility-process bootstrap and recovery: %s', async (scenario) => {
   const directory = await mkdtemp(join(process.cwd(), 'node_modules', '.nook-production-'))
@@ -49,7 +51,7 @@ test.each(scenarios)('production utility-process bootstrap and recovery: %s', as
     const options: AgentBackendInitOptions = {
       config: { model: { provider: 'test-provider', modelID: 'test-model', api: 'openai-completions', baseUrl: `http://127.0.0.1:${address.port}/v1` }, tools: { enabled: scenario === 'lifecycle' ? [] : ['write', 'bash', ...(scenario.startsWith('delegation') ? ['delegate_task'] : [])] }, compaction: { enabled: false, reserveTokens: 1000, keepRecentTokens: 1000 } },
       apiKeys: { 'test-provider': 'synthetic-key' }, databaseUrl: 'file:' + join(data, 'business.sqlite'),
-      migrationsPath: fileURLToPath(new URL('../../../drizzle', import.meta.url)), sessionDir: join(data, 'sessions'), allowedOrigins: [],
+      migrationsPath: fileURLToPath(new URL('../../../drizzle', import.meta.url)), dataDir: data, allowedOrigins: [],
     }
     if (scenario === 'remote-acceptance') {
       options.remoteStaticRoot = join(process.cwd(), 'apps', 'remote', 'dist')
@@ -58,12 +60,9 @@ test.each(scenarios)('production utility-process bootstrap and recovery: %s', as
         { ...options.config.model, id: 'test-provider:test-model', modelName: 'Test', reasoning: true },
         { ...options.config.model, id: 'test-provider:alternate-model', modelID: 'alternate-model', modelName: 'Alternate', reasoning: true, contextWindow: 65536 },
       ]
-      await mkdir(options.sessionDir)
-      await writeFile(join(options.sessionDir, 'historical.jsonl'), [
-        { type: 'session', version: 3, id: 'historical-thread' },
-        { type: 'message', id: 'old-user', parentId: null, message: { role: 'user', content: 'Historical remote request' } },
-        { type: 'message', id: 'old-answer', parentId: 'old-user', message: { role: 'assistant', content: [{ type: 'text', text: 'Historical remote answer' }, { type: 'toolCall', id: 'historical-tool', name: 'write', arguments: { path: 'never.txt', content: 'never replay' } }] } },
-      ].map(record => JSON.stringify(record)).join('\n'))
+    }
+    if (scenario === 'backup-rehearsal') {
+      await new ToolResultStore(join(data, 'tool-results')).save('backup-run', 'backup-call', { toolCallId: 'backup-call', toolName: 'read', status: 'success', content: [{ type: 'text', text: 'Restored tool output' }] })
     }
     const config = await resolveConfig({ build: { outDir: directory }, logLevel: 'silent' }, 'build', 'production')
     await build(config.config!.main!)
@@ -98,11 +97,11 @@ async function recoverInitialization(factory, options, report, ...rest) {
 import { app, BrowserWindow, utilityProcess } from 'electron'
 import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { createClient } from '@libsql/client'
 app.setPath('userData', ${JSON.stringify(data)})
 app.on('window-all-closed', () => {})
 const options = ${JSON.stringify(options)}
 const scenario = ${JSON.stringify(scenario)}
+const rehearsal = false
 const children = new Set()
 const start = (entry = ${JSON.stringify(utility)}) => {
   const child = utilityProcess.fork(entry, [], { env: { ...process.env, USERPROFILE: ${JSON.stringify(data)}, HOME: ${JSON.stringify(data)} }, stdio: 'pipe' })
@@ -172,6 +171,10 @@ app.whenReady().then(async () => {
       const snapshot = await json('/threads/production-thread')
       const runs = await first.rpc('agent-run:list', { request: { sessionId: 'production-thread' } })
       const records = await first.rpc('agent-execution-record:list', { request: { runId: runs[0].id } })
+      if (scenario === 'backup-rehearsal' && !rehearsal) {
+        await first.rpc('workspace:attach', { path: ${JSON.stringify(join(data, 'workspace'))} })
+        await first.rpc('scheduled-task:create', { input: { title: 'Preserved schedule', prompt: 'Do not execute a disabled definition', sessionId: 'production-thread', enabled: false, schedule: { type: 'daily', time: '09:00' } } })
+      }
       await first.close()
       const restored = start()
       const restoredBase = (await restored.ready).baseUrl
@@ -180,13 +183,16 @@ app.whenReady().then(async () => {
       if (repeatedAfterRestart.submissionId !== accepted.submissionId) throw new Error('Restart duplicated admission')
       const restoredRuns = await restored.rpc('agent-run:list', { request: { sessionId: 'production-thread' } })
       if (JSON.stringify(restoredRuns) !== JSON.stringify(runs)) throw new Error('Restart changed official run receipts')
+      if (scenario === 'backup-rehearsal') {
+        const workspaces = await restored.rpc('workspace:list')
+        const schedules = await restored.rpc('scheduled-task:list')
+        const output = await restored.rpc('tool-result:read', { resultRef: 'tool-result://backup-run/backup-call' })
+        if (workspaces.length !== 1 || schedules.length !== 1 || schedules[0].enabled || !JSON.stringify(output).includes('Restored tool output')) throw new Error('Backup data was lost or reactivated')
+      }
       let crash
       let remote
       if (scenario === 'remote-acceptance') {
-        const workspace = await restored.rpc('workspace:attach', { path: ${JSON.stringify(join(data, 'workspace'))} })
-        const database = createClient({ url: options.databaseUrl })
-        await database.execute({ sql: 'INSERT INTO conversations (id, title, workspace_id, permission_mode, created_at, updated_at, archived) VALUES (?, ?, ?, ?, ?, ?, 0)', args: ['historical-thread', 'Historical remote', workspace.workspace.id, 'read-only', 1, 1] })
-        database.close()
+        await restored.rpc('workspace:attach', { path: ${JSON.stringify(join(data, 'workspace'))} })
         const status = await restored.rpc('remote:configure', { settings: { enabled: true } })
         if (!status.running || status.tailscale !== 'connected' || !status.url) throw new Error('Real Tailscale Remote acceptance requires an existing connected Serve route')
         const browser = new BrowserWindow({ show: false, webPreferences: { partition: 'nook-remote-acceptance', contextIsolation: true, sandbox: true, backgroundThrottling: false } })
@@ -197,10 +203,7 @@ app.whenReady().then(async () => {
         browser.destroy()
         await restored.rpc('remote:configure', { settings: { enabled: false } })
         await restored.close()
-        const continuation = remote.continuationId
-        if (await readFile(${JSON.stringify(join(data, 'workspace', 'never.txt'))}, 'utf8').catch(() => '') !== '') throw new Error('Historical effect was replayed')
-        if (!continuation) throw new Error('Remote continuation receipt was missing')
-      } else if (scenario !== 'lifecycle' && scenario !== 'initialization-failure') {
+      } else if (scenario !== 'lifecycle' && scenario !== 'initialization-failure' && scenario !== 'backup-rehearsal') {
         const delegated = scenario.startsWith('delegation')
         const cancelled = scenario === 'cancel-crash' || scenario === 'delegation-cancel-crash'
         base = restoredBase
@@ -294,11 +297,11 @@ app.whenReady().then(async () => {
     const line = stdout.split(/\r?\n/).find((value) => value.startsWith('PRODUCTION_SMOKE='))
     expect(line).toBeDefined()
     const result = JSON.parse(line!.slice('PRODUCTION_SMOKE='.length))
-    if (scenario === 'lifecycle' || scenario === 'initialization-failure') {
+    if (scenario === 'lifecycle' || scenario === 'initialization-failure' || scenario === 'backup-rehearsal') {
       expect(calls).toBe(1)
       if (scenario === 'initialization-failure') expect(stdout).toContain('INITIALIZATION_RECOVERED')
     }
-    else if (scenario === 'remote-acceptance') expect(result.remote).toMatchObject({ sent: true, queue: true, cancel: true, approval: true, configuration: true, history: true })
+    else if (scenario === 'remote-acceptance') expect(result.remote).toMatchObject({ sent: true, queue: true, cancel: true, approval: true, configuration: true })
     else expect(result.crash).toMatchObject({ scenario, recovered: true })
     if (scenario.startsWith('delegation')) {
       const children = modelRequests.filter(body => JSON.stringify(body.messages.filter((message: { role: string }) => message.role === 'user').at(-1)?.content).includes('approval-effect child-'))
@@ -308,6 +311,24 @@ app.whenReady().then(async () => {
     expect(result.runs).toEqual([expect.objectContaining({ status: 'completed', result: 'Production host accepted.' })])
     expect(result.records.map((record) => record.event.type)).toEqual(['agent_started', 'text_delta', 'agent_completed'])
     expect(JSON.stringify(result.snapshot.snapshot.entries)).toContain('Production host accepted.')
+    if (scenario === 'backup-rehearsal') {
+      const backupDir = join(directory, 'backup')
+      const rehearsalDir = join(directory, 'rehearsal')
+      const manifest = await createBackup({ sourceDir: data, backupDir, stopped: true, proof: createMigrationProof(data) })
+      expect(manifest.entries).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'agent.sqlite', sqlite: true }), expect.objectContaining({ path: 'business.sqlite', sqlite: true })]))
+      await restoreBackup({ backupDir, rehearsalDir, proof: createMigrationProof(rehearsalDir) })
+      const restoredOptions = { ...options, databaseUrl: 'file:' + join(rehearsalDir, 'business.sqlite'), dataDir: rehearsalDir }
+      const restoredScript = script.replace(`const options = ${JSON.stringify(options)}`, `const options = ${JSON.stringify(restoredOptions)}`).replace('const rehearsal = false', 'const rehearsal = true').replace(`app.setPath('userData', ${JSON.stringify(data)})`, `app.setPath('userData', ${JSON.stringify(rehearsalDir)})`)
+      const restoredPath = join(directory, 'restored.mjs')
+      await writeFile(restoredPath, restoredScript)
+      const restored = await execute(require('electron'), [restoredPath], { env, windowsHide: true, timeout: 45000 })
+      const restoredLine = restored.stdout.split(/\r?\n/).find(value => value.startsWith('PRODUCTION_SMOKE='))
+      expect(restoredLine).toBeDefined()
+      const restoredResult = JSON.parse(restoredLine!.slice('PRODUCTION_SMOKE='.length))
+      expect(restoredResult.runs).toEqual(result.runs)
+      expect(restoredResult.records).toEqual(result.records)
+      expect(calls).toBe(1)
+    }
   } finally {
     server.closeAllConnections()
     await new Promise<void>((resolve) => server.close(() => resolve()))

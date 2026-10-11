@@ -37,7 +37,6 @@ export function ChatRuntimeProvider({ baseUrl, children }: { baseUrl: string; ch
     convertMessage: (message) => message,
     isRunning: snapshot.current.projected.isRunning,
     isLoading: snapshot.current.loading,
-    isDisabled: snapshot.current.disabled,
     extras: snapshot.extras,
     queue: snapshot.queue,
     adapters: { attachments: contextAttachmentAdapter, threadList: snapshot.threadList },

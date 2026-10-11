@@ -21,10 +21,9 @@ import { formatActivityLabel } from '@/shared/agent/agentActivityFormatter'
 import { summarizeAgentActivities } from '@/shared/agent/agentActivitySummary'
 import type { AgentEventEnvelope } from '@/shared/agent/agentExecutionRecord'
 import type { AgentEvent as ActivityEvent } from '@/shared/agent/agentEvent'
-import type { HistoryRecord } from '@kklyeenook/shared/agent/chat-protocol'
 
 export function agentSummary(
-  record: AgentSessionRecord & { historical?: boolean },
+  record: AgentSessionRecord,
   running: boolean,
 ): RemoteConversationSummary {
   return {
@@ -33,13 +32,12 @@ export function agentSummary(
     title: record.title ?? 'New Conversation',
     status: running ? 'running' : 'idle',
     updatedAt: record.updatedAt,
-    ...(record.historical ? { historical: true } : {}),
   }
 }
 
 export function agentRemoteSnapshot(input: {
   snapshot: SnapshotEvent
-  metadata: AgentSessionRecord & { historical?: boolean }
+  metadata: AgentSessionRecord
   queue: readonly InboxItem[]
   approvals: readonly AgentApproval[]
   permission: PermissionMode
@@ -85,28 +83,6 @@ export function agentMessages(snapshot: SnapshotEvent): RemoteMessage[] {
   const messages = snapshot.entries.flatMap((entry) => entryMessages(entry, false))
   if (snapshot.generation?.message) messages.push(messageToRemote(snapshot.generation.message, `partial:${snapshot.generation.attempt}`, true))
   return messages.filter((message): message is RemoteMessage => Boolean(message))
-}
-
-export function agentHistoryMessages(records: readonly HistoryRecord[]): RemoteMessage[] {
-  return records.flatMap((record) => {
-    if (record.kind === 'header') return []
-    const payload = record.payload as Record<string, unknown> | null
-    if (!payload || typeof payload !== 'object') return []
-    const message = (payload.message ?? payload) as Record<string, unknown>
-    const content: RemoteMessage['content'] = []
-    if (record.role === 'tool') content.push({ type: 'text', text: '历史工具输出（只读）\n' })
-    if (typeof message.content === 'string') content.push({ type: 'text', text: message.content })
-    else if (Array.isArray(message.content)) for (const part of message.content) {
-      if (part.type === 'text' && typeof part.text === 'string') content.push({ type: 'text', text: part.text })
-      else if (part.type === 'thinking' && typeof part.thinking === 'string') content.push({ type: 'reasoning', text: part.redacted ? '[reasoning redacted]' : part.thinking })
-      else if (part.type === 'image' && typeof part.data === 'string' && /^image\/(png|jpeg|gif|webp)$/.test(part.mimeType)) content.push({ type: 'image', image: `data:${part.mimeType};base64,${part.data}` })
-      else if (part.type === 'toolCall') content.push({ type: 'text', text: `历史工具调用（未重放）：${String(part.name)}` })
-    }
-    if (!content.length && typeof payload.summary === 'string') content.push({ type: 'text', text: payload.summary })
-    if (!content.length && record.kind === 'diagnostic') content.push({ type: 'text', text: '历史记录读取诊断：记录无法解析' })
-    if (!content.length) return []
-    return [{ id: `history:${record.id}`, role: record.role === 'user' ? 'user' as const : 'assistant' as const, timestamp: record.createdAt, content, status: 'complete' as const }]
-  })
 }
 
 export function agentQueue(items: readonly InboxItem[]): RemoteQueueItem[] {

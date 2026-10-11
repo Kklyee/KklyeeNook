@@ -39,13 +39,10 @@ export type AgentThreadSummary = {
   workspaceId?: string | null
   permissionMode?: string | null
   archived?: boolean
-  historical?: boolean
   activeRunId?: string
   model?: { provider: string; modelId: string }
   thinkingLevel?: ModelThinkingLevel
 }
-
-export type HistoryRecord = { id: string; role: string; kind: string; createdAt: number; payload: unknown }
 
 export type AgentThreadSnapshot = {
   contextWindow?: number
@@ -53,8 +50,6 @@ export type AgentThreadSnapshot = {
   approvals: readonly AgentApproval[]
   queue: readonly InboxItem[]
   metadata?: AgentThreadSummary
-  historical?: boolean
-  history?: readonly HistoryRecord[]
 }
 
 export type AgentSubmissionInput = {

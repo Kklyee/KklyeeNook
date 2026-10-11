@@ -76,7 +76,7 @@ export function AgentActivityProvider({
       }, 100)
     }
     const load = async () => {
-      if (disposed || loading || chat.getSnapshot().current.historical) return
+      if (disposed || loading) return
       loading = true
       dirty = false
       try {

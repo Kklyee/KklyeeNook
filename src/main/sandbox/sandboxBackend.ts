@@ -15,7 +15,7 @@ export interface SandboxExecutionRequest {
   executeDirect(): Promise<SandboxExecutionResult>
 }
 export type SandboxExecutionResult =
-  import('@earendil-works/pi-agent-core').AgentToolResult<unknown> & { isError?: boolean }
+  { content: import('@/shared/tool/tool').ToolContent[]; details: unknown; isError?: boolean }
 export interface SandboxBackend {
   support(): SandboxSupport
   execute(request: SandboxExecutionRequest): Promise<SandboxExecutionResult>

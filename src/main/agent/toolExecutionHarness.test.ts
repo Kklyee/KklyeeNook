@@ -7,9 +7,9 @@ import { ToolRegistry } from '@/main/tools/toolRegistry'
 import { ToolResultStore } from '@/main/tools/toolResultStore'
 import { FileToolResultRetentionPolicy } from '@/main/tools/toolResultRetentionPolicy'
 import { SandboxService } from '@/main/sandbox/sandboxService'
-import { registerPiBuiltinTools } from './pi/adapters/piBuiltinToolAdapter'
-import { registerPiMcpTool } from './pi/adapters/piMcpToolAdapter'
-import { registerPiToolResultTool } from './pi/adapters/piToolResultAdapter'
+import { registerBuiltinTools } from '../tools/builtin-tools'
+import { registerMcpTool } from '../tools/mcp-tool'
+import { registerToolResultTool } from '../tools/result-tool'
 import { ToolExecutionHarness } from './toolExecutionHarness'
 import type { ToolResult } from '@/shared/tool/tool'
 
@@ -32,7 +32,7 @@ function setup(timeoutMs?: number) {
       inputSchema: Type.Object({ path: Type.String() }),
       timeoutMs,
     },
-    adapter: { runtime: 'pi', create: () => ({}) },
+    adapter: { create: () => ({}) },
   })
   const sandbox = new SandboxService()
   const store = new ToolResultStore(join(directory, 'tool-results'))
@@ -206,8 +206,8 @@ test('large UTF-8 results preserve head and tail and can be read back through re
     createdAt: expect.any(Number),
     result: { content: [{ type: 'text', text }] },
   })
-  registerPiToolResultTool(registry, store)
-  const [read] = registry.resolve<any>('pi', ['read_tool_result'], {})
+  registerToolResultTool(registry, store)
+  const [read] = registry.resolve<any>(['read_tool_result'], {})
   let offset = 0
   let full = ''
   while (true) {
@@ -245,7 +245,7 @@ test('large details and images are also retained and excluded from the preview',
 test('MCP validates standard nested JSON Schema and normalizes remote errors and structured content', async () => {
   const { registry, sandbox, retention } = setup()
   const callTool = vi.fn(async () => ({ content: [], structuredContent: { answer: 42 } }))
-  registerPiMcpTool(
+  registerMcpTool(
     registry,
     { id: 'server', name: 'Server', enabled: true, transport: 'stdio', command: 'mcp', args: [] },
     {
@@ -271,7 +271,7 @@ test('MCP validates standard nested JSON Schema and normalizes remote errors and
   )
   const harness = new ToolExecutionHarness(registry, sandbox, retention)
   const context = { executionContext: { conversationId: 'chat', mode: 'full-access' as const } }
-  const [tool] = registry.resolve<any>('pi', ['mcp__server__nested'], context)
+  const [tool] = registry.resolve<any>(['mcp__server__nested'], context)
   const invoke = (args: unknown) =>
     harness.execute('run-1', { id: 'mcp', toolName: tool.name, args }, context, (input) =>
       tool.execute('mcp', input),
@@ -295,7 +295,7 @@ test('MCP validates standard nested JSON Schema and normalizes remote errors and
 
 test('built-in read retains the full file before any preview truncation', async () => {
   const { registry, sandbox, retention, store } = setup()
-  registerPiBuiltinTools(registry, directory)
+  registerBuiltinTools(registry, directory)
   const text = `HEAD\n${'long line\n'.repeat(12000)}TAIL`
   const path = join(directory, 'large.txt')
   await writeFile(path, text)
@@ -307,7 +307,7 @@ test('built-in read retains the full file before any preview truncation', async 
       mode: 'read-only' as const,
     },
   }
-  const [read] = registry.resolve<any>('pi', ['read'], context)
+  const [read] = registry.resolve<any>(['read'], context)
   const harness = new ToolExecutionHarness(registry, sandbox, retention)
   const result = await harness.execute(
     'run-1',
@@ -323,7 +323,7 @@ test('built-in read retains the full file before any preview truncation', async 
 
 test('built-in Shell retains full stdout and applies timeout in the harness', async () => {
   const { registry, sandbox, retention, store } = setup()
-  registerPiBuiltinTools(registry, directory)
+  registerBuiltinTools(registry, directory)
   const context = {
     cwd: directory,
     executionContext: {
@@ -332,7 +332,7 @@ test('built-in Shell retains full stdout and applies timeout in the harness', as
       mode: 'full-access' as const,
     },
   }
-  const [bash] = registry.resolve<any>('pi', ['bash'], context)
+  const [bash] = registry.resolve<any>(['bash'], context)
   const harness = new ToolExecutionHarness(registry, sandbox, retention)
   const text = `HEAD${'0'.repeat(90000)}TAIL`
   const result = await harness.execute(

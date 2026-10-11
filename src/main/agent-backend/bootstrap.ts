@@ -11,12 +11,8 @@ import { DrizzleWorkspaceRepo } from '@/main/db/repositories/workspaceRepo'
 import { ContextAttachmentService } from '@/main/context/contextAttachmentService'
 import { ContextBuilder } from '@/main/context/contextBuilder'
 import { connectDatabase } from '@/main/db/client'
-import { DrizzleAgentExecutionRecordRepo } from '@/main/db/repositories/agentExecutionRecordRepo'
 import { DrizzleAgentMemoryRepo } from '@/main/db/repositories/memoryRepo'
-import { DrizzleAgentRunRepo } from '@/main/db/repositories/agentRunRepo'
 import { DrizzleAgentSessionRepo } from '@/main/db/repositories/agentSessionRepo'
-import { DrizzleAgentMessageRepo } from '@/main/db/repositories/agentMessageRepo'
-import { LegacyHistory } from '@/main/agent/legacy-history'
 import { DrizzleScheduledTaskRepo } from '@/main/db/repositories/scheduledTaskRepo'
 import { AgentConfigStore } from '@/main/settings/agentConfigStore'
 import { MemoryCredentialStore } from '@/main/settings/credentialStore'
@@ -35,14 +31,14 @@ import { SkillLoader } from './skillLoader'
 import type { AgentBackendNotification } from '@/shared/agentBackend'
 import { createKnowledgeRuntime, type KnowledgeRuntime } from '@/main/knowledge/knowledgeRuntime'
 import { DEFAULT_KNOWLEDGE_SETTINGS } from '@/shared/knowledge/knowledge'
-import { registerPiBuiltinTools } from '@/main/agent/pi/adapters/piBuiltinToolAdapter'
-import { registerPiMemoryTool } from '@/main/agent/pi/adapters/piMemoryToolAdapter'
-import { registerPiPlanTool } from '@/main/agent/pi/adapters/piPlanToolAdapter'
-import { registerPiKnowledgeTools } from '@/main/agent/pi/adapters/piKnowledgeToolAdapter'
-import { registerPiWebSearchTool } from '@/main/agent/pi/adapters/piWebSearchToolAdapter'
+import { registerBuiltinTools } from '../tools/builtin-tools'
+import { registerMemoryTool } from '../tools/memory-tool'
+import { registerPlanTool } from '../tools/plan-tool'
+import { registerKnowledgeTools } from '../tools/knowledge-tools'
+import { registerWebSearchTool } from '../tools/web-search-tool'
 import { WebSearchService } from '@/main/web-search/webSearchService'
 import { DEFAULT_WEB_SEARCH_SETTINGS } from '@/shared/web-search/webSearch'
-import { registerPiToolResultTool } from '@/main/agent/pi/adapters/piToolResultAdapter'
+import { registerToolResultTool } from '../tools/result-tool'
 import { ToolResultStore } from '@/main/tools/toolResultStore'
 import { FileToolResultRetentionPolicy } from '@/main/tools/toolResultRetentionPolicy'
 import type { AgentEventEnvelope } from '@/shared/agent/agentExecutionRecord'
@@ -98,26 +94,24 @@ export async function createAgentBackend(
     const workspaceService = new WorkspaceService(new DrizzleWorkspaceRepo(db))
     const memoryRepo = new DrizzleAgentMemoryRepo(db)
     const sessionRepo = new DrizzleAgentSessionRepo(db)
-    const runRepo = new DrizzleAgentRunRepo(db)
-    const executionRecordRepo = new DrizzleAgentExecutionRecordRepo(db)
     scheduledTasks = new AgentScheduler(new DrizzleScheduledTaskRepo(db), notify)
-    const sessionDir = options.sessionDir
+    const dataDir = options.dataDir
     const skillLoader = new SkillLoader()
     await skillLoader.reload()
     const toolRegistry = new ToolRegistry()
-    const sandbox = new SandboxService(platformSandboxBackend(join(sessionDir, '..')))
-    const toolResultStore = new ToolResultStore(join(sessionDir, '..', 'tool-results'))
-    registerPiBuiltinTools(toolRegistry, '')
-    registerPiToolResultTool(toolRegistry, toolResultStore)
-    registerPiMemoryTool(toolRegistry, memoryRepo)
-    registerPiPlanTool(toolRegistry)
-    knowledge = await createKnowledgeRuntime(db, options.databaseUrl, join(options.sessionDir, '..', 'knowledge-cache'), configStore.get().knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS, workspaceService)
-    registerPiKnowledgeTools(toolRegistry, () => knowledge!.service)
+    const sandbox = new SandboxService(platformSandboxBackend(dataDir))
+    const toolResultStore = new ToolResultStore(join(dataDir, 'tool-results'))
+    registerBuiltinTools(toolRegistry, '')
+    registerToolResultTool(toolRegistry, toolResultStore)
+    registerMemoryTool(toolRegistry, memoryRepo)
+    registerPlanTool(toolRegistry)
+    knowledge = await createKnowledgeRuntime(db, options.databaseUrl, join(options.dataDir, 'knowledge-cache'), configStore.get().knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS, workspaceService)
+    registerKnowledgeTools(toolRegistry, () => knowledge!.service)
     const webSearchService = new WebSearchService(
       () => configStore.get().webSearch ?? DEFAULT_WEB_SEARCH_SETTINGS,
       () => credentialStore,
     )
-    registerPiWebSearchTool(toolRegistry, () => webSearchService)
+    registerWebSearchTool(toolRegistry, () => webSearchService)
     const contextBuilder = new ContextBuilder(contextAttachments, memoryRepo)
     const retention = new FileToolResultRetentionPolicy(toolResultStore)
     mcpServerManager = new McpServerManager(toolRegistry, () => {
@@ -125,7 +119,7 @@ export async function createAgentBackend(
     })
     await mcpServerManager.reconcile(configStore.get().mcpServers ?? [])
     host = await AgentHost.open({
-      databasePath: join(sessionDir, '..', 'agent-durable.sqlite'),
+      databasePath: join(dataDir, 'agent.sqlite'),
       config: () => configStore.get(),
       credentials: () => credentialStore,
       sessions: sessionRepo,
@@ -135,7 +129,6 @@ export async function createAgentBackend(
       retention,
       contextBuilder,
       skills: skillLoader,
-      history: new LegacyHistory(sessionDir, new DrizzleAgentMessageRepo(db), { resolveSourceMetadata: async (id) => (await sessionRepo.findById(id)) ?? undefined }),
       onReport: (error) => console.error('[agent-backend] agent host report', error),
       extensions: [scheduledTasks.extension],
       initialize: async (initializing, context) => {
@@ -216,7 +209,7 @@ export async function createAgentBackend(
                 knowledgeChanged = true
                 await knowledge!.close()
                 knowledge = undefined
-                knowledge = await createKnowledgeRuntime(db, options.databaseUrl, join(options.sessionDir, '..', 'knowledge-cache'), request.config.knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS, workspaceService)
+                knowledge = await createKnowledgeRuntime(db, options.databaseUrl, join(options.dataDir, 'knowledge-cache'), request.config.knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS, workspaceService)
               }
               configStore.set(request.config)
               credentialStore = nextCredentials
@@ -227,7 +220,7 @@ export async function createAgentBackend(
               credentialStore = previousCredentials
               if (knowledgeChanged) {
                 await knowledge?.close()
-                knowledge = await createKnowledgeRuntime(db, options.databaseUrl, join(options.sessionDir, '..', 'knowledge-cache'), previousConfig.knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS, workspaceService)
+                knowledge = await createKnowledgeRuntime(db, options.databaseUrl, join(options.dataDir, 'knowledge-cache'), previousConfig.knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS, workspaceService)
               }
               await mcpServerManager!.reconcile(previousConfig.mcpServers ?? [])
               await host!.reload(BACKGROUND_CONTEXT)
@@ -280,21 +273,14 @@ export async function createAgentBackend(
           case 'skills:reload':
             return skillLoader.reload()
           case 'agent-run:list': {
-            const links = await host!.engine.links(BACKGROUND_CONTEXT)
-            return links[request.request.sessionId]
-              ? runProjection.list(request.request.sessionId, BACKGROUND_CONTEXT)
-              : runRepo.findBySessionId(request.request.sessionId)
+            return runProjection.list(request.request.sessionId, BACKGROUND_CONTEXT)
           }
           case 'agent-run:overview-list': {
-            const threads = (await host!.conversations.list(BACKGROUND_CONTEXT)).filter((thread) => !thread.historical)
-            const current = (await Promise.all(threads.map((thread) => runProjection.list(thread.id, BACKGROUND_CONTEXT)))).flat()
-            const ids = new Set(threads.map((thread) => thread.id))
-            return [...(await runRepo.findAll()).filter((run) => !ids.has(run.sessionId)), ...current]
+            const threads = await host!.conversations.list(BACKGROUND_CONTEXT)
+            return (await Promise.all(threads.map((thread) => runProjection.list(thread.id, BACKGROUND_CONTEXT)))).flat()
           }
           case 'agent-execution-record:list':
-            return /^(?:\d+|durable-child:\d+)$/.test(request.request.runId)
-              ? runProjection.records(request.request.runId, BACKGROUND_CONTEXT)
-              : executionRecordRepo.findByRunId(request.request.runId)
+            return runProjection.records(request.request.runId, BACKGROUND_CONTEXT)
           case 'scheduled-task:list':
             return scheduledTasks!.list()
           case 'scheduled-task:create':

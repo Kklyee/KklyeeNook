@@ -13,6 +13,7 @@ import { effectivePermissionMode } from '@/shared/approval/permission'
 import type { ToolCall, ToolExecutionResult } from '@/shared/tool/tool'
 import type { ToolAdapterContext, ToolRegistry } from '../tools/toolRegistry'
 import type { ToolResultRetentionPolicy } from '../tools/toolResultRetentionPolicy'
+import type { ExecutableToolContext } from '../tools/executable-tool'
 import { SandboxService, toolPermissionResource } from '../sandbox/sandboxService'
 import { ToolExecutionHarness } from './toolExecutionHarness'
 import { AgentApprovals } from './approvals'
@@ -24,6 +25,7 @@ type ExecutableTool = {
     args: unknown,
     signal?: AbortSignal,
     onUpdate?: (result: ToolExecutionResult) => void,
+    context?: ExecutableToolContext,
   ): Promise<unknown>
 }
 
@@ -118,7 +120,7 @@ export class AgentTools {
           context,
         ),
     )
-    const [tool] = this.registry.resolve<ExecutableTool>('pi', [name], {
+    const [tool] = this.registry.resolve<ExecutableTool>([name], {
       ...adapter,
       getRunId: () => runId,
     })
@@ -131,7 +133,7 @@ export class AgentTools {
           tool.execute(api.callId, input, signal, (update) => {
             if (signal.aborted) return
             for (const part of update.content ?? []) if (part.type === 'text') api.output(part.text)
-          }),
+          }, { api }),
         context.abortSignal,
       )
       const { content, toolCallId: _id, toolName: _name, ...details } = result

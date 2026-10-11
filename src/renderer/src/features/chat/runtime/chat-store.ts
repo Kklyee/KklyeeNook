@@ -16,7 +16,6 @@ import {
   type AgentProjectedThread,
   type AgentProjectionState,
 } from '@kklyeenook/shared/agent/projection'
-import { projectHistory } from '@kklyeenook/shared/agent/history'
 import {
   restorePendingContextAttachmentIds,
   takePendingContextAttachmentIds,
@@ -44,20 +43,16 @@ export type ChatExtras = {
   metadata: {
     id: string
     config?: { provider?: string; modelId?: string; thinkingLevel?: ModelThinkingLevel }
-    historical?: boolean
   }
   queue: AgentProjectedThread['queue']
   contextUsage: AgentProjectedThread['contextUsage']
   compaction: AgentProjectedThread['compaction']
-  hostUiRequests: readonly never[]
   refresh(): Promise<void>
   clearQueue(): Promise<void>
   setModel(input: { provider: string; modelId: string; thinkingLevel?: ModelThinkingLevel }): Promise<void>
   setThinkingLevel(level: ModelThinkingLevel): Promise<void>
   updateQueue(input: AgentQueueMutation): Promise<void>
   respondToApproval(id: string, approved: boolean): Promise<void>
-  continueThread(): Promise<string>
-  controller: { connect(): () => void; refresh(): Promise<void> }
 }
 
 export type ChatSnapshot = {
@@ -68,8 +63,6 @@ export type ChatSnapshot = {
     projected: AgentProjectedThread
     approvals: AgentProjectionState['approvals']
     loading: boolean
-    disabled: boolean
-    historical: boolean
     metadata?: AgentThreadSummary
     error?: string
   }
@@ -89,11 +82,9 @@ export class ChatStore {
   private getCreateOptions: () => CreateOptions
   private threads: readonly AgentThreadSummary[] = []
   private selectedThreadId: string | undefined
-  private historyMessages: readonly ThreadMessageLike[] = []
   private projection: AgentProjectionState = emptyDurableProjectionState()
   private projected: AgentProjectedThread = emptyProjected
   private metadata: AgentThreadSummary | undefined
-  private historical = false
   private loading = false
   private listLoading = false
   private error: string | undefined
@@ -101,7 +92,6 @@ export class ChatStore {
   private sending: SendingState = { creating: false, threads: new Set() }
   private pendingAdmission: { threadId: string; fingerprint: string; input: AgentSubmissionInput } | undefined
   private pendingCreation: { fingerprint: string; id: string } | undefined
-  private pendingContinuation: { sourceId: string; id: string } | undefined
 
   constructor(baseUrl: string, getCreateOptions: () => CreateOptions) {
     this.endpoint = baseUrl.replace(/\/+$/, '')
@@ -120,12 +110,10 @@ export class ChatStore {
     selectedThreadId: this.selectedThreadId,
     threads: this.threads,
     current: {
-      messages: [...this.historyMessages, ...this.projected.messages],
+      messages: this.projected.messages,
       projected: this.projected,
       approvals: this.projection.approvals,
       loading: this.loading,
-      disabled: this.historical,
-      historical: this.historical,
       metadata: this.metadata ? { ...this.metadata, ...this.projection.snapshot?.agent } : undefined,
       error: this.error,
     },
@@ -159,11 +147,9 @@ export class ChatStore {
     this.source?.close()
     this.source = undefined
     this.selectedThreadId = undefined
-    this.historyMessages = []
     this.projection = emptyDurableProjectionState()
     this.projected = emptyProjected
     this.metadata = undefined
-    this.historical = false
     this.loading = false
     this.error = undefined
     this.emit()
@@ -175,7 +161,6 @@ export class ChatStore {
     this.source?.close()
     this.source = undefined
     this.selectedThreadId = threadId
-    this.historyMessages = []
     this.projection = emptyDurableProjectionState()
     this.projected = emptyProjected
     this.loading = true
@@ -184,9 +169,7 @@ export class ChatStore {
     try {
       const value = await this.request<AgentThreadSnapshot>(`/threads/${encodeURIComponent(threadId)}`)
       if (this.selectedThreadId !== threadId || version !== this.connectionVersion) return
-      this.historyMessages = projectHistory(value.history ?? [])
       this.metadata = value.metadata ?? this.threads.find((thread) => thread.id === threadId)
-      this.historical = value.historical === true || this.metadata?.historical === true
       this.projection = {
         snapshot: value.snapshot,
         contextWindow: value.contextWindow,
@@ -197,7 +180,7 @@ export class ChatStore {
       this.projected = projectDurableThread(this.projection)
       this.loading = false
       this.emit()
-      if (!this.historical) this.connect(threadId)
+      this.connect(threadId)
     } catch (error) {
       if (this.selectedThreadId !== threadId || version !== this.connectionVersion) return
       this.loading = false
@@ -331,27 +314,6 @@ export class ChatStore {
     )
   }
 
-  async continueThread() {
-    if (!this.selectedThreadId) return this.createThread()
-    const continuation = this.pendingContinuation?.sourceId === this.selectedThreadId ? this.pendingContinuation : { sourceId: this.selectedThreadId, id: crypto.randomUUID() }
-    this.pendingContinuation = continuation
-    let result: AgentThreadSummary
-    try {
-      result = await this.request<AgentThreadSummary>(
-        `/threads/${encodeURIComponent(continuation.sourceId)}/continue`,
-        { method: 'POST', body: { threadId: continuation.id } },
-      )
-      if (this.pendingContinuation === continuation) this.pendingContinuation = undefined
-    } catch (error) {
-      if (error instanceof AgentRequestError && error.status >= 400 && error.status < 500 && this.pendingContinuation === continuation) this.pendingContinuation = undefined
-      throw error
-    }
-    this.threads = [result, ...this.threads.filter((thread) => thread.id !== result.id)]
-    await this.switchToThread(result.id)
-    notifyWorkspaceChanged()
-    return result.id
-  }
-
   private connect(threadId: string) {
     this.source?.close()
     const source = new EventSource(`${this.endpoint}/threads/${encodeURIComponent(threadId)}/events`)
@@ -421,19 +383,16 @@ export class ChatStore {
     }
     return {
       state: { messages: this.projected.transcript },
-      metadata: { id, config, historical: this.historical },
+      metadata: { id, config },
       queue: this.projected.queue,
       contextUsage: this.projected.contextUsage,
       compaction: this.projected.compaction,
-      hostUiRequests: [],
       refresh: () => this.refresh(),
       clearQueue: () => this.clearQueue(),
       setModel: (input) => this.setModel(input),
       setThinkingLevel: (level) => this.setThinkingLevel(level),
       updateQueue: (input) => this.updateQueue(input),
       respondToApproval: (id, approved) => this.respondToApproval(id, approved),
-      continueThread: () => this.continueThread(),
-      controller: { connect: () => () => undefined, refresh: () => this.refresh() },
     }
   }
 
@@ -533,7 +492,7 @@ function toThreadData(thread: AgentThreadSummary) {
     remoteId: thread.id,
     title: thread.title,
     status: 'regular' as const,
-    custom: { workspaceId: thread.workspaceId, historical: thread.historical },
+    custom: { workspaceId: thread.workspaceId },
   }
 }
 

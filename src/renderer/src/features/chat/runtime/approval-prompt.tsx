@@ -5,19 +5,9 @@ import { useChatRuntimeExtras, useChatRuntimeSnapshot } from './chat-runtime'
 export function ApprovalPrompt() {
   const current = useChatRuntimeSnapshot().current
   const request = current.approvals[0]
-  const { respondToApproval, continueThread } = useChatRuntimeExtras()
+  const { respondToApproval } = useChatRuntimeExtras()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
-  if (current.historical) return (
-    <div className="material-control mx-auto flex items-center gap-3 rounded-2xl p-3">
-      <p className="text-sm text-muted-foreground">历史会话只读，继续将创建独立的新会话。</p>
-      <Button size="sm" disabled={pending} onClick={() => {
-        setPending(true)
-        void continueThread().catch((error) => setError(String(error))).finally(() => setPending(false))
-      }}>继续为新会话</Button>
-      {error && <p role="alert">{error}</p>}
-    </div>
-  )
   if (!request) return null
   const answer = async (approved: boolean) => {
     setPending(true)

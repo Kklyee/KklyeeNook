@@ -1,5 +1,5 @@
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, join, parse } from 'node:path'
 import { tmpdir } from 'node:os'
 import { DatabaseSync } from 'node:sqlite'
 import { afterEach, expect, test } from 'vitest'
@@ -42,6 +42,47 @@ test('requires stopped-source confirmation and matching ownership proof', async 
   await expect(createBackup({ sourceDir: source, backupDir: join(base, 'backup-b'), stopped: true, proof: createMigrationProof(join(base, 'other')) })).rejects.toThrow('Ownership proof')
 })
 
+test('rejects using an empty source itself or its child as the backup target', async () => {
+  const source = await tempRoot()
+  await expect(createBackup({ sourceDir: source, backupDir: source, stopped: true, proof: createMigrationProof(source) })).rejects.toThrow('separate from source')
+  if (process.platform === 'win32') await expect(createBackup({ sourceDir: source, backupDir: source.toUpperCase(), stopped: true, proof: createMigrationProof(source) })).rejects.toThrow('separate from source')
+  await expect(createBackup({ sourceDir: source, backupDir: join(source, 'backup'), stopped: true, proof: createMigrationProof(source) })).rejects.toThrow('separate from source')
+})
+
+test('backs up an explicit scope with original paths and rejects selections through parent or linked directories', async () => {
+  const base = await tempRoot()
+  const source = join(base, 'source')
+  await mkdir(join(source, 'sessions'), { recursive: true })
+  await mkdir(join(source, 'cache'))
+  await writeFile(join(source, 'sessions', 'history.jsonl'), '{"type":"session","id":"scope"}\n')
+  await writeFile(join(source, 'settings.json'), '{}')
+  await writeFile(join(source, 'cache', 'temporary'), 'Cache')
+  const backup = join(base, 'backup')
+  const include = ['sessions', 'settings.json', 'absent.sqlite']
+  const manifest = await createBackup({ sourceDir: source, backupDir: backup, stopped: true, proof: createMigrationProof(source), include })
+  expect(manifest.included).toEqual([...include].sort())
+  expect(manifest.entries.map(entry => entry.path).sort()).toEqual([rel('sessions', 'history.jsonl'), 'settings.json'])
+  const rehearsal = join(base, 'restore')
+  await restoreBackup({ backupDir: backup, rehearsalDir: rehearsal, proof: createMigrationProof(rehearsal) })
+  expect(await readFile(join(rehearsal, 'sessions', 'history.jsonl'), 'utf8')).toContain('scope')
+  for (const path of ['../escape', '/absolute', 'sessions/history.jsonl']) await expect(createBackup({ sourceDir: source, backupDir: join(base, 'invalid'), stopped: true, proof: createMigrationProof(source), include: [path] })).rejects.toThrow()
+  const linked = join(source, 'linked')
+  await symlink(join(source, 'sessions'), linked, process.platform === 'win32' ? 'junction' : 'dir')
+  await expect(createBackup({ sourceDir: source, backupDir: join(base, 'linked-backup'), stopped: true, proof: createMigrationProof(source), include: ['linked'] })).rejects.toThrow('Symlink')
+})
+
+test.runIf(process.platform === 'win32' && parse(tmpdir()).root.toLowerCase() !== parse(process.cwd()).root.toLowerCase())('backs up and restores between separate Windows volumes', async () => {
+  const source = await tempRoot()
+  const otherVolume = await mkdtemp(join(process.cwd(), 'node_modules', '.nook-backup-'))
+  roots.push(otherVolume)
+  await writeFile(join(source, 'history.jsonl'), '{"type":"session","id":"cross-volume"}\n')
+  const backup = join(otherVolume, 'backup')
+  await createBackup({ sourceDir: source, backupDir: backup, stopped: true, proof: createMigrationProof(source) })
+  const rehearsal = await tempRoot()
+  await restoreBackup({ backupDir: backup, rehearsalDir: rehearsal, proof: createMigrationProof(rehearsal) })
+  expect(await readFile(join(rehearsal, 'history.jsonl'), 'utf8')).toContain('cross-volume')
+})
+
 test('rejects tampered files, malformed manifests, traversal entries, and non-fresh restore targets', async () => {
   const base = await tempRoot()
   const source = join(base, 'source')
@@ -63,7 +104,7 @@ test('rejects tampered files, malformed manifests, traversal entries, and non-fr
   await expect(verifyBackup(backup)).rejects.toThrow('Unsafe relative path')
 })
 
-test('rejects symlink boundaries during backup and verification', async () => {
+test('rejects symlink boundaries during backup and verification', async (context) => {
   const base = await tempRoot()
   const source = join(base, 'source')
   await mkdir(source, { recursive: true })
@@ -71,7 +112,7 @@ test('rejects symlink boundaries during backup and verification', async () => {
   try {
     await symlink(join(source, 'real.txt'), join(source, 'link.txt'))
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EPERM') return
+    if ((error as NodeJS.ErrnoException).code === 'EPERM') context.skip('Windows file symlink privilege is unavailable')
     throw error
   }
 

@@ -48,7 +48,7 @@ async function setup(options: Parameters<typeof fauxProvider>[0] = {}) {
     registry: createRegistry(),
     settings: { retry: { enabled: false } },
   }
-  const path = join(directory, 'agent-durable.sqlite')
+  const path = join(directory, 'agent.sqlite')
   const open = async () => {
     const engine = await AgentEngine.open(path, harnessOptions, context())
     engines.push(engine)
@@ -135,11 +135,12 @@ test('hides an unpublished conversation and safely retries metadata publication 
   expect(published.title).toBe('Original title')
   expect((await restored.conversation(input.threadId, context())).id).toBe(id)
   expect(await repo.findAll()).toHaveLength(1)
-  await repo.save({ id: 'historical', title: 'Old', createdAt: 1, updatedAt: 1, archived: false })
-  await expect(
-    new ConversationService(restored, repo).create({ ...input, threadId: 'historical' }, context()),
-  ).rejects.toThrow('read-only')
-  expect((await repo.findById('historical'))?.title).toBe('Old')
+  await repo.save({ id: 'discarded', title: 'Old', createdAt: 1, updatedAt: 1, archived: false })
+  const conversations = new ConversationService(restored, repo)
+  expect(await conversations.list(context())).not.toContainEqual(expect.objectContaining({ id: 'discarded' }))
+  await expect(conversations.get('discarded', context())).rejects.toThrow('Conversation not found')
+  const fresh = await conversations.create({ ...input, threadId: 'discarded' }, context())
+  expect(fresh.title).toBe('Original title')
 })
 
 test('keeps model failures authoritative and prevents cross-conversation submission access', async () => {

@@ -35,7 +35,6 @@ import {
   agentApproval,
   agentQueue,
   agentRemoteSnapshot,
-  agentHistoryMessages,
   agentSummary,
   emptySnapshot,
   isDurableRunning,
@@ -53,7 +52,6 @@ export interface RemoteAgentPort {
   listConversations(projectId: string): Promise<RemoteConversationSummary[]>
   createConversation(projectId: string, input: RemoteCreateConversationInput): Promise<RemoteConversationSnapshot>
   getConversation(id: string): Promise<RemoteConversationSnapshot>
-  continueConversation(id: string, threadId: string): Promise<RemoteConversationSnapshot>
   renameConversation(id: string, title: string): Promise<void>
   sendMessage(id: string, input: RemoteSendMessageInput): Promise<void>
   setPermission(id: string, mode: RemotePermissionMode): Promise<void>
@@ -77,11 +75,6 @@ export function createRemoteAgentPort(
   const requireSession = async (id: string) => {
     const session = await host.conversations.get(id, BACKGROUND_CONTEXT)
     if (!session.workspaceId) throw new RemoteError(404, 'Conversation not found')
-    return session
-  }
-  const requireLiveSession = async (id: string) => {
-    const session = await requireSession(id)
-    if ('historical' in session && session.historical) throw new RemoteError(409, 'Historical conversation is read-only; continue in a new conversation')
     return session
   }
   const prepareAttachments = (files: RemoteFileAttachment[]) => {
@@ -120,15 +113,13 @@ export function createRemoteAgentPort(
   }
   const summary = async (id: string) => {
     const session = await requireSession(id)
-    const snapshot = 'historical' in session && session.historical ? emptySnapshot() : await host.conversations.snapshot(id, BACKGROUND_CONTEXT)
+    const snapshot = await host.conversations.snapshot(id, BACKGROUND_CONTEXT)
     return agentSummary(session, isDurableRunning(snapshot))
   }
   const getConversation = async (id: string) => {
     const session = await requireSession(id)
     const workspace = await workspaces.resolve(session.workspaceId!)
     const permission = effectivePermissionMode(session.permissionMode, workspace.status === 'attached', config.get().defaultPermissionMode)
-    const history = agentHistoryMessages(await host.readHistory(id, BACKGROUND_CONTEXT))
-    if ('historical' in session && session.historical) return { ...agentRemoteSnapshot({ snapshot: emptySnapshot(), metadata: session, queue: [], approvals: [], permission }), messages: history }
     const snapshot = await host.conversations.snapshot(id, BACKGROUND_CONTEXT)
     const conversation = await host.engine.conversation(id, BACKGROUND_CONTEXT)
     const queue = (await host.engine.harness.snapshot(InboxDoc, conversation.id, BACKGROUND_CONTEXT))?.items ?? []
@@ -142,7 +133,7 @@ export function createRemoteAgentPort(
       compaction: getAgentCompactionSettings(config.get()),
       taskRuns: (await host.engine.harness.snapshot(runMembershipDoc, conversation.id, BACKGROUND_CONTEXT))?.tasks,
     })
-    return { ...result, messages: [...history, ...result.messages] }
+    return result
   }
   const sendPrepared = async (id: string, input: RemoteSendMessageInput, prepared: ReturnType<typeof prepareAttachments>) => {
     const content = prepared.images.length ? [{ type: 'text' as const, text: input.content }, ...prepared.images] : input.content
@@ -155,7 +146,7 @@ export function createRemoteAgentPort(
     }, BACKGROUND_CONTEXT)
   }
   const mutateQueue = async (id: string, input: RemoteQueueMutation) => {
-    await requireLiveSession(id)
+    await requireSession(id)
     if (!Number.isInteger(input.index) || input.index < 0 || (input.mode !== 'steer' && input.mode !== 'followUp') || (input.action === 'steer' && input.mode !== 'followUp') || (input.action === 'edit' && !input.value.trim()) || (input.action === 'move' && (!Number.isInteger(input.value) || input.value < 0))) throw new RemoteError(400, 'Invalid queue operation')
     const conversation = await host.engine.conversation(id, BACKGROUND_CONTEXT)
     const current = (await host.engine.harness.snapshot(InboxDoc, conversation.id, BACKGROUND_CONTEXT))?.items ?? []
@@ -236,21 +227,13 @@ export function createRemoteAgentPort(
       } finally { contextAttachments.release(prepared.ids) }
     },
     getConversation,
-    async continueConversation(id, threadId) {
-      const source = await requireSession(id)
-      if (!('historical' in source) || !source.historical) throw new RemoteError(409, 'Only historical conversations can be continued')
-      const workspace = await workspaces.resolve(source.workspaceId!)
-      if (workspace.status !== 'attached') throw new RemoteError(409, 'Project is unavailable')
-      const target = await host.continueHistory(id, threadId, BACKGROUND_CONTEXT)
-      return getConversation(target.id)
-    },
     async renameConversation(id, title) {
       await requireSession(id)
       if (!title.trim()) throw new RemoteError(400, 'Title is required')
       await host.conversations.update(id, { title: title.trim() }, BACKGROUND_CONTEXT)
     },
     async sendMessage(id, input) {
-      await requireLiveSession(id)
+      await requireSession(id)
       if (input.requestId !== undefined && !input.requestId.trim()) throw new RemoteError(400, 'Request ID is required')
       const files = validateRemoteAttachments(input.attachments)
       if (!input.content.trim() && !files.length) throw new RemoteError(400, 'Message is required')
@@ -259,34 +242,34 @@ export function createRemoteAgentPort(
       try { await sendPrepared(id, input, prepared) } finally { contextAttachments.release(prepared.ids) }
     },
     async setPermission(id, mode) {
-      await requireLiveSession(id)
+      await requireSession(id)
       if (!PERMISSION_MODES.includes(mode)) throw new RemoteError(400, 'Invalid permission mode')
       await host.conversations.update(id, { permissionMode: mode }, BACKGROUND_CONTEXT)
     },
     async setModel(id, input) {
-      await requireLiveSession(id)
+      await requireSession(id)
       await checkModel(input)
       await host.configure(id, { model: input }, BACKGROUND_CONTEXT)
       saveModelSelection({ ...input, thinkingLevel: getActiveModel(config.get()).thinkingLevel ?? 'off' })
     },
     async setThinkingLevel(id, level) {
-      await requireLiveSession(id)
+      await requireSession(id)
       const snapshot = await getConversation(id)
       if (!snapshot.model) throw new RemoteError(409, 'Select a model first')
       checkThinking(await checkModel(snapshot.model), level)
       await host.configure(id, { thinkingLevel: level as ThinkingLevel }, BACKGROUND_CONTEXT)
       saveModelSelection({ ...snapshot.model, thinkingLevel: level as ThinkingLevel })
     },
-    async cancel(id) { await requireLiveSession(id); await host.conversations.cancel(id, BACKGROUND_CONTEXT) },
+    async cancel(id) { await requireSession(id); await host.conversations.cancel(id, BACKGROUND_CONTEXT) },
     async clearQueue(id) {
-      await requireLiveSession(id)
+      await requireSession(id)
       const conversation = await host.engine.conversation(id, BACKGROUND_CONTEXT)
       const queue = (await host.engine.harness.snapshot(InboxDoc, conversation.id, BACKGROUND_CONTEXT))?.items ?? []
       await Promise.all(queue.filter((item) => item.mode !== 'write').map((item) => host.engine.harness.abortSubmission(item.id, BACKGROUND_CONTEXT, conversation.id)))
     },
     updateQueue: mutateQueue,
     async respondToApproval(id, input) {
-      await requireLiveSession(input.conversationId)
+      await requireSession(input.conversationId)
       if ('value' in input) throw new RemoteError(400, 'A boolean approval decision is required')
       const state = 'confirmed' in input && input.confirmed === true ? 'approved' : 'rejected'
       await host.decideApproval(input.conversationId, id, state, BACKGROUND_CONTEXT)
@@ -299,8 +282,7 @@ export function createRemoteAgentPort(
       const emit = (event: RemoteEventBody) => { if (active) listener({ ...event, seq: ++seq } as RemoteEvent) }
       let stop: (() => Promise<unknown>) | undefined
       void (async () => {
-        const session = await requireSession(id)
-        if ('historical' in session && session.historical) { emit({ type: 'snapshot', snapshot: await getConversation(id) }); return }
+        await requireSession(id)
         const stream = await host.engine.watch(id, BACKGROUND_CONTEXT)
         stop = stream.stop
         if (!active) { await stop(); return }

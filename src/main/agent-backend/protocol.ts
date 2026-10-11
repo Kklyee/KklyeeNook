@@ -19,7 +19,7 @@ export interface AgentBackendInitOptions {
   apiKeys: Record<string, string>
   databaseUrl: string
   migrationsPath: string
-  sessionDir: string
+  dataDir: string
   allowedOrigins: string[]
 }
 

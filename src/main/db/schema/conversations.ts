@@ -1,6 +1,6 @@
 import type { PermissionMode } from '@/shared/approval/permission'
 import { workspaces } from './workspaces'
-import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 export const conversations = sqliteTable(
   'conversations',
@@ -14,26 +14,6 @@ export const conversations = sqliteTable(
     archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
   },
   (table) => [index('conversations_updated_at_idx').on(table.updatedAt)],
-)
-export const agentMessages = sqliteTable(
-  'agent_messages',
-  {
-    id: text('id').notNull(),
-    sessionId: text('session_id')
-      .notNull()
-      .references(() => conversations.id, { onDelete: 'cascade' }),
-    parentId: text('parent_id'),
-    role: text('role', { enum: ['user', 'assistant', 'system'] }).notNull(),
-    createdAt: integer('created_at').notNull(),
-    payloadJson: text('payload_json').notNull(),
-
-    runConfigJson: text('run_config_json'),
-  },
-
-  (table) => [
-    primaryKey({ columns: [table.sessionId, table.id] }),
-    index('agent_messages_session_idx').on(table.sessionId, table.createdAt),
-  ],
 )
 export type ConversationRow = typeof conversations.$inferSelect
 

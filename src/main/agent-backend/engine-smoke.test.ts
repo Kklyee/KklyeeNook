@@ -13,7 +13,7 @@ const execute = promisify(execFile)
 test('opens SQLite, answers an input, closes and reopens without duplicating it', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'nook-durable-'))
   try {
-    const result = await runDurableSmoke(join(directory, 'agent-durable.sqlite'))
+    const result = await runDurableSmoke(join(directory, 'agent.sqlite'))
     expect(result.modelCalls).toBe(1)
     expect(result.entryIds).toHaveLength(2)
   } finally {
@@ -70,7 +70,7 @@ app.whenReady().then(() => {
     delete env.ELECTRON_RUN_AS_NODE
     const { stdout } = await execute(
       electron,
-      [join(directory, 'main.mjs'), join(directory, 'agent-durable.sqlite')],
+      [join(directory, 'main.mjs'), join(directory, 'agent.sqlite')],
       { env, windowsHide: true, timeout: 30_000 },
     )
     const line = stdout.split(/\r?\n/).find((value) => value.startsWith('DURABLE_SMOKE='))

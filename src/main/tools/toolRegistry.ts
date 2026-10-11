@@ -9,7 +9,6 @@ export interface ToolAdapterContext {
 }
 
 export interface ToolAdapter<TTool = unknown> {
-  runtime: string
   create(context: ToolAdapterContext): TTool
 }
 
@@ -51,14 +50,11 @@ export class ToolRegistry {
     return Array.from(this.registrations.values(), ({ definition }) => definition)
   }
 
-  resolve<TTool>(runtime: string, names: readonly string[], context: ToolAdapterContext): TTool[] {
+  resolve<TTool>(names: readonly string[], context: ToolAdapterContext): TTool[] {
     return names.map((name) => {
       const registration = this.registrations.get(name)
       if (!registration) {
         throw new Error(`Unknown tool: ${name}`)
-      }
-      if (registration.adapter.runtime !== runtime) {
-        throw new Error(`Tool "${name}" does not support runtime "${runtime}"`)
       }
 
       return registration.adapter.create(context) as TTool

@@ -49,9 +49,7 @@ export class ConversationService {
   async create(input: CreateConversation, context: Context) {
     const existing = await this.sessions.findById(input.threadId)
     const links = await this.engine.links(context)
-    if (existing) {
-      if (!Object.hasOwn(links, existing.id))
-        throw new Error('Historical conversation is read-only')
+    if (existing && Object.hasOwn(links, existing.id)) {
       await this.engine.conversation(existing.id, context)
       return existing
     }
@@ -82,14 +80,6 @@ export class ConversationService {
 
   async list(context: Context) {
     const links = await this.engine.links(context)
-    return (await this.sessions.findAll()).map((record) => ({
-      ...record,
-      historical: !Object.hasOwn(links, record.id),
-    }))
-  }
-
-  async live(context: Context) {
-    const links = await this.engine.links(context)
     return (await this.sessions.findAll()).filter((record) => Object.hasOwn(links, record.id))
   }
 
@@ -97,14 +87,8 @@ export class ConversationService {
     const record = await this.sessions.findById(threadId)
     if (!record) throw new Error('Conversation not found')
     const links = await this.engine.links(context)
-    if (!Object.hasOwn(links, record.id)) return { ...record, historical: true }
+    if (!Object.hasOwn(links, record.id)) throw new Error('Conversation not found')
     await this.engine.conversation(threadId, context)
-    return record
-  }
-
-  async getLive(threadId: string, context: Context) {
-    const record = await this.get(threadId, context)
-    if ('historical' in record && record.historical) throw new Error('Historical conversation is read-only')
     return record
   }
 
@@ -112,7 +96,6 @@ export class ConversationService {
     const record = await this.get(threadId, context)
     const next = { ...record, ...update, updatedAt: Math.max(Date.now(), record.updatedAt + 1) }
     await this.sessions.save(next)
-    if ('historical' in record && record.historical) return next
     const conversation = await this.engine.conversation(threadId, context)
     await conversation.commit(async (tx) => {
       Object.assign(await tx.doc(creationRecord, conversation.id), next)
@@ -125,8 +108,7 @@ export class ConversationService {
   }
 
   async tombstone(threadId: string, context: Context) {
-    const record = await this.get(threadId, context)
-    if (!('historical' in record && record.historical)) await this.cancel(threadId, context)
+    await this.cancel(threadId, context)
     return this.archive(threadId, true, context)
   }
 

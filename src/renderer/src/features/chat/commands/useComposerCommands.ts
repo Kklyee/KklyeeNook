@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAui, useAuiEvent, useAuiState } from '@assistant-ui/react'
 import { useChatRuntimeExtras } from '../runtime/chat-runtime'
-import type { ChatExtras } from '../runtime/chat-store'
 import type { AgentSkill } from '@/shared/agent/agentSkill'
 import { effectivePermissionMode, PERMISSION_LABELS } from '@/shared/approval/permission'
 import { useWorkspaces } from '../../workspaces/WorkspaceProvider'
@@ -73,16 +72,8 @@ export function useComposerCommands() {
       const nextResult = await executeCommand(command, {
         compact: async (instructions) => {
           if (!sessionId) throw new Error('当前会话暂无可整理的上下文')
-          const { controller } = aui.thread.getState().extras as {
-            controller: ChatExtras['controller']
-          }
-          const disconnect = controller.connect()
-          try {
-            await window.api.conversations.compact(sessionId, instructions)
-            await controller.refresh()
-          } finally {
-            disconnect()
-          }
+          await window.api.conversations.compact(sessionId, instructions)
+          await pi.refresh()
         },
         reload: async () => {
           setSkills(await window.api.reloadAgentSkills())

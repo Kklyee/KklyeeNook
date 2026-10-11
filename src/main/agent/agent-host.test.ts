@@ -19,9 +19,8 @@ import { MemoryCredentialStore } from '../settings/credentialStore'
 import { ContextAttachmentService } from '../context/contextAttachmentService'
 import { ContextBuilder } from '../context/contextBuilder'
 import { SkillLoader } from '../agent-backend/skillLoader'
-import { registerPiBuiltinTools } from './pi/adapters/piBuiltinToolAdapter'
+import { registerBuiltinTools } from '../tools/builtin-tools'
 import { AgentHost } from './agent-host'
-import { LegacyHistory } from './legacy-history'
 import { RunProjection } from './run-projection'
 import { startAgentHttpServer } from '../agent-backend/agent-http'
 import type { RunningAgentHttpServer } from '../agent-backend/http-server'
@@ -128,7 +127,7 @@ async function setup(write = true, respond?: (body: Record<string, any>) => Repl
   const credentials = new MemoryCredentialStore()
   credentials.setApiKey('custom', 'synthetic-key')
   const registry = new ToolRegistry()
-  registerPiBuiltinTools(registry, '')
+  registerBuiltinTools(registry, '')
   const attachments = new ContextAttachmentService()
   const memory = new DrizzleAgentMemoryRepo(database.database)
   await memory.create({ scope: 'workspace', workspaceId, content: 'Actual host memory' })
@@ -223,37 +222,6 @@ test('permission reductions remain authoritative when the metadata mirror fails 
   const [approval] = await recovered.pendingApprovals('permission-thread', context())
   await recovered.decideApproval('permission-thread', approval.id, 'rejected', context())
   await (await recovered.engine.submission('permission-thread', accepted.submissionId, context())).wait(context())
-}, 30_000)
-
-test('historical continuation freezes context in the creating commit and never fabricates execution', async () => {
-  const { host, options, sessions, workspaceId, requests, open } = await setup(false)
-  const legacyDir = join(directory, 'legacy')
-  await mkdir(legacyDir)
-  const file = join(legacyDir, 'old.jsonl')
-  const original = [
-    { type: 'session', version: 3, id: 'old-thread', timestamp: '2026-01-01T00:00:00.000Z' },
-    { type: 'message', id: 'old-user', parentId: null, message: { role: 'user', content: 'Frozen historical request' } },
-    { type: 'message', id: 'old-call', parentId: 'old-user', message: { role: 'assistant', content: [{ type: 'toolCall', id: 'old-tool', name: 'write', arguments: { path: 'never.txt', content: 'never replay' } }] } },
-  ].map((entry) => JSON.stringify(entry)).join('\n')
-  await writeFile(file, original)
-  await sessions.save({ id: 'old-thread', title: 'Old', archived: false, createdAt: 1, updatedAt: 1, workspaceId, permissionMode: 'read-only' })
-  Object.assign(options, { history: new LegacyHistory(legacyDir, undefined, { resolveSourceMetadata: (id) => sessions.findById(id) }) })
-  await host.continueHistory('old-thread', 'continued-thread', context())
-  expect(requests).toHaveLength(0)
-  expect((await host.conversations.snapshot('continued-thread', context())).entries).toHaveLength(0)
-  const frozen = await host.historySnapshot('continued-thread', context())
-  await writeFile(file, original.replace('Frozen historical request', 'Mutated source'))
-  await host.close()
-  const recovered = await open()
-  await recovered.continueHistory('old-thread', 'continued-thread', context())
-  expect(await recovered.historySnapshot('continued-thread', context())).toEqual(frozen)
-  await recovered.create({ threadId: 'unrelated-thread' }, context())
-  await expect(recovered.continueHistory('old-thread', 'unrelated-thread', context())).rejects.toThrow('already exists')
-  const accepted = await recovered.conversations.submit('continued-thread', { type: 'input', content: 'Continue explicitly', requestId: 'continue-request' }, context())
-  await (await recovered.engine.submission('continued-thread', accepted.submissionId, context())).wait(context())
-  expect(JSON.stringify(requests)).toContain('Frozen historical request')
-  expect(JSON.stringify(requests)).not.toContain('Mutated source')
-  await expect(readFile(join(directory, 'workspace', 'never.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
 }, 30_000)
 
 test('run and trace projections derive identities and outcomes from official task receipts across restart', async () => {
@@ -405,7 +373,7 @@ test('personal identity stays separate and registry refresh changes only the dur
       inputSchema: Type.Object({}),
       origin: { kind: 'mcp', serverId: 'server', serverName: 'Server', remoteName: 'fetch' },
     },
-    adapter: { runtime: 'pi', create: () => ({ execute: async () => ({ content: [] }) }) },
+    adapter: { create: () => ({ execute: async () => ({ content: [] }) }) },
   })
   await host.refreshTools(context())
   expect((await conversation.agent(context())).tools.map((tool) => tool.name)).toContain(
@@ -470,20 +438,11 @@ async function events(baseUrl: string, threadId: string) {
   }
 }
 
-test('HTTP keeps historical metadata editable, rejects historical execution and reports busy and stale queues as conflicts', async () => {
-  const { host, sessions, workspaceId, options } = await setup()
-  Object.assign(options, { history: new LegacyHistory(join(directory, 'legacy'), undefined, { resolveSourceMetadata: (id) => sessions.findById(id) }) })
-  await sessions.save({ id: 'historical-thread', title: 'History', archived: false, createdAt: 1, updatedAt: 1, workspaceId, permissionMode: 'read-only' })
+test('HTTP reports busy and stale queues as conflicts and cancels execution before deletion', async () => {
+  const { host, workspaceId } = await setup()
   const { request } = await api(host)
-  expect((await (await request('/threads/historical-thread')).json()).historical).toBe(true)
-  expect((await request('/threads/historical-thread', 'PATCH', { title: 'Renamed' })).status).toBe(200)
-  expect((await request('/threads/historical-thread/archive', 'POST')).status).toBe(204)
-  expect((await request('/threads/historical-thread/unarchive', 'POST')).status).toBe(204)
-  expect((await request('/threads/historical-thread/submissions', 'POST', { type: 'input', content: 'Never replay', requestId: 'historical-input' })).status).toBe(409)
-  expect((await request('/threads/historical-thread/continue', 'POST', { threadId: 'continued-thread' })).status).toBe(201)
-  expect((await request('/threads/historical-thread/continue', 'POST', { threadId: 'continued-thread' })).status).toBe(201)
+  await host.create({ threadId: 'continued-thread', workspaceId, permissionMode: 'read-only' }, context())
   await host.create({ threadId: 'unrelated-thread' }, context())
-  expect((await request('/threads/historical-thread/continue', 'POST', { threadId: 'unrelated-thread' })).status).toBe(409)
   expect((await host.conversations.snapshot('continued-thread', context())).entries).toEqual([])
   const first = await (await request('/threads/continued-thread/submissions', 'POST', { type: 'input', content: 'Write', requestId: 'first' })).json()
   await vi.waitFor(async () => expect(await host.pendingApprovals('continued-thread', context())).toHaveLength(1), { timeout: 15_000 })

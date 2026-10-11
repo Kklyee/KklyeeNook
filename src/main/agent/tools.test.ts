@@ -5,14 +5,17 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { Type } from 'typebox'
 import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/chord/context'
 import { createModels } from '@earendil-works/pi-ai/models'
-import { fauxAssistantMessage, fauxProvider, fauxToolCall } from '@earendil-works/pi-ai/providers/faux'
+import { fauxAssistantMessage, fauxProvider, fauxToolCall, type FauxResponseStep } from '@earendil-works/pi-ai/providers/faux'
 import { createRegistry, type JsonObject } from '@earendil-works/pi-durable'
-import { registerPiBuiltinTools } from './pi/adapters/piBuiltinToolAdapter'
+import { registerBuiltinTools } from '../tools/builtin-tools'
 import { ToolRegistry, type ToolAdapterContext } from '../tools/toolRegistry'
 import { SandboxService } from '../sandbox/sandboxService'
 import type { SandboxBackend } from '../sandbox/sandboxBackend'
 import { AgentEngine } from './agent-engine'
 import { AgentTools } from './tools'
+import type { ToolResultRetentionPolicy } from '../tools/toolResultRetentionPolicy'
+import { FileToolResultRetentionPolicy } from '../tools/toolResultRetentionPolicy'
+import { ToolResultStore } from '../tools/toolResultStore'
 
 let directory: string
 const engines: AgentEngine[] = []
@@ -30,10 +33,10 @@ afterEach(async () => {
 
 async function setup(
   name: string, args: JsonObject,
-  options: { guard?: boolean; backend?: SandboxBackend; registry?: ToolRegistry } = {},
+  options: { guard?: boolean; backend?: SandboxBackend; registry?: ToolRegistry; responses?: FauxResponseStep[]; retention?: ToolResultRetentionPolicy } = {},
 ) {
   const registry = options.registry ?? new ToolRegistry()
-  if (!options.registry) registerPiBuiltinTools(registry, '')
+  if (!options.registry) registerBuiltinTools(registry, '')
   const workspace = join(directory, 'workspace')
   let adapter: ToolAdapterContext = {
     cwd: workspace,
@@ -58,7 +61,7 @@ async function setup(
   const agentRegistry = createRegistry()
   let bridge: AgentTools
   const open = async (beforeResume?: (bridge: AgentTools) => Promise<unknown>) => {
-    bridge = new AgentTools(registry, sandbox, retention, async () => adapter)
+    bridge = new AgentTools(registry, sandbox, options.retention ?? retention, async () => adapter)
     agentRegistry.install(bridge.extension())
     agentRegistry.install(bridge.approvals.extension)
     const engine = await AgentEngine.open(join(directory, 'durable.sqlite'), {
@@ -71,6 +74,7 @@ async function setup(
     return { engine, bridge }
   }
   const { engine, bridge: tools } = await open()
+  if (options.responses) faux.setResponses(options.responses)
   const extension = tools.extension()
   await engine.create('thread', {
     model: { provider: 'faux', modelId: 'faux-1' }, tools: extension.tools,
@@ -86,7 +90,7 @@ async function setup(
       .find((entry) => entry.kind === 'pi.tool-result')!
   }
   return {
-    engine, bridge: tools, conversation, submission, registry, retention, workspace, finishRun, settle, open,
+    engine, bridge: tools, conversation, submission, registry, retention, workspace, finishRun, settle, open, faux,
     setAdapter: (value: ToolAdapterContext) => { adapter = value },
   }
 }
@@ -144,7 +148,7 @@ test('restricted commands enter SandboxService instead of the direct tool execut
   const executeDirect = vi.fn(async () => { throw new Error('direct execution forbidden') })
   registry.register({
     definition: { name: 'bash', label: 'Shell', description: 'Shell', inputSchema: Type.Object({ command: Type.String() }) },
-    adapter: { runtime: 'pi', create: () => ({ execute: executeDirect }) },
+    adapter: { create: () => ({ execute: executeDirect }) },
   })
   const execute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'restricted' }], details: {}, isError: false }))
   const finishRun = vi.fn(async () => undefined)
@@ -161,7 +165,7 @@ test('dynamic MCP-style tools retain schema, result metadata and unsafe recovery
   const registry = new ToolRegistry()
   registry.register({
     definition: { name: 'mcp__server__fetch', label: 'Fetch', description: 'Fetch', inputSchema: Type.Object({ key: Type.String() }) },
-    adapter: { runtime: 'pi', create: () => ({ execute: async () => ({ content: [{ type: 'text', text: 'mcp-result' }], details: { serverId: 'server' } }) }) },
+    adapter: { create: () => ({ execute: async () => ({ content: [{ type: 'text', text: 'mcp-result' }], details: { serverId: 'server' } }) }) },
   })
   const { bridge, conversation, settle } = await setup('mcp__server__fetch', { key: 'key' }, { registry })
   await vi.waitFor(async () => expect(await bridge.approvals.pending(conversation.id, context())).toHaveLength(1))
@@ -180,7 +184,7 @@ test('cancellation reaches the tool AbortSignal and releases sandbox resources',
   const started = Promise.withResolvers<void>()
   registry.register({
     definition: { name: 'wait', label: 'Wait', description: 'Wait', inputSchema: Type.Object({}) },
-    adapter: { runtime: 'pi', create: () => ({ execute: async (_id, _args, signal: AbortSignal) => {
+    adapter: { create: () => ({ execute: async (_id, _args, signal: AbortSignal) => {
       started.resolve()
       await new Promise<void>((resolve) => signal.addEventListener('abort', () => { aborted(); resolve() }, { once: true }))
       return { content: [] }
@@ -198,9 +202,84 @@ test('invalid tool arguments never reach the registry executor', async () => {
   const execute = vi.fn()
   registry.register({
     definition: { name: 'strict', label: 'Strict', description: 'Strict', inputSchema: Type.Object({ key: Type.String() }) },
-    adapter: { runtime: 'pi', create: () => ({ execute }) },
+    adapter: { create: () => ({ execute }) },
   })
   const { settle } = await setup('strict', {}, { registry })
   expect(JSON.stringify(await settle())).toContain('invalid_arguments')
   expect(execute).not.toHaveBeenCalled()
+})
+
+
+test('tool failures and unknown calls finish as model results so the agent can correct them', async () => {
+  const registry = new ToolRegistry()
+  const execute = vi.fn(async (_id: string, args: { key: string }) => {
+    if (args.key === 'fail') throw new Error('tool failed')
+    return { content: [{ type: 'text', text: 'corrected' }], details: {} }
+  })
+  registry.register({ definition: { name: 'strict', label: 'Strict', description: 'Strict', inputSchema: Type.Object({ key: Type.String() }) }, adapter: { create: () => ({ execute }) } })
+  const calls: JsonObject[] = [{}, { key: 'fail' }, {}, { key: 'ok' }]
+  const responses = calls.map((args, index) => fauxAssistantMessage(fauxToolCall(index === 2 ? 'unknown' : 'strict', args, { id: 'call-' + index }), { stopReason: 'toolUse' }))
+  const { conversation, settle, faux } = await setup('strict', {}, { registry, responses: [...responses, fauxAssistantMessage('finished')] })
+  await settle()
+  const entries = (await conversation.entries({ order: 'ascending' }, 100, undefined, context())).items
+  const results = entries.flatMap(entry => entry.model ?? []).filter(message => message.role === 'toolResult')
+  expect(results.map(result => result.isError)).toEqual([true, true, true, false])
+  expect(JSON.stringify(results)).toContain('tool failed')
+  expect(execute.mock.calls.map(([, args]) => args)).toEqual([{ key: 'fail' }, { key: 'ok' }])
+  expect(faux.state.callCount).toBe(5)
+  expect(JSON.stringify(entries.at(-1))).toContain('finished')
+})
+
+test('retention failures become explicit SDK tool errors without repeating execution', async () => {
+  const registry = new ToolRegistry()
+  registry.register({ definition: { name: 'result', label: 'Result', description: 'Result', inputSchema: Type.Object({}) }, adapter: { create: () => ({ execute: async () => ({ content: [{ type: 'text', text: 'done' }], details: {} }) }) } })
+  const { settle, faux } = await setup('result', {}, { registry, retention: { process: async () => { throw new Error('disk full') } } })
+  const result = await settle()
+  expect(result.model?.[0]).toMatchObject({ isError: true, content: [{ type: 'text', text: expect.stringContaining('disk full') }] })
+  expect(faux.state.callCount).toBe(2)
+})
+
+test('the model receives retained previews while full tool output remains readable', async () => {
+  const registry = new ToolRegistry()
+  const text = 'HEAD' + 'x'.repeat(120000) + 'TAIL'
+  const store = new ToolResultStore(join(directory, 'results'))
+  registry.register({ definition: { name: 'large', label: 'Large', description: 'Large', inputSchema: Type.Object({}) }, adapter: { create: () => ({ execute: async () => ({ content: [{ type: 'text', text }], details: {} }) }) } })
+  let resultRef: string | undefined
+  const { settle } = await setup('large', {}, { registry, retention: new FileToolResultRetentionPolicy(store), responses: [
+    fauxAssistantMessage(fauxToolCall('large', {}, { id: 'large-call' }), { stopReason: 'toolUse' }),
+    transcript => {
+      const result = transcript.messages.at(-1)
+      expect(result).toMatchObject({ role: 'toolResult', isError: false, details: { status: 'success', retention: { truncated: true } } })
+      expect(JSON.stringify(result)).not.toContain(text)
+      expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThan(32 * 1024)
+      if (result?.role !== 'toolResult') throw new Error('Missing tool result')
+      resultRef = (result.details as { retention: { resultRef: string } }).retention.resultRef
+      return fauxAssistantMessage('finished')
+    },
+  ] })
+  await settle()
+  expect(resultRef).toBeDefined()
+  expect((await store.load(resultRef!)).result.content).toEqual([{ type: 'text', text }])
+})
+
+test('an approved write does not authorize the next call without another approval', async () => {
+  const { bridge, conversation, workspace, settle } = await setup('write', {}, { responses: [
+    fauxAssistantMessage(fauxToolCall('write', { path: 'file.txt', content: 'once' }, { id: 'first' }), { stopReason: 'toolUse' }),
+    fauxAssistantMessage(fauxToolCall('write', { path: 'file.txt', content: 'twice' }, { id: 'second' }), { stopReason: 'toolUse' }),
+    fauxAssistantMessage('finished'),
+  ] })
+  await vi.waitFor(async () => expect(await bridge.approvals.pending(conversation.id, context())).toHaveLength(1))
+  const [first] = await bridge.approvals.pending(conversation.id, context())
+  await bridge.approvals.decide(conversation.id, first.id, 'approved', context())
+  await vi.waitFor(async () => {
+    const pending = await bridge.approvals.pending(conversation.id, context())
+    expect(pending).toHaveLength(1)
+    expect(pending[0].id).not.toBe(first.id)
+  })
+  const [second] = await bridge.approvals.pending(conversation.id, context())
+  await bridge.approvals.decide(conversation.id, second.id, 'rejected', context())
+  expect((await settle()).model?.[0]).toMatchObject({ isError: false })
+  expect(await readFile(join(workspace, 'file.txt'), 'utf8')).toBe('once')
+  const entries = (await conversation.entries({ order: 'ascending' }, 100, undefined, context())).items
+  expect(entries.flatMap(entry => entry.model ?? []).filter(message => message.role === 'toolResult').at(-1)).toMatchObject({ isError: true })
 })

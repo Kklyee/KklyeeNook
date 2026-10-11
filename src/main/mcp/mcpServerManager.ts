@@ -1,4 +1,4 @@
-import { registerPiMcpTool } from '@/main/agent/pi/adapters/piMcpToolAdapter'
+import { registerMcpTool } from '../tools/mcp-tool'
 import type { ToolRegistry } from '@/main/tools/toolRegistry'
 import type {
   McpCallToolResult,
@@ -281,7 +281,7 @@ export class McpServerManager {
       if (entry.disposeTools.has(tool.name)) continue
       entry.disposeTools.set(
         tool.name,
-        registerPiMcpTool(this.registry, config, tool, entry.connection),
+        registerMcpTool(this.registry, config, tool, entry.connection),
       )
       changed = true
     }

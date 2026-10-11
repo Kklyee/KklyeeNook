@@ -61,7 +61,7 @@ test('registers same-named tools with server identity and disposes them on disco
   const [toolInstance] = registry.resolve<{
     name: string
     execute(id: string, args: unknown): Promise<{ content: Array<{ text?: string }> }>
-  }>('pi', ['mcp__filesystem__search'], { cwd: '/repo' })
+  }>(['mcp__filesystem__search'], { cwd: '/repo' })
   await expect(toolInstance.execute('call-1', { query: 'readme' })).resolves.toMatchObject({
     content: [{ text: 'filesystem:search' }],
   })

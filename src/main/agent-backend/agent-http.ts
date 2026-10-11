@@ -20,7 +20,7 @@ import {
 import type { AgentFrame } from '@/shared/agent/chat-protocol'
 import { AgentHost } from '../agent/agent-host'
 import { approvalSignalDoc } from '../agent/approvals'
-import { contentText, emptySnapshot } from '../agent/projection'
+import { contentText } from '../agent/projection'
 import {
   HttpError,
   readJsonBody,
@@ -83,7 +83,6 @@ const modelSchema = Type.Object(
   { additionalProperties: false },
 )
 const thinkingSchema = Type.Object({ level: thinkingLevelSchema }, { additionalProperties: false })
-const continueSchema = Type.Object({ threadId: Type.String({ minLength: 1 }) }, { additionalProperties: false })
 const queueMutationSchema = Type.Object(
   {
     mode: Type.Union([Type.Literal('steer'), Type.Literal('followUp')]),
@@ -102,7 +101,6 @@ const queueMutationSchema = Type.Object(
 
 export function startAgentHttpServer(host: AgentHost, options: AgentHttpServerOptions = {}) {
   return startAuthenticatedServer(
-    'agent',
     (context, prefix) => handle(context, prefix, host),
     options,
   )
@@ -139,16 +137,6 @@ async function handle(context: Context, prefix: string, host: AgentHost): Promis
   const action = parts[2]
   if (parts.length === 2 && method === 'GET') {
     const metadata = await host.conversations.get(threadId, ctx)
-    if ('historical' in metadata && metadata.historical) {
-      return context.json({
-        snapshot: emptySnapshot(),
-        approvals: [],
-        queue: [],
-        metadata,
-        historical: true,
-        history: await host.readHistory(threadId, ctx),
-      })
-    }
     const conversation = await host.engine.conversation(threadId, ctx)
     return context.json({
       snapshot: await host.conversations.snapshot(threadId, ctx),
@@ -156,7 +144,6 @@ async function handle(context: Context, prefix: string, host: AgentHost): Promis
       queue: (await host.engine.harness.snapshot(InboxDoc, conversation.id, ctx))?.items ?? [],
       metadata,
       contextWindow: host.models.contextWindow((await host.engine.harness.snapshot(AgentDoc, conversation.id, ctx))?.model),
-      history: await host.readHistory(threadId, ctx),
     })
   }
   if (parts.length === 2 && method === 'PATCH') {
@@ -167,16 +154,11 @@ async function handle(context: Context, prefix: string, host: AgentHost): Promis
     await host.conversations.tombstone(threadId, ctx)
     return context.body(null, 204)
   }
-  if (parts.length === 3 && action === 'continue' && method === 'POST') {
-    await host.conversations.get(threadId, ctx)
-    const input = await parse(context, continueSchema)
-    return context.json(await host.continueHistory(threadId, input.threadId, ctx), 201)
-  }
   if (parts.length === 3 && (action === 'archive' || action === 'unarchive') && method === 'POST') {
     await host.conversations.archive(threadId, action === 'archive', ctx)
     return context.body(null, 204)
   }
-  await host.conversations.getLive(threadId, ctx)
+  await host.conversations.get(threadId, ctx)
   const conversation = await host.engine.conversation(threadId, ctx)
   if (parts.length === 3 && action === 'submissions' && method === 'POST') {
     const input = await parse(context, inputSchema)

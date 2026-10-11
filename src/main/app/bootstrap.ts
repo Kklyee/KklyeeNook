@@ -123,7 +123,7 @@ export async function bootstrap(): Promise<AppContext> {
     apiKeys: collectRuntimeCredentials(configStore.get(), credentialStore),
     databaseUrl,
     migrationsPath,
-    sessionDir: join(userDataPath, 'pi-sessions'),
+    dataDir: userDataPath,
     allowedOrigins: [rendererUrl ? (URL.parse(rendererUrl)?.origin ?? 'null') : 'null'],
   }
   const chatWindow = createChatWindow()

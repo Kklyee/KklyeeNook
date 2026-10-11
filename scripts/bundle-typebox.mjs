@@ -6,7 +6,6 @@ import { build } from 'vite'
 const root = fileURLToPath(new URL('../', import.meta.url))
 for (const directory of [
   join(root, 'node_modules', 'typebox'),
-  join(root, 'node_modules', '@earendil-works', 'pi-coding-agent', 'node_modules', 'typebox'),
 ]) {
   const manifestPath = join(directory, 'package.json')
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))

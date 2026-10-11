@@ -41,7 +41,6 @@ function fixture() {
     getProject: vi.fn(async () => ({ id: 'project', name: 'App', conversationCount: 1, activeRunCount: 1 })),
     listConversations: vi.fn(async () => [snapshot]),
     getConversation: vi.fn(async () => snapshot),
-    continueConversation: vi.fn(async () => snapshot),
     createConversation: vi.fn(async () => snapshot),
     renameConversation: vi.fn(async () => {}),
     sendMessage: vi.fn(async () => {}),
@@ -61,7 +60,7 @@ function fixture() {
 
 test('returns business conflicts and scoped missing approvals without disguising them as server errors', async () => {
   const { app, port } = fixture()
-  for (const error of [new ConversationBusy(1 as never), new Error('Historical conversation is read-only')]) {
+  for (const error of [new ConversationBusy(1 as never)]) {
     vi.mocked(port.sendMessage).mockRejectedValueOnce(error)
     const response = await app.request('/api/conversations/chat/messages', { method: 'POST', headers, body: JSON.stringify({ content: 'Hello', mode: 'normal' }) })
     expect(response.status).toBe(409)
@@ -72,12 +71,10 @@ test('returns business conflicts and scoped missing approvals without disguising
   }
 })
 
-test('authenticates explicit historical continuation and passes a stable target without submitting a prompt', async () => {
+test('does not expose a historical continuation route', async () => {
   const { app, port } = fixture()
-  expect((await app.request('/api/conversations/legacy/continue', { method: 'POST', headers, body: JSON.stringify({ threadId: 'continued' }) })).status).toBe(201)
-  expect(port.continueConversation).toHaveBeenCalledWith('legacy', 'continued')
+  expect((await app.request('/api/conversations/legacy/continue', { method: 'POST', headers, body: JSON.stringify({ threadId: 'continued' }) })).status).toBe(404)
   expect(port.sendMessage).not.toHaveBeenCalled()
-  expect((await app.request('/api/conversations/legacy/continue', { method: 'POST', headers, body: '{}' })).status).toBe(400)
   expect((await app.request('/api/conversations/legacy/continue', { method: 'POST', body: JSON.stringify({ threadId: 'continued' }) })).status).toBe(401)
 })
 

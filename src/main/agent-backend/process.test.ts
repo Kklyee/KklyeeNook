@@ -12,7 +12,7 @@ const options: AgentBackendInitOptions = {
   apiKeys: {},
   databaseUrl: 'file:///tmp/app.db',
   migrationsPath: '/tmp/drizzle',
-  sessionDir: '/tmp/sessions',
+  dataDir: '/tmp/agent-data',
   allowedOrigins: [],
 }
 

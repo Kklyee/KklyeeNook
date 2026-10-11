@@ -61,7 +61,7 @@ export class RunProjection {
       : tx.task(id as Record['id']), context)
     if (!task || task.kind !== GenerationTask.definition.name) throw new Error('Run not found')
     const root = await this.host.engine.ownerThread(task.conversationId, context)
-    await this.host.conversations.getLive(root.threadId, context)
+    await this.host.conversations.get(root.threadId, context)
     const graph = await this.graph(root.conversationId, context)
     const group = (await this.groups(graph, context)).find((item) => item.id === runId)
     if (!group) throw new Error('Run not found')

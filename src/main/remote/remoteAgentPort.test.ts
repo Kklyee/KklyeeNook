@@ -10,7 +10,7 @@ import { createRemoteAgentPort } from './remoteAgentPort'
 
 function fixture() {
   const session: AgentSessionRecord = { archived: false, id: 'chat', workspaceId: 'project', title: 'Existing chat', createdAt: 1, updatedAt: 2, permissionMode: 'workspace-write' as const }
-  const sessions = new Map<string, AgentSessionRecord & { historical?: boolean }>([['chat', session], ['global', { ...session, id: 'global', workspaceId: null }]])
+  const sessions = new Map<string, AgentSessionRecord>([['chat', session], ['global', { ...session, id: 'global', workspaceId: null }]])
   const project = { id: 'project', displayName: 'App', rootPath: 'C:\\private-project', status: 'attached', createdAt: 1, updatedAt: 2 }
   const workspaces = { list: vi.fn(async () => [project]), resolve: vi.fn(async () => project) }
   const config = new AgentConfigStore({ model: { provider: 'private-provider', modelID: 'basic', thinkingLevel: 'off' }, providers: [{ id: 'private-provider', baseUrl: 'https://private-provider.test/secret', models: [{ id: 'basic', name: 'Basic', reasoning: false, contextWindow: 128000 }, { id: 'reasoning', name: 'Reasoning', reasoning: true }] }], tools: { enabled: [] } })
@@ -26,7 +26,6 @@ function fixture() {
     models: { contextWindow: vi.fn(() => 128000) },
     conversations: {
       get: vi.fn(async (id: string) => { const value = sessions.get(id); if (!value) throw new Error('Conversation not found'); return value }),
-      getLive: vi.fn(async (id: string) => { const value = sessions.get(id); if (!value) throw new Error('Conversation not found'); return value }),
       list: vi.fn(async () => [...sessions.values()]), snapshot: vi.fn(async () => snapshot),
       submit: vi.fn(async (_id: string, _input: any) => ({})), cancel: vi.fn(async () => {}),
       update: vi.fn(async (id: string, patch: any) => Object.assign(sessions.get(id)!, patch)),
@@ -40,12 +39,6 @@ function fixture() {
       return value
     }),
     configure: vi.fn(async (_id: string, patch: any) => Object.assign(snapshot.agent, patch)),
-    readHistory: vi.fn(async () => [] as any[]),
-    continueHistory: vi.fn(async (id: string, threadId: string) => {
-      const value = { ...sessions.get(id)!, id: threadId, historical: false }
-      sessions.set(threadId, value)
-      return value
-    }),
     pendingApprovals: vi.fn(async () => []), decideApproval: vi.fn(async () => {}),
     engine: {
       conversation: vi.fn(async () => ({ id: 1 })),
@@ -188,41 +181,6 @@ test('strips opaque model signatures and tool details from public transcript pro
   const result = agentRemoteSnapshot({ snapshot, metadata: session, queue: [], approvals: [], permission: 'workspace-write' })
   expect(JSON.stringify(result)).not.toContain('opaque-secret')
   expect(JSON.stringify(result)).not.toContain('hidden')
-})
-
-test('keeps historical conversations visible, inert and explicitly continued with their workspace and permission', async () => {
-  const { port, host, sessions, session } = fixture()
-  sessions.set('legacy', { ...session, id: 'legacy', historical: true, permissionMode: 'read-only' })
-  host.readHistory.mockResolvedValue([{ id: 'old', kind: 'message', role: 'assistant', createdAt: 1, source: { sessionFile: 'C:\\private-session' }, payload: { message: { role: 'assistant', content: [{ type: 'text', text: 'Historical answer' }, { type: 'toolCall', id: 'old-tool', name: 'write', arguments: { secret: 'hidden-argument' } }] } } }])
-  expect((await port.listProjects())[0].conversationCount).toBe(2)
-  expect(await port.listConversations('project')).toContainEqual(expect.objectContaining({ id: 'legacy', historical: true, status: 'idle' }))
-  const old = await port.getConversation('legacy')
-  expect(old).toMatchObject({ historical: true, permission: 'read-only', queue: [], approvals: [] })
-  expect(JSON.stringify(old)).toContain('Historical answer')
-  expect(JSON.stringify(old)).not.toContain('private-session')
-  expect(JSON.stringify(old)).not.toContain('hidden-argument')
-  await expect(port.sendMessage('legacy', { content: 'Do not replay', mode: 'normal' })).rejects.toMatchObject({ status: 409 })
-  await expect(port.setPermission('legacy', 'full-access')).rejects.toMatchObject({ status: 409 })
-  expect(host.conversations.submit).not.toHaveBeenCalled()
-  const events: RemoteEvent[] = []
-  const stop = port.subscribe('legacy', event => events.push(event))
-  await vi.waitFor(() => expect(events[0]?.type).toBe('snapshot'))
-  expect(host.engine.watch).not.toHaveBeenCalled()
-  stop()
-  await port.renameConversation('legacy', 'Renamed history')
-  const continued = await port.continueConversation('legacy', 'continued')
-  expect(host.continueHistory).toHaveBeenCalledWith('legacy', 'continued', expect.anything())
-  expect(continued).toMatchObject({ id: 'continued', projectId: 'project', permission: 'read-only' })
-  expect(host.conversations.submit).not.toHaveBeenCalled()
-})
-
-test('refuses historical continuation into a detached workspace', async () => {
-  const { port, host, sessions, session, workspaces } = fixture()
-  sessions.set('legacy', { ...session, id: 'legacy', historical: true })
-  workspaces.resolve.mockResolvedValue({ ...await workspaces.resolve(), status: 'detached' })
-  expect((await port.getConversation('legacy')).permission).toBe('read-only')
-  await expect(port.continueConversation('legacy', 'continued')).rejects.toMatchObject({ status: 409 })
-  expect(host.continueHistory).not.toHaveBeenCalled()
 })
 
 test('preserves completed tool and thinking activity at desktop text boundaries on reopening', async () => {

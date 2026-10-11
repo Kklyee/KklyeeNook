@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { PermissionRequest } from '@/shared/approval/permission'
 import { ToolExecutionHarness } from '@/main/agent/toolExecutionHarness'
 import { ToolRegistry } from '@/main/tools/toolRegistry'
-import { registerPiBuiltinTools } from '@/main/agent/pi/adapters/piBuiltinToolAdapter'
+import { registerBuiltinTools } from '../tools/builtin-tools'
 import { ToolExecutionError } from '@/shared/tool/toolExecutionResult'
 import { SandboxService } from './sandboxService'
 import {
@@ -115,7 +115,7 @@ test('sandbox startup failure is a normal tool error and never invokes the adapt
     }),
   }
   const registry = new ToolRegistry()
-  registerPiBuiltinTools(registry, root)
+  registerBuiltinTools(registry, root)
   const approve = vi.fn()
   const adapter = vi.fn()
   const harness = new ToolExecutionHarness(
@@ -145,7 +145,7 @@ test.each(['ABORTED', 'TIMEOUT', 'PERMISSION_DENIED'] as const)(
   'sandbox %s retains the tool error code',
   async (code) => {
     const registry = new ToolRegistry()
-    registerPiBuiltinTools(registry, root)
+    registerBuiltinTools(registry, root)
     const sandbox = new SandboxService({
       support: () => 'partial',
       execute: async () => {

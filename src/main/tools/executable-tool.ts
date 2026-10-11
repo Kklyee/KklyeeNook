@@ -1,9 +1,12 @@
 import type { Static, TSchema } from 'typebox'
 import type { ToolExecutionResult } from '@/shared/tool/tool'
+import type { ToolExecutionApi } from '@earendil-works/pi-durable'
 
 export type ToolUpdateHandler = (partial: unknown) => void
 
-export interface ExecutableToolContext {}
+export interface ExecutableToolContext {
+  api?: ToolExecutionApi
+}
 
 export interface ExecutableTool<TParameters extends TSchema = TSchema, TDetails = unknown> {
   name: string

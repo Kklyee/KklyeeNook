@@ -48,10 +48,10 @@ export async function verifyRemote() {
   if (retriedBodies.length !== 2 || retriedBodies[0] !== retriedBodies[1] || !JSON.parse(retriedBodies[0]).requestId) throw new Error('Remote retry changed the original admission')
   await wait(async () => {
     const conversations = await api(`/projects/${projectId}/conversations`)
-    return conversations.find(conversation => !conversation.historical && conversation.status === 'idle')
+    return conversations.find(conversation => conversation.status === 'idle')
   })
-  const first = (await api(`/projects/${projectId}/conversations`)).find(conversation => !conversation.historical)
-  if ((await api(`/projects/${projectId}/conversations`)).filter(conversation => !conversation.historical).length !== 1 || first.id !== `remote-${JSON.parse(retriedBodies[0]).requestId}`) throw new Error('Remote retry created a duplicate conversation')
+  const first = (await api(`/projects/${projectId}/conversations`))[0]
+  if ((await api(`/projects/${projectId}/conversations`)).length !== 1 || first.id !== `remote-${JSON.parse(retriedBodies[0]).requestId}`) throw new Error('Remote retry created a duplicate conversation')
   const id = first.id
   await api(`/conversations/${id}/model`, { provider: 'test-provider', modelId: 'alternate-model' })
   await api(`/conversations/${id}/thinking`, { thinkingLevel: 'low' })
@@ -82,21 +82,11 @@ export async function verifyRemote() {
   await wait(() => document.body.innerText.includes('Production host accepted.'))
   const second = await wait(async () => {
     const conversations = await api(`/projects/${projectId}/conversations`)
-    return conversations.find(conversation => !conversation.historical && conversation.id !== id && conversation.status === 'idle')
+    return conversations.find(conversation => conversation.id !== id && conversation.status === 'idle')
   }) as { id: string }
   const completed = await api(`/conversations/${second.id}`)
   if (!completed.activities.some(activity => activity.toolCallId === 'effect-call' && activity.status === 'completed')) throw new Error('Completed remote tool activity disappeared')
   const publicState = JSON.stringify(completed).replace(/\\/g, '/')
   for (const secret of ['synthetic-key', '/sessions/', 'textSignature', 'thinkingSignature']) if (publicState.includes(secret)) throw new Error('Remote exposed private execution data')
-  location.hash = `/projects/${projectId}/conversations/historical-thread`
-  await wait(() => document.body.innerText.includes('Historical remote answer'))
-  const historical = await api('/conversations/historical-thread')
-  if (!historical.historical || !document.querySelector<HTMLTextAreaElement>('textarea')?.disabled) throw new Error('Remote history was not read-only')
-  ;(await button('在新会话中继续')).click()
-  const continued = await wait(() => location.hash !== `#/projects/${projectId}/conversations/historical-thread` && location.hash.includes('/conversations/'))
-  if (!continued) throw new Error('Remote history did not continue explicitly')
-  const continuationId = location.hash.split('/').at(-1)!
-  const continuation = await api(`/conversations/${continuationId}`)
-  if (continuation.historical || continuation.permission !== 'read-only' || !JSON.stringify(continuation.messages).includes('Historical remote answer')) throw new Error('Remote continuation changed the frozen context or permission')
-  return { sent: true, queue: true, cancel: true, approval: true, configuration: true, history: true, threadId: second.id, continuationId }
+  return { sent: true, queue: true, cancel: true, approval: true, configuration: true, threadId: second.id }
 }
