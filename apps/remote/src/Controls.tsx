@@ -29,7 +29,7 @@ export function Controls({ state, selection, disabled, onPermission, onModel, on
   onModel(value: { provider: string; modelId: string }): void
   onThinking(value: string): void
 }) {
-  const models = state.models.map(model => ({ id: JSON.stringify([model.provider, model.modelId]), name: model.name, description: model.provider, efforts: model.supportsThinking ? model.thinkingLevels.map(level => ({ id: level, name: level })) : undefined }))
+  const models = state.models.map(model => ({ id: JSON.stringify([model.provider, model.modelId]), name: model.name, provider: model.provider, providerName: model.provider, efforts: model.supportsThinking ? model.thinkingLevels.map(level => ({ id: level, name: level })) : undefined }))
   return <div className="mobile-model-controls mr-auto flex min-w-0 w-fit shrink items-center gap-1">
     <Choice compact label="Permission" value={selection.permission} disabled={disabled} options={state.permissions.map(value => ({ value, label: PERMISSION_LABELS[value] }))} onChange={value => onPermission(value as Selection['permission'])} />
     <ModelSelectorRoot models={models} value={JSON.stringify([selection.provider, selection.modelId])} effort={selection.thinkingLevel} onEffortChange={onThinking} onValueChange={value => { const [provider, modelId] = JSON.parse(value); onModel({ provider, modelId }) }}>

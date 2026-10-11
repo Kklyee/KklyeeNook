@@ -184,7 +184,8 @@ function useChatModelSelection(
     return {
       id: model.id,
       name: model.modelName,
-      description: model.providerName,
+      provider: model.provider,
+      providerName: model.providerName,
       keywords: [model.provider, model.providerName],
       efforts: efforts.length ? efforts : undefined,
     }

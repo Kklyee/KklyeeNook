@@ -46,13 +46,6 @@ test('changes the controlled reasoning effort when a radio is clicked', async ()
   }
 
   await act(() => root.render(createElement(Harness)))
-  const effortSection = document.querySelector<HTMLElement>(
-    '[data-section="effort"] [data-slot="model-selector-section-trigger"]',
-  )
-  expect(effortSection).not.toBeNull()
-
-  await act(() => effortSection!.click())
-
   const medium = [...document.querySelectorAll<HTMLElement>('[role="radio"]')].find(
     (radio) => radio.textContent === '中',
   )
@@ -64,7 +57,7 @@ test('changes the controlled reasoning effort when a radio is clicked', async ()
   await act(() => root.unmount())
 })
 
-test('keeps model entries separated with compact provider text', async () => {
+test('filters models by provider without closing the panel', async () => {
   const container = document.createElement('div')
   document.body.append(container)
   const root = createRoot(container)
@@ -83,19 +76,54 @@ test('keeps model entries separated with compact provider text', async () => {
     ),
   )
 
-  const modelSection = document.querySelector<HTMLElement>(
-    '[data-section="model"] [data-slot="model-selector-section-trigger"]',
+  expect(document.querySelectorAll('[data-slot="model-selector-item"]')).toHaveLength(1)
+  expect(document.querySelector('[data-slot="model-selector-item"]')?.textContent).toContain(
+    'Model A',
   )
-  expect(modelSection).not.toBeNull()
+  const provider = document.querySelector<HTMLElement>('button[aria-label="Provider B"]')
+  await act(() => provider!.click())
+  const model = document.querySelector<HTMLElement>('[data-slot="model-selector-item"]')
+  expect(model?.textContent).toContain('Model B')
+  await act(() => model!.click())
+  expect(document.querySelector('[data-slot="model-selector-content"]')).not.toBeNull()
 
-  await act(() => modelSection!.click())
+  await act(() => root.unmount())
+})
 
-  const modelGroup = document.querySelector<HTMLElement>('[data-slot="command-group"]')
-  const provider = [
-    ...document.querySelectorAll<HTMLElement>('[data-slot="model-selector-item"] span span'),
-  ].find((element) => element.textContent === 'Provider A')
-  expect(modelGroup?.className).toContain('gap-1')
-  expect(provider?.className).toContain('text-[10px]')
-
+test('updates thinking options only after selecting a model from another provider', async () => {
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  function Harness() {
+    const [value, setValue] = useState('a')
+    return createElement(ModelSelectorRoot, {
+      models: [
+        {
+          id: 'a',
+          name: 'Model A',
+          provider: 'deepseek',
+          providerName: 'DeepSeek',
+          efforts: [{ id: 'medium', name: 'Medium' }],
+        },
+        {
+          id: 'b',
+          name: 'Model B',
+          provider: 'zai',
+          providerName: 'Z.AI',
+          efforts: [{ id: 'high', name: 'High' }],
+        },
+      ],
+      value,
+      onValueChange: setValue,
+      defaultOpen: true,
+      children: createElement(ModelSelectorContent),
+    })
+  }
+  await act(() => root.render(createElement(Harness)))
+  await act(() => document.querySelector<HTMLElement>('button[aria-label="Z.AI"]')!.click())
+  expect(document.querySelector('[role="radio"]')?.textContent).toBe('Medium')
+  await act(() => document.querySelector<HTMLElement>('[data-slot="model-selector-item"]')!.click())
+  expect(document.querySelector('[role="radio"]')?.textContent).toBe('High')
+  expect(document.querySelector('[data-slot="model-selector-content"]')).not.toBeNull()
   await act(() => root.unmount())
 })

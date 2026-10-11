@@ -12,7 +12,9 @@ import {
   type ReactNode,
 } from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
-import { CheckIcon, ChevronDownIcon, ChevronRightIcon } from 'lucide-react'
+import { CheckIcon, ChevronDownIcon } from 'lucide-react'
+import deepseekIcon from '../assets/icon/deepseek.svg'
+import zaiIcon from '../assets/icon/zai.svg'
 import { cn } from '../lib/utils'
 import { Popover, PopoverContent, PopoverTrigger } from '../components/popover'
 import {
@@ -39,6 +41,8 @@ export type ModelOption = {
   id: string
   name: string
   description?: string
+  provider?: string
+  providerName?: string
   icon?: ReactNode
   disabled?: boolean
   keywords?: readonly string[]
@@ -355,11 +359,16 @@ function ModelSelectorContent({
   children,
   ...props
 }: ModelSelectorContentProps) {
-  const { value, selectedModel, efforts, effort } = useModelSelectorContext()
-  const [expandedSection, setExpandedSection] = useState<'model' | 'effort' | null>(null)
+  const { models, value, selectedModel } = useModelSelectorContext()
+  const providers = [
+    ...new Set(models.map((model) => model.provider ?? model.description ?? 'Models')),
+  ]
+  const [provider, setProvider] = useState(
+    selectedModel?.provider ?? selectedModel?.description ?? providers[0],
+  )
+  const activeProvider = providers.includes(provider!) ? provider : providers[0]
   const { side: renderedSide, popupRef } = useLazyFlipSide()
   const unfiltered = searchable === false || (!searchable && children === undefined)
-  const selectedEffort = efforts?.find((option) => option.id === effort) ?? efforts?.[0]
   const isCompactLayout = children === undefined
 
   return (
@@ -370,91 +379,79 @@ function ModelSelectorContent({
       side={renderedSide ?? side ?? 'bottom'}
       sideOffset={sideOffset}
       className={cn(
-        'w-72 min-w-(--anchor-width) overflow-hidden rounded-[12px] p-0',
+        'w-96 max-w-[calc(100vw-2rem)] min-w-(--anchor-width) overflow-hidden rounded-[12px] p-0',
         className,
       )}
       {...props}
     >
       <Command
-        shouldFilter={isCompactLayout ? expandedSection === 'model' : !unfiltered}
+        shouldFilter={isCompactLayout ? false : !unfiltered}
         {...(value !== undefined ? { defaultValue: value } : {})}
       >
         {children ? (
           children
         ) : (
-          <div className="flex flex-col gap-0.5 p-1.5 ">
-            <ModelSelectorSection
-              data-section="model"
-              value={selectedModel?.name ?? '选择模型'}
-              expanded={expandedSection === 'model'}
-              onClick={() =>
-                setExpandedSection((current) => (current === 'model' ? null : 'model'))
-              }
-            >
-              {}
-              <ModelSelectorList className="max-h-52" />
-            </ModelSelectorSection>
-            <ModelSelectorSection
-              data-section="effort"
-              value={selectedEffort?.name ?? '关闭'}
-              expanded={expandedSection === 'effort'}
-              disabled={!efforts?.length}
-              onClick={() =>
-                setExpandedSection((current) => (current === 'effort' ? null : 'effort'))
-              }
-            >
-              <ModelSelectorEffort className="border-t-0 px-1 pb-1" />
-            </ModelSelectorSection>
-          </div>
+          <>
+            <div className="flex min-h-48">
+              <div
+                aria-label="Providers"
+                className="flex max-h-72 w-14 shrink-0 flex-col gap-1 overflow-y-auto border-r p-1.5"
+              >
+                {providers.map((id) => {
+                  const model = models.find(
+                    (item) => (item.provider ?? item.description ?? 'Models') === id,
+                  )!
+                  const name = model.providerName ?? model.description ?? id
+                  const icon = id.toLowerCase().includes('deepseek')
+                    ? deepseekIcon
+                    : /z[.-]?ai/i.test(id)
+                      ? zaiIcon
+                      : undefined
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      aria-label={name}
+                      aria-pressed={activeProvider === id}
+                      title={name}
+                      onClick={() => setProvider(id)}
+                      className="flex size-10 shrink-0 items-center justify-center rounded-lg text-xs font-medium text-muted-foreground outline-none hover:bg-hover focus-visible:ring-1 focus-visible:ring-ring aria-pressed:bg-selected aria-pressed:text-foreground"
+                    >
+                      {icon ? (
+                        <img src={icon} alt="" className="size-5 dark:invert" />
+                      ) : (
+                        name.slice(0, 2)
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="min-w-0 flex-1 p-1.5">
+                <div className="px-3 py-2 text-xs font-medium text-muted-foreground">
+                  {models.find(
+                    (model) => (model.provider ?? model.description ?? 'Models') === activeProvider,
+                  )?.providerName ?? activeProvider}
+                </div>
+                <ModelSelectorFocusAnchor />
+                <ModelSelectorList className="max-h-60">
+                  <CommandGroup>
+                    {models
+                      .filter(
+                        (model) =>
+                          (model.provider ?? model.description ?? 'Models') === activeProvider,
+                      )
+                      .map((model) => (
+                        <ModelSelectorItem key={model.id} model={model} closeOnSelect={false} />
+                      ))}
+                  </CommandGroup>
+                </ModelSelectorList>
+              </div>
+            </div>
+            <ModelSelectorEffort className="flex-col items-stretch gap-2" />
+          </>
         )}
       </Command>
     </PopoverContent>
-  )
-}
-
-type ModelSelectorSectionProps = {
-  'data-section': 'model' | 'effort'
-  value: ReactNode
-  expanded: boolean
-  disabled?: boolean
-  onClick: () => void
-  children: ReactNode
-}
-
-function ModelSelectorSection({
-  value,
-  expanded,
-  disabled = false,
-  onClick,
-  children,
-  ...props
-}: ModelSelectorSectionProps) {
-  return (
-    <div
-      data-slot="model-selector-section"
-      className={cn(
-        'overflow-hidden rounded-lg ',
-      )}
-      {...props}
-    >
-      <button
-        type="button"
-        data-slot="model-selector-section-trigger"
-        aria-expanded={expanded}
-        disabled={disabled}
-        onClick={onClick}
-        className="flex h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-xs text-foreground transition-colors outline-none hover:bg-hover active:bg-active focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 aria-expanded:bg-selected aria-expanded:hover:bg-selected"
-      >
-        <span className="min-w-0 flex-1 truncate font-medium">{value}</span>
-        <ChevronRightIcon
-          className={cn(
-            'text-muted-foreground size-4 shrink-0 transition-transform',
-            expanded && 'rotate-90',
-          )}
-        />
-      </button>
-      {expanded && <div className="pt-0.5">{children}</div>}
-    </div>
   )
 }
 
@@ -532,10 +529,12 @@ function ModelSelectorSeparator(props: ModelSelectorSeparatorProps) {
 
 export type ModelSelectorItemProps = Omit<ComponentPropsWithoutRef<typeof CommandItem>, 'value'> & {
   model: ModelOption
+  closeOnSelect?: boolean
 }
 
 function ModelSelectorItem({
   model,
+  closeOnSelect = true,
   className,
   children,
   onSelect,
@@ -552,7 +551,7 @@ function ModelSelectorItem({
       {...(model.disabled ? { disabled: true } : undefined)}
       onSelect={(selectedValue) => {
         setValue(model.id)
-        setOpen(false)
+        if (closeOnSelect) setOpen(false)
         onSelect?.(selectedValue)
       }}
       data-model-selected={isSelected || undefined}
@@ -646,14 +645,14 @@ function ModelSelectorEffort({
         value={effort ?? ''}
         onValueChange={setEffort}
         aria-label={typeof label === 'string' ? label : 'Reasoning effort'}
-        className="flex items-center gap-0.5"
+        className="flex flex-wrap items-center gap-0.5"
       >
         {efforts.map((option) => (
           <Radio.Root
             key={option.id}
             value={option.id}
             className={cn(
-              'focus-visible:ring-ring/50 text-muted-foreground cursor-pointer rounded-md bg-transparent px-1.5 py-1 text-[11px] transition-colors outline-none hover:bg-hover hover:text-foreground active:bg-active focus-visible:ring-1',
+              'focus-visible:ring-ring/50 text-muted-foreground cursor-pointer rounded-md bg-transparent whitespace-nowrap px-2 py-1 text-[11px] transition-colors outline-none hover:bg-hover hover:text-foreground active:bg-active focus-visible:ring-1',
               'data-checked:bg-selected data-checked:text-foreground data-checked:font-medium data-checked:hover:bg-selected',
             )}
           >
