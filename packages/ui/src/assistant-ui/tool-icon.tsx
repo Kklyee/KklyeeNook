@@ -2,13 +2,13 @@
 
 import { BotIcon, CircleAlertIcon, GlobeIcon, WrenchIcon } from 'lucide-react'
 
-import bashIcon from '../assets/icon/bash.svg'
-import thinkingIcon from '../assets/icon/thinking.svg'
-import editFileIcon from '../assets/icon/edit-file.svg'
-import readFileIcon from '../assets/icon/read-file.svg'
-import searchIcon from '../assets/icon/tool-search.svg'
-import globIcon from '../assets/icon/tool-glob.svg'
-import writeFileIcon from '../assets/icon/write-file.svg'
+import bashIcon from '../assets/icon/agent-conversation/bash.svg'
+import thinkingIcon from '../assets/icon/agent-conversation/thinking.svg'
+import editFileIcon from '../assets/icon/agent-conversation/edit-file.svg'
+import readFileIcon from '../assets/icon/agent-conversation/read-file.svg'
+import searchIcon from '../assets/icon/agent-conversation/tool-search.svg'
+import globIcon from '../assets/icon/agent-conversation/tool-glob.svg'
+import writeFileIcon from '../assets/icon/agent-conversation/write-file.svg'
 import { cn } from '../lib/utils'
 
 export type ToolIconKind =

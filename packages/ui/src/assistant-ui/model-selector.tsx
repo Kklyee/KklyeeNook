@@ -13,8 +13,9 @@ import {
 } from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { CheckIcon, ChevronDownIcon } from 'lucide-react'
-import deepseekIcon from '../assets/icon/deepseek.svg'
-import zaiIcon from '../assets/icon/zai.svg'
+import deepseekIcon from '../assets/icon/model-provider/deepseek.svg'
+import zaiIcon from '../assets/icon/model-provider/zai.svg'
+import magpieIcon from '../assets/icon/model-provider/magpie.svg'
 import { cn } from '../lib/utils'
 import { Popover, PopoverContent, PopoverTrigger } from '../components/popover'
 import {
@@ -406,7 +407,9 @@ function ModelSelectorContent({
                     ? deepseekIcon
                     : /z[.-]?ai/i.test(id)
                       ? zaiIcon
-                      : undefined
+                      : id.toLowerCase() === 'magpie'
+                        ? magpieIcon
+                        : undefined
                   return (
                     <button
                       key={id}
