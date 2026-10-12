@@ -33,6 +33,15 @@ export class BotService {
     ]
     await this.repo.insert(defaultBot('xiaoya', '小芽'))
     await this.repo.insert(coder)
+    for (const bot of await this.repo.list()) {
+      const enabledTools = [...new Set(bot.enabledTools.map((name) =>
+        name.startsWith('bot.') && GROVE_TOOLS.includes(name.slice(4) as typeof GROVE_TOOLS[number])
+          ? name.slice(4)
+          : name,
+      ))]
+      if (JSON.stringify(enabledTools) !== JSON.stringify(bot.enabledTools))
+        await this.repo.save({ ...bot, enabledTools, updatedAt: Date.now() })
+    }
     if (GROVE_TOOLS.every((name) => this.tools.get(name))) {
       for (const id of ['xiaoya', 'coder']) {
         const bot = await this.get(id)

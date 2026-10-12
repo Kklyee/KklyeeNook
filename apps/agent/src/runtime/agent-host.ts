@@ -279,7 +279,7 @@ export class AgentHost {
     registry.install(botIdentity)
     if (grove) registry.install(grove.extension)
     for (const extension of options.extensions ?? []) registry.install(extension)
-    registry.install(tools.extension())
+    for (const extension of tools.extensions()) registry.install(extension)
     registry.install(tools.approvals.extension)
     registry.install(inputs.extension)
     const membership = createRunMembershipExtension(() => engine.harness)
@@ -424,7 +424,7 @@ export class AgentHost {
               : workspace
                 ? this.identities.coding
                 : this.identities.personal,
-            this.tools.extension(),
+            ...this.tools.extensions(),
             this.tools.approvals.extension,
             this.inputs.extension,
             this.membership,
@@ -517,7 +517,7 @@ export class AgentHost {
   }
 
   async refreshTools(context: Context) {
-    this.registry.install(this.tools.extension())
+    for (const extension of this.tools.extensions()) this.registry.install(extension)
     if (this.bots) return
     const tools = this.enabledTools()
     for (const record of await this.conversations.list(context)) {
@@ -599,8 +599,9 @@ export class AgentHost {
     }
     return [
       ...this.tools
-        .extension()
-        .tools!.filter(
+        .extensions()
+        .flatMap((extension) => extension.tools!)
+        .filter(
           (tool) =>
             (bot ? bot.enabledTools.includes(tool.name) : names.has(tool.name)) &&
             tool.name !== 'delegate_task',

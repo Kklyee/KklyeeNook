@@ -62,7 +62,7 @@ async function setup(
   let bridge: AgentTools
   const open = async (beforeResume?: (bridge: AgentTools) => Promise<unknown>) => {
     bridge = new AgentTools(registry, sandbox, options.retention ?? retention, async () => adapter)
-    agentRegistry.install(bridge.extension())
+    for (const extension of bridge.extensions()) agentRegistry.install(extension)
     agentRegistry.install(bridge.approvals.extension)
     const engine = await AgentEngine.open(join(directory, 'durable.sqlite'), {
       models, registry: agentRegistry, settings: { retry: { enabled: false } },
@@ -75,7 +75,7 @@ async function setup(
   }
   const { engine, bridge: tools } = await open()
   if (options.responses) faux.setResponses(options.responses)
-  const extension = tools.extension()
+  const extension = tools.extensions()[0]!
   await engine.create('thread', {
     model: { provider: 'faux', modelId: 'faux-1' }, tools: extension.tools,
     extensions: options.guard === false ? [extension] : [extension, tools.approvals.extension],
@@ -171,7 +171,7 @@ test('dynamic MCP-style tools retain schema, result metadata and unsafe recovery
   await vi.waitFor(async () => expect(await bridge.approvals.pending(conversation.id, context())).toHaveLength(1))
   const [request] = await bridge.approvals.pending(conversation.id, context())
   await bridge.approvals.decide(conversation.id, request.id, 'approved', context())
-  const [tool] = bridge.extension().tools!
+  const [tool] = bridge.extensions()[0]!.tools!
   expect(tool.replay).toBe('unsafe')
   expect(tool.parameters).toEqual(registry.get(tool.name)?.inputSchema)
   const result = await settle()

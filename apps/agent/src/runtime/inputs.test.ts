@@ -44,7 +44,7 @@ async function setup(options: Parameters<typeof fauxProvider>[0] = {}, directory
   const registry = createRegistry()
   const open = async () => {
     const inputs = new AgentInputs(builder, skills, workspaceId,
-      directoryEnabled ? async () => ({ profile: defaultBot('source', 'Source'), workspaceId: null, permissionMode: 'read-only', tools: ['bot.request_task'], agent: {} }) : undefined,
+      directoryEnabled ? async () => ({ profile: defaultBot('source', 'Source'), workspaceId: null, permissionMode: 'read-only', tools: ['request_task'], agent: {} }) : undefined,
       undefined,
       directoryEnabled ? async () => [{ id: 'private-peer-id', name: 'Private Peer' }] : undefined,
     )

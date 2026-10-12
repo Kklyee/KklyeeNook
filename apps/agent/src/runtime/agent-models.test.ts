@@ -204,8 +204,8 @@ test('unknown custom reasoning models do not advertise or retain unverified effo
   expect(runtime.selection().thinkingLevel).toBe('off')
 })
 
-test.each(['custom', 'deepseek'])('tool names are compatible on the wire and restored for %s execution', async (provider) => {
-  const { baseUrl, requests } = await server('bot.request_task')
+test.each(['custom', 'deepseek'])('legal tool names are sent unchanged for %s execution', async (provider) => {
+  const { baseUrl, requests } = await server('request_task')
   const credentials = new MemoryCredentialStore()
   credentials.setApiKey(provider, 'synthetic-key')
   const settings: AgentConfig = {
@@ -215,20 +215,20 @@ test.each(['custom', 'deepseek'])('tool names are compatible on the wire and res
   const runtime = new AgentModels(() => settings, () => credentials, emptyAuth)
   const model = runtime.models.getModel(provider, settings.model.modelID)!
   const input = {
-    tools: ['read', 'bot.request_task', 'bot_request_task', 'mcp__server.with.dot__工具'].map((name) => ({ name, description: name, parameters: Type.Object({}) })),
+    tools: ['read', 'send_message', 'request_task', 'get_task'].map((name) => ({ name, description: name, parameters: Type.Object({}) })),
     messages: [
       { role: 'user' as const, content: 'hello', timestamp: 1 },
-      { role: 'assistant' as const, content: [{ type: 'toolCall' as const, id: 'old', name: 'bot.request_task', arguments: {} }], api: model.api, provider, model: model.id, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }, stopReason: 'toolUse' as const, timestamp: 2 },
-      { role: 'toolResult' as const, toolCallId: 'old', toolName: 'bot.request_task', content: [{ type: 'text' as const, text: 'done' }], isError: false, timestamp: 3 },
+      { role: 'assistant' as const, content: [{ type: 'toolCall' as const, id: 'old', name: 'request_task', arguments: {} }], api: model.api, provider, model: model.id, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }, stopReason: 'toolUse' as const, timestamp: 2 },
+      { role: 'toolResult' as const, toolCallId: 'old', toolName: 'request_task', content: [{ type: 'text' as const, text: 'done' }], isError: false, timestamp: 3 },
     ],
   }
   const before = JSON.stringify(input)
   for (const stream of [runtime.models.streamSimple(model, input), runtime.models.stream(model, input)]) {
     for await (const event of stream) {
-      if (event.type === 'toolcall_end') expect(event.toolCall.name).toBe('bot.request_task')
-      if ('partial' in event) for (const part of event.partial.content) if (part.type === 'toolCall') expect(part.name).toBe('bot.request_task')
+      if (event.type === 'toolcall_end') expect(event.toolCall.name).toBe('request_task')
+      if ('partial' in event) for (const part of event.partial.content) if (part.type === 'toolCall') expect(part.name).toBe('request_task')
     }
-    expect((await stream.result()).content).toMatchObject([{ type: 'toolCall', name: 'bot.request_task' }])
+    expect((await stream.result()).content).toMatchObject([{ type: 'toolCall', name: 'request_task' }])
   }
   expect(requests).toHaveLength(2)
   for (const { body } of requests) {
@@ -236,23 +236,23 @@ test.each(['custom', 'deepseek'])('tool names are compatible on the wire and res
     expect(names.every((name: string) => /^[a-zA-Z0-9_-]{1,64}$/.test(name))).toBe(true)
     expect(new Set(names).size).toBe(names.length)
     expect(names[0]).toBe('read')
-    expect(names[2]).toBe('bot_request_task')
-    expect((body.messages as any[]).find((message) => message.role === 'assistant').tool_calls[0].function.name).toBe(names[1])
+    expect(names).toEqual(input.tools.map((tool) => tool.name))
+    expect((body.messages as any[]).find((message) => message.role === 'assistant').tool_calls[0].function.name).toBe(names[2])
   }
   expect(JSON.stringify(input)).toBe(before)
 })
 
-test('Durable executes the original dotted tool after an HTTP tool call and continues', async () => {
-  const { baseUrl, requests } = await server('bot.request_task')
+test('Durable executes request_task directly from the bot extension and continues', async () => {
+  const { baseUrl, requests } = await server('request_task')
   const directory = await mkdtemp(join(tmpdir(), 'nook-model-tools-'))
   directories.push(directory)
   const credentials = new MemoryCredentialStore()
   credentials.setApiKey('custom', 'synthetic-key')
   const runtime = new AgentModels(() => config(baseUrl), () => credentials, emptyAuth)
   const execute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'completed' }] }))
-  const tool = defineTool({ name: 'bot.request_task', description: 'bot.request_task', parameters: Type.Object({}), replay: 'safe', execute })
+  const tool = defineTool({ name: 'request_task', description: 'request_task', parameters: Type.Object({}), replay: 'safe', execute })
   const registry = createRegistry()
-  const extension = defineExtension({ name: 'test.tools', tools: [tool] })
+  const extension = defineExtension({ name: 'bot', tools: [tool] })
   registry.install(extension)
   const engine = await AgentEngine.open(join(directory, 'durable.sqlite'), {
     models: runtime.models, registry, settings: { retry: { enabled: false } },
@@ -266,6 +266,6 @@ test('Durable executes the original dotted tool after an HTTP tool call and cont
   expect(execute).toHaveBeenCalledOnce()
   expect(requests).toHaveLength(2)
   const entries = await conversation.entries({ order: 'ascending' }, 100, undefined, context())
-  expect(JSON.stringify(entries.items)).toContain('bot.request_task')
+  expect(JSON.stringify(entries.items)).toContain('request_task')
   expect(JSON.stringify(entries.items)).toContain('reply')
 }, 20_000)

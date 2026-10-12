@@ -14,6 +14,7 @@ import { BotService } from './bot-service'
 let close: () => void
 let directory: string
 let bots: BotService
+let botRepo: DrizzleBotRepo
 let sessions: DrizzleAgentSessionRepo
 let workspaceId: string
 
@@ -27,8 +28,9 @@ beforeEach(async () => {
   sessions = new DrizzleAgentSessionRepo(connection.database)
   const workspaces = new WorkspaceService(new DrizzleWorkspaceRepo(connection.database))
   workspaceId = (await workspaces.attach(directory)).workspace!.id
+  botRepo = new DrizzleBotRepo(connection.database)
   bots = new BotService(
-    new DrizzleBotRepo(connection.database),
+    botRepo,
     sessions,
     workspaces,
     new ToolRegistry(),
@@ -38,6 +40,16 @@ beforeEach(async () => {
 afterEach(async () => {
   close()
   await rm(directory, { recursive: true, force: true })
+})
+
+test('initialization migrates saved collaboration tool names once', async () => {
+  await bots.initialize()
+  const bot = await bots.get('xiaoya')
+  await botRepo.save({ ...bot, enabledTools: ['bot.send_message', 'bot.request_task', 'bot.get_task', 'request_task', 'read'] })
+  await bots.initialize()
+  expect((await bots.get('xiaoya')).enabledTools).toEqual(['send_message', 'request_task', 'get_task', 'read'])
+  await bots.initialize()
+  expect((await bots.get('xiaoya')).enabledTools).toEqual(['send_message', 'request_task', 'get_task', 'read'])
 })
 
 test('seeds once and migrates old conversations without assigning Workspace-based identity to new Bots', async () => {

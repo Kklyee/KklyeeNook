@@ -8,6 +8,7 @@ import {
   type ToolExecutionApi,
 } from '@earendil-works/pi-durable'
 import type { TSchema } from 'typebox'
+import { GROVE_TOOLS } from '@kklyeenook/shared/bot/grove'
 import type { PermissionRequest } from '@kklyeenook/shared/approval/permission'
 import { effectivePermissionMode } from '@kklyeenook/shared/approval/permission'
 import type { ToolCall, ToolExecutionResult } from '@kklyeenook/shared/tool/tool'
@@ -79,11 +80,12 @@ export class AgentTools {
     this.approvals.connect(harness)
   }
 
-  extension() {
-    return defineExtension({
-      name: 'nook.tools',
-      tools: this.registry
-        .list()
+  extensions() {
+    const definitions = this.registry.list()
+    return ['nook.tools', 'bot'].map((name) => defineExtension({
+      name,
+      tools: definitions
+        .filter((definition) => GROVE_TOOLS.includes(definition.name as typeof GROVE_TOOLS[number]) === (name === 'bot'))
         .map((definition) =>
           defineTool({
             name: definition.name,
@@ -94,7 +96,7 @@ export class AgentTools {
               this.execute(definition.name, args, api, context),
           }),
         ),
-    })
+    }))
   }
 
   private async execute(name: string, args: unknown, api: ToolExecutionApi, context: Context) {

@@ -31,9 +31,10 @@ export function submissionRegistry(registry: RegistryReader, inputs: AgentInputs
                 agent.extensions = [
                   ...agent.extensions.filter(
                     (name) =>
-                      name !== 'nook.personal' && name !== 'nook.coding' && name !== 'nook.bot',
+                      name !== 'nook.personal' && name !== 'nook.coding' && name !== 'nook.bot' && name !== 'bot',
                   ),
                   'nook.bot',
+                  'bot',
                 ]
               return undefined
             }, context)

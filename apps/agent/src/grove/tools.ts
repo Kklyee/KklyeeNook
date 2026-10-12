@@ -10,19 +10,19 @@ export function registerGroveTools(registry: ToolRegistry, getHost: () => AgentH
   const text = Type.String({ minLength: 1, maxLength: 64000 })
   const definitions = [
     {
-      name: 'bot.send_message',
+      name: 'send_message',
       description:
         'Send a message to an existing local or connected remote Bot by its ID. Messages are recorded without invoking its model.',
       schema: Type.Object({ toBotId: id, content: text }, { additionalProperties: false }),
     },
     {
-      name: 'bot.request_task',
+      name: 'request_task',
       description:
         'Request collaboration from an existing independent local or connected remote Bot by its ID. It uses its own instructions, model and permitted resources. Returns a task ID; the result arrives automatically. Do not repeatedly poll. Built-in local IDs: xiaoya, coder. Remote requests require a Social Grant and cannot recursively delegate.',
       schema: Type.Object({ toBotId: id, instruction: text }, { additionalProperties: false }),
     },
     {
-      name: 'bot.get_task',
+      name: 'get_task',
       description: 'Read the current status and result of a collaboration involving this Bot.',
       schema: Type.Object({ taskId: id }, { additionalProperties: false }),
     },
@@ -55,9 +55,9 @@ export function registerGroveTools(registry: ToolRegistry, getHost: () => AgentH
               }
               const operationId = `${api.taskId}:${callId}`
               const details =
-                name === 'bot.send_message'
+                name === 'send_message'
                   ? await host.grove.sendMessage(caller, { ...input, operationId }, context)
-                  : name === 'bot.request_task'
+                  : name === 'request_task'
                     ? await host.grove.requestTask(caller, { ...input, operationId }, context)
                     : await host.grove.getTask(caller, input.taskId, context)
               return { content: [{ type: 'text', text: JSON.stringify(details) }], details }

@@ -49,6 +49,8 @@ test('structured Composer mentions submit the user message and recover one colla
   const fixture = await setup(false, () => 'Mention collaboration complete', undefined, true)
   let host = fixture.host
   const source = await host.mainThread('xiaoya', context())
+  expect(host.tools.extensions().find((extension) => extension.name === 'bot')?.tools?.map((tool) => tool.name)).toEqual(['send_message', 'request_task', 'get_task'])
+  expect(host.tools.extensions().find((extension) => extension.name === 'nook.tools')?.tools?.some((tool) => ['send_message', 'request_task', 'get_task'].includes(tool.name))).toBe(false)
   const input = { type: 'input' as const, requestId: 'mention-message', content: '@Coder review code', botMentions: [{ botId: 'coder', displayName: 'Coder', start: 0, end: 6 }] }
   const receipt = await host.conversations.submit(source.id, input, context())
   const repeated = await host.conversations.submit(source.id, input, context())
@@ -57,13 +59,13 @@ test('structured Composer mentions submit the user message and recover one colla
   const task = (await host.grove!.list(context())).tasks[0]
   const conversation = await host.engine.conversation(source.id, context())
   const prepared = await host.engine.harness.snapshot(inputDoc, conversation.id, input.requestId, context())
-  expect(prepared?.bot?.tools).not.toContain('bot.request_task')
+  expect(prepared?.bot?.tools).not.toContain('request_task')
   await vi.waitFor(async () => {
     const result = await host.engine.harness.snapshot(inputDoc, conversation.id, `grove:${task.id}:result`, context())
     expect(result?.groveContinue).toBe(true)
     expect(result?.bot?.tools).not.toContain('delegate_task')
   }, { timeout: 15000 })
-  await expect(host.grove!.guardContinuation(task.id, context(), 'bot.request_task')).rejects.toThrow('delegation')
+  await expect(host.grove!.guardContinuation(task.id, context(), 'request_task')).rejects.toThrow('delegation')
   await host.bots!.update('coder', { name: 'Renamed Coder' })
   expect((await host.conversations.submit(source.id, input, context())).submissionId).toBe(receipt.submissionId)
   await expect(host.conversations.submit(source.id, { ...input, content: '@Coder changed instruction' }, context())).rejects.toThrow('different mention')
@@ -182,7 +184,7 @@ test('Grove tools use caller identity through the existing execution harness and
     if (system.includes('TARGET_TOOL_TEST')) return 'Independent tool result'
     if (body.messages.some((message) => JSON.stringify(message.content).includes('Collaboration ') && JSON.stringify(message.content).includes('Summarize this result'))) return 'Final collaboration summary'
     if (body.messages.some((message) => message.role === 'tool')) return 'Waiting for Coder'
-    return { name: 'bot.request_task', arguments: { toBotId: 'coder', instruction: 'Review independently' } }
+    return { name: 'request_task', arguments: { toBotId: 'coder', instruction: 'Review independently' } }
   }, undefined, true)
   await fixture.host.bots!.update('coder', { instructions: 'TARGET_TOOL_TEST' })
   const source = await fixture.host.mainThread('xiaoya', context())

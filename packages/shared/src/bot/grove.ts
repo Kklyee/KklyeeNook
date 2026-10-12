@@ -44,7 +44,7 @@ export const GROVE_LIMITS = {
   timeoutMs: 300_000,
 } as const
 
-export const GROVE_TOOLS = ['bot.send_message', 'bot.request_task', 'bot.get_task'] as const
+export const GROVE_TOOLS = ['send_message', 'request_task', 'get_task'] as const
 
 export const defaultReceptionPolicy: BotReceptionPolicy = {
   messages: true,

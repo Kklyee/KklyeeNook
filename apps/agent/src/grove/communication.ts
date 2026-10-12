@@ -10,6 +10,7 @@ import {
 } from '@earendil-works/pi-durable'
 import {
   GROVE_LIMITS,
+  GROVE_TOOLS,
   defaultReceptionPolicy,
   type BotMessage,
   type BotTask,
@@ -717,7 +718,7 @@ export class BotCommunicationService {
   async guardContinuation(taskId: string, context: Context, toolName: string) {
     context.abortSignal?.throwIfAborted()
     const task = await this.requireTask(taskId)
-    if (Date.now() >= task.deadline || toolName.startsWith('bot.') || toolName === 'delegate_task')
+    if (Date.now() >= task.deadline || GROVE_TOOLS.includes(toolName as typeof GROVE_TOOLS[number]) || toolName === 'delegate_task')
       throw new BotError(403, 'Collaboration continuation budget or delegation limit exceeded')
   }
 
