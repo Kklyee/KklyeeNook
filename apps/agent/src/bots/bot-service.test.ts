@@ -47,9 +47,9 @@ test('initialization migrates saved collaboration tool names once', async () => 
   const bot = await bots.get('xiaoya')
   await botRepo.save({ ...bot, enabledTools: ['bot.send_message', 'bot.request_task', 'bot.get_task', 'request_task', 'read'] })
   await bots.initialize()
-  expect((await bots.get('xiaoya')).enabledTools).toEqual(['send_message', 'request_task', 'get_task', 'read'])
+  expect((await bots.get('xiaoya')).enabledTools).toEqual(['bot_send_message', 'bot_request_task', 'bot_get_task', 'read'])
   await bots.initialize()
-  expect((await bots.get('xiaoya')).enabledTools).toEqual(['send_message', 'request_task', 'get_task', 'read'])
+  expect((await bots.get('xiaoya')).enabledTools).toEqual(['bot_send_message', 'bot_request_task', 'bot_get_task', 'read'])
 })
 
 test('seeds once and migrates old conversations without assigning Workspace-based identity to new Bots', async () => {

@@ -1,3 +1,4 @@
+import { BotMentionChip } from './BotMentionChip'
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   ComposerPrimitive,
@@ -19,6 +20,15 @@ import { useChatStore, useChatRuntimeSnapshot } from '../runtime/chat-runtime'
 
 const Targets = createContext<MentionTarget[]>([])
 
+function matchesBot(bot: MentionTarget, query: string) {
+  const text = `${bot.name} ${bot.botId} ${bot.role}`.toLowerCase()
+  let index = -1
+  return [...query.toLowerCase()].every((character) => {
+    index = text.indexOf(character, index + 1)
+    return index !== -1
+  })
+}
+
 function MentionCandidates({ children }: { children: ReactNode }) {
   const { open } = unstable_useTriggerPopoverScopeContext()
   return open ? children : null
@@ -30,14 +40,14 @@ function UnavailableBots({ row }: { row: (bot: MentionTarget) => React.ReactNode
   return targets
     .filter(
       (bot) =>
-        !bot.allowed && `${bot.name} ${bot.botId}`.toLowerCase().includes(query.toLowerCase()),
+        !bot.allowed && matchesBot(bot, query),
     )
     .map((bot) => (
       <div
         key={bot.botId}
         aria-disabled="true"
         className="flex items-center gap-2 px-2 py-1.5 opacity-60"
-        title={bot.botId}
+        title={bot.reason ?? 'Bot 不可用'}
       >
         {row(bot)}
         <span className="max-w-40 text-[11px] text-muted-foreground">
@@ -48,22 +58,7 @@ function UnavailableBots({ row }: { row: (bot: MentionTarget) => React.ReactNode
 }
 
 function MentionChip({ directiveId, directiveType, label }: DirectiveChipProps) {
-  const bot = useContext(Targets).find((bot) => bot.botId === directiveId)
-  if (directiveType !== 'bot') return <span className="text-sm">{label}</span>
-  return (
-    <span
-      data-bot-id={directiveId}
-      className={`mx-0.5 inline-flex items-center gap-1 rounded-md bg-hover px-1.5 py-0.5 align-middle text-xs font-medium ${bot && !bot.allowed ? 'text-destructive' : ''}`}
-      title={`${directiveId}${bot && !bot.allowed ? ` · ${bot.reason}` : ''}`}
-    >
-      <BotAvatar
-        avatar={bot?.avatar ?? defaultBot(directiveId, label).avatar}
-        name={label}
-        size={18}
-      />
-      {label}
-    </span>
-  )
+  return directiveType === 'bot' ? <BotMentionChip botId={directiveId} displayName={label} navigate={false} /> : <span className="text-sm">{label}</span>
 }
 
 function SubmitPlugin({ submit }: { submit: (steer?: boolean) => Promise<void> }) {
@@ -78,7 +73,7 @@ function SubmitPlugin({ submit }: { submit: (steer?: boolean) => Promise<void> }
           if (event.shiftKey && !(event.ctrlKey || event.metaKey)) return false
           if (!aui.composer.getState().canSend) return false
           event.preventDefault()
-          void submit(true)
+          void submit(event.shiftKey && (event.ctrlKey || event.metaKey))
           return true
         },
         COMMAND_PRIORITY_NORMAL,
@@ -135,7 +130,7 @@ export function BotMentionInput({
               .filter(
                 (bot) =>
                   bot.allowed &&
-                  `${bot.name} ${bot.botId}`.toLowerCase().includes(query.toLowerCase()),
+                  matchesBot(bot, query),
               )
               .map((bot) => ({
                 id: bot.botId,

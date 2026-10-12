@@ -124,12 +124,10 @@ export async function verifyRemote(alternateModelId = 'alternate-model') {
   ).click()
   await wait(() => document.body.innerText.includes('Allow once'))
   await enter('Remote queued steer')
-  const steer = (await wait(() =>
-    document.querySelector<HTMLButtonElement>('[aria-label="Steer current task"]:not(:disabled)'),
-  )) as HTMLButtonElement
-  steer.click()
+  await wait(() => document.querySelector<HTMLButtonElement>('[aria-label="Queue follow-up"]:not(:disabled)'))
+  document.querySelector<HTMLTextAreaElement>('textarea:not(:disabled)')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, shiftKey: true, bubbles: true }))
   await wait(async () =>
-    (await api(`/conversations/${id}`)).queue.some((item) => item.text === 'Remote queued steer'),
+    (await api(`/conversations/${id}`)).queue.some((item) => item.text === 'Remote queued steer' && item.steer),
   )
   const busy = await fetch(`/api/conversations/${id}/messages`, {
     method: 'POST',

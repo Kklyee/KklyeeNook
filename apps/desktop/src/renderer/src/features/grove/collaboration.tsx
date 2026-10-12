@@ -13,6 +13,7 @@ const labels: Record<BotTask['status'], string> = {
   completed: '已完成',
   failed: '失败',
   rejected: '已拒绝',
+  cancelled: '已取消',
 }
 
 export function Collaboration() {

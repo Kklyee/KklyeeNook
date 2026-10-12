@@ -1,3 +1,4 @@
+import { CollaborationMessages } from '../mentions/CollaborationMessages'
 import { useAuiState, type Toolkit, type ToolCallMessagePartComponent } from '@assistant-ui/react'
 
 import { completePlanSteps, parseAgentPlan, type AgentPlanStep } from '@kklyeenook/shared/agent/agentPlan'
@@ -20,6 +21,7 @@ const UpdatePlanToolCall: ToolCallMessagePartComponent<UpdatePlanArgs, unknown> 
 }
 
 export const assistantToolkit = {
+  bot_request_task: { type: 'backend', display: 'standalone', render: CollaborationMessages },
   read: { type: 'backend', render: ToolCallRenderer },
   find: { type: 'backend', render: ToolCallRenderer },
   grep: { type: 'backend', render: ToolCallRenderer },

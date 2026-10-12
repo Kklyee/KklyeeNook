@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
 import { defaultBot, type BotInput, type BotProfile } from '@kklyeenook/shared/bot/bot'
-import { GROVE_TOOLS } from '@kklyeenook/shared/bot/grove'
 import type { BotRepo } from '../db/repositories/bot-repo'
 import type { AgentSessionRepo } from '../db/repositories/agent-session-repo'
 import type { WorkspaceService } from '../workspace/workspaceService'
@@ -33,23 +32,10 @@ export class BotService {
     ]
     await this.repo.insert(defaultBot('xiaoya', '小芽'))
     await this.repo.insert(coder)
+    const renamed: Record<string, string> = { send_message: 'bot_send_message', request_task: 'bot_request_task', get_task: 'bot_get_task', 'bot.send_message': 'bot_send_message', 'bot.request_task': 'bot_request_task', 'bot.get_task': 'bot_get_task' }
     for (const bot of await this.repo.list()) {
-      const enabledTools = [...new Set(bot.enabledTools.map((name) =>
-        name.startsWith('bot.') && GROVE_TOOLS.includes(name.slice(4) as typeof GROVE_TOOLS[number])
-          ? name.slice(4)
-          : name,
-      ))]
-      if (JSON.stringify(enabledTools) !== JSON.stringify(bot.enabledTools))
-        await this.repo.save({ ...bot, enabledTools, updatedAt: Date.now() })
-    }
-    if (GROVE_TOOLS.every((name) => this.tools.get(name))) {
-      for (const id of ['xiaoya', 'coder']) {
-        const bot = await this.get(id)
-        const defaults = defaultBot(id, '', id === 'coder').enabledTools
-        const legacy = defaults.filter((name) => !GROVE_TOOLS.includes(name as typeof GROVE_TOOLS[number]))
-        if (bot.enabledTools.length === legacy.length && legacy.every((name) => bot.enabledTools.includes(name)))
-          await this.repo.save({ ...bot, enabledTools: defaults, updatedAt: Date.now() })
-      }
+      const enabledTools = [...new Set(bot.enabledTools.map((name) => renamed[name] ?? name))]
+      if (JSON.stringify(enabledTools) !== JSON.stringify(bot.enabledTools)) await this.repo.save({ ...bot, enabledTools, updatedAt: Date.now() })
     }
     const existingCoder = await this.get('coder')
     if (

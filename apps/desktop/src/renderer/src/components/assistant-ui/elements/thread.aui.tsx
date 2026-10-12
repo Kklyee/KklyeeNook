@@ -14,7 +14,8 @@ import { AgentActivityGroup } from '@/renderer/src/features/chat/activity/AgentA
 import { QueuedMessages } from '@/renderer/src/features/chat/QueuedMessages'
 import { usePendingSend } from '@/renderer/src/features/chat/runtime/SendState'
 import { BotMentionInput } from '@/renderer/src/features/chat/mentions/BotMentionInput'
-import { CollaborationMessages } from '@/renderer/src/features/chat/mentions/CollaborationMessages'
+import { MessageMentionRenderer } from '@/renderer/src/features/chat/mentions/MessageMentionRenderer'
+import { MentionNavigation } from '@/renderer/src/features/chat/mentions/BotMentionChip'
 import { Image } from './image-preview'
 import { ImageThumbnail } from '@kklyeenook/ui/assistant-ui/image-thumbnail'
 import { MarkdownText } from '@/renderer/src/components/assistant-ui/elements/markdown-text'
@@ -237,7 +238,7 @@ const ThreadRoot: FC<{
 
           <div data-slot="aui_message-group" className="mb-14 flex flex-col gap-y-6 empty:hidden">
             <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
-            <CollaborationMessages />
+            <MentionNavigation />
             {(isCompacting || commandSurface?.result?.title === 'Compacting') && (
               <ContextCompactionProgress />
             )}
@@ -674,7 +675,7 @@ const UserMessage: FC = () => {
 
       <div className="aui-user-message-content-wrapper relative col-start-2 min-w-0">
         <div className="aui-user-message-content peer bg-muted text-foreground rounded-xl px-4 py-2 wrap-break-word empty:hidden">
-          <MessagePrimitive.Parts components={{ File: UserFilePart, Image: UserImagePart }} />
+          <MessagePrimitive.Parts components={{ Text: MessageMentionRenderer, File: UserFilePart, Image: UserImagePart }} />
         </div>
         {!readOnly && (
           <div className="aui-user-action-bar-wrapper absolute start-0 top-1/2 -translate-x-full -translate-y-1/2 pe-2 peer-empty:hidden rtl:translate-x-full">

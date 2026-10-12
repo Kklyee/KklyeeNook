@@ -139,7 +139,7 @@ async function handle(context: Context, prefix: string, host: AgentHost): Promis
     if (parts[1] === 'mention-targets' && method === 'GET') return context.json(await host.grove.mentionTargets(context.req.query('threadId') ?? '', ctx))
     if (parts.length === 1 && method === 'GET') return context.json(await host.grove.list(ctx))
     if (parts.length === 3 && parts[1] === 'policies' && method === 'PUT') {
-      const policy = await parse(context, Type.Object({ messages: Type.Boolean(), tasks: Type.Boolean(), allowedBotIds: Type.Union([Type.Null(), Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { maxItems: 100 })]) }, { additionalProperties: false }))
+      const policy = await parse(context, Type.Object({ maxConcurrentTasks: Type.Optional(Type.Integer({ minimum: 1, maximum: 4 })), messages: Type.Boolean(), tasks: Type.Boolean(), allowedBotIds: Type.Union([Type.Null(), Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { maxItems: 100 })]) }, { additionalProperties: false }))
       return context.json(await host.grove.setPolicy(parts[2], policy, ctx))
     }
     if (parts.length === 2 && method === 'POST' && (parts[1] === 'messages' || parts[1] === 'tasks')) {

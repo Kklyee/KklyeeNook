@@ -80,6 +80,7 @@ export type ChatExtras = {
 }
 
 export type ChatSnapshot = {
+  mentionReturn?: { threadId: string; text: string; scrollTop?: number }
   bots: readonly BotSummary[]
   selectedBotId?: string
   botEditorId?: string
@@ -103,6 +104,23 @@ export type ChatSnapshot = {
 const emptyProjected = projectDurableThread(emptyDurableProjectionState())
 
 export class ChatStore {
+  private mentionReturn: { threadId: string; text: string; scrollTop?: number } | undefined
+
+  async navigateMention(botId: string, text: string, scrollTop?: number) {
+    const source = this.selectedThreadId
+    await this.selectBot(botId)
+    if (source) this.mentionReturn = { threadId: source, text, ...(scrollTop !== undefined ? { scrollTop } : {}) }
+    this.emit()
+  }
+
+  async returnFromMention() {
+    const source = this.mentionReturn
+    if (!source) return ''
+    await this.switchToThread(source.threadId)
+    this.mentionReturn = undefined
+    this.emit()
+    return source.text
+  }
   private listeners = new Set<Listener>()
   private snapshotCache: ChatSnapshot | undefined
   private connectionVersion = 0
@@ -181,6 +199,7 @@ export class ChatStore {
     queue: this.queueAdapter(),
     extras: this.extras(),
     sending: this.sending,
+    mentionReturn: this.mentionReturn,
   })
 
   dispose() {

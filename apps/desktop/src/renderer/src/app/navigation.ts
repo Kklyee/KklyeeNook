@@ -5,7 +5,6 @@ import {
   ListChecksIcon,
   MessageCircleIcon,
   SettingsIcon,
-  UsersIcon,
 } from 'lucide-react'
 
 export type AppView = 'home' | 'chat' | 'tasks' | 'memories' | 'grove' | 'settings'
@@ -21,7 +20,6 @@ export const primaryNavigation: AppNavigationItem[] = [
   { id: 'chat', label: 'Chat', icon: MessageCircleIcon },
   { id: 'tasks', label: 'Tasks', icon: ListChecksIcon },
   { id: 'memories', label: 'Memories', icon: BookIcon },
-  { id: 'grove', label: 'Grove', icon: UsersIcon },
 ]
 
 export const settingsNavigationItem: AppNavigationItem = {

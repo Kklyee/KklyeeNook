@@ -1,3 +1,5 @@
+import type { BotAvatarConfig } from './bot'
+
 export type BotMessage = {
   id: string
   fromBotId: string
@@ -14,8 +16,13 @@ export type BotTask = {
   fromBotId: string
   toBotId: string
   instruction: string
-  status: 'pending' | 'accepted' | 'running' | 'completed' | 'failed' | 'rejected'
+  status: 'pending' | 'accepted' | 'running' | 'completed' | 'failed' | 'rejected' | 'cancelled'
   result?: string
+  sourceToolCallId?: string
+  targetName?: string
+  targetAvatar?: BotAvatarConfig
+  workspaceId?: string | null
+  mode?: "await" | "async"
   sourceThreadId: string
   targetThreadId?: string
   submissionId?: number
@@ -29,6 +36,7 @@ export type BotTask = {
 }
 
 export type BotReceptionPolicy = {
+  maxConcurrentTasks?: number
   messages: boolean
   tasks: boolean
   allowedBotIds: string[] | null
@@ -44,7 +52,7 @@ export const GROVE_LIMITS = {
   timeoutMs: 300_000,
 } as const
 
-export const GROVE_TOOLS = ['send_message', 'request_task', 'get_task'] as const
+export const GROVE_TOOLS = ['bot_list', 'bot_get_status', 'bot_list_tasks', 'bot_send_message', 'bot_request_task', 'bot_get_task'] as const
 
 export const defaultReceptionPolicy: BotReceptionPolicy = {
   messages: true,

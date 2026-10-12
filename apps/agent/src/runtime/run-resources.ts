@@ -1,5 +1,5 @@
 import type { Context } from '@earendil-works/chord'
-import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context'
+import { awaitWithContext, BACKGROUND_CONTEXT } from '@earendil-works/chord/context'
 import {
   defineDoc,
   LiveDoc,
@@ -13,6 +13,7 @@ import type { AgentEngine } from './agent-engine'
 
 const leases = defineDoc<{
   runs: Record<string, { conversationId: ConversationId; inputId: SubmissionId }>
+  workspaces?: Record<string, string>
 }>({ kind: 'nook.run-resources', version: 1, scope: 'session', initial: () => ({ runs: {} }) })
 
 export class RunResources {
@@ -62,6 +63,26 @@ export class RunResources {
     return this.closing
   }
 
+  async acquireWorkspace(runId: string, workspaceId: string, context: Context) {
+    const engine = this.engine!
+    while (true) {
+      const acquired = await engine.harness.commit(async (tx) => {
+        const doc = await tx.doc(leases)
+        doc.workspaces ??= {}
+        const holder = doc.workspaces[workspaceId]
+        const lease = holder ? doc.runs[holder] : undefined
+        if (lease && holder !== runId) {
+          const live = await tx.doc(LiveDoc, lease.conversationId)
+          if (live?.run?.inputs.includes(lease.inputId)) return false
+        }
+        doc.workspaces[workspaceId] = runId
+        return true
+      }, context)
+      if (acquired) return
+      await awaitWithContext(new Promise<void>((resolve) => setTimeout(resolve, 250)), context)
+    }
+  }
+
   private async shutdown(shutdown: () => Promise<void>) {
     const results: PromiseSettledResult<unknown>[] = await Promise.allSettled([...this.watches.values()].map((watch) => watch.stop()))
     this.watches.clear()
@@ -105,6 +126,10 @@ export class RunResources {
       await this.sandbox.finishRun(runId)
       await engine.harness.commit(async (tx) => {
         delete (await tx.doc(leases)).runs[runId]
+        const doc = await tx.doc(leases)
+        for (const [workspaceId, holder] of Object.entries(doc.workspaces ?? {})) {
+          if (holder === runId) delete doc.workspaces![workspaceId]
+        }
       }, BACKGROUND_CONTEXT)
       this.known.delete(runId)
     }

@@ -133,6 +133,10 @@ export class AgentTools {
       getRunId: () => runId,
     })
     try {
+      const execution = adapter.executionContext
+      if (this.resources && execution?.workspaceId && !name.startsWith('bot_')) {
+        await this.resources.acquireWorkspace(runId, execution.workspaceId, context)
+      }
       const result = await harness.execute(
         runId,
         call,

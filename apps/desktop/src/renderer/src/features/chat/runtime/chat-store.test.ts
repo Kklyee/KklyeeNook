@@ -111,6 +111,22 @@ test('Composer tokens send structured IDs and ranges while retrying one immutabl
   expect(sent[2].botMentions).toBeUndefined()
 })
 
+test('mention navigation returns to the source thread and preserves its unsent draft without submitting', async () => {
+  const requests: string[] = []
+  const store = setup(async (url) => {
+    requests.push(url)
+    if (url.endsWith('/main-thread')) return response(metadata('coder-main'))
+    return response(url.endsWith('/threads') ? [metadata('source')] : snapshot(url.split('/').at(-1)!))
+  })
+  await store.switchToThread('source')
+  await store.navigateMention('coder', 'Unsent draft')
+  expect(store.getSnapshot().selectedThreadId).toBe('coder-main')
+  expect(store.getSnapshot().mentionReturn).toEqual({ threadId: 'source', text: 'Unsent draft' })
+  expect(await store.returnFromMention()).toBe('Unsent draft')
+  expect(store.getSnapshot().selectedThreadId).toBe('source')
+  expect(requests.some((url) => url.endsWith('/submissions') || url.endsWith('/grove/tasks'))).toBe(false)
+})
+
 test('caches external-store snapshots and rejects stale thread loads and stale connections', async () => {
   let finish!: (value: Response) => void
   const store = setup(async (url) =>

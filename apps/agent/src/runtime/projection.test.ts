@@ -15,6 +15,42 @@ const entry = (id: number, message: NonNullable<EntryRecord['model']>[number]): 
 })
 const reduce = (snapshot: SnapshotEvent, events: readonly AgentEvent[]) => events.reduce(applyAgentEvent, snapshot)
 
+test('collaboration results stay with their own call even when a provider reuses a tool call ID', () => {
+  const snapshot = emptySnapshot()
+  const call = () => {
+    const message = fauxAssistantMessage('')
+    message.content = [{ type: 'toolCall', id: 'reused', name: 'bot_request_task', arguments: { botId: 'coder', instruction: 'Review' } }]
+    return message
+  }
+  snapshot.entries = [
+    entry(1, { role: 'user', content: 'First', timestamp: 1 }),
+    entry(2, call()),
+    entry(3, { role: 'toolResult', toolCallId: 'reused', toolName: 'bot_request_task', content: [], details: { collaborationId: 'first' }, isError: false, timestamp: 2 }),
+    entry(4, { role: 'user', content: 'Second', timestamp: 3 }),
+    entry(5, call()),
+    entry(6, { role: 'toolResult', toolCallId: 'reused', toolName: 'bot_request_task', content: [], details: { collaborationId: 'second' }, isError: false, timestamp: 4 }),
+  ]
+  const messages = projectDurableThread({ snapshot, approvals: [], queue: [], sequence: 0 }).messages
+  const calls = messages.flatMap((message) => typeof message.content === 'string' ? [] : message.content).filter((part) => part.type === 'tool-call')
+  expect(calls.map((part) => part.result)).toEqual([
+    expect.objectContaining({ details: { collaborationId: 'first' } }),
+    expect.objectContaining({ details: { collaborationId: 'second' } }),
+  ])
+})
+
+test('history projects structured mention identity from persisted metadata without parsing plain at-text', () => {
+  const snapshot = emptySnapshot()
+  const mentions = [{ botId: 'coder', displayName: 'Coder', start: 0, end: 6 }]
+  snapshot.entries = [
+    entry(1, { role: 'user', content: '@Coder status?', timestamp: 1 }),
+    { id: 2 as never, conversationId: 1 as never, kind: 'nook.mentions', data: { entryId: 1, mentions } },
+    entry(3, { role: 'user', content: '@Coder plain text', timestamp: 3 }),
+  ]
+  const messages = projectDurableThread({ snapshot, approvals: [], queue: [], sequence: 0 }).messages
+  expect(messages[0].metadata?.custom?.botMentions).toEqual({ entryId: 1, mentions })
+  expect(messages[1].metadata?.custom?.botMentions).toBeUndefined()
+})
+
 test('closes the previous assistant response when steer is consumed during a run', () => {
   const snapshot = emptySnapshot()
   const assistant = fauxAssistantMessage('')

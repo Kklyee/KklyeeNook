@@ -96,6 +96,7 @@ export class AgentScheduler {
   connect(host: AgentHost): void {
     if (this.host && this.host !== host) throw new Error('Durable scheduler already connected')
     this.host = host
+    host.scheduledTasks = () => this.list()
   }
 
   async restore(context: Context): Promise<void> {

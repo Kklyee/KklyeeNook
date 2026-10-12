@@ -356,7 +356,7 @@ function projectTranscript(
         if (part.type === 'text') group.parts.push({ type: 'text', text: part.text, parentId })
         else if (part.type === 'thinking') group.parts.push({ type: 'reasoning', text: part.redacted ? '[reasoning redacted]' : part.thinking, parentId })
         else if (part.type === 'toolCall') {
-          const tool = toolResults.get(part.id)
+          const tool = toolResults.get(`${index}:${part.id}`)
           const approval = approvalByCall.get(part.id)
           if (approval?.state === 'pending') group.pendingApproval = true
           if (!tool?.complete && isSnapshotRunning(snapshot)) group.pendingTool = true
@@ -373,6 +373,7 @@ function projectTranscript(
         role: 'user',
         createdAt: new Date(message.timestamp),
         content: userContent(message.content),
+        metadata: { custom: { botMentions: snapshot.entries.find((entry) => entry.kind === 'nook.mentions' && (entry.data as { entryId?: number } | undefined)?.entryId === item.entry?.id)?.data } },
       })
     }
   })
@@ -464,10 +465,16 @@ function toolCallPart(
 
 function buildToolResults(items: readonly TranscriptItem[], snapshot: SnapshotEvent) {
   const results = new Map<string, { result?: unknown; isError?: boolean; complete?: boolean }>()
-  for (const item of items) {
+  const calls = new Map<string, string>()
+  for (const [index, item] of items.entries()) {
+    if (item.message.role === 'assistant') {
+      for (const part of item.message.content) if (part.type === 'toolCall') calls.set(part.id, `${index}:${part.id}`)
+    }
     if (item.message.role !== 'toolResult') continue
     const message = item.message as ToolResultMessage
-    results.set(message.toolCallId, {
+    const key = calls.get(message.toolCallId)
+    if (!key) continue
+    results.set(key, {
       result: {
         content: message.content,
         details: message.details ?? item.entry?.data,
@@ -480,8 +487,9 @@ function buildToolResults(items: readonly TranscriptItem[], snapshot: SnapshotEv
     })
   }
   for (const tool of snapshot.tools) {
-    if (results.has(tool.callId) && tool.status === 'done') continue
-    results.set(tool.callId, {
+    const key = calls.get(tool.callId)
+    if (!key || (results.has(key) && tool.status === 'done')) continue
+    results.set(key, {
       result:
         tool.output !== undefined || tool.details !== undefined || tool.diagnostics !== undefined
           ? {

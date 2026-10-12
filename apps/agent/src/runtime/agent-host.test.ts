@@ -45,39 +45,25 @@ const servers: Server[] = []
 const httpServers: RunningAgentHttpServer[] = []
 const context = () => withAbortSignal(AbortSignal.timeout(20_000), BACKGROUND_CONTEXT)
 
-test('structured Composer mentions submit the user message and recover one collaboration with stable identity', async () => {
-  const fixture = await setup(false, () => 'Mention collaboration complete', undefined, true)
+test('mentions persist references without dispatching work and preserve coordination tools across restart', async () => {
+  const fixture = await setup(false, undefined, undefined, true)
   let host = fixture.host
   const source = await host.mainThread('xiaoya', context())
-  expect(host.tools.extensions().find((extension) => extension.name === 'bot')?.tools?.map((tool) => tool.name)).toEqual(['send_message', 'request_task', 'get_task'])
-  expect(host.tools.extensions().find((extension) => extension.name === 'nook.tools')?.tools?.some((tool) => ['send_message', 'request_task', 'get_task'].includes(tool.name))).toBe(false)
-  const input = { type: 'input' as const, requestId: 'mention-message', content: '@Coder review code', botMentions: [{ botId: 'coder', displayName: 'Coder', start: 0, end: 6 }] }
+  expect(host.tools.extensions().find((extension) => extension.name === 'bot')?.tools?.map((tool) => tool.name)).toEqual(['bot_list', 'bot_get_status', 'bot_list_tasks', 'bot_send_message', 'bot_request_task', 'bot_get_task'])
+  const input = { type: 'input' as const, requestId: 'mention-message', content: '@Coder now busy?', botMentions: [{ botId: 'coder', displayName: 'Coder', start: 0, end: 6 }] }
   const receipt = await host.conversations.submit(source.id, input, context())
-  const repeated = await host.conversations.submit(source.id, input, context())
-  expect(repeated.submissionId).toBe(receipt.submissionId)
-  await vi.waitFor(async () => expect((await host.grove!.list(context())).tasks[0]?.status).toBe('completed'), { timeout: 15000 })
-  const task = (await host.grove!.list(context())).tasks[0]
+  expect((await host.conversations.submit(source.id, input, context())).submissionId).toBe(receipt.submissionId)
   const conversation = await host.engine.conversation(source.id, context())
   const prepared = await host.engine.harness.snapshot(inputDoc, conversation.id, input.requestId, context())
-  expect(prepared?.bot?.tools).not.toContain('request_task')
-  await vi.waitFor(async () => {
-    const result = await host.engine.harness.snapshot(inputDoc, conversation.id, `grove:${task.id}:result`, context())
-    expect(result?.groveContinue).toBe(true)
-    expect(result?.bot?.tools).not.toContain('delegate_task')
-  }, { timeout: 15000 })
-  await expect(host.grove!.guardContinuation(task.id, context(), 'request_task')).rejects.toThrow('delegation')
-  await host.bots!.update('coder', { name: 'Renamed Coder' })
-  expect((await host.conversations.submit(source.id, input, context())).submissionId).toBe(receipt.submissionId)
-  await expect(host.conversations.submit(source.id, { ...input, content: '@Coder changed instruction' }, context())).rejects.toThrow('different mention')
-  expect((await host.grove!.list(context())).tasks).toHaveLength(1)
-  expect(task.toBotId).toBe('coder')
+  expect(prepared?.bot?.tools).toContain('bot_request_task')
+  expect((await host.grove!.list(context())).tasks).toEqual([])
+  await vi.waitFor(async () => expect((await host.conversations.snapshot(source.id, context())).entries.some((entry) => entry.kind === 'nook.mentions')).toBe(true))
+  await vi.waitFor(() => expect(fixture.requests).toHaveLength(1))
   await host.close()
   hosts.splice(hosts.indexOf(host), 1)
   host = await fixture.open()
   expect((await host.conversations.submit(source.id, input, context())).submissionId).toBe(receipt.submissionId)
-  expect((await host.grove!.list(context())).tasks).toHaveLength(1)
-  const state = await host.grove!.list(context())
-  expect(state.mentionRequests[0].mentions).toEqual(input.botMentions)
+  expect((await host.grove!.list(context())).tasks).toEqual([])
 }, 30000)
 
 test('concurrent mention messages cannot reuse one ID with different content', async () => {
@@ -90,21 +76,21 @@ test('concurrent mention messages cannot reuse one ID with different content', a
   ])
   expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
   expect(results.find((result) => result.status === 'rejected')).toMatchObject({ reason: { message: 'Message ID already used with different mention content' } })
-  expect((await host.grove!.list(context())).tasks).toHaveLength(1)
+  expect((await host.grove!.list(context())).tasks).toHaveLength(0)
 })
 
-test('mentions validate reception before submitting a user message and reject invalid ranges', async () => {
+test('mentions allow references when task reception is disabled and reject invalid ranges', async () => {
   const { host, requests } = await setup(false, undefined, undefined, true)
   const source = await host.mainThread('xiaoya', context())
   const input = { type: 'input' as const, requestId: 'blocked-mention', content: '@Coder review', botMentions: [{ botId: 'coder', displayName: 'Coder', start: 0, end: 6 }] }
   await host.grove!.setPolicy('coder', { messages: true, tasks: false, allowedBotIds: null }, context())
-  await expect(host.conversations.submit(source.id, input, context())).rejects.toThrow('协作')
+  await host.conversations.submit(source.id, input, context())
   expect(requests).toHaveLength(0)
   expect((await host.grove!.list(context())).tasks).toEqual([])
   await expect(host.conversations.submit(source.id, { ...input, botMentions: [{ ...input.botMentions[0], end: 5 }] }, context())).rejects.toThrow('structured')
 })
 
-test('multiple mentions create one task per stable Bot ID and enforce the three-token limit', async () => {
+test('multiple mentions remain references and enforce the three-token limit', async () => {
   const { host } = await setup(false, undefined, undefined, true)
   const helper = await host.bots!.create({ name: 'Designer' })
   const source = await host.mainThread('xiaoya', context())
@@ -114,9 +100,9 @@ test('multiple mentions create one task per stable Bot ID and enforce the three-
     { botId: 'coder', displayName: 'Coder', start: 17, end: 23 },
   ] }
   await host.conversations.submit(source.id, input, context())
-  expect((await host.grove!.list(context())).tasks).toHaveLength(2)
+  expect((await host.grove!.list(context())).tasks).toHaveLength(0)
   await expect(host.conversations.submit(source.id, { ...input, requestId: 'over-limit', botMentions: [...input.botMentions, input.botMentions[2]] }, context())).rejects.toThrow('3')
-  expect((await host.grove!.list(context())).tasks).toHaveLength(2)
+  expect((await host.grove!.list(context())).tasks).toHaveLength(0)
 })
 
 test('Grove records ordinary messages without running models and rejects impersonation input', async () => {
@@ -158,11 +144,11 @@ test('Grove executes with target Bot configuration and returns a correlated resu
   const finished = await host.grove!.getTask(caller, task.id, context())
   expect(finished.result).toBe('Coder independent result')
   expect(fixture.requests.some((request) => request.model === 'coder-model')).toBe(true)
-  expect(finished.targetThreadId).toBe('bot:coder:main')
+  expect(finished.targetThreadId).toBe(`collaboration:${task.id}`)
   const target = await host.conversations.get(finished.targetThreadId!, context())
   expect(target.workspaceId).toBe(fixture.workspaceId)
   expect((await host.conversations.get(source.id, context())).workspaceId).toBeNull()
-  await vi.waitFor(async () => expect(JSON.stringify(await host.conversations.snapshot(source.id, context()))).toContain('Summary for user'), { timeout: 15000 })
+  expect((await host.conversations.snapshot(source.id, context())).entries).toHaveLength(0)
   await host.close()
   hosts.splice(hosts.indexOf(host), 1)
   host = await fixture.open()
@@ -183,8 +169,8 @@ test('Grove tools use caller identity through the existing execution harness and
     const system = body.messages.filter((message) => message.role === 'system').map((message) => message.content).join('')
     if (system.includes('TARGET_TOOL_TEST')) return 'Independent tool result'
     if (body.messages.some((message) => JSON.stringify(message.content).includes('Collaboration ') && JSON.stringify(message.content).includes('Summarize this result'))) return 'Final collaboration summary'
-    if (body.messages.some((message) => message.role === 'tool')) return 'Waiting for Coder'
-    return { name: 'request_task', arguments: { toBotId: 'coder', instruction: 'Review independently' } }
+    if (body.messages.some((message) => message.role === 'tool')) return 'Final collaboration summary'
+    return { name: 'bot_request_task', arguments: { botId: 'coder', instruction: 'Review independently' } }
   }, undefined, true)
   await fixture.host.bots!.update('coder', { instructions: 'TARGET_TOOL_TEST' })
   const source = await fixture.host.mainThread('xiaoya', context())
@@ -193,7 +179,9 @@ test('Grove tools use caller identity through the existing execution harness and
     const tasks = (await fixture.host.grove!.list(context())).tasks
     expect(tasks).toHaveLength(1)
     expect(tasks[0]).toMatchObject({ fromBotId: 'xiaoya', toBotId: 'coder', status: 'completed', result: 'Independent tool result' })
-    expect(JSON.stringify(await fixture.host.conversations.snapshot(source.id, context()))).toContain('Final collaboration summary')
+    const snapshot = await fixture.host.conversations.snapshot(source.id, context())
+    expect(JSON.stringify(snapshot)).toContain('Final collaboration summary')
+    expect(snapshot.entries.flatMap((entry) => entry.model ?? []).filter((message) => message.role === 'user')).toHaveLength(1)
   }, { timeout: 15000 })
 }, 25_000)
 
@@ -219,7 +207,7 @@ test('Grove restores queued work without duplicate submissions and rechecks revo
     blockedId = blocked.id
     await initializing.grove!.setPolicy('coder', { messages: true, tasks: false, allowedBotIds: null }, context())
   })
-  await vi.waitFor(async () => expect((await host.grove!.getTask(caller, blockedId, context())).status).toBe('rejected'), { timeout: 15000 })
+  await vi.waitFor(async () => expect((await host.grove!.getTask(caller, blockedId, context())).status).toBe('failed'), { timeout: 15000 })
   expect((await host.grove!.getTask(caller, blockedId, context())).submissionId).toBeUndefined()
 }, 30_000)
 
@@ -242,6 +230,215 @@ test('Grove persists an explicit failure when a target returns no valid answer',
   const task = await host.grove!.requestTask(caller, { toBotId: 'coder', instruction: 'Review', operationId: 'empty-answer' }, context())
   await vi.waitFor(async () => expect(await host.grove!.getTask(caller, task.id, context())).toMatchObject({ status: 'failed', result: 'Bot did not return a valid answer' }), { timeout: 15000 })
 }, 20_000)
+
+test('activity queries aggregate workspace threads and future schedules without waking a Bot', async () => {
+  const { host, requests, workspaceId } = await setup(false, undefined, undefined, true)
+  await host.bots!.update('coder', { workspaceIds: [workspaceId] })
+  await host.mainThread('coder', context())
+  await host.create({ threadId: 'coder-workspace', botId: 'coder', workspaceId }, context())
+  host.scheduledTasks = async () => [{ id: 'future', title: 'Later', prompt: 'Work', botId: 'coder', schedule: { type: 'once', runAt: Date.now() + 60000 }, enabled: true, createdAt: Date.now(), updatedAt: Date.now() }]
+  const status = await host.activity.getStatus('coder', context())
+  expect(status).toMatchObject({ state: 'idle', runningCount: 0, queuedCount: 0, pendingApprovalCount: 0 })
+  expect(status.tasks).toContainEqual(expect.objectContaining({ kind: 'scheduled', status: 'scheduled' }))
+  expect(requests).toHaveLength(0)
+})
+
+test('a structured mention lets the coordinator query status without invoking the target model', async () => {
+  const fixture = await setup(false, (body) => body.messages.some((message) => message.role === 'tool')
+    ? 'Coder is idle'
+    : { name: 'bot_get_status', arguments: { botId: 'coder' } }, undefined, true)
+  await fixture.host.bots!.update('coder', { instructions: 'TARGET_MUST_NOT_WAKE' })
+  const source = await fixture.host.mainThread('xiaoya', context())
+  await fixture.host.conversations.submit(source.id, { type: 'input', requestId: 'status-query', content: '@Coder busy?', botMentions: [{ botId: 'coder', displayName: 'Coder', start: 0, end: 6 }] }, context())
+  await vi.waitFor(async () => expect(JSON.stringify(await fixture.host.conversations.snapshot(source.id, context()))).toContain('Coder is idle'))
+  expect(fixture.requests).toHaveLength(2)
+  expect(JSON.stringify(fixture.requests)).not.toContain('TARGET_MUST_NOT_WAKE')
+  expect(JSON.stringify(fixture.requests[0])).toContain('Coding Agent')
+  expect((await fixture.host.grove!.list(context())).tasks).toEqual([])
+})
+
+test('async coordination stays attached to its tool call without injecting a later message', async () => {
+  const fixture = await setup(false, (body) => {
+    if (body.messages.some((message) => message.role === 'system' && message.content.includes('ASYNC_TARGET'))) return 'Async result'
+    if (body.messages.some((message) => message.role === 'tool')) return 'Task submitted'
+    return { name: 'bot_request_task', arguments: { botId: 'coder', instruction: 'Review', mode: 'async' } }
+  }, undefined, true)
+  await fixture.host.bots!.update('coder', { instructions: 'ASYNC_TARGET' })
+  const source = await fixture.host.mainThread('xiaoya', context())
+  await fixture.host.conversations.submit(source.id, { type: 'input', requestId: 'async', content: 'Delegate' }, context())
+  await vi.waitFor(async () => expect((await fixture.host.grove!.list(context())).tasks[0]).toMatchObject({ status: 'completed', sourceToolCallId: 'write-call', mode: 'async' }), { timeout: 15000 })
+  const snapshot = await fixture.host.conversations.snapshot(source.id, context())
+  expect(snapshot.entries.flatMap((entry) => entry.model ?? []).filter((message) => message.role === 'user')).toHaveLength(1)
+  expect(JSON.stringify(snapshot)).toContain('Task submitted')
+  expect(fixture.requests).toHaveLength(3)
+})
+
+test('collaborations serialize one workspace while independent main conversations remain usable', async () => {
+  const { host, workspaceId } = await setup(false, undefined, undefined, true)
+  await host.bots!.update('coder', { workspaceIds: [workspaceId], defaultWorkspaceId: workspaceId })
+  const source = await host.mainThread('xiaoya', context())
+  const caller = { threadId: source.id }
+  const first = await host.grove!.requestTask(caller, { toBotId: 'coder', instruction: 'First', operationId: 'serial-first', mode: 'async' }, context())
+  const second = await host.grove!.requestTask(caller, { toBotId: 'coder', instruction: 'Second', operationId: 'serial-second', mode: 'async' }, context())
+  await vi.waitFor(async () => {
+    const tasks = (await host.grove!.list(context())).tasks
+    if (tasks.find((task) => task.id === first.id)?.status !== 'completed') expect(tasks.find((task) => task.id === second.id)?.submissionId).toBeUndefined()
+    expect(tasks.find((task) => task.id === second.id)?.status).toBe('completed')
+  }, { timeout: 15000 })
+  const target = await host.grove!.getTask(caller, first.id, context())
+  expect((await host.conversations.get(target.targetThreadId!, context())).workspaceId).toBe(workspaceId)
+  expect((await host.conversations.snapshot((await host.mainThread('coder', context())).id, context())).entries).toHaveLength(0)
+  await expect(host.grove!.requestTask({ threadId: target.targetThreadId! }, { toBotId: 'xiaoya', instruction: 'No inherited access', workspaceId, operationId: 'ungranted', mode: 'async' }, context())).rejects.toThrow('Workspace access')
+})
+
+test('workspace tool leases serialize writers across ordinary conversations and release after completion', async () => {
+  const fixture = await setup(false, (body) => body.messages.some((message) => message.role === 'tool') ? 'Done' : { name: 'workspace_probe', arguments: {} }, undefined, true)
+  let active = 0
+  let maximum = 0
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => { release = resolve })
+  fixture.registry.register({
+    definition: { name: 'workspace_probe', label: 'Probe', description: 'Probe workspace execution', inputSchema: Type.Object({}), replay: 'safe' },
+    adapter: { create: () => ({ execute: async () => {
+      active++
+      maximum = Math.max(maximum, active)
+      await gate
+      active--
+      return { content: [{ type: 'text', text: 'Probe done' }] }
+    } }) },
+  })
+  await fixture.host.refreshTools(context())
+  await fixture.host.bots!.update('coder', { workspaceIds: [fixture.workspaceId], enabledTools: ['workspace_probe'] })
+  fixture.host.scheduledTasks = async () => ['active-schedule', 'future-schedule'].map((id) => ({ id, title: id, prompt: 'Probe', botId: 'coder', enabled: true, schedule: { type: 'once' as const, runAt: Date.now() + 60000 }, createdAt: 1, updatedAt: 1 }))
+  for (const threadId of ['writer-one', 'writer-two']) {
+    await fixture.host.create({ threadId, botId: 'coder', workspaceId: fixture.workspaceId }, context())
+    await fixture.host.conversations.submit(threadId, { type: 'input', requestId: threadId, content: 'Probe', ...(threadId === 'writer-one' ? { scheduledTaskId: 'active-schedule' } : {}) }, context())
+  }
+  try {
+    await vi.waitFor(async () => {
+      const status = await fixture.host.activity.getStatus('coder', context())
+      expect(status.activeThreads.map((thread) => thread.threadId).sort()).toEqual(['writer-one', 'writer-two'])
+      expect(status.runningCount).toBe(2)
+      expect(status.tasks).toContainEqual(expect.objectContaining({ taskId: 'active-schedule', kind: 'scheduled', status: 'running' }))
+      expect(status.tasks).toContainEqual(expect.objectContaining({ taskId: 'future-schedule', kind: 'scheduled', status: 'scheduled' }))
+      expect((await fixture.host.activity.listTasks('coder', context())).tasks).toContainEqual(expect.objectContaining({ threadId: 'writer-two', workspaceName: 'workspace' }))
+    })
+  } finally {
+    release()
+  }
+  await vi.waitFor(async () => {
+    for (const threadId of ['writer-one', 'writer-two']) expect(JSON.stringify(await fixture.host.conversations.snapshot(threadId, context()))).toContain('Done')
+  }, { timeout: 15000 })
+  expect(maximum).toBe(1)
+})
+
+test('await collaboration resumes the original tool after host restart without redispatching its submission', async () => {
+  const fixture = await setup(false, (body) => {
+    const target = body.messages.some((message) => message.role === 'system' && message.content.includes('RECOVERY_TARGET'))
+    if (body.messages.some((message) => message.role === 'tool')) return target ? 'Recovered target result' : 'Recovered source summary'
+    return target ? { name: 'slow_probe', arguments: {} } : { name: 'bot_request_task', arguments: { botId: 'coder', instruction: 'Recover this work' } }
+  }, undefined, true)
+  fixture.registry.register({
+    definition: { name: 'slow_probe', label: 'Probe', description: 'Slow execution', inputSchema: Type.Object({}), replay: 'safe' },
+    adapter: { create: () => ({ execute: async (_id: string, _args: unknown, signal?: AbortSignal) => {
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(resolve, 1000)
+        signal?.addEventListener('abort', () => { clearTimeout(timer); reject(signal.reason) }, { once: true })
+      })
+      return { content: [{ type: 'text', text: 'Recovered probe' }] }
+    } }) },
+  })
+  let host = fixture.host
+  await host.refreshTools(context())
+  await host.bots!.update('coder', { instructions: 'RECOVERY_TARGET', enabledTools: ['slow_probe'] })
+  const source = await host.mainThread('xiaoya', context())
+  await host.conversations.submit(source.id, { type: 'input', requestId: 'recover-await', content: 'Delegate work' }, context())
+  let submissionId: number | undefined
+  await vi.waitFor(async () => {
+    const task = (await host.grove!.list(context())).tasks[0]
+    expect(task?.submissionId).toBeDefined()
+    submissionId = task.submissionId
+  })
+  await host.close()
+  hosts.splice(hosts.indexOf(host), 1)
+  host = await fixture.open()
+  await vi.waitFor(async () => expect(JSON.stringify(await host.conversations.snapshot(source.id, context()))).toContain('Recovered source summary'), { timeout: 15000 })
+  const tasks = (await host.grove!.list(context())).tasks
+  expect(tasks).toHaveLength(1)
+  expect(tasks[0]).toMatchObject({ status: 'completed', submissionId })
+  expect((await host.conversations.snapshot(source.id, context())).entries.flatMap((entry) => entry.model ?? []).filter((message) => message.role === 'user')).toHaveLength(1)
+}, 25000)
+
+test('cancelling the source await call cancels its target and releases the collaboration queue', async () => {
+  const fixture = await setup(false, (body) => {
+    if (body.messages.some((message) => message.role === 'system' && message.content.includes('CANCEL_TARGET'))) return { name: 'cancel_probe', arguments: {} }
+    return { name: 'bot_request_task', arguments: { botId: 'coder', instruction: 'Wait for cancellation' } }
+  }, undefined, true)
+  let entered = false
+  fixture.registry.register({
+    definition: { name: 'cancel_probe', label: 'Probe', description: 'Wait for cancellation', inputSchema: Type.Object({}), replay: 'safe' },
+    adapter: { create: () => ({ execute: async (_id: string, _args: unknown, signal?: AbortSignal) => {
+      entered = true
+      await new Promise((_resolve, reject) => signal?.addEventListener('abort', () => reject(signal.reason), { once: true }))
+    } }) },
+  })
+  await fixture.host.refreshTools(context())
+  await fixture.host.bots!.update('coder', { instructions: 'CANCEL_TARGET', enabledTools: ['cancel_probe'] })
+  const source = await fixture.host.mainThread('xiaoya', context())
+  await fixture.host.conversations.submit(source.id, { type: 'input', requestId: 'cancel-await', content: 'Delegate' }, context())
+  await vi.waitFor(() => expect(entered).toBe(true))
+  await fixture.host.conversations.cancel(source.id, context())
+  await vi.waitFor(async () => expect((await fixture.host.grove!.list(context())).tasks[0]?.status).toBe('cancelled'))
+  const task = (await fixture.host.grove!.list(context())).tasks[0]
+  await vi.waitFor(async () => expect((await fixture.host.conversations.snapshot(task.targetThreadId!, context())).run).toBeUndefined())
+  expect((await fixture.host.activity.getStatus('coder', context())).queuedCount).toBe(0)
+})
+
+test('expired collaboration deadlines settle as failures instead of waiting indefinitely', async () => {
+  const fixture = await setup(false, undefined, undefined, true)
+  const source = await fixture.host.mainThread('xiaoya', context())
+  const caller = { threadId: source.id }
+  const task = await fixture.host.grove!.requestTask(caller, { toBotId: 'coder', instruction: 'Time budget', operationId: 'expired' }, context())
+  await fixture.host.bots!.withLock(`collaboration:${task.id}`, async () => {
+    const current = await fixture.options.groveRepo!.getTask(task.id)
+    await fixture.options.groveRepo!.putTask({ ...current!, deadline: Date.now() - 1 })
+  })
+  await vi.waitFor(async () => expect(await fixture.host.grove!.getTask(caller, task.id, context())).toMatchObject({ status: 'failed', result: 'Collaboration time budget exhausted' }))
+})
+
+test('recovery fails queued work explicitly when its Bot or Workspace is unavailable', async () => {
+  const fixture = await setup(false, undefined, undefined, true)
+  const helper = await fixture.host.bots!.create({ name: 'Temporary target' })
+  await fixture.host.bots!.update('coder', { workspaceIds: [fixture.workspaceId] })
+  const source = await fixture.host.mainThread('xiaoya', context())
+  await fixture.host.close()
+  hosts.splice(hosts.indexOf(fixture.host), 1)
+  const host = await fixture.open(async (initializing) => {
+    await initializing.coordination!.requestTask({ threadId: source.id }, { toBotId: helper.id, instruction: 'Removed target', operationId: 'removed' }, context())
+    await initializing.coordination!.requestTask({ threadId: source.id }, { toBotId: 'coder', instruction: 'Unavailable workspace', workspaceId: fixture.workspaceId, operationId: 'detached' }, context())
+    await initializing.bots!.remove(helper.id)
+    await fixture.workspaces.detach(fixture.workspaceId)
+  })
+  await vi.waitFor(async () => {
+    const tasks = (await host.coordination!.list(context())).tasks
+    expect(tasks).toHaveLength(2)
+    expect(tasks.every((task) => task.status === 'failed')).toBe(true)
+    expect(tasks.every((task) => task.submissionId === undefined)).toBe(true)
+  })
+  expect(fixture.requests).toHaveLength(0)
+})
+
+test('one source submission cannot restart collaboration chains indefinitely', async () => {
+  const { host } = await setup(false, undefined, undefined, true)
+  const source = await host.mainThread('xiaoya', context())
+  const caller = { threadId: source.id }
+  for (let index = 0; index < 8; index++) {
+    const task = await host.coordination!.requestTask(caller, { toBotId: 'coder', instruction: `Task ${index}`, operationId: `bounded-${index}`, sourceSubmissionId: 999, mode: 'async' }, context())
+    await host.coordination!.waitTask(caller, task.id, context())
+  }
+  await expect(host.coordination!.requestTask(caller, { toBotId: 'coder', instruction: 'Excess', operationId: 'bounded-excess', sourceSubmissionId: 999, mode: 'async' }, context())).rejects.toThrow('Source submission collaboration budget')
+  expect((await host.coordination!.list(context())).tasks).toHaveLength(8)
+}, 20000)
 
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'nook-host-'))
@@ -550,6 +747,7 @@ test('run and trace projections derive identities and outcomes from official tas
   const records = await projection.records(run.id, context())
   expect(records.map((record) => record.event.type)).toEqual([
     'agent_started',
+    'user_message',
     'tool_started',
     'tool_finished',
     'text_delta',
@@ -1279,6 +1477,7 @@ test('activity projection shows reasoning before text and completion over a cust
         const records = await projection.records(runId, context())
         expect(records.map((record) => record.event.type)).toEqual([
           'agent_started',
+          'user_message',
           'thinking_delta',
           'text_delta',
         ])
@@ -1291,7 +1490,7 @@ test('activity projection shows reasoning before text and completion over a cust
     ).wait(context())
     await (await host.engine.conversation('stream-activity', context())).waitForIdle(context())
     expect((await projection.records(runId, context())).map((record) => record.event.type)).toEqual(
-      ['agent_started', 'thinking_delta', 'text_delta', 'agent_completed'],
+      ['agent_started', 'user_message', 'thinking_delta', 'text_delta', 'agent_completed'],
     )
   } finally {
     releaseText()

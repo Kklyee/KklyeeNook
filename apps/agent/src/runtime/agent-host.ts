@@ -43,8 +43,9 @@ import type { BotSubmissionConfig } from './inputs'
 import type { BotProfile } from '@kklyeenook/shared/bot/bot'
 import { botState } from '@kklyeenook/shared/bot/bot-state'
 import type { GroveRepo } from '../db/repositories/grove-repo'
-import { BotCommunicationService } from '../grove/communication'
-import { registerGroveTools } from '../grove/tools'
+import { BotCoordinationService } from '../bots/bot-coordination-service'
+import { BotActivityService } from '../bots/bot-activity-service'
+import { registerBotCoordinationTools } from '../tools/bot-coordination-tools'
 import type { RemoteTransport } from '../grove/remote-transport'
 import type { CapabilityRuntime } from '../grove/capability-runtime'
 
@@ -71,7 +72,11 @@ export type AgentHostOptions = {
 export class AgentHost {
   readonly conversations: ConversationService
   readonly bots?: BotService
-  readonly grove?: BotCommunicationService
+  stopping = false
+  scheduledTasks?: () => Promise<import("@kklyeenook/shared/scheduler/scheduled-task").ScheduledTask[]>
+  readonly activity = new BotActivityService(this)
+  readonly grove?: BotCoordinationService
+  readonly coordination?: BotCoordinationService
 
   private constructor(
     readonly engine: AgentEngine,
@@ -85,10 +90,11 @@ export class AgentHost {
     private readonly identities: { coding: Extension; personal: Extension },
     private readonly membership: Extension,
     bots?: BotService,
-    grove?: BotCommunicationService,
+    grove?: BotCoordinationService,
   ) {
     this.bots = bots
     this.grove = grove
+    this.coordination = grove
     this.conversations = new ConversationService(
       engine,
       options.sessions,
@@ -122,8 +128,8 @@ export class AgentHost {
 
   static async open(options: AgentHostOptions, context: Context) {
     let host: AgentHost | undefined
-    const grove = options.botRepo && options.groveRepo ? new BotCommunicationService(options.groveRepo, options.groveTransport, options.groveCapabilities) : undefined
-    const unregisterGrove = grove ? registerGroveTools(options.tools, () => host!) : []
+    const grove = options.botRepo && options.groveRepo ? new BotCoordinationService(options.groveRepo, options.groveTransport, options.groveCapabilities) : undefined
+    const unregisterGrove = grove ? registerBotCoordinationTools(options.tools, () => host!) : []
     const models = new AgentModels(options.config, options.credentials)
     const bots = options.botRepo
       ? new BotService(
@@ -245,7 +251,10 @@ export class AgentHost {
             })
           }
         : undefined,
-      grove ? () => grove.directory() : undefined,
+      grove ? async (id, context) => {
+        const owner = await engine.ownerThread(id, context)
+        return (await grove.mentionTargets(owner.threadId, context)).filter((bot) => bot.allowed).map((bot) => ({ id: bot.botId, name: bot.name, role: bot.role, transport: 'local' }))
+      } : undefined,
     )
     const delegation = new AgentDelegation(inputs, async (id, context) => {
       await executionContext(id, context, 'delegate_task')
@@ -576,6 +585,7 @@ export class AgentHost {
   }
 
   close() {
+    this.stopping = true
     return this.resources.close(() => this.engine.close()).finally(() => {
       for (const unregister of this.unregisterGrove) unregister()
     })

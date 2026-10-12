@@ -43,3 +43,9 @@ test('requires an input schema for every registered tool', () => {
   const registry = new ToolRegistry()
   expect(() => registry.register({ definition: { ...definition, inputSchema: undefined }, adapter: { create: () => ({}) } })).toThrow('Tool input schema is required: read')
 })
+
+test('rejects invalid model tool names', () => {
+  for (const name of ['bot.request_task', 'bot-request-task', 'bot task', '机器人', '_bot']) {
+    expect(() => new ToolRegistry().register({ definition: { ...definition, name }, adapter: { create: () => ({}) } })).toThrow('Invalid tool name')
+  }
+})
