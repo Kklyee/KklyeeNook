@@ -3,7 +3,7 @@
 ## 当前进度
 
 - Phase 1：本地 Bot 通信、Durable 协作执行、Chat 与 Grove 入口已实现。
-- Phase 2：已实现网络身份、Host / User 凭据校验、Social Grant、连接邀请、PostgreSQL Relay HTTP API、Remote Transport、Host Inbox / Outbox 和 Durable Bridge。Desktop 启动配置、凭据接入和管理 UI 尚未完成。
+- Phase 2：已实现网络身份、Host / User 凭据校验、Social Grant、连接邀请、PostgreSQL Relay HTTP API、Remote Transport、Host Inbox / Outbox 和 Durable Bridge。Desktop 已接入连接设置、加密凭据、连接管理、权限编辑器及远程协作目标选择；完整桌面交互验收尚未完成。
 - Phase 3：受控远程 MCP 分享、委托安装及审批尚未实现。
 - Phase 4：不属于 v0.2 首期范围。
 
@@ -67,7 +67,7 @@ Grove 展示本地 Bot 的接收策略、消息与协作记录。Chat 展示本�
 - 持久化 Generation 预算和执行前授权复核。
 - 空答案的明确失败结果。
 
-继续开发时将现有本地协议扩展至 Remote Transport，并接通 Relay HTTP API、Host Inbox / Outbox 和管理 UI；不能把现有 Desktop Remote Gateway 的设备访问凭据直接当作跨用户 Bot 身份。
+本地协议已扩展至 Remote Transport、Relay HTTP API 与 Host Inbox / Outbox；Grove 使用独立的 User / Host 凭据，不使用 Desktop Remote Gateway 的设备访问凭据作为跨用户 Bot 身份。
 
 ## 网络授权基础
 
@@ -83,13 +83,13 @@ Social Grant 仅由目标 Bot 的所有者 User 签发或撤销。User Grant 不
 
 ## Relay HTTP 服务
 
-设置 `GROVE_DATABASE_URL` 后，在仓库根目录运行 `pnpm --filter @kklyeenook/grove user:create "Alice"` 生成 User 身份及一次输出的访问凭据，再运行 `pnpm --filter @kklyeenook/grove start`。服务默认绑定 `127.0.0.1:43128`，可通过 `GROVE_HOST` 和 `GROVE_PORT` 设置监听地址。网络部署须通过 HTTPS 反向代理访问；Desktop 的连接配置和凭据持久化仍待实现。
+设置 `GROVE_DATABASE_URL` 后，在仓库根目录运行 `pnpm --filter @kklyeenook/grove user:create "Alice"` 生成 User 身份及一次输出的访问凭据，再运行 `pnpm --filter @kklyeenook/grove start`。服务默认绑定 `127.0.0.1:43128`，可通过 `GROVE_HOST` 和 `GROVE_PORT` 设置监听地址。网络部署须通过 HTTPS 反向代理访问；在 Desktop Grove 页输入 Relay URL 和 User 凭据以注册本机 Host。
 
 所有受保护 API 使用 Bearer 凭据。User 管理操作与 Host 通信操作分别认证；HTTP 输入使用严格 Schema，禁止请求体伪造 User、Host、Grant 签发者或消息来源。
 
 User API：`GET /me`、`POST /hosts`、`DELETE /hosts/:id`、`GET /connections`、`POST /relationships`、`POST /relationships/:id/decision`、`POST /grants`、`DELETE /grants/:id`。
 
-Host API：`POST /bots`、`GET /host/bots`、`POST /messages`、`GET /inbox`、`POST /inbox/:id/ack`、`POST /operations/:id/authorize`、`POST /operations/:id/result`。
+Host API：`GET /host`、`POST /bots`、`GET /host/bots`、`POST /messages`、`GET /inbox`、`POST /inbox/:id/ack`、`POST /operations/:id/authorize`、`POST /operations/:id/result`。
 
 连接邀请只能由接收 User 同意或拒绝，任一参与 User 可撤销连接。联系人目录仅显示自己的 Bot 与已接受连接的远程 Bot；建立连接不会自动授予任务或工具权限。
 
@@ -101,7 +101,9 @@ Inbox 投递前复核授权与任务截止时间，撤销或过期请求不会�
 
 ## Host 网络执行与恢复
 
-`AgentHostOptions.groveTransport` 接收 `RemoteTransport`。Transport 要求 HTTPS，允许测试或本地部署使用 loopback HTTP，禁止 URL 内携带凭据及跟随重定向。Host 凭据由回调提供，不保存在消息、任务、身份或 Inbox / Outbox 数据中。Desktop 的设置与加密凭据接入尚待实现。
+`AgentHostOptions.groveTransport` 接收 `RemoteTransport`。Transport 要求 HTTPS，允许测试或本地部署使用 loopback HTTP，禁止 URL 内携带凭据及跟随重定向。Host 凭据由回调提供，不保存在消息、任务、身份或 Inbox / Outbox 数据中。
+
+Desktop 使用现有加密 CredentialStore 保存 User / Host 凭据，配置文件仅保存公开身份与 Relay URL。User 凭据留在 Main 进程，Agent 后端只收到 Host 凭据。连接设置支持运行中暂停和恢复，保留原始身份及持久化队列；恢复前验证 Host 所有权。管理 IPC 仅接受主窗口主 Frame。权限编辑器区分 User / Bot 主体，支持目标 Bot、动作、Tool / MCP 范围、使用次数、到期时间和撤销；工具权限动作的实际执行闭环仍待 Phase 3。
 
 Host 本地新增 `network_identity`、`remote_contacts`、`social_inbox` 与 `social_outbox`。Durable 后台网络任务注册 Bot、刷新联系人、重试待发送事件、拉取 Inbox 并处理本地恢复记录。Inbox 先持久化到 SQLite，再向 Relay ack；如果在提交或 ack 周围退出进程，持久化 Inbox 和稳定的 requestId 可恢复原始任务，避免重复 Submission。Outbox 保存原始 payload 和 Operation ID，发送失败会保留并重试；明确拒绝会记录失败，已结束任务不会继续发出。
 
@@ -111,4 +113,4 @@ Host 本地新增 `network_identity`、`remote_contacts`、`social_inbox` 与 `s
 
 接收请求、生成模型调用及工具执行前都会复核远程授权和本地接收策略。临时 Relay 故障会等待或重试，始终受原始截止时间约束；撤销或拒绝不会被当作临时故障继续执行。
 
-`apps/grove/src/host-bridge.test.ts` 通过两个独立 Node Host 子进程、各自的 SQLite 数据库、真实 Pi Durable、模拟模型服务及 TCP Relay 验证跨用户执行、模型和上下文隔离、离线接收、完整进程退出后恢复、任务 / Submission 去重、授权撤销和接收策略拒绝。下一阶段接通 Desktop 配置与管理 UI，再完成受控 MCP 分享和委托安装。
+`apps/grove/src/host-bridge.test.ts` 通过两个独立 Node Host 子进程、各自的 SQLite 数据库、真实 Pi Durable、模拟模型服务及 TCP Relay 验证跨用户执行、模型和上下文隔离、离线接收、完整进程退出后恢复、任务 / Submission 去重、授权撤销、接收策略拒绝及运行中暂停恢复。`connection.test.ts` 验证 Desktop 凭据加密、身份绑定、重用注册及配置回滚，`groveIpc.test.ts` 验证管理入口来源边界。下一阶段完成受控 MCP 分享和委托安装。

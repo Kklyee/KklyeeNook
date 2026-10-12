@@ -115,6 +115,7 @@ function isAgentConfig(value: unknown): value is AgentConfig {
   const config = value as Partial<AgentConfig>
   return Boolean(
     config.model &&
+    (config.grove === undefined || (typeof config.grove === 'object' && config.grove !== null && typeof config.grove.enabled === 'boolean' && typeof config.grove.relayUrl === 'string')) &&
     isModelConfig(config.model) &&
     (config.models === undefined ||
       (Array.isArray(config.models) &&

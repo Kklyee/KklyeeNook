@@ -1,7 +1,9 @@
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context'
 import { testHost } from './host'
+import { RemoteTransport } from '../../../agent/src/grove/remote-transport'
 
 let fixture: Awaited<ReturnType<typeof testHost>>
+let connection: { relayUrl: string; token: string }
 process.on('message', (input) => {
   const message = input as { id: number; command: string; input: any }
   void run(message.command, message.input).then(
@@ -19,6 +21,7 @@ process.on('message', (input) => {
 
 async function run(command: string, input: any): Promise<unknown> {
   if (command === 'init') {
+    connection = { relayUrl: input.relayUrl, token: input.token }
     fixture = await testHost(input.relayUrl, input.token, input.name, input.answer, {
       directory: input.directory,
       cleanup: false,
@@ -27,6 +30,11 @@ async function run(command: string, input: any): Promise<unknown> {
   }
   const host = fixture.host
   if (command === 'sync') return host.grove!.syncNetwork(BACKGROUND_CONTEXT)
+  if (command === 'network')
+    return host.grove!.configureTransport(
+      input.enabled ? new RemoteTransport(connection.relayUrl, () => connection.token) : undefined,
+      BACKGROUND_CONTEXT,
+    )
   if (command === 'identities') return fixture.repo.identities()
   if (command === 'tasks') return fixture.repo.tasks()
   if (command === 'task') return fixture.repo.getTask(input.id)

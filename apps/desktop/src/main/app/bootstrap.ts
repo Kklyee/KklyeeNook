@@ -30,6 +30,9 @@ import { ApprovalPolicy } from '@kklyeenook/agent/approval/approvalPolicy'
 import { AgentConfigStore } from '@kklyeenook/agent/settings/agentConfigStore'
 import { registerMcpIpc } from '@/main/ipc/mcpIpc'
 import { PersistentCredentialStore, type CredentialStore } from '@kklyeenook/agent/settings/credentialStore'
+import { GROVE_HOST_CREDENTIAL } from '@kklyeenook/shared/bot/grove-settings'
+import { GroveConnection } from '../grove/connection'
+import { registerGroveIpc } from '../ipc/groveIpc'
 import {
   WEB_SEARCH_PROVIDER_NAMES,
   webSearchCredentialId,
@@ -162,6 +165,7 @@ export async function bootstrap(): Promise<AppContext> {
   })
   const disposeWindowIpc = registerWindowIpc(chatWindow)
   const disposeRemoteIpc = registerRemoteIpc(chatWindow, configStore, backendProcess)
+  const disposeGroveIpc = registerGroveIpc(chatWindow, new GroveConnection(configStore, credentialStore, backendProcess))
   const disposeAgentRunIpc = registerAgentRunIpc(backendProcess)
   const disposeAgentSkillIpc = registerAgentSkillIpc(backendProcess)
   const disposeScheduledTaskIpc = registerScheduledTaskIpc(backendProcess)
@@ -185,6 +189,7 @@ export async function bootstrap(): Promise<AppContext> {
   return {
     async dispose() {
       disposeRemoteIpc()
+      disposeGroveIpc()
       disposeModelSelection()
       disposePreviewIpc()
       disposeWorkspaceIpc()
@@ -219,5 +224,7 @@ function collectRuntimeCredentials(
     const apiKey = credentials.getApiKey(webSearchCredentialId(provider))
     if (apiKey) apiKeys[webSearchCredentialId(provider)] = apiKey
   }
+  const groveToken = credentials.getApiKey(GROVE_HOST_CREDENTIAL)
+  if (groveToken) apiKeys[GROVE_HOST_CREDENTIAL] = groveToken
   return apiKeys
 }

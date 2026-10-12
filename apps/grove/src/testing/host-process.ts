@@ -54,6 +54,7 @@ export async function testHostProcess(
   return {
     directory,
     syncNetwork: () => call<void>('sync'),
+    network: (enabled: boolean) => call<void>('network', { enabled }),
     identities: () => call<NetworkBotIdentity[]>('identities'),
     tasks: () => call<BotTask[]>('tasks'),
     task: (id: string) => call<BotTask>('task', { id }),

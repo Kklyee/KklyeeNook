@@ -46,6 +46,8 @@ import { AgentHost } from '../runtime/agent-host'
 import { AgentModels } from '../runtime/agent-models'
 import { DrizzleBotRepo } from '../db/repositories/bot-repo'
 import { DrizzleGroveRepo } from '../db/repositories/grove-repo'
+import { RemoteTransport } from '../grove/remote-transport'
+import { GROVE_HOST_CREDENTIAL } from '@kklyeenook/shared/bot/grove-settings'
 
 export interface AgentBackendRuntime {
   baseUrl: string
@@ -64,7 +66,9 @@ export async function createAgentBackend(
   options: AgentBackendInitOptions,
   reportStartupStage: StartupStageReporter = () => undefined,
   notify: (notification: AgentBackendNotification) => void = () => undefined,
-  publishModelSelection: (selection: import('@kklyeenook/shared/agent/agentSettings').UpdateAgentModelSelectionRequest) => void = () => undefined,
+  publishModelSelection: (
+    selection: import('@kklyeenook/shared/agent/agentSettings').UpdateAgentModelSelectionRequest,
+  ) => void = () => undefined,
 ): Promise<AgentBackendRuntime> {
   const configStore = new AgentConfigStore(options.config)
   let credentialStore = createCredentialStore(options.apiKeys)
@@ -81,12 +85,18 @@ export async function createAgentBackend(
   let settingsChangePending = false
   const contextAttachments = new ContextAttachmentService()
   const close = async () => {
-    const results = await Promise.allSettled([remote?.close(), server?.close(), scheduledTasks?.close()])
-    results.push(...await Promise.allSettled([host?.close()]))
-    results.push(...await Promise.allSettled([knowledge?.close(), mcpServerManager?.close()]))
+    const results = await Promise.allSettled([
+      remote?.close(),
+      server?.close(),
+      scheduledTasks?.close(),
+    ])
+    results.push(...(await Promise.allSettled([host?.close()])))
+    results.push(...(await Promise.allSettled([knowledge?.close(), mcpServerManager?.close()])))
     contextAttachments.clear()
     closeDb()
-    const failures = results.flatMap(result => result.status === 'rejected' ? [result.reason] : [])
+    const failures = results.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason] : [],
+    )
     if (failures.length) throw new AggregateError(failures, 'Agent backend cleanup failed')
   }
   try {
@@ -105,7 +115,13 @@ export async function createAgentBackend(
     registerToolResultTool(toolRegistry, toolResultStore)
     registerMemoryTool(toolRegistry, memoryRepo)
     registerPlanTool(toolRegistry)
-    knowledge = await createKnowledgeRuntime(db, options.databaseUrl, join(options.dataDir, 'knowledge-cache'), configStore.get().knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS, workspaceService)
+    knowledge = await createKnowledgeRuntime(
+      db,
+      options.databaseUrl,
+      join(options.dataDir, 'knowledge-cache'),
+      configStore.get().knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS,
+      workspaceService,
+    )
     registerKnowledgeTools(toolRegistry, () => knowledge!.service)
     const webSearchService = new WebSearchService(
       () => configStore.get().webSearch ?? DEFAULT_WEB_SEARCH_SETTINGS,
@@ -115,35 +131,57 @@ export async function createAgentBackend(
     const contextBuilder = new ContextBuilder(contextAttachments, memoryRepo)
     const retention = new FileToolResultRetentionPolicy(toolResultStore)
     mcpServerManager = new McpServerManager(toolRegistry, () => {
-      void host?.refreshTools(BACKGROUND_CONTEXT).catch((error) => console.error('[agent-backend] MCP tool refresh failed', error))
+      void host
+        ?.refreshTools(BACKGROUND_CONTEXT)
+        .catch((error) => console.error('[agent-backend] MCP tool refresh failed', error))
     })
     await mcpServerManager.reconcile(configStore.get().mcpServers ?? [])
-    host = await AgentHost.open({
-      databasePath: join(dataDir, 'agent.sqlite'),
-      config: () => configStore.get(),
-      credentials: () => credentialStore,
-      sessions: sessionRepo,
-      botRepo: new DrizzleBotRepo(db),
-      groveRepo: new DrizzleGroveRepo(db),
-      workspaces: workspaceService,
-      tools: toolRegistry,
-      sandbox,
-      retention,
-      contextBuilder,
-      skills: skillLoader,
-      onReport: (error) => console.error('[agent-backend] agent host report', error),
-      extensions: [scheduledTasks.extension],
-      initialize: async (initializing, context) => {
-        scheduledTasks!.connect(initializing)
-        await scheduledTasks!.restore(context)
+    host = await AgentHost.open(
+      {
+        databasePath: join(dataDir, 'agent.sqlite'),
+        config: () => configStore.get(),
+        credentials: () => credentialStore,
+        sessions: sessionRepo,
+        botRepo: new DrizzleBotRepo(db),
+        groveRepo: new DrizzleGroveRepo(db),
+        groveTransport: configStore.get().grove?.enabled
+          ? new RemoteTransport(configStore.get().grove!.relayUrl, () =>
+              credentialStore.getApiKey(GROVE_HOST_CREDENTIAL),
+            )
+          : undefined,
+        workspaces: workspaceService,
+        tools: toolRegistry,
+        sandbox,
+        retention,
+        contextBuilder,
+        skills: skillLoader,
+        onReport: (error) => console.error('[agent-backend] agent host report', error),
+        extensions: [scheduledTasks.extension],
+        initialize: async (initializing, context) => {
+          scheduledTasks!.connect(initializing)
+          await scheduledTasks!.restore(context)
+        },
       },
-    }, BACKGROUND_CONTEXT)
+      BACKGROUND_CONTEXT,
+    )
     const runProjection = new RunProjection(host)
     remote = new RemoteController(
-      createRemoteAgentPort(workspaceService, host, configStore, selection => {
-        configStore.set(updateAgentModelSelectionFromCatalog(configStore.get(), { provider: selection.provider, modelID: selection.modelId, thinkingLevel: selection.thinkingLevel }))
-        publishModelSelection(selection)
-      }, contextAttachments),
+      createRemoteAgentPort(
+        workspaceService,
+        host,
+        configStore,
+        (selection) => {
+          configStore.set(
+            updateAgentModelSelectionFromCatalog(configStore.get(), {
+              provider: selection.provider,
+              modelID: selection.modelId,
+              thinkingLevel: selection.thinkingLevel,
+            }),
+          )
+          publishModelSelection(selection)
+        },
+        contextAttachments,
+      ),
       options.remoteStaticRoot ?? join(process.cwd(), 'apps/remote/dist'),
     )
     await remote.configure(configStore.get().remote ?? { enabled: false })
@@ -155,6 +193,30 @@ export async function createAgentBackend(
       baseUrl: server.baseUrl,
       async handleRequest(request) {
         switch (request.action) {
+          case 'grove:status':
+            return (await host!.grove!.list(BACKGROUND_CONTEXT)).network
+          case 'grove:configure': {
+            const previous = configStore.get()
+            const oldToken = credentialStore.getApiKey(GROVE_HOST_CREDENTIAL)
+            try {
+              if (request.hostToken)
+                credentialStore.setApiKey(GROVE_HOST_CREDENTIAL, request.hostToken)
+              await host!.grove!.configureTransport(
+                request.settings.enabled
+                  ? new RemoteTransport(request.settings.relayUrl, () =>
+                      credentialStore.getApiKey(GROVE_HOST_CREDENTIAL),
+                    )
+                  : undefined,
+                BACKGROUND_CONTEXT,
+              )
+              configStore.set({ ...previous, grove: request.settings })
+            } catch (error) {
+              if (oldToken) credentialStore.setApiKey(GROVE_HOST_CREDENTIAL, oldToken)
+              else credentialStore.deleteApiKey(GROVE_HOST_CREDENTIAL)
+              throw error
+            }
+            return (await host!.grove!.list(BACKGROUND_CONTEXT)).network
+          }
           case 'remote:status':
             return remote!.status()
           case 'remote:configure': {
@@ -163,18 +225,28 @@ export async function createAgentBackend(
             return status
           }
           case 'conversation:compact':
-            return (await host!.engine.conversation(request.id, BACKGROUND_CONTEXT)).compact(request.instructions, BACKGROUND_CONTEXT)
+            return (await host!.engine.conversation(request.id, BACKGROUND_CONTEXT)).compact(
+              request.instructions,
+              BACKGROUND_CONTEXT,
+            )
           case 'tool-result:read':
             return (await toolResultStore.load(request.resultRef)).result
           case 'conversation:permission': {
             if (!PERMISSION_MODES.includes(request.mode)) throw new Error('权限模式无效')
-            return host!.conversations.update(request.id, { permissionMode: request.mode }, BACKGROUND_CONTEXT)
+            return host!.conversations.update(
+              request.id,
+              { permissionMode: request.mode },
+              BACKGROUND_CONTEXT,
+            )
           }
           case 'conversation:list':
             return host!.conversations.list(BACKGROUND_CONTEXT)
           case 'conversation:create':
             if (request.workspaceId) await workspaceService.resolve(request.workspaceId)
-            return host!.create({ threadId: randomUUID(), title: request.title, workspaceId: request.workspaceId }, BACKGROUND_CONTEXT)
+            return host!.create(
+              { threadId: randomUUID(), title: request.title, workspaceId: request.workspaceId },
+              BACKGROUND_CONTEXT,
+            )
           case 'workspace:list':
             return workspaceService.list()
           case 'workspace:attach':
@@ -206,12 +278,24 @@ export async function createAgentBackend(
             const nextCredentials = createCredentialStore(request.apiKeys)
             let knowledgeChanged = false
             try {
-              new AgentModels(() => request.config, () => nextCredentials).selection()
-              if (JSON.stringify(request.config.knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS) !== JSON.stringify(knowledge!.settings)) {
+              new AgentModels(
+                () => request.config,
+                () => nextCredentials,
+              ).selection()
+              if (
+                JSON.stringify(request.config.knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS) !==
+                JSON.stringify(knowledge!.settings)
+              ) {
                 knowledgeChanged = true
                 await knowledge!.close()
                 knowledge = undefined
-                knowledge = await createKnowledgeRuntime(db, options.databaseUrl, join(options.dataDir, 'knowledge-cache'), request.config.knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS, workspaceService)
+                knowledge = await createKnowledgeRuntime(
+                  db,
+                  options.databaseUrl,
+                  join(options.dataDir, 'knowledge-cache'),
+                  request.config.knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS,
+                  workspaceService,
+                )
               }
               configStore.set(request.config)
               credentialStore = nextCredentials
@@ -222,7 +306,13 @@ export async function createAgentBackend(
               credentialStore = previousCredentials
               if (knowledgeChanged) {
                 await knowledge?.close()
-                knowledge = await createKnowledgeRuntime(db, options.databaseUrl, join(options.dataDir, 'knowledge-cache'), previousConfig.knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS, workspaceService)
+                knowledge = await createKnowledgeRuntime(
+                  db,
+                  options.databaseUrl,
+                  join(options.dataDir, 'knowledge-cache'),
+                  previousConfig.knowledge ?? DEFAULT_KNOWLEDGE_SETTINGS,
+                  workspaceService,
+                )
               }
               await mcpServerManager!.reconcile(previousConfig.mcpServers ?? [])
               await host!.reload(BACKGROUND_CONTEXT)
@@ -236,11 +326,13 @@ export async function createAgentBackend(
             settingsChangePending = false
             return undefined
           case 'settings:model-selection':
-            configStore.set(updateAgentModelSelectionFromCatalog(configStore.get(), {
-              provider: request.selection.provider,
-              modelID: request.selection.modelId,
-              thinkingLevel: request.selection.thinkingLevel,
-            }))
+            configStore.set(
+              updateAgentModelSelectionFromCatalog(configStore.get(), {
+                provider: request.selection.provider,
+                modelID: request.selection.modelId,
+                thinkingLevel: request.selection.thinkingLevel,
+              }),
+            )
             await host!.reload(BACKGROUND_CONTEXT)
             return undefined
           case 'mcp:list':
@@ -279,7 +371,11 @@ export async function createAgentBackend(
           }
           case 'agent-run:overview-list': {
             const threads = await host!.conversations.list(BACKGROUND_CONTEXT)
-            return (await Promise.all(threads.map((thread) => runProjection.list(thread.id, BACKGROUND_CONTEXT)))).flat()
+            return (
+              await Promise.all(
+                threads.map((thread) => runProjection.list(thread.id, BACKGROUND_CONTEXT)),
+              )
+            ).flat()
           }
           case 'agent-execution-record:list':
             return runProjection.records(request.request.runId, BACKGROUND_CONTEXT)
@@ -300,12 +396,17 @@ export async function createAgentBackend(
       close,
     }
   } catch (error) {
-    try { await close() }
-    catch (cleanupError) { throw new AggregateError([error, cleanupError], 'Agent backend initialization and cleanup failed') }
+    try {
+      await close()
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        'Agent backend initialization and cleanup failed',
+      )
+    }
     throw error
   }
 }
-
 
 function createCredentialStore(apiKeys: Record<string, string>): MemoryCredentialStore {
   const store = new MemoryCredentialStore()

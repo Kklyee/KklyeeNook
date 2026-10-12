@@ -38,6 +38,15 @@ import type {
 } from '@kklyeenook/shared/scheduler/scheduled-task'
 
 interface API {
+  grove: {
+    status(): Promise<import('@kklyeenook/shared/bot/grove-settings').GroveStatus>
+    configure(input: import('@kklyeenook/shared/bot/grove-settings').GroveConnectRequest): Promise<import('@kklyeenook/shared/bot/grove-settings').GroveStatus>
+    connections(): Promise<import('@kklyeenook/shared/bot/grove-settings').GroveConnections>
+    invite(recipientUserId: string): Promise<import('@kklyeenook/shared/bot/social').SocialRelationship>
+    decide(input: { id: string; state: 'accepted' | 'rejected' | 'revoked' }): Promise<import('@kklyeenook/shared/bot/social').SocialRelationship>
+    grant(input: Omit<import('@kklyeenook/shared/bot/social').SocialGrant, 'id' | 'issuerUserId' | 'revokedAt'>): Promise<import('@kklyeenook/shared/bot/social').SocialGrant>
+    revoke(id: string): Promise<void>
+  }
   remote: {
     status(): Promise<import('@kklyeenook/shared/remote/index').RemoteStatus>
     configure(settings: import('@kklyeenook/shared/remote/index').RemoteSettings): Promise<import('@kklyeenook/shared/remote/index').RemoteStatus>

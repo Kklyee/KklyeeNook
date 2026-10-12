@@ -50,6 +50,15 @@ const context = {
 }
 
 const api = {
+  grove: {
+    status(): Promise<import('@kklyeenook/shared/bot/grove-settings').GroveStatus> { return ipcRenderer.invoke(IPC_CHANNELS.GROVE_STATUS) },
+    configure(input: import('@kklyeenook/shared/bot/grove-settings').GroveConnectRequest): Promise<import('@kklyeenook/shared/bot/grove-settings').GroveStatus> { return ipcRenderer.invoke(IPC_CHANNELS.GROVE_CONFIGURE, input) },
+    connections(): Promise<import('@kklyeenook/shared/bot/grove-settings').GroveConnections> { return ipcRenderer.invoke(IPC_CHANNELS.GROVE_CONNECTIONS) },
+    invite(recipientUserId: string): Promise<import('@kklyeenook/shared/bot/social').SocialRelationship> { return ipcRenderer.invoke(IPC_CHANNELS.GROVE_INVITE, recipientUserId) },
+    decide(input: { id: string; state: 'accepted' | 'rejected' | 'revoked' }): Promise<import('@kklyeenook/shared/bot/social').SocialRelationship> { return ipcRenderer.invoke(IPC_CHANNELS.GROVE_DECIDE, input) },
+    grant(input: Omit<import('@kklyeenook/shared/bot/social').SocialGrant, 'id' | 'issuerUserId' | 'revokedAt'>): Promise<import('@kklyeenook/shared/bot/social').SocialGrant> { return ipcRenderer.invoke(IPC_CHANNELS.GROVE_GRANT, input) },
+    revoke(id: string): Promise<void> { return ipcRenderer.invoke(IPC_CHANNELS.GROVE_REVOKE, id) },
+  },
   remote: {
     status(): Promise<import('@kklyeenook/shared/remote/index').RemoteStatus> { return ipcRenderer.invoke(IPC_CHANNELS.REMOTE_STATUS) },
     configure(settings: import('@kklyeenook/shared/remote/index').RemoteSettings): Promise<import('@kklyeenook/shared/remote/index').RemoteStatus> { return ipcRenderer.invoke(IPC_CHANNELS.REMOTE_CONFIGURE, settings) },

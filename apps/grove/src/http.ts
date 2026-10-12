@@ -97,6 +97,7 @@ export function createGroveApp(store: GroveStore, relay: GroveRelay) {
   app.get('/me', async (context) =>
     context.json({ userId: await store.authenticateUser(token(context)) }),
   )
+  app.get('/host', async (context) => context.json(await store.authenticateHost(token(context))))
   app.post('/hosts', async (context) =>
     context.json(
       await store.registerHost(

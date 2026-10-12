@@ -2,6 +2,13 @@ export type WindowMenu = 'application' | 'edit'
 export type WindowMenuAction = 'settings'
 
 export const IPC_CHANNELS = {
+  GROVE_STATUS: 'grove:status',
+  GROVE_CONFIGURE: 'grove:configure',
+  GROVE_CONNECTIONS: 'grove:connections',
+  GROVE_INVITE: 'grove:invite',
+  GROVE_DECIDE: 'grove:decide',
+  GROVE_GRANT: 'grove:grant',
+  GROVE_REVOKE: 'grove:revoke',
   REMOTE_STATUS: 'remote:status',
   REMOTE_CONFIGURE: 'remote:configure',
   CONVERSATION_COMPACT: 'conversation:compact',

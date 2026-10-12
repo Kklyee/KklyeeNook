@@ -183,5 +183,28 @@ test('a pending Outbox survives sender process restart and a Relay outage', asyn
   expect((await source.outbox()).filter((entry) => entry.taskId === task.id)).toHaveLength(1)
 }, 45_000)
 
+test('running Hosts can pause and resume Grove without re-enrolling a device', async () => {
+  const { source, receiver } = await fixture()
+  const before = await source.identities()
+  await source.network(false)
+  await expect(
+    source.requestTask({
+      toBotId: receiver.networkId,
+      instruction: 'Disabled request',
+      operationId: 'disabled',
+    }),
+  ).rejects.toThrow('not configured')
+  await source.network(true)
+  const task = await source.requestTask({
+    toBotId: receiver.networkId,
+    instruction: 'Resumed collaboration',
+    operationId: 'resumed',
+  })
+  await viWait(async () => expect((await source.task(task.id)).status).toBe('completed'))
+  expect((await source.identities()).map((bot) => bot.networkId)).toEqual(
+    before.map((bot) => bot.networkId),
+  )
+}, 45_000)
+
 const viWait = (assertion: () => void | Promise<void>) =>
   vi.waitFor(assertion, { timeout: 25_000, interval: 100 })

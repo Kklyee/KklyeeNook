@@ -58,6 +58,9 @@ export class RemoteTransport {
   directory(signal?: AbortSignal) {
     return this.request<NetworkBotIdentity[]>('/host/bots', undefined, signal)
   }
+  identity(signal?: AbortSignal) {
+    return this.request<{ id: string; ownerUserId: string }>('/host', undefined, signal)
+  }
   send(input: RemoteSendInput, signal?: AbortSignal) {
     return this.request<RelayEnvelope>('/messages', input, signal)
   }
@@ -82,11 +85,16 @@ export class RemoteTransport {
     )
   }
 
-  private async request<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+  protected async request<T>(
+    path: string,
+    body?: unknown,
+    signal?: AbortSignal,
+    method?: string,
+  ): Promise<T> {
     const token = this.credential()
     if (!token) throw new RemoteTransportError(401, 'Grove Host credential is not configured')
     const response = await fetch(this.url + path, {
-      method: body === undefined ? 'GET' : 'POST',
+      method: method ?? (body === undefined ? 'GET' : 'POST'),
       redirect: 'error',
       headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),

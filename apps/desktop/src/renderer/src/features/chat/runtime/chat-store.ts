@@ -8,6 +8,7 @@ import type { QueueItemState } from '@assistant-ui/react'
 import type { PermissionMode } from '@kklyeenook/shared/approval/permission'
 import type { BotInput, BotProfile, BotSummary } from '@kklyeenook/shared/bot/bot'
 import type { BotMessage, BotTask, BotReceptionPolicy } from '@kklyeenook/shared/bot/grove'
+import type { NetworkBotIdentity } from '@kklyeenook/shared/bot/social'
 import { botState } from '@kklyeenook/shared/bot/bot-state'
 import type { BotState } from '@kklyeenook/shared/bot/bot'
 import type { Workspace } from '@kklyeenook/shared/workspace/workspace'
@@ -244,7 +245,7 @@ export class ChatStore {
   }
 
   grove() {
-    return this.request<{ messages: BotMessage[]; tasks: BotTask[]; policies: Record<string, BotReceptionPolicy> }>('/grove')
+    return this.request<{ messages: BotMessage[]; tasks: BotTask[]; policies: Record<string, BotReceptionPolicy>; contacts: NetworkBotIdentity[]; identities: NetworkBotIdentity[]; network: { enabled: boolean; error?: string } }>('/grove')
   }
 
   setGrovePolicy(botId: string, policy: BotReceptionPolicy) {

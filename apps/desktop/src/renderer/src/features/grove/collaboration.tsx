@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { BotTask } from '@kklyeenook/shared/bot/grove'
+import type { NetworkBotIdentity } from '@kklyeenook/shared/bot/social'
 import { useChatRuntimeSnapshot, useChatStore } from '../chat/runtime/chat-runtime'
 import { Button } from '../../components/ui/button'
 import { Textarea } from '../../components/ui/textarea'
@@ -18,6 +19,7 @@ export function Collaboration({ compact = false }: { compact?: boolean }) {
   const store = useChatStore()
   const { bots, selectedBotId, selectedThreadId } = useChatRuntimeSnapshot()
   const [tasks, setTasks] = useState<BotTask[]>([])
+  const [contacts, setContacts] = useState<NetworkBotIdentity[]>([])
   const [target, setTarget] = useState('')
   const [content, setContent] = useState('')
   const [error, setError] = useState('')
@@ -30,6 +32,7 @@ export function Collaboration({ compact = false }: { compact?: boolean }) {
         const state = await store.grove()
         if (active) {
           setTasks(state.tasks)
+          setContacts(state.contacts ?? [])
           setError('')
         }
       } catch (error) {
@@ -43,7 +46,10 @@ export function Collaboration({ compact = false }: { compact?: boolean }) {
       clearInterval(timer)
     }
   }, [store])
-  const names = (id: string) => bots.find((bot) => bot.id === id)?.name ?? id
+  const names = (id: string) =>
+    bots.find((bot) => bot.id === id)?.name ??
+    contacts.find((bot) => bot.networkId === id)?.name ??
+    id
   const visible = tasks
     .filter(
       (task) =>
@@ -54,19 +60,14 @@ export function Collaboration({ compact = false }: { compact?: boolean }) {
     .slice()
     .reverse()
   return (
-    <details
-      className={
-        compact ? 'shrink-0 border-b px-5 py-2 text-sm' : 'material-control rounded-xl p-5'
-      }
-      open={!compact}
-    >
+    <details className={compact ? 'shrink-0 border-b px-5 py-2 text-sm' : 'p-5'} open={!compact}>
       <summary className="cursor-pointer font-medium">
         Bot 协作{compact && visible.length > 0 ? ` · ${visible.length}` : ''}
       </summary>
       <div className="mt-4 flex flex-col gap-3">
         <p className="text-xs text-muted-foreground">
           发起 Bot：{selectedBotId ? names(selectedBotId) : '请先在 Chat 选择 Bot'}。目标 Bot
-          使用自己的模型与授权 Workspace。
+          使用自己的模型和资源权限。远程任务需要接收方授权。
         </p>
         <Select
           value={target}
@@ -78,9 +79,14 @@ export function Collaboration({ compact = false }: { compact?: boolean }) {
           }}
         >
           <SelectTrigger aria-label="协作目标">
-            {target ? names(target) : '选择本地 Bot'}
+            {target ? names(target) : '选择协作 Bot'}
           </SelectTrigger>
           <SelectContent>
+            {contacts.map((bot) => (
+              <SelectItem key={bot.networkId} value={bot.networkId}>
+                {bot.name} · 远程
+              </SelectItem>
+            ))}
             {bots
               .filter((bot) => bot.id !== selectedBotId)
               .map((bot) => (

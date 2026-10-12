@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { Context } from '@earendil-works/chord'
-import { awaitWithContext } from '@earendil-works/chord/context'
+import { awaitWithContext, withAbortSignal } from '@earendil-works/chord/context'
 import {
   defineDoc,
   defineExtension,
@@ -45,10 +45,11 @@ export class BotCommunicationService {
   private readonly pump
   private syncing?: Promise<void>
   private networkError?: string
+  private networkLifetime = new AbortController()
 
   constructor(
     private readonly repo: GroveRepo,
-    private readonly remote?: RemoteTransport,
+    private remote?: RemoteTransport,
   ) {
     this.worker = defineTask<
       { id: string },
@@ -266,7 +267,7 @@ export class BotCommunicationService {
             this.networkError = undefined
           } catch {
             context.abortSignal?.throwIfAborted()
-            this.networkError = 'Grove Relay is unavailable'
+            this.networkError = this.remote ? 'Grove Relay is unavailable' : undefined
           }
           await runtime.sleep(runtime.now() + 2000, context)
           await runtime.commit(
@@ -300,23 +301,37 @@ export class BotCommunicationService {
       if (!terminal(task)) await this.schedule(task, context)
       else await this.deliverResult(task, context)
     }
-    if (this.remote) {
-      await host.engine.create('grove:__router', { extensions: [this.extension] }, context)
-      const control = await host.engine.conversation('grove:__router', context)
-      await host.engine.harness.commit(async (tx) => {
-        const state = await tx.doc(groveDoc)
-        if (
-          state.pump !== undefined &&
-          (await tx.task(state.pump as TaskId))?.state.status !== 'terminal'
-        )
-          return
-        state.pump = await tx.createTask(
-          this.pump,
-          { id: 'network' },
-          { ownership: { kind: 'conversation' }, conversationId: control.id, background: true },
-        )
-      }, context)
-    }
+    if (this.remote) await this.startPump(context)
+  }
+
+  async configureTransport(remote: RemoteTransport | undefined, context: Context) {
+    const state = await this.host.engine.harness.snapshot(groveDoc, context)
+    if (remote && state?.relayUrl && state.relayUrl !== remote.url)
+      throw new BotError(409, 'Persisted Grove records belong to another Relay')
+    this.networkLifetime.abort()
+    await this.syncing?.catch(() => undefined)
+    this.networkLifetime = new AbortController()
+    this.remote = remote
+    this.networkError = undefined
+    if (remote) await this.startPump(context)
+  }
+
+  private async startPump(context: Context) {
+    await this.host.engine.create('grove:__router', { extensions: [this.extension] }, context)
+    const control = await this.host.engine.conversation('grove:__router', context)
+    await this.host.engine.harness.commit(async (tx) => {
+      const state = await tx.doc(groveDoc)
+      if (
+        state.pump !== undefined &&
+        (await tx.task(state.pump as TaskId))?.state.status !== 'terminal'
+      )
+        return
+      state.pump = await tx.createTask(
+        this.pump,
+        { id: 'network' },
+        { ownership: { kind: 'conversation' }, conversationId: control.id, background: true },
+      )
+    }, context)
   }
 
   async list(context: Context) {
@@ -687,7 +702,10 @@ export class BotCommunicationService {
 
   async syncNetwork(context: Context): Promise<void> {
     if (!this.remote) throw new BotError(403, 'Grove Remote Transport is not configured')
-    this.syncing ??= this.sync(context).finally(() => {
+    const signal = context.abortSignal
+      ? AbortSignal.any([context.abortSignal, this.networkLifetime.signal])
+      : this.networkLifetime.signal
+    this.syncing ??= this.sync(withAbortSignal(signal, context)).finally(() => {
       this.syncing = undefined
     })
     await this.syncing

@@ -34,6 +34,8 @@ export type AgentBackendStartupStage =
   | 'ready'
 
 export type AgentBackendRequest =
+  | { action: 'grove:status' }
+  | { action: 'grove:configure'; settings: import('../bot/grove-settings').GroveSettings; hostToken?: string }
   | { action: 'remote:status' }
   | { action: 'remote:configure'; settings: import('@kklyeenook/shared/remote/index').RemoteSettings }
   | { action: 'conversation:compact'; id: string; instructions?: string }
