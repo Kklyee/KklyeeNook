@@ -211,7 +211,7 @@ function BotThreads({
       )}
       <header
         className={
-          collapsed ? 'flex flex-col items-center gap-1 py-1' : 'flex h-11 items-center gap-1 px-1'
+          collapsed ? 'flex flex-col items-center gap-1 py-1' : 'grid h-11 grid-cols-[1.75rem_minmax(0,1fr)_1.75rem] items-center gap-1 px-1'
         }
       >
         <Button
@@ -228,7 +228,7 @@ function BotThreads({
           className={
             collapsed
               ? 'h-9 min-w-0 justify-center px-0'
-              : 'h-9 min-w-0 flex-1 justify-start gap-2 px-1'
+              : 'h-9 w-fit min-w-0 max-w-full justify-self-center justify-center gap-2 px-1.5'
           }
           aria-label={bot.name + ' 设置'}
           title="Bot 设置"
@@ -237,7 +237,7 @@ function BotThreads({
           <BotAvatar avatar={bot.avatar} name={bot.name} state={bot.state} size={28} />
           {!collapsed && (
             <>
-              <span className="min-w-0 flex-1 truncate text-left text-[13px] font-medium">
+              <span className="min-w-0 truncate text-center text-[13px] font-medium">
                 {bot.name}
               </span>
               <Settings2Icon className="size-3.5 text-muted-foreground" />
