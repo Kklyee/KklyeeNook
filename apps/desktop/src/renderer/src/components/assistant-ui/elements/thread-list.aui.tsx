@@ -232,7 +232,7 @@ const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
             variant="ghost"
             size="icon"
             data-slot="aui_thread-list-item-more"
-            className="sidebar-accessory absolute end-1 top-1/2 size-6 -translate-y-1/2 rounded-md p-0 text-faint-foreground hover:bg-hover hover:text-foreground active:bg-active focus-visible:border-ring focus-visible:ring-0 data-[state=open]:bg-selected data-[state=open]:text-foreground data-[state=open]:hover:bg-selected"
+            className="pointer-events-none absolute end-1 top-1/2 size-6 -translate-y-1/2 rounded-md p-0 text-faint-foreground opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-has-focus-visible:pointer-events-auto group-has-focus-visible:opacity-100 hover:bg-hover hover:text-foreground active:bg-active focus-visible:border-ring focus-visible:ring-0 data-[state=open]:pointer-events-auto data-[state=open]:bg-selected data-[state=open]:text-foreground data-[state=open]:opacity-100 data-[state=open]:hover:bg-selected"
           />
         }
       >

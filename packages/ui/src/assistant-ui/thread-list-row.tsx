@@ -23,15 +23,19 @@ export function ThreadListRowContent({
       <span data-slot="aui_thread-list-item-title" className="min-w-0 flex-1 truncate">
         {title}
       </span>
-      {running && (
-        <LoaderCircleIcon
-          aria-label="运行中"
-          data-slot="aui_thread-list-item-running"
-          className="me-1.5 size-3 shrink-0 animate-spin text-faint-foreground"
-          strokeWidth={1.5}
-        />
+      {(running || waiting) && (
+        <span className="pointer-events-none absolute end-1 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center transition-opacity group-hover:opacity-0 group-has-focus-visible:opacity-0 group-has-data-[state=open]:opacity-0">
+          {running && (
+            <LoaderCircleIcon
+              aria-label="运行中"
+              data-slot="aui_thread-list-item-running"
+              className="size-3 shrink-0 animate-spin text-faint-foreground"
+              strokeWidth={1.5}
+            />
+          )}
+          {waiting && <span className="text-[10px] text-faint-foreground">等待</span>}
+        </span>
       )}
-      {waiting && <span className="me-1.5 shrink-0 text-[10px] text-faint-foreground">等待</span>}
     </>
   )
 }
