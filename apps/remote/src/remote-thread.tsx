@@ -281,6 +281,10 @@ export function RemoteThread({
       result[result.length - 1] = { ...last, status: 'running' }
     return result
   }, [transcript, running])
+  const lastMessage = messages.at(-1)
+  const statsReady = !running && !busy && !loading && !sendError &&
+    lastMessage?.role === 'assistant' && lastMessage.status === 'complete' &&
+    lastMessage.content.some((part) => part.type === 'text' && part.text.trim().length > 0)
   const runtime = useExternalStoreRuntime({
     messages,
     convertMessage,
@@ -403,8 +407,8 @@ export function RemoteThread({
               />
               <SessionStats
                 messages={transcript}
+                ready={statsReady}
                 compact
-                status={running ? '正在执行…' : undefined}
               >
                 {contextBudget && <ComposerContext budget={contextBudget} className="shrink-0" />}
               </SessionStats>

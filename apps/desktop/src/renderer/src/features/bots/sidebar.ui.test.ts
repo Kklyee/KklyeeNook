@@ -166,24 +166,39 @@ test('Settings restores an archived conversation without selecting another Bot',
   }
 })
 
-test('Composer status stays compact and detailed statistics open in a Popover', async () => {
+test('Context and statistics remain hidden until a final reply completes', async () => {
+  const content = createElement('span', null, '上下文 12%')
+  const view = await mount(createElement(SessionStats, { messages: [], ready: false }, content))
+  try {
+    expect(view.element.querySelector('[data-slot="aui-session-stats"]')).toBeNull()
+    await view.update(createElement(SessionStats, { messages: [{ role: 'user', content: 'hello' }], ready: false }, content))
+    expect(view.element.textContent).not.toContain('上下文')
+    expect(view.element.querySelector('[aria-label="查看会话统计"]')).toBeNull()
+    await view.update(createElement(SessionStats, { messages: [{ role: 'assistant', content: 'done' }], ready: true }, content))
+    expect(view.element.textContent).toContain('上下文 12%')
+    expect(view.element.querySelector('[aria-label="查看会话统计"]')).not.toBeNull()
+    await view.update(createElement(SessionStats, { messages: [{ role: 'assistant', content: 'done' }], ready: false }, content))
+    expect(view.element.querySelector('[data-slot="aui-session-stats"]')).toBeNull()
+  } finally { await view.close() }
+})
+
+test('Detailed statistics open in a Popover after completion', async () => {
   const messages = [
     { role: 'user', content: 'review' },
     {
       role: 'assistant',
-      content: [{ type: 'toolCall' }],
+      content: [{ type: 'toolCall' }, { type: 'text', text: '完成' }],
       usage: { input: 100, output: 20, cacheRead: 300, cacheWrite: 0 },
     },
   ]
   const view = await mount(
     createElement(
       SessionStats,
-      { messages, status: '正在执行…' },
+      { messages, ready: true },
       createElement('span', null, '上下文 12%'),
     ),
   )
   try {
-    expect(view.element.textContent).toContain('正在执行…')
     expect(view.element.textContent).toContain('上下文 12%')
     expect(view.element.textContent).not.toContain('Token')
     expect(view.element.textContent).not.toContain('工具调用')

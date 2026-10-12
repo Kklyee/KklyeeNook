@@ -12,11 +12,13 @@ interface SessionMessage {
 
 export function SessionStats({
   messages,
+  ready,
   compact = false,
   status,
   children,
 }: {
   messages: readonly SessionMessage[]
+  ready: boolean
   compact?: boolean
   status?: ReactNode
   children?: ReactNode
@@ -60,6 +62,8 @@ export function SessionStats({
       cacheRate: promptTokens > 0 ? `${((cacheRead / promptTokens) * 100).toFixed(1)}%` : '—',
     }
   }, [messages])
+
+  if (!ready) return null
 
   return (
     <div
