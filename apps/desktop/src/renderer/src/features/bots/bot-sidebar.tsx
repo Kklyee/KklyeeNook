@@ -234,10 +234,10 @@ function BotThreads({
           title="Bot 设置"
           onClick={() => store.editBot(bot.id)}
         >
-          <BotAvatar avatar={bot.avatar} name={bot.name} state={bot.state} size={28} />
+          <BotAvatar avatar={bot.avatar} name={bot.name} state={bot.state} size={24} />
           {!collapsed && (
             <>
-              <span className="min-w-0 truncate text-center text-[13px] font-medium">
+              <span className="min-w-0 truncate text-center text-sm font-medium text-foreground">
                 {bot.name}
               </span>
               <Settings2Icon className="size-3.5 text-muted-foreground" />
