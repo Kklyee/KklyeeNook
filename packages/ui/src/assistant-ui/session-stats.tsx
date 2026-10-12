@@ -69,7 +69,7 @@ export function SessionStats({
         compact
           ? 'flex h-7 min-w-0 items-center gap-2 px-1 text-[10px] text-muted-foreground'
           : 'flex h-7 min-w-0 items-center gap-2 px-3 text-[11px] text-muted-foreground',
-        status ? 'justify-between' : 'justify-end',
+        status ? 'justify-between' : 'justify-start',
       ].join(' ')}
     >
       {status && (

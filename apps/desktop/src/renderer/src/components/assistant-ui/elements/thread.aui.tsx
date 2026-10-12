@@ -251,10 +251,7 @@ const ThreadRoot: FC<{
 
           {!readOnly && (
             <ThreadPrimitive.ViewportFooter
-              className={cn(
-                'aui-thread-viewport-footer material-base flex flex-col gap-4 overflow-visible pb-4 md:pb-6',
-                !isEmpty && 'sticky bottom-0 mt-auto rounded-t-(--composer-radius)',
-              )}
+              className="aui-thread-viewport-footer material-base sticky bottom-0 mt-auto flex flex-col gap-2 overflow-visible rounded-t-(--composer-radius) pb-1"
             >
               <ThreadScrollToBottom />
               {composerAccessory}
