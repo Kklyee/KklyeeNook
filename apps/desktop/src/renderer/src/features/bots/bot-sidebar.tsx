@@ -260,7 +260,7 @@ function BotThreads({
           <Button
             variant="ghost"
             className={
-              threadListRowClassName + ' h-10 justify-start gap-2 px-2 text-left text-[13px] font-normal'
+              threadListRowClassName + ' my-4 h-10 justify-start gap-2 px-2 text-left text-[13px] font-normal'
             }
             aria-pressed={snapshot.selectedThreadId === bot.mainThreadId}
             data-active={snapshot.selectedThreadId === bot.mainThreadId || undefined}
@@ -271,7 +271,7 @@ function BotThreads({
           </Button>
           {bot.kind === 'coding' ? (
             <>
-              <div className="mt-5 flex h-7 items-center justify-between px-2 text-[11px] text-muted-foreground">
+              <div className="flex h-7 items-center justify-between px-2 text-[11px] text-muted-foreground">
                 <span>WORKSPACES</span>
                 <Button
                   variant="ghost"
@@ -282,14 +282,14 @@ function BotThreads({
                   <PlusIcon className="size-3" />
                 </Button>
               </div>
-              <div className="flex items-center gap-1 px-2">
-                <SearchIcon className="size-3 text-muted-foreground" />
+              <div className="relative my-2">
+                <SearchIcon className="pointer-events-none absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="搜索会话…"
                   aria-label="搜索开发会话"
-                  className="h-7 border-0 bg-transparent text-xs"
+                  className="h-8 border border-border/50 bg-transparent pl-8 pr-2 text-[13px] shadow-none focus-visible:border-ring focus-visible:ring-0 md:text-[13px]"
                 />
               </div>
               {workspaces
@@ -303,7 +303,7 @@ function BotThreads({
                     key={workspace.id}
                     defaultOpen={workspace.id === snapshot.current.metadata?.workspaceId}
                   >
-                    <div className="flex items-center gap-0.5">
+                    <div className="flex items-center gap-0.5 pr-2">
                       <CollapsibleTrigger aria-label={'展开或折叠 ' + workspace.displayName} className="group/workspace flex h-[34px] min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left text-[13px] text-muted-foreground hover:bg-hover hover:text-foreground">
                         <FolderIcon className="size-4 group-data-[panel-open]/workspace:hidden" />
                         <FolderOpenIcon className="hidden size-4 text-brand group-data-[panel-open]/workspace:block" />
