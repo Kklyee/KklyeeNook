@@ -130,7 +130,7 @@ function Composer({
   const [preparing, setPreparing] = useState(false)
   const [error, setError] = useState('')
   useAuiEvent('composer.attachmentAddError', ({ message }) => setError(message))
-  const [mode, setMode] = useState<'followUp' | 'steer'>('steer')
+  const [mode, setMode] = useState<'followUp' | 'steer'>('followUp')
   const submit = async (event: FormEvent, override?: 'steer') => {
     event.preventDefault()
     if (disabled || busy || preparing || !canSend) return
