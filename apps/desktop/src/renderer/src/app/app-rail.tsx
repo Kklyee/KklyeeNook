@@ -23,7 +23,7 @@ export function AppRail({
     <TooltipProvider>
       <nav
         aria-label="主导航"
-        className="app-rail border-border bg-(--ui-titlebar) flex w-(--app-rail-width) shrink-0 flex-col items-center gap-1.5 border-r px-1 py-2"
+        className="app-rail border-border bg-(--ui-titlebar) flex w-(--app-rail-width) shrink-0 flex-col items-center gap-3 border-r px-1 py-3"
       >
         {primaryNavigation.map((item) => (
           <AppRailItem key={item.id} item={item} active={view === item.id} onNavigate={onNavigate} />
@@ -69,7 +69,7 @@ function AppRailItem({
           />
         }
       >
-        <Icon className="size-3.5" strokeWidth={1.5} />
+        <Icon className="size-[18px]" strokeWidth={1.5} />
       </TooltipTrigger>
       <TooltipContent side="right">{item.label}</TooltipContent>
     </Tooltip>
