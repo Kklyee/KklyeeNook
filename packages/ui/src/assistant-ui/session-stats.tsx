@@ -13,7 +13,7 @@ interface SessionMessage {
 export function SessionStats({
   messages,
   compact = false,
-  status = '就绪',
+  status,
   children,
 }: {
   messages: readonly SessionMessage[]

@@ -172,7 +172,7 @@ export function BotMentionInput({
         autoFocus={autoFocus}
         submitMode="none"
         aria-label="Message input"
-        className="aui-composer-input max-h-48 min-h-11 w-full overflow-y-auto px-3 py-1 text-[15px] leading-6 outline-none [&_[contenteditable]]:min-h-11 [&_[contenteditable]]:outline-none"
+        className="aui-composer-input relative max-h-48 min-h-11 w-full overflow-y-auto px-3 py-1 text-[15px] leading-6 outline-none [&_.aui-lexical-placeholder]:pointer-events-none [&_.aui-lexical-placeholder]:absolute [&_.aui-lexical-placeholder]:inset-x-0 [&_.aui-lexical-placeholder]:top-0 [&_.aui-lexical-placeholder]:truncate [&_.aui-lexical-placeholder]:px-3 [&_.aui-lexical-placeholder]:py-1 [&_.aui-lexical-placeholder]:text-faint-foreground [&_[contenteditable]]:min-h-11 [&_[contenteditable]]:outline-none"
       >
         <SubmitPlugin submit={submit} />
       </LexicalComposerInput>

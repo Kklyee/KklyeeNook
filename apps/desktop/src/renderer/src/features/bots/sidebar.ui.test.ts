@@ -116,7 +116,7 @@ test('My Bots remains exclusive after return, delayed selection and collapsed up
   const view = await mount(createElement(BotSidebar))
   try {
     expect(view.element.textContent).not.toContain('Coder work')
-    expect(view.element.querySelector('[aria-label="Bot 菜单"]')).toBeNull()
+    expect(view.element.querySelector('[aria-label="Coder 设置"]')).toBeNull()
     await view.click(view.element.querySelector('[aria-label="Coder"]'))
     expect(view.element.textContent).toContain('Coder work')
     expect(view.element.textContent).not.toContain('Helper work')

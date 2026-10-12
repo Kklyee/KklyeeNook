@@ -17,7 +17,6 @@ import { BotAvatar } from '@kklyeenook/ui/components/bot-avatar'
 import { threadListRowClassName } from '@kklyeenook/ui/assistant-ui/thread-list-row'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
-import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
 import {
   Dialog,
   DialogContent,
@@ -152,7 +151,6 @@ function BotThreads({
   const ids = useAuiState((state) => state.threads.threadIds)
   const [query, setQuery] = useState('')
   const [error, setError] = useState('')
-  const [botMenuOpen, setBotMenuOpen] = useState(false)
   const [pendingWorkspace, setPendingWorkspace] = useState<WorkspaceAttachResult>()
   const run = async (action: () => Promise<unknown>) => {
     setError('')
@@ -225,44 +223,27 @@ function BotThreads({
         >
           <ArrowLeftIcon className="size-4" />
         </Button>
-        <Popover open={botMenuOpen} onOpenChange={setBotMenuOpen}>
-          <PopoverTrigger
-            render={
-              <Button
-                variant="ghost"
-                className={
-                  collapsed
-                    ? 'h-9 min-w-0 justify-center px-0'
-                    : 'h-9 min-w-0 flex-1 justify-start gap-2 px-1'
-                }
-                aria-label={bot.name + ' 菜单'}
-              />
-            }
-          >
-            <BotAvatar avatar={bot.avatar} name={bot.name} state={bot.state} size={28} />
-            {!collapsed && (
-              <>
-                <span className="min-w-0 flex-1 truncate text-left text-[13px] font-medium">
-                  {bot.name}
-                </span>
-                <ChevronDownIcon className="size-3 text-muted-foreground" />
-              </>
-            )}
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-48">
-            <Button
-              variant="ghost"
-              className="justify-start"
-              onClick={() => {
-                setBotMenuOpen(false)
-                store.editBot(bot.id)
-              }}
-            >
-              <Settings2Icon className="size-4" />
-              Bot 设置
-            </Button>
-          </PopoverContent>
-        </Popover>
+        <Button
+          variant="ghost"
+          className={
+            collapsed
+              ? 'h-9 min-w-0 justify-center px-0'
+              : 'h-9 min-w-0 flex-1 justify-start gap-2 px-1'
+          }
+          aria-label={bot.name + ' 设置'}
+          title="Bot 设置"
+          onClick={() => store.editBot(bot.id)}
+        >
+          <BotAvatar avatar={bot.avatar} name={bot.name} state={bot.state} size={28} />
+          {!collapsed && (
+            <>
+              <span className="min-w-0 flex-1 truncate text-left text-[13px] font-medium">
+                {bot.name}
+              </span>
+              <Settings2Icon className="size-3.5 text-muted-foreground" />
+            </>
+          )}
+        </Button>
         {!collapsed && (
           <Button
             variant="ghost"
