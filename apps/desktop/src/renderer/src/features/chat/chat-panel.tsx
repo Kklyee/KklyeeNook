@@ -1,4 +1,4 @@
-import { useEffect, useState, type ButtonHTMLAttributes } from 'react'
+import { useEffect, useState, type ButtonHTMLAttributes, type CSSProperties } from 'react'
 import { useAui, useAuiState } from '@assistant-ui/react'
 import {
   useChatSession,
@@ -65,6 +65,13 @@ export function ChatPanel({
   const store = useChatStore()
   const { workspaces } = useWorkspaces()
   const bot = snapshot.bots.find((bot) => bot.id === snapshot.selectedBotId)
+  const accentColor = bot?.avatar.accentColor
+  const accentLuminance = accentColor
+    ? [1, 3, 5].map((offset) => {
+        const channel = parseInt(accentColor.slice(offset, offset + 2), 16) / 255
+        return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+      }).reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index]!, 0)
+    : 0
   const [workspaceError, setWorkspaceError] = useState('')
   const [focusedRunId, setFocusedRunId] = useState<string>()
   const threadItemId = useAuiState((state) => state.threadListItem.id)
@@ -187,7 +194,13 @@ export function ChatPanel({
               )}
             </nav>
             {view === 'chat' ? (
-              <div className="relative min-h-0 flex-1">
+              <div
+                className={cn('relative min-h-0 flex-1', accentColor && 'bot-chat')}
+                style={accentColor ? {
+                  '--bot-accent': accentColor,
+                  '--ui-brand-fg': accentLuminance > 0.179 ? '#18181b' : '#ffffff',
+                } as CSSProperties : undefined}
+              >
                 <Thread
                   components={BOT_THREAD_COMPONENTS}
                   composerPlaceholder={bot ? `发送消息给 ${bot.name}…` : undefined}

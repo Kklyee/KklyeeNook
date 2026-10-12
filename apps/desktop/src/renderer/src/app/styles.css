@@ -220,6 +220,25 @@ body,
   background: oklch(0.32 0.012 280);
 }
 
+.bot-chat {
+  --ui-brand: var(--bot-accent);
+  --ui-brand-light: var(--bot-accent);
+  --ui-brand-muted: color-mix(in oklab, var(--bot-accent) 12%, transparent);
+  --ui-focus: color-mix(in oklab, var(--bot-accent) 35%, transparent);
+  --primary: var(--ui-brand);
+  --primary-foreground: var(--ui-brand-fg);
+  --ring: var(--ui-focus);
+  --bot-link-color: oklch(from var(--bot-accent) 0.48 c h);
+}
+
+.dark .bot-chat {
+  --bot-link-color: oklch(from var(--bot-accent) 0.8 c h);
+}
+
+.bot-chat .aui-user-message-content {
+  background: color-mix(in oklab, var(--bot-accent) 12%, var(--ui-surface-muted));
+}
+
 @layer components {
   .material-base {
     background: var(--ui-bg);
@@ -349,11 +368,11 @@ body,
 }
 
 .aui-md {
-  --markdown-accent: oklch(0.5 0.12 255);
+  --markdown-accent: var(--bot-link-color, oklch(0.5 0.12 255));
 }
 
 .dark .aui-md {
-  --markdown-accent: oklch(0.8 0.09 255);
+  --markdown-accent: var(--bot-link-color, oklch(0.8 0.09 255));
 }
 
 .aui-md pre::-webkit-scrollbar {

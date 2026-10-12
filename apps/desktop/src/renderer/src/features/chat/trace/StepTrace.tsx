@@ -45,7 +45,7 @@ export function StepTrace({
         <span
           className={cn(
             'mt-0.5 size-1 shrink-0 rounded-full',
-            failed ? 'bg-destructive' : running ? 'animate-pulse bg-blue-400' : 'bg-foreground/35',
+            failed ? 'bg-destructive' : running ? 'animate-pulse bg-brand' : 'bg-foreground/35',
           )}
         />
         <span>#{step.ordinal}</span>
