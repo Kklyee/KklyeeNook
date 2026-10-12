@@ -4,7 +4,6 @@ import {
   useChatSession,
   useChatThreadState,
   useChatRuntimeSnapshot,
-  useChatStore,
 } from './runtime/chat-runtime'
 import type { ChatExtras } from './runtime/chat-store'
 import { toAgentContextUsage } from '@kklyeenook/shared/agent/agentContextUsage'
@@ -19,11 +18,7 @@ import { PreviewProvider } from '../preview/PreviewProvider'
 import { ChatWorkspace } from '../preview/ChatWorkspace'
 import { AgentActivityProvider } from './activity/AgentActivityProvider'
 import { BotAvatar } from '@kklyeenook/ui/components/bot-avatar'
-import { BOT_STATE_LABELS } from '@kklyeenook/shared/bot/bot-state'
 import { BotManagement } from '../bots/bot-management'
-import { Select, SelectTrigger, SelectContent, SelectItem } from '../../components/ui/select'
-import { Button } from '../../components/ui/button'
-import { useWorkspaces } from '../workspaces/WorkspaceProvider'
 
 function BotWelcome() {
   const { bots, selectedBotId } = useChatRuntimeSnapshot()
@@ -62,8 +57,6 @@ export function ChatPanel({
 }) {
   const [view, setView] = useState<'chat' | 'subagent'>('chat')
   const snapshot = useChatRuntimeSnapshot()
-  const store = useChatStore()
-  const { workspaces } = useWorkspaces()
   const bot = snapshot.bots.find((bot) => bot.id === snapshot.selectedBotId)
   const accentColor = bot?.avatar.accentColor
   const accentLuminance = accentColor
@@ -72,7 +65,6 @@ export function ChatPanel({
         return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
       }).reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index]!, 0)
     : 0
-  const [workspaceError, setWorkspaceError] = useState('')
   const [focusedRunId, setFocusedRunId] = useState<string>()
   const threadItemId = useAuiState((state) => state.threadListItem.id)
   const sessionId = useAuiState((state) => state.threadListItem.remoteId)
@@ -125,54 +117,11 @@ export function ChatPanel({
                       : ' · 主会话'}
                   </p>
                 </div>
-                <Select
-                  value={snapshot.current.metadata?.workspaceId ?? 'none'}
-                  onValueChange={(value) => {
-                    if (value) {
-                      setWorkspaceError('')
-                      void store
-                        .setWorkspace(value === 'none' ? null : value)
-                        .catch((error) => setWorkspaceError(error.message))
-                    }
-                  }}
-                >
-                  <SelectTrigger
-                    aria-label="当前 Workspace"
-                    disabled={snapshot.current.loading || snapshot.current.projected.isRunning}
-                    className="h-8 w-auto max-w-48 border-0 text-xs"
-                  >
-                    {workspaces.find(
-                      (workspace) => workspace.id === snapshot.current.metadata?.workspaceId,
-                    )?.displayName ?? '无 Workspace'}
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">无 Workspace</SelectItem>
-                    {workspaces
-                      .filter((workspace) => bot.workspaceIds.includes(workspace.id))
-                      .map((workspace) => (
-                        <SelectItem
-                          key={workspace.id}
-                          value={workspace.id}
-                          disabled={workspace.status !== 'attached'}
-                        >
-                          {workspace.displayName}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                {snapshot.current.state !== 'idle' && (
-                  <span className="hidden text-xs text-muted-foreground sm:inline" role="status">
-                    {BOT_STATE_LABELS[snapshot.current.state]}
-                  </span>
-                )}
-                <Button variant="ghost" size="sm" onClick={() => store.editBot(bot.id)}>
-                  设置
-                </Button>
               </header>
             )}
-            {(snapshot.current.error || workspaceError) && (
+            {snapshot.current.error && (
               <p role="alert" className="px-5 py-2 text-xs text-destructive">
-                {snapshot.current.error || workspaceError}
+                {snapshot.current.error}
               </p>
             )}
             {modelError && (
