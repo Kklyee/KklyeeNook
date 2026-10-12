@@ -50,7 +50,7 @@ export function Titlebar({
             className="h-full w-9 rounded-none px-0 text-muted-foreground hover:bg-hover hover:text-foreground"
             onClick={toggleSidebar}
           >
-            <PanelLeftIcon className="size-3.5" />
+            <PanelLeftIcon className="size-[18px]" />
           </Button>
         )}
         <Button
@@ -115,7 +115,7 @@ function WindowButton({
       className={`h-full w-11 rounded-none px-0 text-muted-foreground hover:bg-hover hover:text-foreground ${className ?? ''}`}
       onClick={onClick}
     >
-      <span className="[&_svg]:size-3.5">{children}</span>
+      <span className="[&_svg]:size-[18px]">{children}</span>
     </Button>
   )
 }
