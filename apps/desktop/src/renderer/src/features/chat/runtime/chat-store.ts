@@ -49,10 +49,13 @@ class AgentRequestError extends Error {
 type SendingState = { creating: boolean; threads: Set<string> }
 
 type CreateOptions = {
+  threadId?: string
   botId?: string
   workspaceId?: string | null
   permissionMode?: PermissionMode | null
   title?: string
+  model?: { provider: string; modelId: string }
+  thinkingLevel?: ModelThinkingLevel
 }
 
 export type ChatExtras = {
@@ -113,6 +116,7 @@ export class ChatStore {
   private disposed = false
   private botTimer: ReturnType<typeof setInterval> | undefined
   private selectedThreadId: string | undefined
+  private draft: CreateOptions | undefined
   private projection: AgentProjectionState = emptyDurableProjectionState()
   private projected: AgentProjectedThread = emptyProjected
   private metadata: AgentThreadSummary | undefined
@@ -208,6 +212,7 @@ export class ChatStore {
   }
 
   async selectBot(id: string) {
+    this.draft = undefined
     const version = ++this.botSelectionVersion
     this.connectionVersion++
     this.source?.close()
@@ -249,8 +254,11 @@ export class ChatStore {
     return this.request<{ messages: BotMessage[]; tasks: BotTask[]; policies: Record<string, BotReceptionPolicy>; contacts: NetworkBotIdentity[]; identities: NetworkBotIdentity[]; network: { enabled: boolean; error?: string } }>('/grove')
   }
   mentionTargets() {
-    if (!this.selectedThreadId) return Promise.resolve<MentionTarget[]>([])
-    return this.request<MentionTarget[]>(`/grove/mention-targets?threadId=${encodeURIComponent(this.selectedThreadId)}`)
+    const threadId = this.selectedThreadId ?? (this.draft
+      ? this.bots.find((bot) => bot.id === this.selectedBotId)?.mainThreadId
+      : undefined)
+    if (!threadId) return Promise.resolve<MentionTarget[]>([])
+    return this.request<MentionTarget[]>(`/grove/mention-targets?threadId=${encodeURIComponent(threadId)}`)
   }
 
   setGrovePolicy(botId: string, policy: BotReceptionPolicy) {
@@ -301,6 +309,12 @@ export class ChatStore {
   }
 
   async setWorkspace(workspaceId: string | null) {
+    if (this.draft) {
+      this.draft = { ...this.draft, workspaceId }
+      this.metadata = { ...this.metadata!, workspaceId }
+      this.emit()
+      return
+    }
     if (!this.selectedThreadId) return
     await this.request(`/threads/${encodeURIComponent(this.selectedThreadId)}`, {
       method: 'PATCH',
@@ -340,6 +354,7 @@ export class ChatStore {
     this.source?.close()
     this.source = undefined
     this.selectedThreadId = undefined
+    this.draft = undefined
     this.projection = emptyDurableProjectionState()
     this.projected = emptyProjected
     this.metadata = undefined
@@ -355,6 +370,7 @@ export class ChatStore {
     this.source?.close()
     this.source = undefined
     this.selectedThreadId = threadId
+    this.draft = undefined
     this.projection = emptyDurableProjectionState()
     this.projected = emptyProjected
     this.metadata = undefined
@@ -389,6 +405,37 @@ export class ChatStore {
   }
 
   async createThread(options: CreateOptions = {}) {
+    const bot = this.bots.find((bot) => bot.id === (options.botId ?? this.selectedBotId))
+    this.draft = {
+      ...(bot
+        ? { botId: bot.id, workspaceId: bot.defaultWorkspaceId, permissionMode: bot.permissionMode }
+        : this.getCreateOptions()),
+      ...options,
+      threadId: crypto.randomUUID(),
+    }
+    this.botSelectionVersion++
+    this.connectionVersion++
+    this.source?.close()
+    this.source = undefined
+    this.selectedThreadId = undefined
+    this.selectedBotId = this.draft.botId ?? this.selectedBotId
+    this.botEditorId = undefined
+    this.projection = emptyDurableProjectionState()
+    this.projected = emptyProjected
+    this.metadata = {
+      model: bot?.model ?? undefined,
+      thinkingLevel: bot?.thinkingLevel ?? undefined,
+      ...this.draft,
+      id: this.draft.threadId!,
+      title: options.title ?? '新会话',
+    }
+    this.loading = false
+    this.error = undefined
+    this.emit()
+    return this.metadata.id
+  }
+
+  private async persistThread(options: CreateOptions = {}) {
     const selectionVersion = this.botSelectionVersion
     const bot = this.bots.find((bot) => bot.id === (options.botId ?? this.selectedBotId))
     const input = {
@@ -401,7 +448,7 @@ export class ChatStore {
     const creation =
       this.pendingCreation?.fingerprint === fingerprint
         ? this.pendingCreation
-        : { fingerprint, id: crypto.randomUUID() }
+        : { fingerprint, id: input.threadId ?? crypto.randomUUID() }
     this.pendingCreation = creation
     this.setSending(undefined, true)
     try {
@@ -411,8 +458,10 @@ export class ChatStore {
           threadId: creation.id,
           botId: input.botId,
           title: input.title,
-          workspaceId: input.workspaceId ?? undefined,
+          workspaceId: input.workspaceId,
           permissionMode: input.permissionMode ?? undefined,
+          model: input.model,
+          thinkingLevel: input.thinkingLevel,
         },
       })
       if (this.pendingCreation === creation) this.pendingCreation = undefined
@@ -436,8 +485,9 @@ export class ChatStore {
   }
 
   async submit(message: AppendMessage, whenBusy?: 'steer' | 'followUp' | 'reject') {
-    if (!this.selectedThreadId && this.selectedBotId) await this.selectBot(this.selectedBotId)
-    const threadId = this.selectedThreadId ?? (await this.createThread())
+    if (this.draft) await this.persistThread(this.draft)
+    else if (!this.selectedThreadId && this.selectedBotId) await this.selectBot(this.selectedBotId)
+    const threadId = this.selectedThreadId ?? (await this.persistThread())
     const pendingIds = takePendingContextAttachmentIds()
     const botMentions: BotMention[] = []
     let textLength = 0
@@ -537,6 +587,20 @@ export class ChatStore {
   }
 
   async setModel(input: { provider: string; modelId: string; thinkingLevel?: ModelThinkingLevel }) {
+    if (this.draft) {
+      this.draft = {
+        ...this.draft,
+        model: { provider: input.provider, modelId: input.modelId },
+        thinkingLevel: input.thinkingLevel,
+      }
+      this.metadata = {
+        ...this.metadata!,
+        model: this.draft.model,
+        thinkingLevel: input.thinkingLevel,
+      }
+      this.emit()
+      return
+    }
     if (!this.selectedThreadId) return
     await this.request(`/threads/${encodeURIComponent(this.selectedThreadId)}/model`, {
       method: 'POST',
@@ -550,6 +614,12 @@ export class ChatStore {
   }
 
   async setThinkingLevel(level: ModelThinkingLevel) {
+    if (this.draft) {
+      this.draft = { ...this.draft, thinkingLevel: level }
+      this.metadata = { ...this.metadata!, thinkingLevel: level }
+      this.emit()
+      return
+    }
     if (!this.selectedThreadId) return
     await this.request(`/threads/${encodeURIComponent(this.selectedThreadId)}/thinking`, {
       method: 'POST',

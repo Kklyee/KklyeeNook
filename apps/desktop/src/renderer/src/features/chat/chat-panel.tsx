@@ -113,7 +113,7 @@ export function ChatPanel({
                   <h1 className="truncate text-base font-semibold">{bot.name}</h1>
                   <p className="mt-0.5 truncate text-xs text-muted-foreground">
                     {bot.role}
-                    {snapshot.selectedThreadId && snapshot.selectedThreadId !== bot.mainThreadId
+                    {snapshot.current.metadata && snapshot.current.metadata.id !== bot.mainThreadId
                       ? ` · ${snapshot.current.metadata?.title ?? '新会话'}`
                       : ' · 主会话'}
                   </p>
@@ -250,7 +250,8 @@ function useChatModelSelection(
   const [switchingModel, setSwitchingModel] = useState(false)
   const [modelError, setModelError] = useState<string | null>(null)
   const session = useChatSession()
-  const { bots, selectedBotId } = useChatRuntimeSnapshot()
+  const { bots, selectedBotId, selectedThreadId } = useChatRuntimeSnapshot()
+  const isDraft = !!session && !selectedThreadId
   const bot = bots.find((bot) => bot.id === selectedBotId)
   const aui = useAui()
   const configuredModels = settings?.models ?? []
@@ -268,7 +269,7 @@ function useChatModelSelection(
       : model.id === settings?.activeModelId,
   )
   const selectedModel = bot
-    ? session?.status === 'running'
+    ? session?.status === 'running' || isDraft
       ? (sessionModel ?? profileModel)
       : profileModel
     : sessionId
@@ -280,7 +281,7 @@ function useChatModelSelection(
           (model) => model.id === (globalSelection?.modelId ?? settings?.activeModelId),
         )
   const selectedThinkingLevel =
-    bot && session?.status !== 'running'
+    bot && session?.status !== 'running' && !isDraft
       ? (bot.thinkingLevel ?? profileModel?.thinkingLevel ?? settings?.thinkingLevel)
       : (session?.config?.thinkingLevel ??
         (sessionId ? sessionModel?.thinkingLevel : undefined) ??
@@ -326,7 +327,7 @@ function useChatModelSelection(
     setModelError(null)
     try {
       await saveSelection(model, thinkingLevel)
-      if (sessionId) {
+      if (session) {
         await piRuntime.setModel({ provider: model.provider, modelId: model.modelID })
         await piRuntime.setThinkingLevel(thinkingLevel)
       }
@@ -345,7 +346,7 @@ function useChatModelSelection(
     setModelError(null)
     try {
       await saveSelection(selectedModel, level)
-      if (sessionId) await piRuntime.setThinkingLevel(level)
+      if (session) await piRuntime.setThinkingLevel(level)
       await onSettingsChanged?.()
     } catch (error) {
       setModelError(error instanceof Error ? error.message : '推理等级切换失败')

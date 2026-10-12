@@ -57,7 +57,7 @@ export function ChatRuntimeProvider({
       snapshot.current.loading ||
       snapshot.sending.creating ||
       !snapshot.selectedBotId ||
-      !snapshot.selectedThreadId,
+      !snapshot.current.metadata,
     extras: snapshot.extras,
     queue: snapshot.queue,
     adapters: { attachments: contextAttachmentAdapter, threadList: snapshot.threadList },
@@ -108,7 +108,7 @@ export function useChatThreadState<T>(selector: (state: ChatExtras) => T): T {
 export function useChatSession() {
   const snapshot = useChatRuntimeSnapshot()
   const metadata = snapshot.current.metadata
-  if (!metadata || !snapshot.selectedThreadId) return undefined
+  if (!metadata) return undefined
   return {
     id: metadata.id,
     title: metadata.title,

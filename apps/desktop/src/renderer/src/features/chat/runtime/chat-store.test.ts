@@ -194,10 +194,11 @@ test('allows a fresh delivery mode after a definitive busy rejection and retains
   expect(bodies[1]).toMatchObject({ whenBusy: 'steer', contextAttachmentIds: ['attachment'] })
 })
 
-test('reuses a creation target after acknowledgement loss and creates a fresh target after success', async () => {
+test('keeps new workspace threads temporary until the first message and reuses creation retries', async () => {
   const creations: string[] = []
   const known = [metadata('a')]
   const store = setup(async (url, init) => {
+    if (url.endsWith('/submissions')) return response({ accepted: true })
     if (url.endsWith('/threads') && init?.method === 'POST') {
       const id = JSON.parse(String(init.body)).threadId
       creations.push(id)
@@ -208,12 +209,54 @@ test('reuses a creation target after acknowledgement loss and creates a fresh ta
     return response(url.endsWith('/threads') ? known : snapshot(url.split('/').at(-1)!))
   })
   await vi.waitFor(() => expect(store.getSnapshot().threadList.isLoading).toBe(false))
-  await expect(store.createThread()).rejects.toThrow('Creation acknowledgement lost')
-  await store.createThread()
+  const abandoned = await store.createThread({ botId: 'coder', workspaceId: 'workspace' })
+  const draft = await store.createThread({ botId: 'coder', workspaceId: 'workspace' })
+  expect(draft).not.toBe(abandoned)
+  expect(creations).toEqual([])
+  expect(store.getSnapshot().selectedThreadId).toBeUndefined()
+  expect(store.getSnapshot().current.metadata).toMatchObject({ id: draft, workspaceId: 'workspace' })
+  expect(store.getSnapshot().threadList.threads).toHaveLength(1)
+  await store.reloadThreads()
+  expect(store.getSnapshot().current.metadata?.id).toBe(draft)
+  await expect(store.submit(message('hello'))).rejects.toThrow('Creation acknowledgement lost')
+  await store.submit(message('hello'))
   expect(creations[1]).toBe(creations[0])
+  expect(creations[1]).toBe(draft)
+  expect(store.getSnapshot().threadList.threads?.some((thread) => thread.id === draft)).toBe(true)
   await store.createThread()
+  await store.submit(message('next'))
   expect(creations[2]).not.toBe(creations[0])
   expect(store.getSnapshot().selectedThreadId).toBe(creations[2])
+})
+
+test('discards unsent drafts on navigation and preserves workspace and model choices on first send', async () => {
+  const creations: Record<string, unknown>[] = []
+  const known = [metadata('a')]
+  const store = setup(async (url, init) => {
+    if (url.endsWith('/submissions')) return response({ accepted: true })
+    if (url.endsWith('/threads') && init?.method === 'POST') {
+      const input = JSON.parse(String(init.body))
+      creations.push(input)
+      const created = { ...metadata(input.threadId), ...input }
+      known.push(created)
+      return response(created)
+    }
+    return response(url.endsWith('/threads') ? known : snapshot(url.split('/').at(-1)!))
+  })
+  await vi.waitFor(() => expect(store.getSnapshot().threadList.isLoading).toBe(false))
+  await store.createThread({ botId: 'coder', workspaceId: 'workspace' })
+  await store.switchToThread('a')
+  expect(creations).toEqual([])
+  expect(store.getSnapshot().threads.map((thread) => thread.id)).toEqual(['a'])
+  await store.createThread({ botId: 'coder', workspaceId: 'workspace' })
+  await store.setWorkspace(null)
+  await store.setModel({ provider: 'test', modelId: 'model' })
+  await store.setThinkingLevel('high')
+  expect(creations).toEqual([])
+  await store.refresh()
+  expect(store.getSnapshot().current.metadata?.workspaceId).toBeNull()
+  await store.submit(message('hello'))
+  expect(creations).toEqual([expect.objectContaining({ botId: 'coder', workspaceId: null, model: { provider: 'test', modelId: 'model' }, thinkingLevel: 'high' })])
 })
 
 test('Bot-first entry restores one main Thread and rejects late responses from another Bot', async () => {
@@ -224,6 +267,7 @@ test('Bot-first entry restores one main Thread and rejects late responses from a
   const threads = bots.map((bot) => ({ ...metadata(bot.mainThreadId), botId: bot.id }))
   let slow!: (value: Response) => void
   const store = setup(async (url) => {
+    if (url.includes('/grove/mention-targets?')) return response([])
     if (url.endsWith('/threads')) return response(threads)
     if (url.endsWith('/main-thread')) {
       const id = url.split('/').at(-2)!
@@ -246,6 +290,15 @@ test('Bot-first entry restores one main Thread and rejects late responses from a
   await pending
   expect(store.getSnapshot().selectedBotId).toBe('coder')
   expect(store.getSnapshot().selectedThreadId).toBe(bots[1].mainThreadId)
+  await store.selectBot('xiaoya')
+  expect(store.getSnapshot().selectedThreadId).toBe(bots[0].mainThreadId)
+  expect(store.getSnapshot().threads).toHaveLength(3)
+  await store.createThread({ botId: 'coder', workspaceId: 'workspace' })
+  expect(await store.mentionTargets()).toEqual([])
+  expect(fetch).toHaveBeenLastCalledWith(
+    expect.stringContaining(`threadId=${encodeURIComponent(bots[1].mainThreadId)}`),
+    expect.anything(),
+  )
   await store.selectBot('xiaoya')
   expect(store.getSnapshot().selectedThreadId).toBe(bots[0].mainThreadId)
   expect(store.getSnapshot().threads).toHaveLength(3)
