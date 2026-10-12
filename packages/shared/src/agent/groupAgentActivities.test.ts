@@ -14,6 +14,24 @@ function records(events: AgentEvent[]): AgentEventEnvelope[] {
   }))
 }
 
+test('splits steer activities without requiring any assistant text', () => {
+  const events = records([
+    { type: 'user_message', inputId: 'first', delivery: 'initial', text: 'Original' },
+    { type: 'thinking_delta', text: 'Before correction' },
+    { type: 'tool_started', call: { id: 'old', toolName: 'read', args: {} } },
+    { type: 'tool_finished', result: { toolCallId: 'old', toolName: 'read', status: 'success', content: [] } },
+    { type: 'thinking_delta', text: 'Still thinking' },
+    { type: 'user_message', inputId: 'second', delivery: 'steer', text: 'Correction' },
+    { type: 'thinking_delta', text: 'After correction' },
+    { type: 'tool_started', call: { id: 'new', toolName: 'read', args: {} } },
+  ])
+  const segments = groupAgentActivities(events, deriveAgentActivities(events))
+  expect(segments.map(segment => [segment.inputId, segment.textOffset])).toEqual([['first', 0], ['second', 0]])
+  expect(segments[0].endedAt).toBe(105)
+  expect(segments[0].activities.every(activity => activity.status === 'completed')).toBe(true)
+  expect(segments[1].activities.map(activity => activity.id)).not.toContain('old')
+})
+
 test('splits activities after intermediate text and keeps each summary local', () => {
   const events = records([
     { type: 'inference_started' },

@@ -209,6 +209,47 @@ test('keeps model failures authoritative and prevents cross-conversation submiss
   )
 })
 
+test('consumes a correction before the next model request without concurrent runs', async () => {
+  const { engine, faux, service } = await setup()
+  let release!: () => void
+  const boundary = new Promise<void>(resolve => { release = resolve })
+  const requests: string[][] = []
+  faux.setResponses([
+    async transcript => {
+      requests.push(transcript.messages.filter(message => message.role === 'user').map(message => String(message.content)))
+      await boundary
+      return fauxAssistantMessage('Before correction')
+    },
+    transcript => {
+      requests.push(transcript.messages.filter(message => message.role === 'user').map(message => String(message.content)))
+      return fauxAssistantMessage('Adjusted response')
+    },
+  ])
+  await service.create({ threadId: 'steer', agent: { model } }, context())
+  const watch = await engine.watch('steer', context())
+  const events: string[] = []
+  watch.start(async batch => { events.push(...batch.map(event => event.type)) })
+  await service.submit('steer', { type: 'input', content: 'Original', requestId: 'original' }, context())
+  await vi.waitFor(() => expect(requests).toHaveLength(1))
+  try {
+    await service.submit('steer', { type: 'input', content: 'Correction', requestId: 'correction', whenBusy: 'steer' }, context())
+    expect(requests).toHaveLength(1)
+  } finally {
+    release()
+  }
+  await (await engine.conversation('steer', context())).waitForIdle(context())
+  expect(requests).toEqual([['Original'], ['Original', 'Correction']])
+  await vi.waitFor(() => expect(events.filter(type => type === 'run_start' || type === 'run_end').at(-1)).toBe('run_end'))
+  let active = 0
+  for (const event of events) {
+    if (event === 'run_start') active++
+    if (event === 'run_end') active--
+    expect(active).toBeGreaterThanOrEqual(0)
+    expect(active).toBeLessThanOrEqual(1)
+  }
+  expect(active).toBe(0)
+})
+
 test('withdraws one queued submission, aborts current work and stops event watches on close', async () => {
   const { engine, faux, service } = await setup({
     tokensPerSecond: 20,

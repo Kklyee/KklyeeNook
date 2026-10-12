@@ -19,8 +19,10 @@ import { useActivitySelector, type ActivityRun } from './AgentActivityProvider'
 
 interface ActivityScope {
   runId?: string
+  inputId?: string
   textOffset: number
   startedAt: number
+  running: boolean
   fallback: boolean
 }
 
@@ -30,14 +32,16 @@ const hasContent = (activity: AgentActivity) =>
 const findSegment = (groups: readonly ActivityRun[], scope: ActivityScope) =>
   groups
     .find((group) => group.run.id === scope.runId)
-    ?.segments.find((segment) => segment.textOffset === scope.textOffset)
+    ?.segments.find((segment) => segment.textOffset === scope.textOffset && segment.inputId === scope.inputId)
 
 function isRunning(groups: readonly ActivityRun[], scope: ActivityScope) {
+  if (!scope.running) return false
   const group = groups.find((entry) => entry.run.id === scope.runId)
   const segment = findSegment(groups, scope)
   if (!group || !segment) return scope.fallback
   return (
     ['created', 'running', 'waiting'].includes(group.run.status) &&
+    group.segments.at(-1)?.inputId === scope.inputId &&
     (segment.endedAt === undefined ||
       segment.activities.some(
         (activity) => activity.status === 'running' || activity.status === 'waiting',
@@ -49,6 +53,7 @@ export function AgentActivityGroup({ afterPartIndex }: { afterPartIndex?: number
   const id = useAuiState((state) => state.message.id)
   const isLast = useAuiState((state) => state.message.isLast)
   const status = useAuiState((state) => state.message.status?.type)
+  const inputId = useAuiState((state) => state.message.metadata.custom?.activityInputId as string | undefined)
   const messageCount = useAuiState((state) => state.thread.messages.length)
   const textOffset = useAuiState((state) =>
     afterPartIndex === undefined
@@ -105,7 +110,7 @@ export function AgentActivityGroup({ afterPartIndex }: { afterPartIndex?: number
       .slice(0, index)
       .reduce(
         (offset, entry) =>
-          entry.role === 'assistant' && match(entry)?.run.id === group.run.id
+          entry.role === 'assistant' && match(entry)?.run.id === group.run.id && entry.metadata.custom?.activityInputId === inputId
             ? offset +
               entry.content.reduce(
                 (total, part) => total + (part.type === 'text' ? part.text.length : 0),
@@ -119,7 +124,7 @@ export function AgentActivityGroup({ afterPartIndex }: { afterPartIndex?: number
       !message.content.slice(afterPartIndex + 1).some((part) => part.type === 'text') &&
       thread.messages
         .slice(index + 1)
-        .some((entry) => entry.role === 'assistant' && match(entry)?.run.id === group.run.id)
+        .some((entry) => entry.role === 'assistant' && match(entry)?.run.id === group.run.id && entry.metadata.custom?.activityInputId === inputId)
     )
       return null
     return `${group.run.id}\n${previousText + textOffset}`
@@ -129,11 +134,13 @@ export function AgentActivityGroup({ afterPartIndex }: { afterPartIndex?: number
     const [runId, offset] = boundary?.split('\n') ?? []
     return {
       runId,
+      inputId,
       textOffset: Number(offset ?? textOffset),
       startedAt,
+      running,
       fallback: running && afterPartIndex === undefined && !answered,
     }
-  }, [boundary, textOffset, startedAt, running, afterPartIndex, answered])
+  }, [boundary, inputId, textOffset, startedAt, running, afterPartIndex, answered])
   if (boundary === null || (!boundary && !scope.fallback)) return null
   return <ActivityTimeline scope={scope} />
 }
@@ -204,7 +211,7 @@ function ActivityHeader({
   const running = useActivitySelector((groups) => isRunning(groups, scope))
   const failed = useActivitySelector((groups) => {
     const group = groups.find((entry) => entry.run.id === scope.runId)
-    return group?.run.status === 'failed' && group.segments.at(-1)?.textOffset === scope.textOffset
+    return group?.run.status === 'failed' && group.segments.at(-1)?.textOffset === scope.textOffset && group.segments.at(-1)?.inputId === scope.inputId
   })
   const completed = !running && !failed
   const label = failed

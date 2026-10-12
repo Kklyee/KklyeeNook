@@ -15,6 +15,25 @@ const entry = (id: number, message: NonNullable<EntryRecord['model']>[number]): 
 })
 const reduce = (snapshot: SnapshotEvent, events: readonly AgentEvent[]) => events.reduce(applyAgentEvent, snapshot)
 
+test('closes the previous assistant response when steer is consumed during a run', () => {
+  const snapshot = emptySnapshot()
+  const assistant = fauxAssistantMessage('')
+  assistant.stopReason = 'toolUse'
+  assistant.content = [{ type: 'thinking', thinking: 'Original reasoning' }]
+  snapshot.run = { inputs: [1 as never, 2 as never] }
+  snapshot.entries = [
+    entry(1, { role: 'user', content: 'Original', timestamp: 1 }),
+    entry(2, assistant),
+    entry(3, { role: 'user', content: 'Correction', timestamp: 3 }),
+  ]
+  snapshot.generation = { attempt: 1, message: fauxAssistantMessage('Adjusted response') }
+  const projected = projectDurableThread({ snapshot, approvals: [], queue: [], sequence: 0 })
+  const replies = projected.messages.filter(message => message.role === 'assistant')
+  expect(replies.map(message => message.status?.type)).toEqual(['complete', 'running'])
+  expect(replies.map(message => message.metadata?.custom?.activityInputId)).toEqual(['1', '3'])
+  expect(projected.isRunning).toBe(true)
+})
+
 test('replays every streamed block and nested tool argument delta without mutating a prior snapshot', () => {
   const first = reduce(emptySnapshot(), [{ type: 'message_start', message: fauxAssistantMessage('') }])
   const result = reduce(first, [{

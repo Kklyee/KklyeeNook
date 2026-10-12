@@ -78,7 +78,7 @@ function SubmitPlugin({ submit }: { submit: (steer?: boolean) => Promise<void> }
           if (event.shiftKey && !(event.ctrlKey || event.metaKey)) return false
           if (!aui.composer.getState().canSend) return false
           event.preventDefault()
-          void submit(event.shiftKey && (event.ctrlKey || event.metaKey))
+          void submit(true)
           return true
         },
         COMMAND_PRIORITY_NORMAL,

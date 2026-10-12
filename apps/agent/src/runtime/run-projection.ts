@@ -96,10 +96,16 @@ export class RunProjection {
   private project(group: Group, tasks: readonly Record[], threadId: string): AgentExecutionRecord[] {
     const output: AgentExecutionRecord[] = []
     const ids = new Set<number>(group.tasks.map((task) => task.id))
+    let input: { id: string; text: string; timestamp: number } | undefined
+    let inputId: string | undefined
     const push = (event: AgentEvent, timestamp: number) => output.push({
       id: output.length + 1, seq: output.length + 1, runId: group.id, sessionId: threadId, timestamp, event,
     })
     const assistant = (message: AssistantMessage, live = false) => {
+      if (input && input.id !== inputId) {
+        push({ type: 'user_message', inputId: input.id, delivery: inputId === undefined ? 'initial' : 'steer', text: input.text }, input.timestamp)
+        inputId = input.id
+      }
       for (const part of message.content) {
         if (part.type === 'text') push({ type: 'text_delta', text: part.text }, message.timestamp)
         else if (part.type === 'thinking') push({ type: 'thinking_delta', text: part.redacted ? '[reasoning redacted]' : part.thinking }, message.timestamp)
@@ -108,6 +114,9 @@ export class RunProjection {
     }
     push({ type: 'agent_started' }, group.tasks[0].startedAt ?? 0)
     for (const entry of group.snapshot.entries) {
+      for (const message of entry.model ?? []) {
+        if (message.role === 'user') input = { id: String(entry.id), text: typeof message.content === 'string' ? message.content : message.content.filter(part => part.type === 'text').map(part => part.text).join('\n'), timestamp: message.timestamp }
+      }
       const owner = entry.byTaskId ? tasks.find((item) => item.id === entry.byTaskId) : undefined
       if (!entry.byTaskId || (!ids.has(entry.byTaskId) && (!owner?.owner || !ids.has(owner.owner)))) continue
       for (const message of entry.model ?? []) {

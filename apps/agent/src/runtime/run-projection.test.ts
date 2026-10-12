@@ -130,3 +130,21 @@ test('does not present incomplete streamed tool arguments as an executing tool',
     ),
   ).toBe(false)
 })
+
+test('preserves consumed steer boundaries within the same run activity history', async () => {
+  const { projection, harness, message } = fixture()
+  harness.testSnapshot.entries = [
+    { id: 10, conversationId: 1, kind: 'pi.user', model: [{ role: 'user', content: 'Original', timestamp: 90 }] },
+    { id: 11, conversationId: 1, kind: 'pi.assistant', byTaskId: 2, model: [message] },
+    { id: 12, conversationId: 1, kind: 'pi.user', model: [{ role: 'user', content: 'Correction', timestamp: 110 }] },
+  ] as unknown as EntryRecord[]
+  harness.testSnapshot.generation = { attempt: 1, message: { ...message, timestamp: 120, content: [{ type: 'thinking', thinking: 'Adjusted reasoning' }] } }
+  const records = await projection.records('2', BACKGROUND_CONTEXT)
+  expect(records.filter(record => record.event.type === 'user_message').map(record => record.event)).toMatchObject([
+    { inputId: '10', delivery: 'initial' }, { inputId: '12', delivery: 'steer' },
+  ])
+  const segments = groupAgentActivities(records, deriveAgentActivities(records))
+  expect(segments.map(segment => segment.inputId)).toEqual(['10', '12'])
+  expect(segments[0].activities).toMatchObject([{ content: 'Reasoning before replying', status: 'completed' }])
+  expect(segments[1].activities).toMatchObject([{ content: 'Adjusted reasoning', status: 'running' }])
+})

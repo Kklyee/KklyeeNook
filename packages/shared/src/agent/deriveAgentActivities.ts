@@ -34,6 +34,10 @@ export function deriveAgentActivities(
   for (const record of [...events].sort((a, b) => a.seq - b.seq)) {
     const { event, timestamp } = record
     switch (event.type) {
+      case 'user_message':
+        endThinking(timestamp)
+        pendingInference = false
+        break
       case 'inference_started':
         if (stepReasoning && (!pendingInference || !thinking)) startThinking(record)
         pendingInference = false

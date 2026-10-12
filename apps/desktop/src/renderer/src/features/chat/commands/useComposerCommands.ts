@@ -49,7 +49,7 @@ export function useComposerCommands() {
     [skills, running, pi.compaction.active, executing],
   )
 
-  const submit = async (steer = false, text = aui.composer.getState().text) => {
+  const submit = async (steer = true, text = aui.composer.getState().text) => {
     const command = parseSystemCommand(text)
     const version = ++resultVersion.current
     setResult(undefined)

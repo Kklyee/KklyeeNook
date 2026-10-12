@@ -16,6 +16,7 @@ type TranscriptItem = {
 }
 
 type AssistantGroup = {
+  inputId?: string
   firstIndex: number
   lastIndex: number
   parts: ContentPart[]
@@ -316,9 +317,14 @@ function projectTranscript(
   const approvalByCall = new Map(approvals.map((approval) => [approval.callId, approval]))
   const output: ThreadMessageLike[] = []
   let group: AssistantGroup | null = null
-  const flush = () => {
+  let inputId: string | undefined
+  const flush = (active = true) => {
     if (!group) return
-    output.push(buildAssistant(group, snapshot, items, output.length))
+    let message = buildAssistant(group, snapshot, items, output.length)
+    if (!active && (message.status?.type === 'running' || message.status?.type === 'requires-action')) {
+      message = { ...message, status: { type: 'complete', reason: 'stop' } }
+    }
+    output.push(message)
     group = null
   }
   items.forEach((item, index) => {
@@ -327,6 +333,7 @@ function projectTranscript(
     if (message.role === 'assistant') {
       if (!group) {
         group = {
+          inputId,
           firstIndex: index,
           lastIndex: index,
           parts: [],
@@ -358,8 +365,9 @@ function projectTranscript(
       }
       return
     }
-    flush()
+    flush(false)
     if (message.role === 'user') {
+      inputId = item.entry ? String(item.entry.id) : undefined
       output.push({
         id: `durable-msg:${index}`,
         role: 'user',
@@ -400,6 +408,7 @@ function buildAssistant(
         },
         ...(entry?.byTaskId ? { runId: String(entry.byTaskId) } : {}),
         outputIndex,
+        activityInputId: group.inputId,
       },
     },
   }
