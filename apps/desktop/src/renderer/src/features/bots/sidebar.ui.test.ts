@@ -121,6 +121,13 @@ test('My Bots remains exclusive after return, delayed selection and collapsed up
     expect(view.element.textContent).toContain('Coder work')
     expect(view.element.textContent).not.toContain('Helper work')
     expect(view.element.textContent).not.toContain('Archived work')
+    const folder = view.element.querySelector('[aria-label="展开或折叠 Project"]')!
+    expect(folder.hasAttribute('data-panel-open')).toBe(true)
+    expect(folder.querySelector('.lucide-chevron-down')).toBeNull()
+    await view.click(folder)
+    expect(folder.hasAttribute('data-panel-open')).toBe(false)
+    await view.click(folder)
+    expect(folder.hasAttribute('data-panel-open')).toBe(true)
     await view.click(view.element.querySelector('[aria-label="返回 My Bots"]'))
     fixture.snapshot.selectedBotId = 'helper'
     await view.update(createElement(BotSidebar))

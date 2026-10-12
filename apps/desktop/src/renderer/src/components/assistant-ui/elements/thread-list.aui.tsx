@@ -130,7 +130,7 @@ export const ThreadListItem: FC = () => {
   return (
     <ThreadListItemPrimitive.Root
       data-slot="aui_thread-list-item"
-      className={threadListRowClassName}
+      className={cn(threadListRowClassName, 'h-7')}
     >
       {isRenaming ? (
         <ThreadListItemRename

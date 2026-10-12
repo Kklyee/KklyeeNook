@@ -65,15 +65,18 @@ export function SessionStats({
     <div
       data-slot="aui-session-stats"
       aria-label="会话状态"
-      className={
+      className={[
         compact
-          ? 'flex h-7 min-w-0 items-center justify-between gap-2 px-1 text-[10px] text-muted-foreground'
-          : 'flex h-7 min-w-0 items-center justify-between gap-2 px-3 text-[11px] text-muted-foreground'
-      }
+          ? 'flex h-7 min-w-0 items-center gap-2 px-1 text-[10px] text-muted-foreground'
+          : 'flex h-7 min-w-0 items-center gap-2 px-3 text-[11px] text-muted-foreground',
+        status ? 'justify-between' : 'justify-end',
+      ].join(' ')}
     >
-      <span role="status" className="min-w-0 truncate">
-        {status}
-      </span>
+      {status && (
+        <span role="status" className="min-w-0 truncate">
+          {status}
+        </span>
+      )}
       <div className="flex shrink-0 items-center gap-1 tabular-nums">
         {children}
         <Popover>

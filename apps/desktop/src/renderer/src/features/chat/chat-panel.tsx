@@ -153,9 +153,11 @@ export function ChatPanel({
                       ))}
                   </SelectContent>
                 </Select>
-                <span className="hidden text-xs text-muted-foreground sm:inline" role="status">
-                  {BOT_STATE_LABELS[snapshot.current.state]}
-                </span>
+                {snapshot.current.state !== 'idle' && (
+                  <span className="hidden text-xs text-muted-foreground sm:inline" role="status">
+                    {BOT_STATE_LABELS[snapshot.current.state]}
+                  </span>
+                )}
                 <Button variant="ghost" size="sm" onClick={() => store.editBot(bot.id)}>
                   设置
                 </Button>

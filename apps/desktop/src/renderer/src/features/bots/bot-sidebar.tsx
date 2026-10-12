@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { ThreadListPrimitive, useAuiState } from '@assistant-ui/react'
 import {
   ArrowLeftIcon,
-  ChevronDownIcon,
   ChevronRightIcon,
   FolderIcon,
+  FolderOpenIcon,
   MessageCircleIcon,
   PlusIcon,
   SearchIcon,
@@ -260,7 +260,7 @@ function BotThreads({
           <Button
             variant="ghost"
             className={
-              threadListRowClassName + ' justify-start gap-2 px-2 text-left text-[13px] font-normal'
+              threadListRowClassName + ' h-7 justify-start gap-2 px-2 text-left text-[13px] font-normal'
             }
             aria-pressed={snapshot.selectedThreadId === bot.mainThreadId}
             data-active={snapshot.selectedThreadId === bot.mainThreadId || undefined}
@@ -304,10 +304,10 @@ function BotThreads({
                     defaultOpen={workspace.id === snapshot.current.metadata?.workspaceId}
                   >
                     <div className="flex items-center gap-0.5">
-                      <CollapsibleTrigger className="flex h-[34px] min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left text-[13px] text-muted-foreground hover:bg-hover hover:text-foreground">
-                        <FolderIcon className="size-4" />
+                      <CollapsibleTrigger aria-label={'展开或折叠 ' + workspace.displayName} className="group/workspace flex h-[34px] min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left text-[13px] text-muted-foreground hover:bg-hover hover:text-foreground">
+                        <FolderIcon className="size-4 group-data-[panel-open]/workspace:hidden" />
+                        <FolderOpenIcon className="hidden size-4 text-brand group-data-[panel-open]/workspace:block" />
                         <span className="flex-1 truncate">{workspace.displayName}</span>
-                        <ChevronDownIcon className="size-3" />
                       </CollapsibleTrigger>
                       <Button
                         variant="ghost"
@@ -326,7 +326,7 @@ function BotThreads({
                         <PlusIcon className="size-3" />
                       </Button>
                     </div>
-                    <CollapsibleContent className="ml-3 flex flex-col gap-0.5">
+                    <CollapsibleContent className="flex flex-col">
                       {renderRows(workspace.id)}
                       {!rows.some(({ thread }) => thread?.workspaceId === workspace.id) && (
                         <p className="px-8 py-1 text-xs text-muted-foreground">暂无会话</p>

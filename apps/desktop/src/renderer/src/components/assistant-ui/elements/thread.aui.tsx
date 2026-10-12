@@ -373,7 +373,7 @@ const Composer: FC<{
           <CommandMenu commands={commands} onCommand={(id) => void submit(false, `/${id}`)} />
         </ComposerPrimitive.Root>
       </ComposerPrimitive.Unstable_TriggerPopoverRoot>
-      <SessionStats status={isCompacting ? '正在整理上下文…' : undefined}>
+      <SessionStats>
         {budget.tokens !== undefined &&
           budget.contextWindow !== undefined &&
           budget.contextWindow > 0 ? (
