@@ -20,16 +20,19 @@ import type { AgentRunContext, ContextBuilder } from '../context/contextBuilder'
 import type { SkillLoader } from '../backend/skillLoader'
 
 export type ContextInput = InputSubmissionDraft & {
+  botMentions?: readonly import('@kklyeenook/shared/bot/mentions').BotMention[]
   requestId: string
   contextAttachmentIds?: readonly string[]
   skillIds?: readonly string[]
   scheduledTaskId?: string
   groveTaskId?: string
   groveResult?: boolean
+  groveContinue?: boolean
   groveRemote?: boolean
 }
 
 type PreparedInput = {
+  botMentions?: import('@kklyeenook/shared/bot/mentions').BotMention[]
   bot?: BotSubmissionConfig
   draft: JsonRepresentation<Omit<InputSubmissionDraft, 'entry'> & { requestId: string }>
   context: string
@@ -38,6 +41,7 @@ type PreparedInput = {
   scheduledTaskId?: string
   groveTaskId?: string
   groveResult?: boolean
+  groveContinue?: boolean
   groveRemote?: boolean
 }
 
@@ -102,6 +106,10 @@ export class AgentInputs {
     this.extension = defineExtension({
       name: 'nook.context',
       sections: [
+        section('bot-collaboration', async (input, context) => {
+          const mentions = (await this.active(input, context)).flatMap((entry) => entry.botMentions ?? [])
+          return mentions.length ? JSON.stringify({ instruction: 'These Bot collaborations are already scheduled by the user. Do not create duplicate tasks for these mentions. Results will be delivered to this conversation.', mentions }) : undefined
+        }),
         section('available-bots', async (input, context) => {
           const prepared = await this.active(input, context)
           if (!this.botDirectory || prepared.some((entry) => entry.groveRemote || entry.groveResult) ||
@@ -185,13 +193,15 @@ export class AgentInputs {
       const workspaceId = await this.workspaceId(conversation.id, context)
       const runContext = input.groveRemote ? undefined : await this.builder.build(input.contextAttachmentIds ?? [], workspaceId)
       const bot = await this.capture?.(conversation.id, context)
-      const { contextAttachmentIds: _attachments, skillIds: _skills, scheduledTaskId, groveTaskId, groveResult, groveRemote, ...draft } = input
+      const { contextAttachmentIds: _attachments, skillIds: _skills, scheduledTaskId, groveTaskId, groveResult, groveContinue, groveRemote, botMentions, ...draft } = input
       const candidate: PreparedInput = {
-        ...(bot ? { bot: copyJson(groveResult ? { ...bot, tools: [] } : bot, { omitUndefinedProperties: true }) as BotSubmissionConfig } : {}),
+        ...(botMentions?.length ? { botMentions: [...botMentions] } : {}),
+        ...(bot ? { bot: copyJson(groveResult && !groveContinue ? { ...bot, tools: [] } : botMentions?.length || groveContinue ? { ...bot, tools: bot.tools.filter((name) => !name.startsWith('bot.') && name !== 'delegate_task') } : bot, { omitUndefinedProperties: true }) as BotSubmissionConfig } : {}),
         draft: copyJson(draft, { omitUndefinedProperties: true }) as PreparedInput['draft'],
         ...(scheduledTaskId ? { scheduledTaskId } : {}),
         ...(groveTaskId ? { groveTaskId } : {}),
         ...(groveResult ? { groveResult } : {}),
+        ...(groveContinue ? { groveContinue } : {}),
         ...(groveRemote ? { groveRemote } : {}),
         context: renderContext(runContext),
         skills: selected.length
@@ -245,6 +255,13 @@ export class AgentInputs {
     if (first === undefined) return false
     const record = await (await this.host().submission(first, context))?.status(context)
     return record?.requestId ? (await this.host().snapshot(inputDoc, id, record.requestId, context))?.groveResult === true : false
+  }
+  async activeGroveContinuation(id: ConversationId, context: Context) {
+    const live = await this.host().snapshot(LiveDoc, id, context)
+    const first = live?.run?.inputs[0]
+    if (first === undefined) return false
+    const record = await (await this.host().submission(first, context))?.status(context)
+    return record?.requestId ? (await this.host().snapshot(inputDoc, id, record.requestId, context))?.groveContinue === true : false
   }
 
   private async active(input: PromptInput, context: Context) {

@@ -48,40 +48,7 @@ export function ChatRuntimeProvider({
     return () => store.dispose()
   }, [store])
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
-  const suggestions =
-    snapshot.bots.find((bot) => bot.id === snapshot.selectedBotId)?.kind === 'coding'
-      ? [
-          {
-            title: '了解项目',
-            label: '',
-            prompt: '请阅读当前项目，介绍目录结构和主要模块，暂时不要修改文件。',
-          },
-          {
-            title: '解释代码',
-            label: '',
-            prompt: '请解释当前项目中 Agent 从接收消息到完成回复的流程，暂时不要修改文件。',
-          },
-          {
-            title: '整理文档',
-            label: '',
-            prompt: '请阅读项目并提出 README 的改进建议，等我确认后再修改。',
-          },
-        ]
-      : [
-          {
-            title: '今天的计划',
-            label: '',
-            prompt: '帮我梳理今天的优先事项，安排接下来要做的事。',
-          },
-          { title: '拆解目标', label: '', prompt: '帮我把一个目标拆成可执行的小任务。' },
-          {
-            title: '研究问题',
-            label: '',
-            prompt: '帮我研究一个问题，整理可靠信息并给出清晰结论。',
-          },
-        ]
   const runtime = useExternalStoreRuntime({
-    suggestions,
     messages: snapshot.current.messages,
     convertMessage: (message) => message,
     isRunning: snapshot.current.projected.isRunning,

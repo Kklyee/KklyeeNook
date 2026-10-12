@@ -26,10 +26,13 @@
     "test:package": "node scripts/verify-package.mjs"
   },
   "dependencies": {
+    "@assistant-ui/react-lexical": "0.2.9",
     "@electron-toolkit/preload": "3.0.2",
     "@electron-toolkit/utils": "4.0.0",
     "@kklyeenook/agent": "workspace:*",
-    "@kklyeenook/shared": "workspace:*"
+    "@kklyeenook/shared": "workspace:*",
+    "@lexical/react": "0.49.0",
+    "lexical": "0.49.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.3",

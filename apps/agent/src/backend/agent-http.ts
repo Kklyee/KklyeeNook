@@ -69,6 +69,7 @@ const inputSchema = Type.Object(
     ),
     contextAttachmentIds: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
     skillIds: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
+    botMentions: Type.Optional(Type.Array(Type.Object({ botId: Type.String({ minLength: 1, maxLength: 200 }), displayName: Type.String({ minLength: 1, maxLength: 100 }), start: Type.Integer({ minimum: 0 }), end: Type.Integer({ minimum: 1 }) }, { additionalProperties: false }), { maxItems: 3 })),
   },
   { additionalProperties: false },
 )
@@ -130,6 +131,7 @@ async function handle(context: Context, prefix: string, host: AgentHost): Promis
   const ctx = withAbortSignal(context.req.raw.signal, BACKGROUND_CONTEXT)
   const method = context.req.method
   if (parts[0] === 'grove' && host.grove) {
+    if (parts[1] === 'mention-targets' && method === 'GET') return context.json(await host.grove.mentionTargets(context.req.query('threadId') ?? '', ctx))
     if (parts.length === 1 && method === 'GET') return context.json(await host.grove.list(ctx))
     if (parts.length === 3 && parts[1] === 'policies' && method === 'PUT') {
       const policy = await parse(context, Type.Object({ messages: Type.Boolean(), tasks: Type.Boolean(), allowedBotIds: Type.Union([Type.Null(), Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { maxItems: 100 })]) }, { additionalProperties: false }))

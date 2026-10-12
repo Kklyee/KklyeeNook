@@ -144,7 +144,7 @@ export function useComposerCommands() {
     } finally {
       executingRef.current = false
       setExecuting(false)
-      document.querySelector<HTMLTextAreaElement>('.aui-composer-input')?.focus()
+      document.querySelector<HTMLElement>('.aui-composer-input [contenteditable="true"], textarea.aui-composer-input')?.focus()
     }
   }
 

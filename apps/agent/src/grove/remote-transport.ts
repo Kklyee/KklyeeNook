@@ -53,8 +53,11 @@ export class RemoteTransport {
     this.url = parsed.href.replace(/\/$/, '')
   }
 
-  registerBot(localBotId: string, name: string, signal?: AbortSignal) {
-    return this.request<NetworkBotIdentity>('/bots', { localBotId, name }, signal)
+  registerBot(localBotId: string, name: string, signal?: AbortSignal, profile?: Pick<NetworkBotIdentity, 'role' | 'avatar'>) {
+    return this.request<NetworkBotIdentity>('/bots', { localBotId, name, ...profile }, signal)
+  }
+  taskPermission(fromBotId: string, targetBotId: string, signal?: AbortSignal) {
+    return this.request<{ allowed: boolean; reason?: string; online: boolean; owned: boolean }>('/host/task-permission', { fromBotId, targetBotId }, signal)
   }
   directory(signal?: AbortSignal) {
     return this.request<NetworkBotIdentity[]>('/host/bots', undefined, signal)

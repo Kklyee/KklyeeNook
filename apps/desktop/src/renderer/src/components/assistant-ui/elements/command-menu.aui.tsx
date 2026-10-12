@@ -12,7 +12,7 @@ const formatter: Unstable_DirectiveFormatter = {
   parse: (text) => [{ kind: 'text', text }],
 }
 
-export function CommandMenu({ commands }: { commands: CommandDefinition[] }) {
+export function CommandMenu({ commands, onCommand }: { commands: CommandDefinition[]; onCommand?: (id: string) => void }) {
   const text = useAuiState((state) => state.composer.text)
   const query = /^\/([^\s]*)/.exec(text)?.[1]?.toLowerCase() ?? ''
   const matches = (command: CommandDefinition, search: string) =>
@@ -49,7 +49,7 @@ export function CommandMenu({ commands }: { commands: CommandDefinition[] }) {
       aria-label="Commands and Skills"
     >
       <ComposerPrimitive.Unstable_TriggerPopover.Action
-        onExecute={() => undefined}
+        onExecute={(item) => { if (commands.find((command) => command.id === item.id)?.kind === 'system') onCommand?.(item.id) }}
         formatter={formatter}
       />
       <ComposerPrimitive.Unstable_TriggerPopoverItems>

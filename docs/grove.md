@@ -27,7 +27,7 @@
 
 输入使用 `grove:<taskId>`，结果回传使用 `grove:<taskId>:result`。Pi Durable 1.1.0 的 input Submission 不支持示例设计稿中的 `entry`，Grove 关联数据保存于 `nook.input` 文档。
 
-忙碌时使用 `whenBusy: "followUp"` 排队。后台任务恢复后复用已保存 Submission ID；在提交和保存 ID 之间崩溃时，稳定 requestId 仍可找回同一次 Submission。完成结果先持久化，再通过稳定 requestId 回传发起会话。结果汇总输入禁用工具，避免结果触发新的委托链。
+忙碌时使用 `whenBusy: "followUp"` 排队。后台任务恢复后复用已保存 Submission ID；在提交和保存 ID 之间崩溃时，稳定 requestId 仍可找回同一次 Submission。完成结果先持久化，再通过稳定 requestId 回传发起会话。普通工具委托的结果汇总输入禁用工具；Composer Mention 的结果允许当前 Bot 使用自身已授权工具继续处理，但禁止再次委托，并遵守原始链路期限与模型调用预算。
 
 接收策略、工作区及工具权限在执行前复核。普通消息和任务的接收开关独立，也支持通过 API 设置来源 Bot 白名单。社交接收策略持久化于 `nook.grove` 会话级 Durable 文档。
 
@@ -52,7 +52,9 @@ API 使用既有本地认证服务及秘密路径：
 - `POST /grove/tasks`：`threadId`、`toBotId`、`instruction`、`operationId`。
 - `PUT /grove/policies/:botId`：`messages`、`tasks`、`allowedBotIds`。
 
-Grove 展示本地 Bot 的接收策略、消息与协作记录。Chat 展示本会话关联的协作请求、状态和可展开结果，并提供手动协作入口。该 API 尚不对远程用户开放。
+Grove 展示本地 Bot 的接收策略、消息与协作记录。Chat Composer 使用 `@` 搜索 Bot 并插入带头像的原子 Mention Token，每条消息最多 3 个。目标以结构化 `botId`、显示名称和文本范围保存；普通 `@名字` 文本不会创建任务。消息提交前检查目标接收权限，同一稳定 requestId 通过 Durable Mention 计划恢复当前消息及各目标任务，重复目标只创建一个任务。Chat 中展示本会话的协作状态、耗时与可展开结果。该 API 尚不对远程用户开放。
+
+`GET /grove/mention-targets?threadId=...` 返回本地接收策略与远程权限预览；预览不消耗 Grant 次数。远程 Bot 的公开角色、头像与设备在线状态用于候选展示。已授权但离线的目标可等待投递，未授权或不可用目标不能选择；执行前仍再次复核授权。
 
 Grove 页面分为 Overview、Connections、Permissions、Shared Tools 和 Activity。普通消息、协作记录与授权 / 安装记录分别显示。本地接收策略可设置来源 Bot ID 白名单。模型可读取本机 Bot 与已连接远程 Bot 的名称、ID 和网络身份目录；远程任务及结果汇总不会加载该私有目录。
 

@@ -27,6 +27,7 @@ type BotRow = {
   owner_user_id: string
   host_id: string
   name: string
+  profile?: Pick<NetworkBotIdentity, 'role' | 'avatar'>
 }
 type OperationRow = {
   id: string
@@ -79,6 +80,7 @@ export class GroveStore {
       )
     ).rows[0]
     if (!row) throw new GroveError(401, 'Host authentication failed')
+    await this.db.query('UPDATE host_devices SET last_seen=$1 WHERE id=$2', [Date.now(), row.id])
     return { id: row.id, ownerUserId: row.owner_user_id }
   }
 
@@ -108,6 +110,7 @@ export class GroveStore {
     hostToken: string,
     localBotId: string,
     name: string,
+    profile: Pick<NetworkBotIdentity, 'role' | 'avatar'> = {},
   ): Promise<NetworkBotIdentity> {
     const host = await this.authenticateHost(hostToken)
     const row = (
@@ -116,7 +119,22 @@ export class GroveStore {
         [randomUUID(), localBotId, host.ownerUserId, host.id, name],
       )
     ).rows[0]!
+    await this.db.query('UPDATE network_bots SET profile=$1 WHERE network_id=$2', [JSON.stringify(profile), row.network_id])
+    row.profile = profile
     return botIdentity(row)
+  }
+
+  async taskPermission(token: string, fromBotId: string, targetBotId: string) {
+    const host = await this.authenticateHost(token)
+    const source = await this.getBot(fromBotId)
+    if (source.hostId !== host.id) throw new GroveError(403, 'Host does not own the sending Bot')
+    const target = await this.getBot(targetBotId)
+    const rows = (await this.db.query<{ definition: SocialGrant; revoked_at: string | null }>('SELECT definition,revoked_at FROM social_grants WHERE target_bot_id=$1 AND subject_type=$2 AND subject_id=$3', [targetBotId, 'bot', source.networkId])).rows
+    const grants = rows.map((row) => ({ ...row.definition, ...(row.revoked_at ? { revokedAt: Number(row.revoked_at) } : {}) }))
+    const counts = (await this.db.query<{ grant_id: string; uses: string }>('SELECT grant_id,count(*) AS uses FROM network_operations WHERE grant_id=ANY($1::text[]) GROUP BY grant_id', [grants.map((grant) => grant.id)])).rows
+    const decision = this.authorization.evaluate({ subject: { type: 'bot', id: source.networkId }, subjectOwnerUserId: host.ownerUserId, target, action: 'task.request' }, grants, Object.fromEntries(counts.map((row) => [row.grant_id, Number(row.uses)])), Date.now())
+    const device = (await this.db.query<{ last_seen: string | null; disabled_at: string | null }>('SELECT last_seen,disabled_at FROM host_devices WHERE id=$1', [target.hostId])).rows[0]!
+    return { ...(device.disabled_at === null ? decision : { allowed: false, reason: 'Target Host is unavailable' }), online: device.disabled_at === null && Number(device.last_seen ?? 0) > Date.now() - 15000, owned: host.ownerUserId === target.ownerUserId }
   }
 
   async getBot(id: string, connection: SqlConnection = this.db) {
@@ -424,6 +442,7 @@ function botIdentity(row: BotRow): NetworkBotIdentity {
     ownerUserId: row.owner_user_id,
     hostId: row.host_id,
     name: row.name,
+    ...row.profile,
   }
 }
 function operationRecord(row: OperationRow): NetworkOperation {

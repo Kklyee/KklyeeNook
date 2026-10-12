@@ -116,6 +116,7 @@ export class AgentHost {
             return bots.withLock(record.botId, action)
           }
         : undefined,
+      grove ? (threadId, input, context) => grove.submitMentions(threadId, input, context) : undefined,
     )
   }
 
@@ -154,7 +155,10 @@ export class AgentHost {
       if (!record?.botId) throw new BotError(403, 'Conversation has no Bot identity')
       const captured = await inputs?.activeConfig(id, engine.harness, context)
       const groveTaskId = await inputs?.activeGroveTask(id, context)
-      if (groveTaskId && toolName) await grove?.guardExecution(groveTaskId, context, toolName, callId)
+      if (groveTaskId && toolName) {
+        if (await inputs.activeGroveContinuation(id, context)) await grove?.guardContinuation(groveTaskId, context, toolName)
+        else await grove?.guardExecution(groveTaskId, context, toolName, callId)
+      }
       const workspaceId = captured ? captured.workspaceId : record.workspaceId
       const bot = await bots.assertAccess(record.botId, workspaceId, toolName)
       if (captured && toolName && !captured.tools.includes(toolName))

@@ -81,6 +81,7 @@ export class ConversationService {
       threadId: string,
       action: () => Promise<T>,
     ) => Promise<T>,
+    private readonly submitMentions?: (threadId: string, input: ContextInput, context: Context) => Promise<{ accepted: true; conversationId: number; submissionId: number } | undefined>,
   ) {}
 
   async create(input: CreateConversation, context: Context) {
@@ -167,7 +168,9 @@ export class ConversationService {
     const conversation = await this.engine.conversation(threadId, context)
     if (!this.inputs && (input.contextAttachmentIds?.length || input.skillIds?.length))
       throw new Error('Input context service is not configured')
-    const submission = this.inputs
+    const mentionReceipt = input.botMentions?.length ? await this.submitMentions?.(threadId, input, context) : undefined
+    if (input.botMentions?.length && !this.submitMentions) throw new BotError(403, 'Bot collaboration is unavailable')
+    const submission = mentionReceipt ? { id: mentionReceipt.submissionId as SubmissionId } : this.inputs
       ? await this.inputs.submit(conversation, input, context)
       : await conversation.submit(input, context)
     const title =

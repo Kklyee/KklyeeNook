@@ -24,7 +24,6 @@ import { BotManagement } from '../bots/bot-management'
 import { Select, SelectTrigger, SelectContent, SelectItem } from '../../components/ui/select'
 import { Button } from '../../components/ui/button'
 import { useWorkspaces } from '../workspaces/WorkspaceProvider'
-import { Collaboration } from '../grove/collaboration'
 
 function BotWelcome() {
   const { bots, selectedBotId } = useChatRuntimeSnapshot()
@@ -172,7 +171,6 @@ export function ChatPanel({
                 {modelError}
               </p>
             )}
-            <Collaboration compact />
             <nav
               className="border-border/60 flex h-11 shrink-0 items-end gap-1 border-b px-4"
               aria-label="对话视图"

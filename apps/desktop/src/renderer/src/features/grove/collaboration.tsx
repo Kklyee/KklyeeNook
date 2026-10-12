@@ -15,7 +15,7 @@ const labels: Record<BotTask['status'], string> = {
   rejected: '已拒绝',
 }
 
-export function Collaboration({ compact = false }: { compact?: boolean }) {
+export function Collaboration() {
   const store = useChatStore()
   const { bots, selectedBotId, selectedThreadId } = useChatRuntimeSnapshot()
   const [tasks, setTasks] = useState<BotTask[]>([])
@@ -50,19 +50,11 @@ export function Collaboration({ compact = false }: { compact?: boolean }) {
     bots.find((bot) => bot.id === id)?.name ??
     contacts.find((bot) => bot.networkId === id)?.name ??
     id
-  const visible = tasks
-    .filter(
-      (task) =>
-        !compact ||
-        task.sourceThreadId === selectedThreadId ||
-        task.targetThreadId === selectedThreadId,
-    )
-    .slice()
-    .reverse()
+  const visible = tasks.slice().reverse()
   return (
-    <details className={compact ? 'shrink-0 border-b px-5 py-2 text-sm' : 'p-5'} open={!compact}>
+    <details className="p-5" open>
       <summary className="cursor-pointer font-medium">
-        Bot 协作{compact && visible.length > 0 ? ` · ${visible.length}` : ''}
+        Bot 协作
       </summary>
       <div className="mt-4 flex flex-col gap-3">
         <p className="text-xs text-muted-foreground">

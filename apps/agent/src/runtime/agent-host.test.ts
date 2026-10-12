@@ -35,6 +35,7 @@ import { promisify } from 'node:util'
 import { createRemoteAgentPort } from '../remote/remote-agent-port'
 import { startRemoteGateway } from '../remote/remote-gateway'
 import { AgentConfigStore } from '../settings/agentConfigStore'
+import { inputDoc } from './inputs'
 import { verifyRemote, verifyRemoteMobile } from '../backend/testing/remote-browser'
 
 let directory: string
@@ -43,6 +44,78 @@ const databases: Array<() => void> = []
 const servers: Server[] = []
 const httpServers: RunningAgentHttpServer[] = []
 const context = () => withAbortSignal(AbortSignal.timeout(20_000), BACKGROUND_CONTEXT)
+
+test('structured Composer mentions submit the user message and recover one collaboration with stable identity', async () => {
+  const fixture = await setup(false, () => 'Mention collaboration complete', undefined, true)
+  let host = fixture.host
+  const source = await host.mainThread('xiaoya', context())
+  const input = { type: 'input' as const, requestId: 'mention-message', content: '@Coder review code', botMentions: [{ botId: 'coder', displayName: 'Coder', start: 0, end: 6 }] }
+  const receipt = await host.conversations.submit(source.id, input, context())
+  const repeated = await host.conversations.submit(source.id, input, context())
+  expect(repeated.submissionId).toBe(receipt.submissionId)
+  await vi.waitFor(async () => expect((await host.grove!.list(context())).tasks[0]?.status).toBe('completed'), { timeout: 15000 })
+  const task = (await host.grove!.list(context())).tasks[0]
+  const conversation = await host.engine.conversation(source.id, context())
+  const prepared = await host.engine.harness.snapshot(inputDoc, conversation.id, input.requestId, context())
+  expect(prepared?.bot?.tools).not.toContain('bot.request_task')
+  await vi.waitFor(async () => {
+    const result = await host.engine.harness.snapshot(inputDoc, conversation.id, `grove:${task.id}:result`, context())
+    expect(result?.groveContinue).toBe(true)
+    expect(result?.bot?.tools).not.toContain('delegate_task')
+  }, { timeout: 15000 })
+  await expect(host.grove!.guardContinuation(task.id, context(), 'bot.request_task')).rejects.toThrow('delegation')
+  await host.bots!.update('coder', { name: 'Renamed Coder' })
+  expect((await host.conversations.submit(source.id, input, context())).submissionId).toBe(receipt.submissionId)
+  await expect(host.conversations.submit(source.id, { ...input, content: '@Coder changed instruction' }, context())).rejects.toThrow('different mention')
+  expect((await host.grove!.list(context())).tasks).toHaveLength(1)
+  expect(task.toBotId).toBe('coder')
+  await host.close()
+  hosts.splice(hosts.indexOf(host), 1)
+  host = await fixture.open()
+  expect((await host.conversations.submit(source.id, input, context())).submissionId).toBe(receipt.submissionId)
+  expect((await host.grove!.list(context())).tasks).toHaveLength(1)
+  const state = await host.grove!.list(context())
+  expect(state.mentionRequests[0].mentions).toEqual(input.botMentions)
+}, 30000)
+
+test('concurrent mention messages cannot reuse one ID with different content', async () => {
+  const { host } = await setup(false, undefined, undefined, true)
+  const source = await host.mainThread('xiaoya', context())
+  const input = { type: 'input' as const, requestId: 'concurrent-mentions', content: '@Coder first', botMentions: [{ botId: 'coder', displayName: 'Coder', start: 0, end: 6 }] }
+  const results = await Promise.allSettled([
+    host.conversations.submit(source.id, input, context()),
+    host.conversations.submit(source.id, { ...input, content: '@Coder second' }, context()),
+  ])
+  expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
+  expect(results.find((result) => result.status === 'rejected')).toMatchObject({ reason: { message: 'Message ID already used with different mention content' } })
+  expect((await host.grove!.list(context())).tasks).toHaveLength(1)
+})
+
+test('mentions validate reception before submitting a user message and reject invalid ranges', async () => {
+  const { host, requests } = await setup(false, undefined, undefined, true)
+  const source = await host.mainThread('xiaoya', context())
+  const input = { type: 'input' as const, requestId: 'blocked-mention', content: '@Coder review', botMentions: [{ botId: 'coder', displayName: 'Coder', start: 0, end: 6 }] }
+  await host.grove!.setPolicy('coder', { messages: true, tasks: false, allowedBotIds: null }, context())
+  await expect(host.conversations.submit(source.id, input, context())).rejects.toThrow('协作')
+  expect(requests).toHaveLength(0)
+  expect((await host.grove!.list(context())).tasks).toEqual([])
+  await expect(host.conversations.submit(source.id, { ...input, botMentions: [{ ...input.botMentions[0], end: 5 }] }, context())).rejects.toThrow('structured')
+})
+
+test('multiple mentions create one task per stable Bot ID and enforce the three-token limit', async () => {
+  const { host } = await setup(false, undefined, undefined, true)
+  const helper = await host.bots!.create({ name: 'Designer' })
+  const source = await host.mainThread('xiaoya', context())
+  const input = { type: 'input' as const, requestId: 'multiple-mentions', content: '@Coder @Designer @Coder review', botMentions: [
+    { botId: 'coder', displayName: 'Coder', start: 0, end: 6 },
+    { botId: helper.id, displayName: 'Designer', start: 7, end: 16 },
+    { botId: 'coder', displayName: 'Coder', start: 17, end: 23 },
+  ] }
+  await host.conversations.submit(source.id, input, context())
+  expect((await host.grove!.list(context())).tasks).toHaveLength(2)
+  await expect(host.conversations.submit(source.id, { ...input, requestId: 'over-limit', botMentions: [...input.botMentions, input.botMentions[2]] }, context())).rejects.toThrow('3')
+  expect((await host.grove!.list(context())).tasks).toHaveLength(2)
+})
 
 test('Grove records ordinary messages without running models and rejects impersonation input', async () => {
   const { host, requests } = await setup(false, undefined, undefined, true)

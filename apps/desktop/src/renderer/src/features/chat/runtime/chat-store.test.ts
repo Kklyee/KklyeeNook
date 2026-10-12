@@ -8,6 +8,7 @@ import {
 } from '../context/pendingContextAttachments'
 import type { AgentFrame } from '@kklyeenook/shared/agent/chat-protocol'
 import { defaultBot, type BotSummary } from '@kklyeenook/shared/bot/bot'
+import { botMentionFormatter } from '@kklyeenook/shared/bot/mentions'
 
 vi.mock('../../workspaces/WorkspaceProvider', () => ({ notifyWorkspaceChanged: vi.fn() }))
 
@@ -87,6 +88,28 @@ function setup(
   stores.push(store)
   return store
 }
+
+test('Composer tokens send structured IDs and ranges while retrying one immutable message', async () => {
+  const sent: Record<string, any>[] = []
+  let lost = true
+  const store = setup(async (url, init) => {
+    if (url.endsWith('/submissions')) {
+      sent.push(JSON.parse(init!.body as string))
+      if (lost) { lost = false; throw new TypeError('lost acknowledgement') }
+      return response({ accepted: true })
+    }
+    return response(url.endsWith('/threads') ? [metadata('a')] : snapshot('a'))
+  })
+  await store.switchToThread('a')
+  const token = botMentionFormatter.serialize({ id: 'stable-coder', label: 'Coder' })
+  await expect(store.submit(message(`先看 ${token} 检查代码`))).rejects.toThrow('lost')
+  await store.submit(message(`先看 ${token} 检查代码`))
+  expect(sent[0]).toEqual(sent[1])
+  expect(sent[0].content).toBe('先看 @Coder 检查代码')
+  expect(sent[0].botMentions).toEqual([{ botId: 'stable-coder', displayName: 'Coder', start: 3, end: 9 }])
+  await store.submit(message('@Coder 普通消息'))
+  expect(sent[2].botMentions).toBeUndefined()
+})
 
 test('caches external-store snapshots and rejects stale thread loads and stale connections', async () => {
   let finish!: (value: Response) => void

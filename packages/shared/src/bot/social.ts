@@ -6,6 +6,8 @@ export type NetworkBotIdentity = {
   ownerUserId: string
   hostId: string
   name: string
+  role?: string
+  avatar?: import('./bot').BotAvatarConfig
 }
 
 export const SOCIAL_ACTIONS = [

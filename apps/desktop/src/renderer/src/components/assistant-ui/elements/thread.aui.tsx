@@ -13,7 +13,8 @@ import { File } from './file-preview'
 import { AgentActivityGroup } from '@/renderer/src/features/chat/activity/AgentActivityGroup'
 import { QueuedMessages } from '@/renderer/src/features/chat/QueuedMessages'
 import { usePendingSend } from '@/renderer/src/features/chat/runtime/SendState'
-import { ThreadFollowupSuggestions } from '@/renderer/src/components/assistant-ui/elements/follow-up-suggestions.aui'
+import { BotMentionInput } from '@/renderer/src/features/chat/mentions/BotMentionInput'
+import { CollaborationMessages } from '@/renderer/src/features/chat/mentions/CollaborationMessages'
 import { Image } from './image-preview'
 import { ImageThumbnail } from '@kklyeenook/ui/assistant-ui/image-thumbnail'
 import { MarkdownText } from '@/renderer/src/components/assistant-ui/elements/markdown-text'
@@ -46,7 +47,6 @@ import { CommandMenu } from './command-menu.aui'
 import { CommandResult } from './command-result.aui'
 import { ContextCompactionProgress, ContextCompactionSummary } from './context-compaction.aui'
 import { useComposerCommands } from '@/renderer/src/features/chat/commands/useComposerCommands'
-import { parseSystemCommand } from '@/renderer/src/features/chat/commands/commandParser'
 import { formatMessageTimestamp, formatMessageTimestampFull } from '@kklyeenook/shared/formatMessageTimestamp'
 import {
   ActionBarMorePrimitive,
@@ -237,6 +237,7 @@ const ThreadRoot: FC<{
 
           <div data-slot="aui_message-group" className="mb-14 flex flex-col gap-y-6 empty:hidden">
             <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
+            <CollaborationMessages />
             {(isCompacting || commandSurface?.result?.title === 'Compacting') && (
               <ContextCompactionProgress />
             )}
@@ -256,7 +257,6 @@ const ThreadRoot: FC<{
               )}
             >
               <ThreadScrollToBottom />
-              <ThreadFollowupSuggestions />
               {composerAccessory}
               <Composer
                 commandSurface={commandSurface!}
@@ -360,41 +360,17 @@ const Composer: FC<{
             render={<ComposerBar data-slot="aui_composer-shell" className="composer max-w-none" />}
           >
             <ComposerAttachments />
-            <ComposerPrimitive.Input
+            <BotMentionInput
               placeholder={composerPlaceholder ?? '描述一个任务，或提出一个问题…'}
-              className="aui-composer-input text-foreground placeholder:text-foreground/35 max-h-48 min-h-11 w-full resize-none bg-transparent px-3 py-1 text-[15px] leading-6 caret-primary outline-none"
-              rows={1}
               autoFocus={autoFocus}
-              enterKeyHint="send"
-              aria-label="Message input"
-              onKeyDown={(event) => {
-                if (event.nativeEvent.isComposing) return
-                if (event.key === 'Enter' && !event.shiftKey) {
-                  const highlightedId = event.currentTarget.getAttribute('aria-activedescendant')
-                  const highlighted = highlightedId ? document.getElementById(highlightedId) : null
-                  if (highlighted?.dataset.commandKind === 'system') {
-                    event.preventDefault()
-                    void submit(false, `/${highlighted.dataset.commandId}`)
-                    return
-                  }
-                }
-                if (
-                  event.key === 'Enter' &&
-                  event.shiftKey &&
-                  (event.ctrlKey || event.metaKey) &&
-                  parseSystemCommand(event.currentTarget.value)
-                ) {
-                  event.preventDefault()
-                  void submit(true)
-                }
-              }}
+              submit={submit}
             />
             <ComposerAction
               onSend={() => void submit()}
               modelSelector={modelSelector}
             />
           </ComposerPrimitive.AttachmentDropzone>
-          <CommandMenu commands={commands} />
+          <CommandMenu commands={commands} onCommand={(id) => void submit(false, `/${id}`)} />
         </ComposerPrimitive.Root>
       </ComposerPrimitive.Unstable_TriggerPopoverRoot>
       <SessionStats>

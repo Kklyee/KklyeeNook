@@ -54,6 +54,7 @@ export type AgentThreadSnapshot = {
 }
 
 export type AgentSubmissionInput = {
+  botMentions?: readonly import('../bot/mentions').BotMention[]
   type: 'input'
   requestId: string
   content:

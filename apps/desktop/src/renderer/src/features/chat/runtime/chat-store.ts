@@ -9,6 +9,7 @@ import type { PermissionMode } from '@kklyeenook/shared/approval/permission'
 import type { BotInput, BotProfile, BotSummary } from '@kklyeenook/shared/bot/bot'
 import type { BotMessage, BotTask, BotReceptionPolicy } from '@kklyeenook/shared/bot/grove'
 import type { NetworkBotIdentity } from '@kklyeenook/shared/bot/social'
+import { decodeBotMentions, validateBotMentions, type BotMention, type MentionTarget } from '@kklyeenook/shared/bot/mentions'
 import { botState } from '@kklyeenook/shared/bot/bot-state'
 import type { BotState } from '@kklyeenook/shared/bot/bot'
 import type { Workspace } from '@kklyeenook/shared/workspace/workspace'
@@ -247,6 +248,10 @@ export class ChatStore {
   grove() {
     return this.request<{ messages: BotMessage[]; tasks: BotTask[]; policies: Record<string, BotReceptionPolicy>; contacts: NetworkBotIdentity[]; identities: NetworkBotIdentity[]; network: { enabled: boolean; error?: string } }>('/grove')
   }
+  mentionTargets() {
+    if (!this.selectedThreadId) return Promise.resolve<MentionTarget[]>([])
+    return this.request<MentionTarget[]>(`/grove/mention-targets?threadId=${encodeURIComponent(this.selectedThreadId)}`)
+  }
 
   setGrovePolicy(botId: string, policy: BotReceptionPolicy) {
     return this.request(`/grove/policies/${encodeURIComponent(botId)}`, { method: 'PUT', body: policy })
@@ -434,9 +439,22 @@ export class ChatStore {
     if (!this.selectedThreadId && this.selectedBotId) await this.selectBot(this.selectedBotId)
     const threadId = this.selectedThreadId ?? (await this.createThread())
     const pendingIds = takePendingContextAttachmentIds()
+    const botMentions: BotMention[] = []
+    let textLength = 0
+    const rawContent = agentContent(message)
+    const parts = (typeof rawContent === 'string' ? [{ type: 'text' as const, text: rawContent }] : rawContent).map((part) => {
+      if (part.type !== 'text') return part
+      const decoded = decodeBotMentions(part.text)
+      botMentions.push(...decoded.mentions.map((mention) => ({ ...mention, start: mention.start + textLength, end: mention.end + textLength })))
+      textLength += decoded.text.length + 1
+      return { ...part, text: decoded.text }
+    })
+    try { validateBotMentions(parts.filter((part) => part.type === 'text').map((part) => part.text).join('\n'), botMentions) }
+    catch (error) { restorePendingContextAttachmentIds(pendingIds); throw error }
     const intent = {
       type: 'input' as const,
-      content: agentContent(message),
+      content: typeof rawContent === 'string' ? (parts[0] as { type: 'text'; text: string }).text : parts,
+      ...(botMentions.length ? { botMentions } : {}),
       ...(pendingIds.length ? { contextAttachmentIds: pendingIds } : {}),
     }
     const fingerprint = JSON.stringify(intent)

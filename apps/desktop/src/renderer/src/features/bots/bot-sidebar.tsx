@@ -14,6 +14,8 @@ import { BotAvatar } from '@kklyeenook/ui/components/bot-avatar'
 import { BOT_STATE_LABELS } from '@kklyeenook/shared/bot/bot-state'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
+import { threadListRowClassName } from '@kklyeenook/ui/assistant-ui/thread-list-row'
 import {
   Dialog,
   DialogContent,
@@ -46,6 +48,7 @@ export function BotSidebar() {
   const [showBots, setShowBots] = useState(false)
   const [query, setQuery] = useState('')
   const [error, setError] = useState('')
+  const [botMenuOpen, setBotMenuOpen] = useState(false)
   const [pendingWorkspace, setPendingWorkspace] = useState<WorkspaceAttachResult>()
   const bot = snapshot.bots.find((bot) => bot.id === snapshot.selectedBotId)
   const coderView = bot?.kind === 'coding' && !showBots && !collapsed
@@ -106,13 +109,13 @@ export function BotSidebar() {
     (thread) => thread.botId === bot?.id && thread.archived && thread.id !== bot?.mainThreadId,
   )
   return (
-    <ThreadListRoot className="min-h-full gap-2">
+    <ThreadListRoot className="min-h-full gap-1">
       {(error || snapshot.current.error) && (
         <p role="alert" className="px-2 text-xs text-destructive">
           {error || snapshot.current.error}
         </p>
       )}
-      {!collapsed && (
+      {(
         <header className="flex min-h-12 items-center gap-2 px-2">
           {coderView ? (
             <>
@@ -124,16 +127,26 @@ export function BotSidebar() {
               >
                 <ArrowLeftIcon />
               </Button>
-              <BotAvatar avatar={bot.avatar} name={bot.name} state={bot.state} size={36} />
-              <div className="min-w-0 flex-1">
-                <h1 className="truncate text-base font-semibold">{bot.name}</h1>
-                <p className="truncate text-xs text-muted-foreground">{bot.role}</p>
-              </div>
+              <Popover open={botMenuOpen} onOpenChange={setBotMenuOpen}>
+                <PopoverTrigger render={<Button variant="ghost" className="h-auto min-w-0 flex-1 justify-start gap-2 px-1 py-1" aria-label={`${bot.name} 菜单`} />}>
+                  <BotAvatar avatar={bot.avatar} name={bot.name} state={bot.state} size={32} />
+                  <span className="min-w-0 flex-1 text-left"><span className="block truncate text-sm font-semibold">{bot.name}</span><span className="block truncate text-[11px] font-normal text-muted-foreground">{bot.role}</span></span>
+                  <ChevronDownIcon className="size-3 text-muted-foreground" />
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-48">
+                  <Button variant="ghost" className="justify-start" onClick={() => { setBotMenuOpen(false); store.editBot(bot.id) }}><Settings2Icon className="size-4" />Bot 设置</Button>
+                </PopoverContent>
+              </Popover>
             </>
           ) : (
-            <h1 className="flex-1 text-lg font-semibold">Chat</h1>
+            <Popover>
+              <PopoverTrigger render={<Button variant="ghost" className="min-w-0 flex-1 justify-start px-0" aria-label="Bot 菜单" />}>
+                {collapsed ? <Settings2Icon /> : <><span className="text-base font-semibold">Chat</span><ChevronDownIcon className="size-3" /></>}
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-48"><Button variant="ghost" className="justify-start" onClick={() => store.editBot(bot?.id ?? snapshot.bots[0]?.id ?? 'new')}>Bot 设置</Button></PopoverContent>
+            </Popover>
           )}
-          <Button
+          {!collapsed && <Button
             variant="ghost"
             size="icon-sm"
             aria-label={coderView ? '新建开发会话' : 'Create Bot'}
@@ -142,27 +155,20 @@ export function BotSidebar() {
             }
           >
             <PlusIcon />
-          </Button>
+          </Button>}
         </header>
       )}
       {coderView ? (
         <>
           <Button
             variant="ghost"
-            className="mb-3 h-auto justify-start gap-3 rounded-xl px-3 py-3 text-left"
+            className={`${threadListRowClassName} justify-start gap-2 px-2 text-left text-[13px] font-normal`}
             aria-pressed={snapshot.selectedThreadId === bot.mainThreadId}
-            style={
-              snapshot.selectedThreadId === bot.mainThreadId
-                ? { background: `color-mix(in srgb, ${bot.avatar.accentColor} 12%, transparent)` }
-                : undefined
-            }
+            data-active={snapshot.selectedThreadId === bot.mainThreadId ? '' : undefined}
             onClick={() => void run(() => store.selectBot(bot.id))}
           >
             <MessageCircleIcon className="size-4" />
-            <span>
-              <span className="block text-sm font-medium">主会话</span>
-              <span className="mt-1 block text-xs text-muted-foreground">讨论技术，规划开发</span>
-            </span>
+            <span>主会话</span>
           </Button>
           <div className="flex items-center justify-between px-2 text-[11px] text-faint-foreground">
             <span>WORKSPACES</span>
@@ -197,28 +203,17 @@ export function BotSidebar() {
                 defaultOpen={workspace.id === snapshot.current.metadata?.workspaceId}
                 className="space-y-1"
               >
-                <CollapsibleTrigger className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-sm hover:bg-hover">
+                <div className="flex items-center gap-1">
+                <CollapsibleTrigger className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left text-[13px] hover:bg-hover">
                   <FolderIcon className="size-4 text-muted-foreground" />
                   <span className="flex-1 truncate">{workspace.displayName}</span>
                   <ChevronDownIcon className="size-3" />
                 </CollapsibleTrigger>
+                <Button variant="ghost" size="icon-xs" aria-label={`为 ${workspace.displayName} 新建会话`} disabled={!bot.workspaceIds.includes(workspace.id) || workspace.status !== 'attached'} onClick={() => void run(() => store.createThread({ botId: bot.id, workspaceId: workspace.id }))}><PlusIcon className="size-3" /></Button>
+                </div>
                 <CollapsibleContent className="ml-3 flex flex-col gap-0.5">
                   {renderRows(workspace.id)}
-                  <Button
-                    variant="ghost"
-                    disabled={
-                      !bot.workspaceIds.includes(workspace.id) || workspace.status !== 'attached'
-                    }
-                    className="justify-start text-xs font-normal"
-                    onClick={() =>
-                      void run(() =>
-                        store.createThread({ botId: bot.id, workspaceId: workspace.id }),
-                      )
-                    }
-                  >
-                    <PlusIcon className="size-3" />
-                    新建开发会话
-                  </Button>
+                  {!rows.some(({ thread }) => thread?.workspaceId === workspace.id) && <p className="px-5 py-1 text-xs text-muted-foreground">暂无会话</p>}
                 </CollapsibleContent>
               </Collapsible>
             ))}
@@ -289,12 +284,8 @@ export function BotSidebar() {
             </Button>
           ))}
           {!collapsed && bot && (
-            <Collapsible defaultOpen className="mt-5 border-t border-border pt-4">
-              <CollapsibleTrigger className="flex h-9 w-full items-center justify-between px-2 text-[11px] font-medium text-faint-foreground">
-                OTHER CONVERSATIONS
-                <ChevronDownIcon className="size-3.5" />
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-2 flex flex-col gap-1">
+            <div className="mt-2">
+              <div className="flex flex-col gap-1">
                 {renderRows(null, true)}
                 <Button
                   variant="ghost"
@@ -304,8 +295,8 @@ export function BotSidebar() {
                   <PlusIcon />
                   新建会话
                 </Button>
-              </CollapsibleContent>
-            </Collapsible>
+              </div>
+            </div>
           )}
         </>
       )}
@@ -341,17 +332,6 @@ export function BotSidebar() {
           {error}
         </p>
       )}
-      <div className="mt-auto pt-5">
-        <Button
-          variant="ghost"
-          className="h-11 w-full justify-start gap-2 rounded-xl px-3"
-          aria-label="Manage Bots"
-          onClick={() => store.editBot(bot?.id ?? snapshot.bots[0]?.id ?? 'new')}
-        >
-          <Settings2Icon className="size-4" />
-          {!collapsed && <span>{coderView ? `${bot.name} 设置` : 'Manage Bots'}</span>}
-        </Button>
-      </div>
       <Dialog
         open={!!pendingWorkspace}
         onOpenChange={(open) => {

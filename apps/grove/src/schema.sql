@@ -72,4 +72,6 @@ CREATE TABLE IF NOT EXISTS network_messages (
 );
 CREATE INDEX IF NOT EXISTS network_messages_pending ON network_messages (recipient_host_id, created_at) WHERE received_at IS NULL;
 ALTER TABLE network_bots ADD COLUMN IF NOT EXISTS shared_mcp jsonb NOT NULL DEFAULT '[]';
+ALTER TABLE network_bots ADD COLUMN IF NOT EXISTS profile jsonb NOT NULL DEFAULT '{}';
+ALTER TABLE host_devices ADD COLUMN IF NOT EXISTS last_seen bigint;
 ALTER TABLE network_operations ADD COLUMN IF NOT EXISTS capability jsonb;

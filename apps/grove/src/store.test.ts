@@ -121,6 +121,33 @@ test('stable operation IDs are idempotent and concurrent requests cannot exceed 
   expect((await database.query('SELECT * FROM network_operations')).rows).toHaveLength(1)
 })
 
+test('mention permission preview preserves grant uses and reports device availability', async () => {
+  const { alice, bob, aliceHost, bobHost, coder, designer } = await fixture()
+  await store.createGrant(bob.token, {
+    subject: { type: 'user', id: alice.id },
+    targetBotId: designer.networkId,
+    actions: ['task.request'],
+  })
+  expect(await store.taskPermission(aliceHost.token, coder.networkId, designer.networkId)).toMatchObject({ allowed: false, online: true, owned: false })
+  await expect(store.taskPermission(aliceHost.token, designer.networkId, coder.networkId)).rejects.toThrow('does not own')
+  await store.createGrant(bob.token, {
+    subject: { type: 'bot', id: coder.networkId },
+    targetBotId: designer.networkId,
+    actions: ['task.request'],
+    constraints: { maxUses: 1 },
+  })
+  for (let i = 0; i < 2; i++) {
+    expect(await store.taskPermission(aliceHost.token, coder.networkId, designer.networkId)).toMatchObject({ allowed: true, online: true })
+  }
+  expect((await database.query('SELECT * FROM network_operations')).rows).toHaveLength(0)
+  await database.query('UPDATE host_devices SET last_seen=$1 WHERE id=$2', [Date.now() - 60_000, bobHost.id])
+  expect(await store.taskPermission(aliceHost.token, coder.networkId, designer.networkId)).toMatchObject({ allowed: true, online: false })
+  await store.admit({ token: aliceHost.token, fromBotId: coder.networkId, targetBotId: designer.networkId, action: 'task.request', operationId: 'preview-use', payload: 'review' })
+  expect(await store.taskPermission(aliceHost.token, coder.networkId, designer.networkId)).toMatchObject({ allowed: false })
+  await store.disableHost(bob.token, bobHost.id)
+  expect(await store.taskPermission(aliceHost.token, coder.networkId, designer.networkId)).toMatchObject({ allowed: false, online: false, reason: 'Target Host is unavailable' })
+})
+
 test('queued operations recheck expiry, revocation and target Host before execution', async () => {
   const { bob, aliceHost, bobHost, coder, designer } = await fixture()
   const grant = await store.createGrant(bob.token, {

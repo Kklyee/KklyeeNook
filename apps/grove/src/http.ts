@@ -12,6 +12,10 @@ import { GroveRelay } from './relay'
 const id = Type.String({ minLength: 1, maxLength: 200 })
 const text = Type.String({ minLength: 1, maxLength: 64000 })
 const strict = { additionalProperties: false }
+const publicProfile = {
+  role: Type.Optional(Type.String({ maxLength: 100 })),
+  avatar: Type.Optional(Type.Object({ seed: id, variant: Type.Union(['beam','bauhaus','marble','pixel','ring','sunset'].map((value) => Type.Literal(value))), colors: Type.Array(Type.String({ maxLength: 30 }), { maxItems: 10 }), accentColor: Type.String({ maxLength: 30 }) }, strict)),
+}
 const sharedMcpSchema = Type.Object(
   {
     id,
@@ -128,15 +132,19 @@ export function createGroveApp(store: GroveStore, relay: GroveRelay) {
   app.post('/bots', async (context) => {
     const input = await parse(
       context,
-      Type.Object({ localBotId: id, name: Type.String({ minLength: 1, maxLength: 100 }) }, strict),
+      Type.Object({ localBotId: id, name: Type.String({ minLength: 1, maxLength: 100 }), ...publicProfile }, strict),
     )
-    return context.json(await store.registerBot(token(context), input.localBotId, input.name), 201)
+    return context.json(await store.registerBot(token(context), input.localBotId, input.name, { role: input.role, avatar: input.avatar }), 201)
   })
   app.post('/grants', async (context) =>
     context.json(await store.createGrant(token(context), await parse(context, grantSchema)), 201),
   )
   app.get('/connections', async (context) => context.json(await store.connections(token(context))))
   app.get('/host/bots', async (context) => context.json(await store.hostDirectory(token(context))))
+  app.post('/host/task-permission', async (context) => {
+    const input = await parse(context, Type.Object({ fromBotId: id, targetBotId: id }, strict))
+    return context.json(await store.taskPermission(token(context), input.fromBotId, input.targetBotId))
+  })
   app.get('/capabilities', async (context) =>
     context.json({
       catalog: await store.capabilities.catalog(token(context)),
