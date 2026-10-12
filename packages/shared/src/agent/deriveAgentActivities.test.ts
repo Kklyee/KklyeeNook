@@ -6,7 +6,7 @@ import { deriveAgentActivities } from '@kklyeenook/shared/agent/deriveAgentActiv
 import { mapToolCallToActivity, webSearchSources } from '@kklyeenook/shared/agent/agentActivityMapper'
 import { currentActivity, groupDuration } from '@kklyeenook/shared/agent/agentActivityTiming'
 import { summarizeAgentActivities } from '@kklyeenook/shared/agent/agentActivitySummary'
-import { formatActivityLabel } from '@kklyeenook/shared/agent/agentActivityFormatter'
+import { formatActivityLabel, getThinkingPreview } from '@kklyeenook/shared/agent/agentActivityFormatter'
 
 function events(entries: [number, AgentEvent][]): AgentEventEnvelope[] {
   return entries.map(([timestamp, event], seq) => ({
@@ -115,6 +115,23 @@ test('does not let an earlier shell failure replace a later completed tool', () 
   const read = mapToolCallToActivity({ id: 'read', toolName: 'read', args: { path: 'composer.tsx' } }, 'completed')
   expect(currentActivity([failed, read])).toBe(read)
   expect(summarizeAgentActivities([failed, read])).toBe('读取了 1 个文件')
+})
+
+test('shows the newest streamed thinking text while retaining the completed opening preview', () => {
+  const content = `${'Earlier reasoning. '.repeat(12)}Now checking the paste handler.`
+  const thinking: AgentActivity = { id: 'thinking', type: 'thinking', status: 'running', content }
+  expect(formatActivityLabel(thinking)).toContain('Now checking the paste handler.')
+  expect(formatActivityLabel({ ...thinking, content: `${content} Found the missing listener.` })).toContain('Found the missing listener.')
+  expect(getThinkingPreview(content)).toBe(content.slice(0, 120))
+  expect(getThinkingPreview(' short\nthought ', true)).toBe('short thought')
+})
+
+test('keeps failed shell labels concise while preserving the command in activity details', () => {
+  const command = 'git log --oneline --all | Select-Object -First 40'
+  const activity = mapToolCallToActivity({ id: 'shell', toolName: 'bash', args: { command } }, 'failed')
+  expect(formatActivityLabel(activity)).toBe('命令失败')
+  expect(activity).toMatchObject({ command })
+  expect(formatActivityLabel({ ...activity, type: 'shell', exitCode: 1 })).toBe('命令失败 · 退出码 1')
 })
 
 test('derives live reasoning without ending it between stream chunks', () => {

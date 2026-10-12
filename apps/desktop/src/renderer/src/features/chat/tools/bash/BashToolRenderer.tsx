@@ -11,6 +11,7 @@ import {
   getStringValue,
   isRecord,
   stringifyValue,
+  previewText,
 } from '../toolUtils'
 
 export const ShellToolRenderer: ToolCallMessagePartComponent = ({ args, result, status }) => {
@@ -21,29 +22,27 @@ export const ShellToolRenderer: ToolCallMessagePartComponent = ({ args, result, 
       ? stringifyValue(status.error)
       : undefined
   const { output, stderr, exitCode, error } = readShellResult(result, statusError)
+  const failed = error !== undefined
+  const details = (
+    <>
+      {command && <ToolDetailSection label="Command"><pre className={toolCodeClassName}>{command}</pre></ToolDetailSection>}
+      {output && <ToolDetailSection label="stdout"><pre className={toolCodeClassName}>{output}</pre></ToolDetailSection>}
+      {stderr && <ToolDetailSection label="stderr"><pre className={toolCodeClassName}>{stderr}</pre></ToolDetailSection>}
+      {error && error !== stderr?.trim() && error !== output?.trim() && <ToolDetailSection label="Error"><pre className={cn(toolCodeClassName, 'text-danger')}>{error}</pre></ToolDetailSection>}
+    </>
+  )
 
   return (
     <ToolCard toolName="bash" label="Shell" summary={command} status={status}>
-      {command && (
-        <ToolDetailSection label="Command">
-          <pre className={toolCodeClassName}>{command}</pre>
-        </ToolDetailSection>
-      )}
-      {output && (
-        <ToolDetailSection label="stdout">
-          <pre className={toolCodeClassName}>{output}</pre>
-        </ToolDetailSection>
-      )}
-      {stderr && (
-        <ToolDetailSection label="stderr">
-          <pre className={toolCodeClassName}>{stderr}</pre>
-        </ToolDetailSection>
-      )}
-      {error && (
-        <ToolDetailSection label="Error">
-          <pre className={cn(toolCodeClassName, 'text-danger')}>{error}</pre>
-        </ToolDetailSection>
-      )}
+      {failed ? (
+        <>
+          <pre className="whitespace-pre-wrap break-words text-xs text-danger">{previewText(stderr || error, 3, 400)}</pre>
+          <details className="space-y-2">
+            <summary className="cursor-pointer text-xs text-muted-foreground">完整命令与输出</summary>
+            {details}
+          </details>
+        </>
+      ) : details}
       {exitCode !== undefined && (
         <p className="font-mono text-[11px] text-faint-foreground">exit {String(exitCode)}</p>
       )}

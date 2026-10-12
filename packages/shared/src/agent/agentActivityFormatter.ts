@@ -1,8 +1,9 @@
 import { WEB_SEARCH_ERROR_LABELS } from '@kklyeenook/shared/web-search/webSearch'
 import type { AgentActivity, ActivityStatus } from '@kklyeenook/shared/agent/agentActivity'
 
-export function getThinkingPreview(content: string): string {
-  return content.replace(/\s+/g, ' ').trim().slice(0, 120)
+export function getThinkingPreview(content: string, latest = false): string {
+  const text = content.replace(/\s+/g, ' ').trim()
+  return latest && text.length > 120 ? `…${text.slice(-120)}` : text.slice(0, 120)
 }
 
 export function formatActivityLabel(
@@ -11,12 +12,14 @@ export function formatActivityLabel(
 ): string {
   if (activity.type === 'thinking') {
     const label = mode === 'running' ? '思考中' : mode === 'failed' ? '思考中断' : '思考'
-    const preview = getThinkingPreview(activity.content)
+    const preview = getThinkingPreview(activity.content, mode === 'running')
     return preview ? `${label} · ${preview}` : label
   }
   if (activity.type === 'approval') {
     return mode === 'waiting' ? '等待你的确认…' : mode === 'failed' ? '确认未通过' : '已确认'
   }
+  if (activity.type === 'shell' && mode === 'failed')
+    return `命令失败${activity.exitCode !== undefined ? ` · 退出码 ${activity.exitCode}` : ''}`
   if (activity.type === 'web_search') {
     const target =
       mode === 'failed'

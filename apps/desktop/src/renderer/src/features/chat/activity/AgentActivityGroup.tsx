@@ -4,6 +4,7 @@ import type { ChatExtras } from '../runtime/chat-store'
 import { CheckIcon, CircleAlertIcon } from 'lucide-react'
 import type { AgentActivity } from '@kklyeenook/shared/agent/agentActivity'
 import { ToolTimeline } from '@/renderer/src/components/assistant-ui/elements/tool-timeline'
+import { Button } from '@/renderer/src/components/ui/button'
 import { currentActivity } from '@kklyeenook/shared/agent/agentActivityTiming'
 import { formatActivityLabel } from '@kklyeenook/shared/agent/agentActivityFormatter'
 import { summarizeAgentActivities } from '@kklyeenook/shared/agent/agentActivitySummary'
@@ -139,6 +140,7 @@ export function AgentActivityGroup({ afterPartIndex }: { afterPartIndex?: number
 
 const ActivityTimeline = memo(function ActivityTimeline({ scope }: { scope: ActivityScope }) {
   const [open, setOpen] = useState(false)
+  const [showAll, setShowAll] = useState(false)
   const activityIds = useActivitySelector(
     (groups) =>
       findSegment(groups, scope)
@@ -175,7 +177,12 @@ const ActivityTimeline = memo(function ActivityTimeline({ scope }: { scope: Acti
           label={<ActivityHeader scope={scope} current={current} />}
           trailing={current ? <ActivityHeaderDuration scope={scope} /> : null}
         >
-          {ids.map((id) => (
+          {ids.length > 6 && (
+            <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={() => setShowAll(!showAll)}>
+              {showAll ? '收起较早活动' : `显示全部 ${ids.length} 条活动（已隐藏 ${ids.length - 6} 条）`}
+            </Button>
+          )}
+          {(showAll ? ids : ids.slice(-6)).map((id) => (
             <AgentActivityRow key={id} runId={scope.runId!} activityId={id} />
           ))}
         </ToolTimeline>
