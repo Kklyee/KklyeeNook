@@ -224,8 +224,8 @@ const ThreadRoot: FC<{
         <ConversationMapAui />
         <div
           className={cn(
-            'mx-auto flex w-full max-w-(--thread-max-width) flex-1 flex-col px-4 pt-4',
-            isEmpty && 'justify-center',
+            'mx-auto flex w-full max-w-(--thread-max-width) flex-1 flex-col px-4',
+            isEmpty ? 'justify-center py-4' : 'pt-4',
           )}
         >
           <AuiIf condition={(state) => !readOnly && isNewChatView(state)}>
@@ -251,7 +251,10 @@ const ThreadRoot: FC<{
 
           {!readOnly && (
             <ThreadPrimitive.ViewportFooter
-              className="aui-thread-viewport-footer material-base sticky bottom-0 mt-auto flex flex-col gap-2 overflow-visible rounded-t-(--composer-radius) pb-1"
+              className={cn(
+                'aui-thread-viewport-footer material-base flex flex-col gap-2 overflow-visible rounded-t-(--composer-radius) pb-1',
+                isEmpty ? 'relative' : 'sticky bottom-0 mt-auto',
+              )}
             >
               <ThreadScrollToBottom />
               {composerAccessory}
