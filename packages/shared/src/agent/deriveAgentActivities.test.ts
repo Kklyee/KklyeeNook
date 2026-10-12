@@ -99,6 +99,24 @@ test('keeps reasoning per inference, ends thinking at tool start, and retains to
   ).toBe(true)
 })
 
+test.each(['running', 'completed'] as const)('does not let an earlier shell failure replace later %s thinking', (status) => {
+  const failed = mapToolCallToActivity(
+    { id: 'failed-shell', toolName: 'bash', args: { command: 'git log' } },
+    'failed',
+    { startedAt: 100, endedAt: 200 },
+  )
+  const thinking: AgentActivity = { id: 'thinking', type: 'thinking', content: 'Try another command.', status, startedAt: 300 }
+  expect(currentActivity([failed, thinking])).toBe(thinking)
+  expect(failed.status).toBe('failed')
+})
+
+test('does not let an earlier shell failure replace a later completed tool', () => {
+  const failed = mapToolCallToActivity({ id: 'failed-shell', toolName: 'bash', args: {} }, 'failed')
+  const read = mapToolCallToActivity({ id: 'read', toolName: 'read', args: { path: 'composer.tsx' } }, 'completed')
+  expect(currentActivity([failed, read])).toBe(read)
+  expect(summarizeAgentActivities([failed, read])).toBe('读取了 1 个文件')
+})
+
 test('derives live reasoning without ending it between stream chunks', () => {
   const activities = deriveAgentActivities(
     events([

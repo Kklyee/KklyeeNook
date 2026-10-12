@@ -33,7 +33,6 @@ export function currentActivity(activities: readonly AgentActivity[]): AgentActi
     latest.find((activity) => activity.type === 'approval' && activity.status === 'waiting') ??
     latest.find((activity) => activity.type !== 'thinking' && activity.status === 'running') ??
     latest.find((activity) => activity.type === 'thinking' && activity.status === 'running') ??
-    latest.find((activity) => activity.status === 'failed') ??
     latest[0]
   )
 }

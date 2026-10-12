@@ -1,7 +1,7 @@
 import { memo, useMemo, useState } from 'react'
 import { useAui, useAuiState, type ThreadMessage } from '@assistant-ui/react'
 import type { ChatExtras } from '../runtime/chat-store'
-import { CheckIcon } from 'lucide-react'
+import { CheckIcon, CircleAlertIcon } from 'lucide-react'
 import type { AgentActivity } from '@kklyeenook/shared/agent/agentActivity'
 import { ToolTimeline } from '@/renderer/src/components/assistant-ui/elements/tool-timeline'
 import { currentActivity } from '@kklyeenook/shared/agent/agentActivityTiming'
@@ -195,13 +195,25 @@ function ActivityHeader({
     summarizeAgentActivities(findSegment(groups, scope)?.activities.filter(hasContent) ?? []),
   )
   const running = useActivitySelector((groups) => isRunning(groups, scope))
-  const completed = !running && current?.status !== 'failed'
-  const label = !current ? undefined : completed ? summary : formatActivityLabel(current)
+  const failed = useActivitySelector((groups) => {
+    const group = groups.find((entry) => entry.run.id === scope.runId)
+    return group?.run.status === 'failed' && group.segments.at(-1)?.textOffset === scope.textOffset
+  })
+  const completed = !running && !failed
+  const label = failed
+    ? '本轮活动失败'
+    : !current
+      ? undefined
+      : completed
+        ? summary
+        : formatActivityLabel(current)
   const transitionKey = !current
     ? 'waiting'
-    : completed
-      ? 'completed'
-      : `${current.id}:${current.status}`
+    : failed
+      ? 'failed'
+      : completed
+        ? 'completed'
+        : `${current.id}:${current.status}`
   return (
     <ActivityCrossfade transitionKey={transitionKey}>
       {!current ? (
@@ -209,6 +221,8 @@ function ActivityHeader({
           aria-hidden="true"
           className="size-2 shrink-0 animate-pulse rounded-full bg-current motion-reduce:animate-none"
         />
+      ) : failed ? (
+        <CircleAlertIcon aria-hidden="true" className="size-3.5 shrink-0" />
       ) : completed ? (
         <CheckIcon aria-hidden="true" className="size-3.5 shrink-0" />
       ) : (
