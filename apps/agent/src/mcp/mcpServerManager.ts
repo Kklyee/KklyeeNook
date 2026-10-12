@@ -41,7 +41,8 @@ export class McpServerManager {
     private readonly registry: ToolRegistry,
     private readonly onToolsChanged: () => void = () => undefined,
     private readonly createConnection: McpConnectionFactory = (config, onClose, onToolsChanged) =>
-      new McpClientConnection(config, onClose, onToolsChanged),
+      new McpClientConnection(config, onClose, onToolsChanged, () => this.credential(config.id)),
+    private readonly credential: (serverId: string) => string | undefined = () => undefined,
   ) {}
 
   async reconcile(configs: readonly McpServerConfig[]): Promise<void> {
@@ -89,8 +90,9 @@ export class McpServerManager {
     )
   }
 
-  connect(serverId: string): Promise<McpServerState> {
+  async connect(serverId: string): Promise<McpServerState> {
     const config = this.getEnabledConfig(serverId)
+    await Promise.all(this.pending)
     return this.track(this.startConnection(config, configSignature(config)))
   }
 

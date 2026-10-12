@@ -39,6 +39,10 @@ import type {
 
 interface API {
   grove: {
+    sharedTools(): Promise<import('@kklyeenook/shared/bot/capabilities').SharedToolsSnapshot>
+    requestCapability(input: import('@kklyeenook/shared/bot/capabilities').CapabilityRequest): Promise<import('@kklyeenook/shared/bot/capabilities').CapabilityOperation>
+    decideCapability(input: { id: string; approved: boolean }): Promise<void>
+    configureMcp(input: { server: import('@kklyeenook/shared/bot/capabilities').SharedMcp; credential?: string; shared?: boolean }): Promise<void>
     status(): Promise<import('@kklyeenook/shared/bot/grove-settings').GroveStatus>
     configure(input: import('@kklyeenook/shared/bot/grove-settings').GroveConnectRequest): Promise<import('@kklyeenook/shared/bot/grove-settings').GroveStatus>
     connections(): Promise<import('@kklyeenook/shared/bot/grove-settings').GroveConnections>

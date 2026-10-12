@@ -76,7 +76,7 @@ export async function bootstrap(): Promise<AppContext> {
     },
   }
 
-  const configStore = new AgentConfigStore(defaultConfig, join(userDataPath, 'agent-settings.json'))
+  const configStore = new AgentConfigStore(defaultConfig, join(userDataPath, 'agent-settings.json'), true)
   const savedConfig = configStore.get()
   const requiredTools = [
     'find',
@@ -226,5 +226,9 @@ function collectRuntimeCredentials(
   }
   const groveToken = credentials.getApiKey(GROVE_HOST_CREDENTIAL)
   if (groveToken) apiKeys[GROVE_HOST_CREDENTIAL] = groveToken
+  for (const server of config.mcpServers ?? []) {
+    const token = credentials.getApiKey(`mcp:${server.id}`)
+    if (token) apiKeys[`mcp:${server.id}`] = token
+  }
   return apiKeys
 }

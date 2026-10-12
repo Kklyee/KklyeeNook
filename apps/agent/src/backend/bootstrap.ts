@@ -48,6 +48,7 @@ import { DrizzleBotRepo } from '../db/repositories/bot-repo'
 import { DrizzleGroveRepo } from '../db/repositories/grove-repo'
 import { RemoteTransport } from '../grove/remote-transport'
 import { GROVE_HOST_CREDENTIAL } from '@kklyeenook/shared/bot/grove-settings'
+import { capabilityRuntime } from '../grove/capability-runtime'
 
 export interface AgentBackendRuntime {
   baseUrl: string
@@ -134,7 +135,7 @@ export async function createAgentBackend(
       void host
         ?.refreshTools(BACKGROUND_CONTEXT)
         .catch((error) => console.error('[agent-backend] MCP tool refresh failed', error))
-    })
+    }, undefined, (id) => credentialStore.getApiKey(`mcp:${id}`))
     await mcpServerManager.reconcile(configStore.get().mcpServers ?? [])
     host = await AgentHost.open(
       {
@@ -144,6 +145,10 @@ export async function createAgentBackend(
         sessions: sessionRepo,
         botRepo: new DrizzleBotRepo(db),
         groveRepo: new DrizzleGroveRepo(db),
+        groveCapabilities: capabilityRuntime(configStore, mcpServerManager, () => host!, (servers) => {
+          const saved = new AgentConfigStore(options.config, join(options.dataDir, 'agent-settings.json'))
+          saved.set({ ...saved.get(), mcpServers: servers })
+        }, (id) => credentialStore.getApiKey(`mcp:${id}`)),
         groveTransport: configStore.get().grove?.enabled
           ? new RemoteTransport(configStore.get().grove!.relayUrl, () =>
               credentialStore.getApiKey(GROVE_HOST_CREDENTIAL),
@@ -195,6 +200,20 @@ export async function createAgentBackend(
         switch (request.action) {
           case 'grove:status':
             return (await host!.grove!.list(BACKGROUND_CONTEXT)).network
+          case 'grove:capabilities':
+            return (await host!.grove!.list(BACKGROUND_CONTEXT)).capabilities
+          case 'grove:catalog-configure': {
+            if (request.credentialId) {
+              if (request.credential) credentialStore.setApiKey(`mcp:${request.credentialId}`, request.credential)
+              else if (!request.servers.some((server) => server.id === request.credentialId)) credentialStore.deleteApiKey(`mcp:${request.credentialId}`)
+            }
+            configStore.set({ ...configStore.get(), mcpServers: request.servers })
+            await mcpServerManager!.reconcile(request.servers)
+            return undefined
+          }
+          case 'grove:decide-capability':
+            await host!.grove!.decideCapability(request.id, request.approved, BACKGROUND_CONTEXT)
+            return undefined
           case 'grove:configure': {
             const previous = configStore.get()
             const oldToken = credentialStore.getApiKey(GROVE_HOST_CREDENTIAL)

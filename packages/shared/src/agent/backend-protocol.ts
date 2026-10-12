@@ -35,6 +35,9 @@ export type AgentBackendStartupStage =
 
 export type AgentBackendRequest =
   | { action: 'grove:status' }
+  | { action: 'grove:capabilities' }
+  | { action: 'grove:catalog-configure'; servers: import('../mcp/mcpServer').McpServerConfig[]; credentialId?: string; credential?: string }
+  | { action: 'grove:decide-capability'; id: string; approved: boolean }
   | { action: 'grove:configure'; settings: import('../bot/grove-settings').GroveSettings; hostToken?: string }
   | { action: 'remote:status' }
   | { action: 'remote:configure'; settings: import('@kklyeenook/shared/remote/index').RemoteSettings }

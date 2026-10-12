@@ -25,6 +25,26 @@ const encryption = {
   decryptString: (value: Buffer) => value.toString().slice('encrypted:'.length),
 }
 
+test('MCP definitions persist separately from encrypted owner credentials and failed changes roll back', async () => {
+  const configPath = join(directory, 'mcp-settings.json')
+  const credentialPath = join(directory, 'mcp-credentials.json')
+  const config = new AgentConfigStore(undefined, configPath)
+  const credentials = new PersistentCredentialStore(credentialPath, encryption)
+  const backend = { request: vi.fn(async () => undefined) }
+  const connection = new GroveConnection(config, credentials, backend)
+  const server = { id: 'private', name: 'Private MCP', url: 'https://mcp.example.com/private', requiresCredentials: true }
+  await connection.configureMcp({ server, credential: 'private-owner-key' })
+  expect(await readFile(configPath, 'utf8')).not.toContain('private-owner-key')
+  expect(await readFile(credentialPath, 'utf8')).not.toContain('private-owner-key')
+  expect(new PersistentCredentialStore(credentialPath, encryption).getApiKey('mcp:private')).toBe('private-owner-key')
+  const before = config.get()
+  backend.request.mockRejectedValueOnce(new Error('backend unavailable'))
+  await expect(connection.configureMcp({ server: { ...server, id: 'other' }, credential: 'new-key' })).rejects.toThrow('backend unavailable')
+  expect(config.get()).toEqual(before)
+  expect(credentials.hasApiKey('mcp:other')).toBe(false)
+  await expect(connection.configureMcp({ server: { ...server, url: 'https://attacker.example/mcp' } })).rejects.toThrow('bound')
+})
+
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'grove-connect-'))
   database = new PGlite()

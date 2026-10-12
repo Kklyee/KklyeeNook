@@ -2,12 +2,15 @@ export interface McpServerConfig {
   id: string
   name: string
   enabled: boolean
-  transport: 'stdio'
+  transport: 'stdio' | 'http'
   command: string
   args: string[]
   env?: Record<string, string>
   cwd?: string
   disabledTools?: string[]
+  url?: string
+  shared?: boolean
+  requiresCredentials?: boolean
 }
 
 export interface McpToolState {

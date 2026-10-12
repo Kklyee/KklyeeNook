@@ -9,6 +9,7 @@ import type {
   SocialRelationship,
 } from '@kklyeenook/shared/bot/social'
 import type { GroveDatabase, SqlConnection } from './database'
+import { GroveCapabilities } from './capabilities'
 
 export class GroveError extends Error {
   constructor(
@@ -45,7 +46,10 @@ type OperationRow = {
 
 export class GroveStore {
   private readonly authorization = new SocialAuthorization()
-  constructor(private readonly db: GroveDatabase) {}
+  readonly capabilities: GroveCapabilities
+  constructor(private readonly db: GroveDatabase) {
+    this.capabilities = new GroveCapabilities(db, this)
+  }
 
   async provisionUser(name: string) {
     const id = randomUUID()
@@ -206,12 +210,13 @@ export class GroveStore {
     ).rows.map(relationshipRecord)
     const bots = await this.directory(owner)
     const grants = (
-      await this.db.query<{ definition: SocialGrant; revoked_at: string | null }>(
-        'SELECT definition,revoked_at FROM social_grants WHERE issuer_user_id=$1 ORDER BY created_at DESC',
+      await this.db.query<{ definition: SocialGrant; revoked_at: string | null; created_at: string }>(
+        'SELECT definition,revoked_at,created_at FROM social_grants WHERE issuer_user_id=$1 ORDER BY created_at DESC',
         [owner],
       )
     ).rows.map((row) => ({
       ...row.definition,
+      createdAt: Number(row.created_at),
       ...(row.revoked_at !== null ? { revokedAt: Number(row.revoked_at) } : {}),
     }))
     return { userId: owner, relationships, bots, grants }
@@ -240,12 +245,33 @@ export class GroveStore {
       payload: unknown
       toolId?: string
       mcpServerId?: string
+      taskOperationId?: string
     },
     enqueue?: (connection: SqlConnection, operation: NetworkOperation) => Promise<void>,
   ): Promise<NetworkOperation> {
     let subject: Principal
     let ownerUserId: string
-    if (input.fromBotId) {
+    if (input.taskOperationId) {
+      const task = await this.revalidate(input.token, input.taskOperationId)
+      if (
+        task.action !== 'task.request' ||
+        task.subject.type !== 'bot' ||
+        task.targetBotId !== input.targetBotId ||
+        input.action !== 'tool.invoke' ||
+        task.state !== 'pending'
+      )
+        throw new GroveError(403, 'Invocation does not match an active remote task')
+      const request = (
+        await this.db.query<{ deadline: string }>(
+          "SELECT payload->'task'->>'deadline' AS deadline FROM network_messages WHERE id=$1 AND type='task'",
+          [task.id],
+        )
+      ).rows[0]
+      if (!request || Number(request.deadline) <= Date.now())
+        throw new GroveError(403, 'Collaboration time budget exhausted')
+      subject = task.subject
+      ownerUserId = (await this.getBot(subject.id)).ownerUserId
+    } else if (input.fromBotId) {
       const host = await this.authenticateHost(input.token)
       const bot = await this.getBot(input.fromBotId)
       if (bot.hostId !== host.id || bot.ownerUserId !== host.ownerUserId)

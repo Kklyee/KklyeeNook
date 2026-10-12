@@ -10,6 +10,12 @@ import {
   type GroveStatus,
 } from '@kklyeenook/shared/bot/grove-settings'
 import type { AgentBackendRequest } from '@kklyeenook/shared/agent/backend-protocol'
+import {
+  validateSharedMcp,
+  type CapabilityOperation,
+  type SharedMcp,
+  type SharedToolsSnapshot,
+} from '@kklyeenook/shared/bot/capabilities'
 
 export class GroveConnection {
   private updating = false
@@ -106,5 +112,65 @@ export class GroveConnection {
     return new GroveAccount(settings.relayUrl, () =>
       this.credentials.getApiKey(GROVE_USER_CREDENTIAL),
     )
+  }
+  async sharedTools(): Promise<SharedToolsSnapshot> {
+    const remote = await this.account().sharedTools()
+    return {
+      ...remote,
+      local: (await this.backend.request({
+        action: 'grove:capabilities',
+      })) as CapabilityOperation[],
+    }
+  }
+  decideCapability(id: string, approved: boolean) {
+    return this.backend.request({ action: 'grove:decide-capability', id, approved })
+  }
+  async configureMcp(input: { server: SharedMcp; credential?: string; shared?: boolean }) {
+    validateSharedMcp(input.server)
+    if (input.credential && !this.credentials.isPersistenceAvailable())
+      throw new Error('MCP requires encrypted credential persistence')
+    const current = this.config.get()
+    if (this.updating) throw new Error('Grove settings are being updated')
+    const existing = current.mcpServers?.find((server) => server.id === input.server.id)
+    if (existing && (existing.transport !== 'http' || existing.url !== input.server.url))
+      throw new Error('MCP ID is bound to another configuration')
+    const server = {
+      ...existing,
+      ...input.server,
+      transport: 'http' as const,
+      command: '',
+      args: [],
+      shared: input.shared ?? true,
+      enabled: existing?.enabled ?? false,
+    }
+    const servers = [...(current.mcpServers ?? []).filter((item) => item.id !== server.id), server]
+    const credentialId = `mcp:${server.id}`
+    const oldCredential = this.credentials.getApiKey(credentialId)
+    this.updating = true
+    try {
+      if (input.credential) this.credentials.setApiKey(credentialId, input.credential)
+      this.config.set({ ...current, mcpServers: servers })
+      await this.backend.request({
+        action: 'grove:catalog-configure',
+        servers,
+        credentialId: server.id,
+        credential: input.credential,
+      })
+    } catch (error) {
+      this.config.set({ ...this.config.get(), mcpServers: current.mcpServers })
+      if (oldCredential) this.credentials.setApiKey(credentialId, oldCredential)
+      else this.credentials.deleteApiKey(credentialId)
+      await this.backend
+        .request({
+          action: 'grove:catalog-configure',
+          servers: current.mcpServers ?? [],
+          credentialId: server.id,
+          credential: oldCredential,
+        })
+        .catch(() => undefined)
+      throw error
+    } finally {
+      this.updating = false
+    }
   }
 }

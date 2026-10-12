@@ -12,6 +12,7 @@ import { SkillLoader } from '../backend/skillLoader'
 import type { AgentMemoryRepo } from '../db/repositories/memoryRepo'
 import { AgentEngine } from './agent-engine'
 import { AgentInputs, inputDoc } from './inputs'
+import { defaultBot } from '@kklyeenook/shared/bot/bot'
 
 let directory: string
 const engines: AgentEngine[] = []
@@ -28,7 +29,7 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
-async function setup(options: Parameters<typeof fauxProvider>[0] = {}) {
+async function setup(options: Parameters<typeof fauxProvider>[0] = {}, directoryEnabled = false) {
   const attachments = new ContextAttachmentService()
   const skills = new SkillLoader(join(directory, 'skills'))
   const memory: AgentMemoryRepo = {
@@ -42,7 +43,11 @@ async function setup(options: Parameters<typeof fauxProvider>[0] = {}) {
   models.setProvider(faux.provider)
   const registry = createRegistry()
   const open = async () => {
-    const inputs = new AgentInputs(builder, skills, workspaceId)
+    const inputs = new AgentInputs(builder, skills, workspaceId,
+      directoryEnabled ? async () => ({ profile: defaultBot('source', 'Source'), workspaceId: null, permissionMode: 'read-only', tools: ['bot.request_task'], agent: {} }) : undefined,
+      undefined,
+      directoryEnabled ? async () => [{ id: 'private-peer-id', name: 'Private Peer' }] : undefined,
+    )
     registry.install(inputs.extension)
     const engine = await AgentEngine.open(join(directory, 'durable.sqlite'), {
       models, registry, settings: { retry: { enabled: false } },
@@ -183,4 +188,38 @@ test('concurrent duplicate requests publish one original context and one authori
   expect(doc?.context).toContain(doc?.draft.content === 'first' ? 'first-data' : 'second-data')
   expect((await conversation.entries({ order: 'ascending' }, 100, undefined, context())).items.filter((entry) => entry.kind === 'pi.user')).toHaveLength(1)
   expect(faux.state.callCount).toBe(1)
+})
+
+test('local collaboration exposes Bot IDs while remote submissions do not expose the Host directory', async () => {
+  const { engine, inputs, conversation, faux } = await setup({}, true)
+  faux.setResponses([fauxAssistantMessage('finished')])
+  await (
+    await inputs.submit(
+      conversation,
+      { type: 'input', content: 'Collaborate', requestId: 'directory' },
+      context(),
+    )
+  ).wait(context())
+  const local = (await conversation.entries({ order: 'ascending' }, 100, undefined, context()))
+    .items
+  expect(JSON.stringify(local.find((entry) => entry.kind === 'pi.system'))).toContain(
+    'private-peer-id',
+  )
+  await engine.create(
+    'remote-thread',
+    { model: { provider: 'faux', modelId: 'faux-1' }, extensions: [inputs.extension], tools: [] },
+    context(),
+  )
+  const remote = await engine.conversation('remote-thread', context())
+  faux.setResponses([fauxAssistantMessage('remote finished')])
+  await (
+    await inputs.submit(
+      remote,
+      { type: 'input', content: 'Remote task', requestId: 'remote-directory', groveRemote: true },
+      context(),
+    )
+  ).wait(context())
+  expect(
+    JSON.stringify((await remote.entries({ order: 'ascending' }, 100, undefined, context())).items),
+  ).not.toContain('private-peer-id')
 })

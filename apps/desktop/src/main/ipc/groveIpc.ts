@@ -3,9 +3,14 @@ import { IPC_CHANNELS } from '@kklyeenook/shared/ipc/channels'
 import type { GroveConnectRequest } from '@kklyeenook/shared/bot/grove-settings'
 import type { SocialGrant } from '@kklyeenook/shared/bot/social'
 import type { GroveConnection } from '../grove/connection'
+import type { CapabilityRequest, SharedMcp } from '@kklyeenook/shared/bot/capabilities'
 
 export function registerGroveIpc(window: BrowserWindow, grove: GroveConnection) {
   const handlers = {
+    [IPC_CHANNELS.GROVE_SHARED_TOOLS]: () => grove.sharedTools(),
+    [IPC_CHANNELS.GROVE_CAPABILITY_REQUEST]: (input: CapabilityRequest) => grove.account().requestCapability(input),
+    [IPC_CHANNELS.GROVE_CAPABILITY_DECIDE]: (input: { id: string; approved: boolean }) => grove.decideCapability(input.id, input.approved),
+    [IPC_CHANNELS.GROVE_MCP_CONFIGURE]: (input: { server: SharedMcp; credential?: string; shared?: boolean }) => grove.configureMcp(input),
     [IPC_CHANNELS.GROVE_STATUS]: () => grove.status(),
     [IPC_CHANNELS.GROVE_CONFIGURE]: (input: GroveConnectRequest) => grove.configure(input),
     [IPC_CHANNELS.GROVE_CONNECTIONS]: () => grove.account().connections(),

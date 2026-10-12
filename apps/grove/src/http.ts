@@ -12,6 +12,15 @@ import { GroveRelay } from './relay'
 const id = Type.String({ minLength: 1, maxLength: 200 })
 const text = Type.String({ minLength: 1, maxLength: 64000 })
 const strict = { additionalProperties: false }
+const sharedMcpSchema = Type.Object(
+  {
+    id,
+    name: Type.String({ minLength: 1, maxLength: 100 }),
+    url: Type.String({ minLength: 1, maxLength: 2000 }),
+    requiresCredentials: Type.Boolean(),
+  },
+  strict,
+)
 const grantSchema = Type.Object(
   {
     subject: Type.Object(
@@ -128,6 +137,67 @@ export function createGroveApp(store: GroveStore, relay: GroveRelay) {
   )
   app.get('/connections', async (context) => context.json(await store.connections(token(context))))
   app.get('/host/bots', async (context) => context.json(await store.hostDirectory(token(context))))
+  app.get('/capabilities', async (context) =>
+    context.json({
+      catalog: await store.capabilities.catalog(token(context)),
+      operations: await store.capabilities.userOperations(token(context)),
+    }),
+  )
+  app.post('/capabilities', async (context) =>
+    context.json(
+      await store.capabilities.request(
+        token(context),
+        await parse(
+          context,
+          Type.Object(
+            {
+              operationId: id,
+              targetBotId: id,
+              action: Type.Union([Type.Literal('tool.propose'), Type.Literal('tool.install')]),
+              server: sharedMcpSchema,
+            },
+            strict,
+          ),
+        ),
+      ),
+      202,
+    ),
+  )
+  app.get('/host/capabilities', async (context) =>
+    context.json(await store.capabilities.inbox(token(context))),
+  )
+  app.post('/host/capabilities/catalog', async (context) => {
+    const input = await parse(
+      context,
+      Type.Object({ botId: id, servers: Type.Array(sharedMcpSchema, { maxItems: 100 }) }, strict),
+    )
+    await store.capabilities.publish(token(context), input.botId, input.servers)
+    return context.body(null, 204)
+  })
+  app.post('/host/capabilities/:id/state', async (context) => {
+    const input = await parse(
+      context,
+      Type.Object(
+        {
+          state: Type.Union(
+            ['awaiting_approval', 'installing', 'completed', 'failed', 'rejected'].map((state) =>
+              Type.Literal(state),
+            ),
+          ),
+          error: Type.Optional(Type.String({ maxLength: 2000 })),
+        },
+        strict,
+      ),
+    )
+    return context.json(
+      await store.capabilities.update(
+        token(context),
+        context.req.param('id'),
+        input.state as 'installing',
+        input.error,
+      ),
+    )
+  })
   app.post('/relationships', async (context) =>
     context.json(
       await store.invite(
@@ -175,6 +245,24 @@ export function createGroveApp(store: GroveStore, relay: GroveRelay) {
   app.post('/operations/:id/authorize', async (context) =>
     context.json(await store.revalidate(token(context), context.req.param('id'))),
   )
+  app.post('/operations/:id/invoke', async (context) => {
+    const task = await store.revalidate(token(context), context.req.param('id'))
+    const input = await parse(
+      context,
+      Type.Object({ callId: id, toolId: id, mcpServerId: id }, strict),
+    )
+    const operation = await store.admit({
+      token: token(context),
+      targetBotId: task.targetBotId,
+      taskOperationId: task.id,
+      action: 'tool.invoke',
+      operationId: `invoke:${task.id}:${input.callId}`,
+      payload: { taskId: task.id, toolId: input.toolId },
+      toolId: input.toolId,
+      mcpServerId: input.mcpServerId,
+    })
+    return context.json(await store.revalidate(token(context), operation.id))
+  })
   app.post('/operations/:id/result', async (context) => {
     const outcome = await parse(
       context,

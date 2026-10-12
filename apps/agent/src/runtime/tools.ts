@@ -33,6 +33,7 @@ type ResolveContext = (
   conversationId: ConversationId,
   context: Context,
   toolName?: string,
+  callId?: string,
 ) => Promise<ToolAdapterContext>
 
 function permission(call: ToolCall, context: ToolAdapterContext): PermissionRequest {
@@ -97,7 +98,7 @@ export class AgentTools {
   }
 
   private async execute(name: string, args: unknown, api: ToolExecutionApi, context: Context) {
-    const adapter = await this.resolveContext(api.conversationId, context, name)
+    const adapter = await this.resolveContext(api.conversationId, context, name, `${api.taskId}:${api.callId}`)
     const runId = this.resources
       ? await this.resources.acquire(api.conversationId, context)
       : `durable:${api.conversationId}:${api.taskId}`
@@ -121,7 +122,7 @@ export class AgentTools {
           context,
         ),
       async () => {
-        const current = await this.resolveContext(api.conversationId, context, name)
+        const current = await this.resolveContext(api.conversationId, context, name, `${api.taskId}:${api.callId}`)
         if (current.executionContext?.mode !== adapter.executionContext?.mode) throw new Error('Permission changed while awaiting execution; submit again')
       },
     )

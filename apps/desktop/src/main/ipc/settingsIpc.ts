@@ -23,6 +23,7 @@ import type {
 } from '@kklyeenook/shared/agent/agentConfig'
 import type { AgentConfigStore } from '@kklyeenook/agent/settings/agentConfigStore'
 import type { McpServerConfig } from '@kklyeenook/shared/mcp/mcpServer'
+import { validateSharedMcp } from '@kklyeenook/shared/bot/capabilities'
 import {
   getAgentCompactionSettings,
   getActiveModel,
@@ -465,9 +466,9 @@ function validateMcpServer(server: McpServerConfig): McpServerConfig {
     typeof server.name !== 'string' ||
     !server.name.trim() ||
     typeof server.enabled !== 'boolean' ||
-    server.transport !== 'stdio' ||
+    !['stdio','http'].includes(server.transport) ||
     typeof server.command !== 'string' ||
-    !server.command.trim() ||
+    (server.transport === 'stdio' && !server.command.trim()) ||
     !Array.isArray(server.args) ||
     !server.args.every((arg) => typeof arg === 'string') ||
     (server.cwd !== undefined && typeof server.cwd !== 'string') ||
@@ -484,11 +485,13 @@ function validateMcpServer(server: McpServerConfig): McpServerConfig {
   ) {
     throw new Error('MCP Server 配置无效')
   }
+  if (server.transport === 'http') validateSharedMcp({ id: server.id, name: server.name, url: server.url!, requiresCredentials: server.requiresCredentials ?? false })
   return {
     id: server.id.trim(),
     name: server.name.trim(),
     enabled: server.enabled,
-    transport: 'stdio',
+    transport: server.transport,
+    ...(server.transport === 'http' ? { url: server.url, shared: server.shared, requiresCredentials: server.requiresCredentials } : {}),
     command: server.command.trim(),
     args: [...server.args],
     ...(server.env ? { env: { ...server.env } } : {}),

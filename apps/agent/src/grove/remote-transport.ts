@@ -5,6 +5,7 @@ import type {
   TaskOutcome,
   NetworkOperation,
 } from '@kklyeenook/shared/bot/social'
+import type { CapabilityOperation, SharedMcp } from '@kklyeenook/shared/bot/capabilities'
 
 export type RemoteSendInput = {
   operationId: string
@@ -77,12 +78,24 @@ export class RemoteTransport {
       signal,
     )
   }
+  invoke(operationId: string, callId: string, toolId: string, mcpServerId: string, signal?: AbortSignal) {
+    return this.request<NetworkOperation>(`/operations/${encodeURIComponent(operationId)}/invoke`, { callId, toolId, mcpServerId }, signal)
+  }
   result(operationId: string, outcome: TaskOutcome, signal?: AbortSignal) {
     return this.request<RelayEnvelope>(
       `/operations/${encodeURIComponent(operationId)}/result`,
       outcome,
       signal,
     )
+  }
+  publishCapabilities(botId: string, servers: SharedMcp[], signal?: AbortSignal) {
+    return this.request<void>('/host/capabilities/catalog', { botId, servers }, signal)
+  }
+  capabilities(signal?: AbortSignal) {
+    return this.request<CapabilityOperation[]>('/host/capabilities', undefined, signal)
+  }
+  capabilityState(id: string, state: NetworkOperation['state'], error?: string, signal?: AbortSignal) {
+    return this.request<CapabilityOperation>(`/host/capabilities/${encodeURIComponent(id)}/state`, { state, error }, signal)
   }
 
   protected async request<T>(

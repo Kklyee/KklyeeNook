@@ -22,6 +22,10 @@ import { ContextBuilder } from '../../../agent/src/context/contextBuilder'
 import { SkillLoader } from '../../../agent/src/backend/skillLoader'
 import { AgentHost } from '../../../agent/src/runtime/agent-host'
 import { RemoteTransport } from '../../../agent/src/grove/remote-transport'
+import { AgentConfigStore } from '../../../agent/src/settings/agentConfigStore'
+import { McpServerManager } from '../../../agent/src/mcp/mcpServerManager'
+import { capabilityRuntime } from '../../../agent/src/grove/capability-runtime'
+import type { SharedMcp } from '@kklyeenook/shared/bot/capabilities'
 
 export async function testHost(
   relayUrl: string,
@@ -68,17 +72,25 @@ export async function testHost(
   }
   const tools = new ToolRegistry()
   registerBuiltinTools(tools, '')
+  const configStore = new AgentConfigStore(config, join(directory, 'config.json'))
+  const mcp = new McpServerManager(tools, () => undefined, () => ({
+    connect: async () => {}, listTools: async () => [{ name: 'inspect', inputSchema: { type: 'object' } }],
+    callTool: async () => ({ content: [{ type: 'text', text: 'Shared design result' }] }), close: async () => {},
+  }))
+  await mcp.reconcile(configStore.get().mcpServers ?? [])
   const sessions = new DrizzleAgentSessionRepo(db.database)
   const memories = new DrizzleAgentMemoryRepo(db.database)
   const repo = new DrizzleGroveRepo(db.database)
+  let current: AgentHost
   const options = {
     databasePath: join(directory, 'durable.sqlite'),
-    config: () => config,
+    config: () => configStore.get(),
     credentials: () => credentials,
     sessions,
     botRepo: new DrizzleBotRepo(db.database),
     groveRepo: repo,
     groveTransport: new RemoteTransport(relayUrl, () => token),
+    groveCapabilities: capabilityRuntime(configStore, mcp, () => current),
     workspaces: new WorkspaceService(new DrizzleWorkspaceRepo(db.database)),
     tools,
     sandbox: new SandboxService({
@@ -91,7 +103,7 @@ export async function testHost(
     contextBuilder: new ContextBuilder(new ContextAttachmentService(), memories),
     skills: new SkillLoader(join(directory, 'skills')),
   }
-  let current = await AgentHost.open(options, BACKGROUND_CONTEXT)
+  current = await AgentHost.open(options, BACKGROUND_CONTEXT)
   return {
     get host() {
       return current
@@ -101,6 +113,12 @@ export async function testHost(
     memories,
     requests,
     directory,
+    async catalog(server: SharedMcp) {
+      configStore.set({ ...configStore.get(), mcpServers: [{ ...server, transport: 'http', command: '', args: [], enabled: false, shared: true }] })
+      await mcp.reconcile(configStore.get().mcpServers ?? [])
+      await current.grove!.syncNetwork(BACKGROUND_CONTEXT)
+    },
+    installed: () => configStore.get().mcpServers ?? [],
     async restart() {
       await current.close()
       current = await AgentHost.open(options, BACKGROUND_CONTEXT)
@@ -115,6 +133,7 @@ export async function testHost(
     },
     async close() {
       await current.close()
+      await mcp.close()
       db.close()
       model.closeAllConnections()
       await new Promise<void>((resolve) => model.close(() => resolve()))

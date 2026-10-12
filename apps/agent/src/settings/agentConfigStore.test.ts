@@ -15,6 +15,17 @@ test('defaults to workspace tools and the supported agent helpers', () => {
 const directory = mkdtempSync(join(tmpdir(), 'kklyeenook-config-'))
 afterAll(() => rmSync(directory, { recursive: true }))
 
+test('desktop reads persisted HTTP MCP changes without losing current settings', () => {
+  const path = join(directory, 'shared-mcp.json')
+  const desktop = new AgentConfigStore(undefined, path, true)
+  desktop.set(desktop.get())
+  const other = new AgentConfigStore(undefined, path)
+  other.set({ ...other.get(), mcpServers: [{ id: 'design', name: 'Design', transport: 'http', url: 'https://mcp.example.com/design', command: '', args: [], enabled: true, shared: true }] })
+  expect(desktop.get().mcpServers?.[0].transport).toBe('http')
+  desktop.set({ ...desktop.get(), grove: { enabled: true, relayUrl: 'https://relay.example.com' } })
+  expect(new AgentConfigStore(undefined, path).get().mcpServers).toHaveLength(1)
+})
+
 test('defaults web search to disabled and persists a selected provider', () => {
   expect(new AgentConfigStore().get().webSearch).toEqual({ provider: 'disabled' })
 

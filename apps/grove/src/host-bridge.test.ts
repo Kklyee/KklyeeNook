@@ -208,3 +208,108 @@ test('running Hosts can pause and resume Grove without re-enrolling a device', a
 
 const viWait = (assertion: () => void | Promise<void>) =>
   vi.waitFor(assertion, { timeout: 25_000, interval: 100 })
+
+test('a delegated MCP installs once, enables only target Bot tools and survives a full Host restart', async () => {
+  const { alice, bob, target, receiver } = await fixture()
+  const server = {
+    id: 'design',
+    name: 'Design MCP',
+    url: 'https://mcp.example.com/design',
+    requiresCredentials: false,
+  }
+  await target.catalog(server)
+  await store.createGrant(bob.token, {
+    subject: { type: 'user', id: alice.id },
+    targetBotId: receiver.networkId,
+    actions: ['tool.install'],
+    constraints: { allowedMcpServers: ['design'], maxUses: 1 },
+  })
+  const input = {
+    operationId: 'install-design',
+    targetBotId: receiver.networkId,
+    action: 'tool.install' as const,
+    server,
+  }
+  const request = await store.capabilities.request(alice.token, input)
+  await viWait(async () =>
+    expect(
+      (await target.capabilities()).find((entry) => entry.operation.id === request.operation.id)
+        ?.operation.state,
+    ).toBe('completed'),
+  )
+  const installed = await target.installed()
+  expect(installed.servers).toHaveLength(1)
+  expect(installed.bots.find((bot) => bot.id === 'coder')!.enabledTools).toContain(
+    'mcp__design__inspect',
+  )
+  expect(installed.bots.find((bot) => bot.id === 'xiaoya')!.enabledTools).not.toContain(
+    'mcp__design__inspect',
+  )
+  await target.restart()
+  await target.syncNetwork()
+  expect((await target.installed()).servers).toHaveLength(1)
+  expect((await target.installed()).bots.find((bot) => bot.id === 'coder')!.enabledTools).toContain(
+    'mcp__design__inspect',
+  )
+  expect((await store.capabilities.request(alice.token, input)).operation.id).toBe(
+    request.operation.id,
+  )
+}, 45_000)
+
+test('new MCP proposals require local owner approval and credential requests never auto-connect', async () => {
+  const { alice, bob, target, receiver } = await fixture()
+  const grant = await store.createGrant(bob.token, {
+    subject: { type: 'user', id: alice.id },
+    targetBotId: receiver.networkId,
+    actions: ['tool.propose'],
+  })
+  const server = {
+    id: 'proposal',
+    name: 'Proposed MCP',
+    url: 'https://mcp.example.com/proposal',
+    requiresCredentials: false,
+  }
+  const proposed = await store.capabilities.request(alice.token, {
+    operationId: 'propose',
+    targetBotId: receiver.networkId,
+    action: 'tool.propose',
+    server,
+  })
+  await viWait(async () =>
+    expect(
+      (await target.capabilities()).find((entry) => entry.operation.id === proposed.operation.id)
+        ?.operation.state,
+    ).toBe('awaiting_approval'),
+  )
+  expect((await target.installed()).servers).toEqual([])
+  await target.decideCapability(proposed.operation.id, true)
+  await viWait(async () =>
+    expect(
+      (await target.capabilities()).find((entry) => entry.operation.id === proposed.operation.id)
+        ?.operation.state,
+    ).toBe('completed'),
+  )
+  const privateRequest = await store.capabilities.request(alice.token, {
+    operationId: 'private',
+    targetBotId: receiver.networkId,
+    action: 'tool.propose',
+    server: { ...server, id: 'private', requiresCredentials: true },
+  })
+  await viWait(async () =>
+    expect(
+      (await target.capabilities()).find(
+        (entry) => entry.operation.id === privateRequest.operation.id,
+      )?.operation.state,
+    ).toBe('awaiting_approval'),
+  )
+  await target.decideCapability(privateRequest.operation.id, true)
+  expect((await target.installed()).servers).toHaveLength(1)
+  await store.revokeGrant(bob.token, grant.id)
+  await viWait(async () =>
+    expect(
+      (await target.capabilities()).find(
+        (entry) => entry.operation.id === privateRequest.operation.id,
+      )?.operation.state,
+    ).toBe('rejected'),
+  )
+}, 45_000)

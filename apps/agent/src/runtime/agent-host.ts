@@ -46,6 +46,7 @@ import type { GroveRepo } from '../db/repositories/grove-repo'
 import { BotCommunicationService } from '../grove/communication'
 import { registerGroveTools } from '../grove/tools'
 import type { RemoteTransport } from '../grove/remote-transport'
+import type { CapabilityRuntime } from '../grove/capability-runtime'
 
 export type AgentHostOptions = {
   databasePath: string
@@ -55,6 +56,7 @@ export type AgentHostOptions = {
   botRepo?: BotRepo
   groveRepo?: GroveRepo
   groveTransport?: RemoteTransport
+  groveCapabilities?: CapabilityRuntime
   workspaces: WorkspaceService
   tools: ToolRegistry
   sandbox: SandboxService
@@ -119,7 +121,7 @@ export class AgentHost {
 
   static async open(options: AgentHostOptions, context: Context) {
     let host: AgentHost | undefined
-    const grove = options.botRepo && options.groveRepo ? new BotCommunicationService(options.groveRepo, options.groveTransport) : undefined
+    const grove = options.botRepo && options.groveRepo ? new BotCommunicationService(options.groveRepo, options.groveTransport, options.groveCapabilities) : undefined
     const unregisterGrove = grove ? registerGroveTools(options.tools, () => host!) : []
     const models = new AgentModels(options.config, options.credentials)
     const bots = options.botRepo
@@ -144,7 +146,7 @@ export class AgentHost {
     let engine: AgentEngine
     let inputs: AgentInputs
     const loader = new AgentInstructions()
-    const executionContext = async (id: ConversationId, context: Context, toolName?: string) => {
+    const executionContext = async (id: ConversationId, context: Context, toolName?: string, callId?: string) => {
       const owner = await engine.ownerThread(id, context)
       const resolved = await contexts.resolve(owner.threadId)
       if (!bots) return resolved
@@ -152,7 +154,7 @@ export class AgentHost {
       if (!record?.botId) throw new BotError(403, 'Conversation has no Bot identity')
       const captured = await inputs?.activeConfig(id, engine.harness, context)
       const groveTaskId = await inputs?.activeGroveTask(id, context)
-      if (groveTaskId && toolName) await grove?.guardExecution(groveTaskId, context, toolName)
+      if (groveTaskId && toolName) await grove?.guardExecution(groveTaskId, context, toolName, callId)
       const workspaceId = captured ? captured.workspaceId : record.workspaceId
       const bot = await bots.assertAccess(record.botId, workspaceId, toolName)
       if (captured && toolName && !captured.tools.includes(toolName))
@@ -170,8 +172,8 @@ export class AgentHost {
       options.tools,
       options.sandbox,
       options.retention,
-      async (id, context, toolName) => {
-        const resolved = await executionContext(id, context, toolName)
+      async (id, context, toolName, callId) => {
+        const resolved = await executionContext(id, context, toolName, callId)
         return { executionContext: resolved, cwd: resolved.workspace?.rootPath }
       },
       resources,
@@ -239,6 +241,7 @@ export class AgentHost {
             })
           }
         : undefined,
+      grove ? () => grove.directory() : undefined,
     )
     const delegation = new AgentDelegation(inputs, async (id, context) => {
       await executionContext(id, context, 'delegate_task')

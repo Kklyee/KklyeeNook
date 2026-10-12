@@ -38,6 +38,7 @@ export class AgentConfigStore {
   constructor(
     config?: Partial<AgentConfig>,
     private readonly storagePath?: string,
+    private readonly reloadOnRead = false,
   ) {
     const persisted = this.load()
     const initial = mergeConfig(config)
@@ -52,6 +53,7 @@ export class AgentConfigStore {
   }
 
   get(): AgentConfig {
+    if (this.reloadOnRead) this.config = this.load() ?? this.config
     return structuredClone(this.config)
   }
 
@@ -153,12 +155,17 @@ function isMcpServerConfig(value: unknown): boolean {
     env?: unknown
     cwd?: unknown
     disabledTools?: unknown
+    url?: unknown
+    shared?: unknown
+    requiresCredentials?: unknown
   }
   return Boolean(
     typeof server.id === 'string' &&
     typeof server.name === 'string' &&
     typeof server.enabled === 'boolean' &&
-    server.transport === 'stdio' &&
+    (server.transport === 'stdio' || (server.transport === 'http' && typeof server.url === 'string')) &&
+    (server.shared === undefined || typeof server.shared === 'boolean') &&
+    (server.requiresCredentials === undefined || typeof server.requiresCredentials === 'boolean') &&
     typeof server.command === 'string' &&
     Array.isArray(server.args) &&
     server.args.every((arg) => typeof arg === 'string') &&

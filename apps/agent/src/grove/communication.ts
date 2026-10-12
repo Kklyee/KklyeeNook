@@ -20,6 +20,8 @@ import type { GroveRepo } from '../db/repositories/grove-repo'
 import { BotError } from '../bots/bot-service'
 import { RemoteTransport, RemoteTransportError, type RemoteSendInput } from './remote-transport'
 import type { RelayEnvelope } from '@kklyeenook/shared/bot/social'
+import type { CapabilityOperation } from '@kklyeenook/shared/bot/capabilities'
+import type { CapabilityRuntime } from './capability-runtime'
 
 type GroveState = {
   workers: Record<string, number>
@@ -27,6 +29,7 @@ type GroveState = {
   generations: Record<string, number[]>
   pump?: number
   relayUrl?: string
+  capabilities?: Record<string, CapabilityOperation & { approved?: boolean }>
 }
 
 const groveDoc = defineDoc<GroveState>({
@@ -50,6 +53,7 @@ export class BotCommunicationService {
   constructor(
     private readonly repo: GroveRepo,
     private remote?: RemoteTransport,
+    private readonly capabilityRuntime?: CapabilityRuntime,
   ) {
     this.worker = defineTask<
       { id: string },
@@ -348,7 +352,27 @@ export class BotCommunicationService {
       identities: await this.repo.identities(),
       contacts: await this.repo.contacts(),
       network: { enabled: Boolean(this.remote), error: this.networkError },
+      capabilities: Object.values(state?.capabilities ?? {}),
     }
+  }
+  async directory() {
+    return [
+      ...(await this.host.bots!.list()).map((bot) => ({ id: bot.id, name: bot.name, transport: 'local' })),
+      ...(await this.repo.contacts()).map((bot) => ({ id: bot.networkId, name: bot.name, ownerUserId: bot.ownerUserId, hostId: bot.hostId, transport: 'remote' })),
+    ]
+  }
+
+  async decideCapability(id: string, approved: boolean, context: Context) {
+    await this.host.engine.harness.commit(async (tx) => {
+      const state = await tx.doc(groveDoc)
+      const record = state.capabilities?.[id]
+      if (!record || record.operation.state !== 'awaiting_approval')
+        throw new BotError(409, 'Capability operation is not awaiting approval')
+      record.approved = approved
+      if (!approved)
+        record.operation = { ...record.operation, state: 'rejected', updatedAt: Date.now() }
+    }, context)
+    await this.syncNetwork(context)
   }
 
   async setPolicy(botId: string, policy: BotReceptionPolicy, context: Context) {
@@ -512,7 +536,7 @@ export class BotCommunicationService {
     return task
   }
 
-  async guardExecution(taskId: string, context: Context, toolName?: string) {
+  async guardExecution(taskId: string, context: Context, toolName?: string, callId?: string) {
     const task = await this.requireTask(taskId)
     if (terminal(task) || Date.now() >= task.deadline)
       throw new BotError(403, 'Collaboration execution budget exhausted')
@@ -538,8 +562,32 @@ export class BotCommunicationService {
         await awaitWithContext(new Promise<void>((resolve) => setTimeout(resolve, 1000)), context)
       }
     }
-    if (task.remote?.direction === 'incoming' && toolName)
-      throw new BotError(403, 'Remote requests require a separate tool.invoke authorization')
+    if (task.remote?.direction === 'incoming' && toolName) {
+      const candidates =
+        this.capabilityRuntime
+          ?.catalog()
+          .filter((server) => toolName.startsWith(`mcp__${server.id}__`)) ?? []
+      const server = candidates.length === 1 ? candidates[0] : undefined
+      if (!server || !task.remote.operationId || !this.remote)
+        throw new BotError(
+          403,
+          'Remote requests require an explicitly shared MCP and tool.invoke authorization',
+        )
+      if (!callId) return
+      try {
+        await this.remote.invoke(
+          task.remote.operationId,
+          callId,
+          toolName,
+          server.id,
+          context.abortSignal,
+        )
+      } catch (error) {
+        if (error instanceof RemoteTransportError && error.status > 0 && error.status < 500)
+          throw new BotError(403, error.message)
+        throw error
+      }
+    }
   }
 
   async guardGeneration(taskId: string, generationId: number, result: boolean, context: Context) {
@@ -829,6 +877,139 @@ export class BotCommunicationService {
         context.abortSignal?.throwIfAborted()
         if (!(error instanceof BotError)) throw error
         await this.repo.processInbox(row.envelope.message.id, error.message)
+      }
+    }
+    if (this.capabilityRuntime) await this.syncCapabilities(context)
+  }
+
+  private async syncCapabilities(context: Context) {
+    const remote = this.remote!
+    const runtime = this.capabilityRuntime!
+    const catalog = runtime.catalog()
+    for (const identity of await this.repo.identities())
+      await remote.publishCapabilities(identity.networkId, catalog, context.abortSignal)
+    const incoming = await remote.capabilities(context.abortSignal)
+    await this.host.engine.harness.commit(async (tx) => {
+      const state = await tx.doc(groveDoc)
+      state.capabilities ??= {}
+      for (const entry of incoming) state.capabilities[entry.operation.id] ??= entry
+    }, context)
+    const entries = Object.values(
+      (await this.host.engine.harness.snapshot(groveDoc, context))?.capabilities ?? {},
+    )
+    const save = async (entry: CapabilityOperation & { approved?: boolean }) => {
+      await this.host.engine.harness.commit(async (tx) => {
+        const state = await tx.doc(groveDoc)
+        state.capabilities![entry.operation.id] = entry
+      }, context)
+    }
+    for (let entry of entries) {
+      if (['completed', 'failed', 'rejected'].includes(entry.operation.state)) {
+        if (incoming.some((item) => item.operation.id === entry.operation.id))
+          await remote.capabilityState(
+            entry.operation.id,
+            entry.operation.state,
+            entry.operation.error,
+            context.abortSignal,
+          )
+        continue
+      }
+      try {
+        await remote.authorize(entry.operation.id, context.abortSignal)
+        const approved = catalog.some(
+          (server) =>
+            server.id === entry.server.id &&
+            server.url === entry.server.url &&
+            server.name === entry.server.name &&
+            server.requiresCredentials === entry.server.requiresCredentials,
+        )
+        if (entry.operation.action === 'tool.install' && !approved)
+          throw new BotError(403, 'MCP is no longer in the local shared catalog')
+        if (
+          (entry.operation.action === 'tool.propose' && !entry.approved) ||
+          !runtime.ready(entry.server)
+        ) {
+          if (entry.operation.state !== 'awaiting_approval') {
+            entry = {
+              ...entry,
+              operation: {
+                ...entry.operation,
+                state: 'awaiting_approval',
+                updatedAt: Date.now(),
+                ...(entry.server.requiresCredentials
+                  ? { error: 'Owner credentials are required' }
+                  : {}),
+              },
+            }
+            await save(entry)
+          }
+          if (
+            incoming.find((item) => item.operation.id === entry.operation.id)?.operation.state ===
+            'pending'
+          )
+            await remote.capabilityState(
+              entry.operation.id,
+              'awaiting_approval',
+              entry.operation.error,
+              context.abortSignal,
+            )
+          continue
+        }
+        const identity = (await this.repo.identities()).find(
+          (item) => item.networkId === entry.operation.targetBotId,
+        )
+        if (!identity) throw new BotError(403, 'Capability target is not a local Bot')
+        entry = {
+          ...entry,
+          operation: { ...entry.operation, state: 'installing', updatedAt: Date.now() },
+        }
+        await save(entry)
+        const remoteState = incoming.find((item) => item.operation.id === entry.operation.id)
+          ?.operation.state
+        if (remoteState !== 'installing')
+          await remote.capabilityState(
+            entry.operation.id,
+            'installing',
+            undefined,
+            context.abortSignal,
+          )
+        await remote.authorize(entry.operation.id, context.abortSignal)
+        await runtime.install(identity.localBotId, entry.server, async () => {
+          await remote.authorize(entry.operation.id, context.abortSignal)
+        })
+        entry = {
+          ...entry,
+          operation: { ...entry.operation, state: 'completed', updatedAt: Date.now() },
+        }
+        await save(entry)
+        await remote.capabilityState(
+          entry.operation.id,
+          'completed',
+          undefined,
+          context.abortSignal,
+        )
+      } catch (error) {
+        context.abortSignal?.throwIfAborted()
+        if (error instanceof RemoteTransportError && (error.status === 0 || error.status >= 500))
+          throw error
+        const state =
+          error instanceof BotError || error instanceof RemoteTransportError ? 'rejected' : 'failed'
+        entry = {
+          ...entry,
+          operation: {
+            ...entry.operation,
+            state,
+            error: error instanceof Error ? error.message : 'Capability installation failed',
+            updatedAt: Date.now(),
+          },
+        }
+        await save(entry)
+        await remote.capabilityState(
+          entry.operation.id,
+          state,
+          entry.operation.error,
+          context.abortSignal,
+        )
       }
     }
   }

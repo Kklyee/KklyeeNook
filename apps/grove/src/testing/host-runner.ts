@@ -36,6 +36,10 @@ async function run(command: string, input: any): Promise<unknown> {
       BACKGROUND_CONTEXT,
     )
   if (command === 'identities') return fixture.repo.identities()
+  if (command === 'catalog') return fixture.catalog(input)
+  if (command === 'installed') return { servers: fixture.installed(), bots: await host.bots!.list() }
+  if (command === 'capabilities') return (await host.grove!.list(BACKGROUND_CONTEXT)).capabilities
+  if (command === 'decide-capability') return host.grove!.decideCapability(input.id, input.approved, BACKGROUND_CONTEXT)
   if (command === 'tasks') return fixture.repo.tasks()
   if (command === 'task') return fixture.repo.getTask(input.id)
   if (command === 'outbox') return fixture.repo.outbox()

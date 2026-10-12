@@ -1,8 +1,15 @@
 import { RemoteTransport } from './remote-transport'
 import type { GroveConnections } from '@kklyeenook/shared/bot/grove-settings'
 import type { SocialGrant, SocialRelationship } from '@kklyeenook/shared/bot/social'
+import type { CapabilityOperation, CapabilityRequest, SharedMcp } from '@kklyeenook/shared/bot/capabilities'
 
 export class GroveAccount extends RemoteTransport {
+  sharedTools() {
+    return this.request<{ catalog: Array<{ botId: string; servers: SharedMcp[] }>; operations: CapabilityOperation[] }>('/capabilities')
+  }
+  requestCapability(input: CapabilityRequest) {
+    return this.request<CapabilityOperation>('/capabilities', input)
+  }
   me() {
     return this.request<{ userId: string }>('/me')
   }

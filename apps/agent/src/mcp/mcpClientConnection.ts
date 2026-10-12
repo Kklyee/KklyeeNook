@@ -1,23 +1,20 @@
-import { Client } from '@modelcontextprotocol/client'
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio'
 
-import type {
-  McpCallToolResult,
-  McpServerConfig,
-  McpTool,
-} from '@kklyeenook/shared/mcp/mcpServer'
+import type { McpCallToolResult, McpServerConfig, McpTool } from '@kklyeenook/shared/mcp/mcpServer'
 
 const CONNECTION_TIMEOUT_MS = 15_000
 
 export class McpClientConnection {
   private client: Client | undefined
-  private transport: StdioClientTransport | undefined
+  private transport: StdioClientTransport | StreamableHTTPClientTransport | undefined
   private closing = false
 
   constructor(
     private readonly config: McpServerConfig,
     private readonly onClose: (error?: Error) => void = () => undefined,
     private readonly onToolsChanged: (tools: McpTool[]) => void = () => undefined,
+    private readonly credential: () => string | undefined = () => undefined,
   ) {}
 
   async connect(): Promise<void> {
@@ -34,13 +31,24 @@ export class McpClientConnection {
         },
       },
     )
-    const transport = new StdioClientTransport({
-      command: this.config.command,
-      args: this.config.args,
-      env: this.config.env,
-      cwd: this.config.cwd,
-      stderr: 'inherit',
-    })
+    if (this.config.transport === 'http' && this.config.requiresCredentials && !this.credential())
+      throw new Error('MCP requires owner credentials; automatic connection is disabled')
+    const transport =
+      this.config.transport === 'http'
+        ? new StreamableHTTPClientTransport(new URL(this.config.url!), {
+            requestInit: { redirect: 'error' },
+            authProvider: this.config.requiresCredentials
+              ? { token: async () => this.credential()! }
+              : undefined,
+            fetch: (input, init) => fetch(input, { ...init, redirect: 'error' }),
+          })
+        : new StdioClientTransport({
+            command: this.config.command,
+            args: this.config.args,
+            env: this.config.env,
+            cwd: this.config.cwd,
+            stderr: 'inherit',
+          })
     this.client = client
     this.transport = transport
     client.onclose = () => {
@@ -80,10 +88,7 @@ export class McpClientConnection {
   async callTool(name: string, args: unknown, signal?: AbortSignal): Promise<McpCallToolResult> {
     if (!this.client) throw new Error('MCP client is not connected.')
     const result = await this.client.callTool(
-      {
-        name,
-        arguments: isRecord(args) ? args : {},
-      },
+      { name, arguments: isRecord(args) ? args : {} },
       { signal },
     )
     return result as McpCallToolResult

@@ -20,5 +20,5 @@ export type GroveConnections = {
   userId: string
   relationships: SocialRelationship[]
   bots: NetworkBotIdentity[]
-  grants: SocialGrant[]
+  grants: Array<SocialGrant & { createdAt: number }>
 }

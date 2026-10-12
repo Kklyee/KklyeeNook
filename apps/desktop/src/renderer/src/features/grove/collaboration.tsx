@@ -84,7 +84,7 @@ export function Collaboration({ compact = false }: { compact?: boolean }) {
           <SelectContent>
             {contacts.map((bot) => (
               <SelectItem key={bot.networkId} value={bot.networkId}>
-                {bot.name} · 远程
+                {bot.name} · {bot.ownerUserId}
               </SelectItem>
             ))}
             {bots

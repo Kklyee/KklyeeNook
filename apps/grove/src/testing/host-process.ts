@@ -7,6 +7,9 @@ import { fileURLToPath } from 'node:url'
 import type { BotTask } from '@kklyeenook/shared/bot/grove'
 import type { NetworkBotIdentity, RelayEnvelope } from '@kklyeenook/shared/bot/social'
 import type { SocialOutboxEntry } from '../../../agent/src/grove/remote-transport'
+import type { CapabilityOperation, SharedMcp } from '@kklyeenook/shared/bot/capabilities'
+import type { BotProfile } from '@kklyeenook/shared/bot/bot'
+import type { McpServerConfig } from '@kklyeenook/shared/mcp/mcpServer'
 
 export async function testHostProcess(
   relayUrl: string,
@@ -56,6 +59,10 @@ export async function testHostProcess(
     syncNetwork: () => call<void>('sync'),
     network: (enabled: boolean) => call<void>('network', { enabled }),
     identities: () => call<NetworkBotIdentity[]>('identities'),
+    catalog: (server: SharedMcp) => call<void>('catalog', server),
+    installed: () => call<{ servers: McpServerConfig[]; bots: BotProfile[] }>('installed'),
+    capabilities: () => call<CapabilityOperation[]>('capabilities'),
+    decideCapability: (id: string, approved: boolean) => call<void>('decide-capability', { id, approved }),
     tasks: () => call<BotTask[]>('tasks'),
     task: (id: string) => call<BotTask>('task', { id }),
     outbox: () => call<SocialOutboxEntry[]>('outbox'),

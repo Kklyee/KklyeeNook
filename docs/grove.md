@@ -4,7 +4,7 @@
 
 - Phase 1：本地 Bot 通信、Durable 协作执行、Chat 与 Grove 入口已实现。
 - Phase 2：已实现网络身份、Host / User 凭据校验、Social Grant、连接邀请、PostgreSQL Relay HTTP API、Remote Transport、Host Inbox / Outbox 和 Durable Bridge。Desktop 已接入连接设置、加密凭据、连接管理、权限编辑器及远程协作目标选择；完整桌面交互验收尚未完成。
-- Phase 3：受控远程 MCP 分享、委托安装及审批尚未实现。
+- Phase 3：已实现 HTTPS MCP 目录、分享提案、授权安装、所有者审批、加密凭据配置、安装状态恢复及独立工具调用授权。
 - Phase 4：不属于 v0.2 首期范围。
 
 ## 本地通信
@@ -54,6 +54,8 @@ API 使用既有本地认证服务及秘密路径：
 
 Grove 展示本地 Bot 的接收策略、消息与协作记录。Chat 展示本会话关联的协作请求、状态和可展开结果，并提供手动协作入口。该 API 尚不对远程用户开放。
 
+Grove 页面分为 Overview、Connections、Permissions、Shared Tools 和 Activity。普通消息、协作记录与授权 / 安装记录分别显示。本地接收策略可设置来源 Bot ID 白名单。模型可读取本机 Bot 与已连接远程 Bot 的名称、ID 和网络身份目录；远程任务及结果汇总不会加载该私有目录。
+
 ## 验证
 
 `apps/agent/src/runtime/agent-host.test.ts` 的 Grove 集成测试使用真实 Pi Durable、数据库迁移、ToolRegistry、权限 Harness 和本地模拟模型服务，覆盖：
@@ -75,7 +77,7 @@ Grove 展示本地 Bot 的接收策略、消息与协作记录。Chat 展示本�
 
 `apps/grove` 是 Grove Server 的独立服务包，包含 PostgreSQL 数据结构、连接管理、存储服务和 HTTP Relay。`users` 与 `host_devices` 分别存储高熵 User / Host 访问凭据的 SHA-256 摘要，Host 注册由已认证 User 发起，网络 Bot 注册由已认证 Host 发起。凭据不能互换；发送方不能代表其他 Host 的 Bot。
 
-Social Grant 仅由目标 Bot 的所有者 User 签发或撤销。User Grant 不扩展至该 User 的 Bot。一次 Operation 的授权检查、限次统计和记录写入同一个 PostgreSQL 事务，锁定 Grant 行并对 Operation ID 取事务级锁；重复请求复用原始记录，修改参数后重复使用 ID 会被拒绝。对排队操作提供目标 Host 执行前的授权复核，撤销、到期或禁用发送 Host 都会阻止后续执行。后续 Host Bridge 必须调用此复核后才执行副作用。
+Social Grant 仅由目标 Bot 的所有者 User 签发或撤销。User Grant 不扩展至该 User 的 Bot。一次 Operation 的授权检查、限次统计和记录写入同一个 PostgreSQL 事务，锁定 Grant 行并对 Operation ID 取事务级锁；重复请求复用原始记录，修改参数后重复使用 ID 会被拒绝。Host Bridge 在执行前复核排队操作，撤销、到期或禁用发送 Host 都会阻止后续执行。
 
 服务器表为 `users`、`host_devices`、`network_bots`、`relationships`、`social_grants`、`network_operations` 与 `network_messages`。
 
@@ -103,14 +105,26 @@ Inbox 投递前复核授权与任务截止时间，撤销或过期请求不会�
 
 `AgentHostOptions.groveTransport` 接收 `RemoteTransport`。Transport 要求 HTTPS，允许测试或本地部署使用 loopback HTTP，禁止 URL 内携带凭据及跟随重定向。Host 凭据由回调提供，不保存在消息、任务、身份或 Inbox / Outbox 数据中。
 
-Desktop 使用现有加密 CredentialStore 保存 User / Host 凭据，配置文件仅保存公开身份与 Relay URL。User 凭据留在 Main 进程，Agent 后端只收到 Host 凭据。连接设置支持运行中暂停和恢复，保留原始身份及持久化队列；恢复前验证 Host 所有权。管理 IPC 仅接受主窗口主 Frame。权限编辑器区分 User / Bot 主体，支持目标 Bot、动作、Tool / MCP 范围、使用次数、到期时间和撤销；工具权限动作的实际执行闭环仍待 Phase 3。
+Desktop 使用现有加密 CredentialStore 保存 User / Host 凭据，配置文件仅保存公开身份与 Relay URL。User 凭据留在 Main 进程，Agent 后端只收到 Host 凭据。连接设置支持运行中暂停和恢复，保留原始身份及持久化队列；恢复前验证 Host 所有权。管理 IPC 仅接受主窗口主 Frame。权限编辑器区分 User / Bot 主体，支持目标 Bot、动作、Tool / MCP 范围、使用次数、到期时间和撤销；工具管理与调用分别校验对应 Grant。
 
 Host 本地新增 `network_identity`、`remote_contacts`、`social_inbox` 与 `social_outbox`。Durable 后台网络任务注册 Bot、刷新联系人、重试待发送事件、拉取 Inbox 并处理本地恢复记录。Inbox 先持久化到 SQLite，再向 Relay ack；如果在提交或 ack 周围退出进程，持久化 Inbox 和稳定的 requestId 可恢复原始任务，避免重复 Submission。Outbox 保存原始 payload 和 Operation ID，发送失败会保留并重试；明确拒绝会记录失败，已结束任务不会继续发出。
 
 身份解析层将本 Host 的 networkId 规范化为 localBotId，跨 Host 使用全局 networkId。Relay 地址及已注册身份与本地持久化状态绑定，不能在恢复待处理记录时静默更换 Relay 或 Host 身份。
 
-远程任务进入单独的协作 Conversation，使用目标 Bot 的模型和 Instructions，不继承私有主会话。输入不加载 Memory、附件或本地 Skill 清单，也不自动关联 Workspace。远程模型工具调用目前默认拒绝，后续受控共享必须单独接入 `tool.invoke` 检查；接收协作授权不会隐式变成资源或工具执行授权。跨网络递归委托被拒绝，接收端最多使用 23 次 Generation，为发起方的一次结果汇总保留预算。
+远程任务进入单独的协作 Conversation，使用目标 Bot 的模型和 Instructions，不继承私有主会话。输入不加载 Memory、附件或本地 Skill 清单，也不自动关联 Workspace。远程工具仅允许公开目录中的 MCP，并为每个稳定工具调用 ID 单独验证 `tool.invoke` Grant；本地工具、Workspace、Memory 及未共享 MCP 默认拒绝。接收协作授权不会隐式变成资源或工具执行授权。跨网络递归委托被拒绝，接收端最多使用 23 次 Generation，为发起方的一次结果汇总保留预算。
 
 接收请求、生成模型调用及工具执行前都会复核远程授权和本地接收策略。临时 Relay 故障会等待或重试，始终受原始截止时间约束；撤销或拒绝不会被当作临时故障继续执行。
 
-`apps/grove/src/host-bridge.test.ts` 通过两个独立 Node Host 子进程、各自的 SQLite 数据库、真实 Pi Durable、模拟模型服务及 TCP Relay 验证跨用户执行、模型和上下文隔离、离线接收、完整进程退出后恢复、任务 / Submission 去重、授权撤销、接收策略拒绝及运行中暂停恢复。`connection.test.ts` 验证 Desktop 凭据加密、身份绑定、重用注册及配置回滚，`groveIpc.test.ts` 验证管理入口来源边界。下一阶段完成受控 MCP 分享和委托安装。
+`apps/grove/src/host-bridge.test.ts` 通过两个独立 Node Host 子进程、各自的 SQLite 数据库、真实 Pi Durable、模拟模型服务及 TCP Relay 验证跨用户执行、模型和上下文隔离、离线接收、完整进程退出后恢复、任务 / Submission 去重、授权撤销、接收策略拒绝及运行中暂停恢复。`connection.test.ts` 验证 Desktop 凭据加密、身份绑定、重用注册及配置回滚，`groveIpc.test.ts` 验证管理入口来源边界。
+
+## MCP 分享与安装
+
+Grove 的 Shared Tools 支持本机所有者保存 HTTPS MCP 到公开目录、为目标 Bot 分享提案、选择目标 Host 的目录请求授权安装、查看操作状态及审批。所有者可关闭目录公开，阻止后续远程安装与调用。新提案需要 `tool.propose` Grant 和目标所有者本机确认；授权安装需要 `tool.install` Grant，且请求定义必须与目标 Host 公开的 ID、名称、URL 和认证要求完全一致。不能用获准的 Server ID 替换 URL，也不能发送 command、args、env 或私人凭据。
+
+网络操作的 MCP 定义保存于既有 `network_operations`，目标 Host 在 Durable 会话文档中持久化操作状态、审批决定与结果。安装前复核 Grant 和本机目录。固定 Server ID 使重复请求及崩溃后的安装恢复复用配置；完成结果先在 Host 持久化，再同步 Relay。撤销会拒绝等待审批或尚未安装的请求，已合法完成的配置继续保留。
+
+安装复用 `McpServerManager`、HTTP `McpClientConnection` 与 `ToolRegistry`，发现工具后仅修改目标 Bot 的 enabledTools。接收方 Bearer 凭据存于现有加密 CredentialStore 的 `mcp:<serverId>`，配置与网络目录不包含凭据；未配置必要凭据的操作保留 awaiting_approval。当前支持所有者手动配置 Bearer 凭据，OAuth 交互登录不在此实现中。
+
+`/operations/:id/invoke` 仅接受原任务目标 Host，从已验证任务派生发送 Bot 身份，并验证工具范围、MCP 范围、次数、任务期限及授权撤销。稳定 Durable Tool Task ID 与 callId 组成调用标识，审批与实际工具执行仍使用现有 Harness / Sandbox。
+
+`capabilities.test.ts` 使用 PostgreSQL 引擎验证定义绑定、原子去重、跨主体边界、授权撤销、禁止凭据和命令输入、独立 tool.invoke Grant 及次数限制。Host 子进程测试验证目标 Bot 工具启用、配置重启恢复、提案审批与无凭据等待；该测试注入模拟 MCP 连接。另由 `mcpClientConnection.test.ts` 的真实 TCP HTTP MCP 服务验证连接、发现、工具调用、Bearer 注入、缺少凭据拒绝和禁止重定向。尚未以两台实际 Desktop 和公网 MCP 做完整人工验收。

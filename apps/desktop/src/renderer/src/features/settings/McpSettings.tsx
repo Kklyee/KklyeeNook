@@ -69,6 +69,10 @@ function useMcpSettings({
   }
 
   const openEditServer = (server: McpServerConfig) => {
+    if (server.transport === 'http') {
+      setError('远程 MCP 的连接与凭据请在 Grove 的 Shared Tools 中配置。')
+      return
+    }
     setEditingId(server.id)
     setName(server.name)
     setCommand(server.command)

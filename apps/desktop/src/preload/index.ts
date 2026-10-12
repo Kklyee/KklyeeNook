@@ -51,6 +51,10 @@ const context = {
 
 const api = {
   grove: {
+    sharedTools(): Promise<import('@kklyeenook/shared/bot/capabilities').SharedToolsSnapshot> { return ipcRenderer.invoke(IPC_CHANNELS.GROVE_SHARED_TOOLS) },
+    requestCapability(input: import('@kklyeenook/shared/bot/capabilities').CapabilityRequest): Promise<import('@kklyeenook/shared/bot/capabilities').CapabilityOperation> { return ipcRenderer.invoke(IPC_CHANNELS.GROVE_CAPABILITY_REQUEST, input) },
+    decideCapability(input: { id: string; approved: boolean }): Promise<void> { return ipcRenderer.invoke(IPC_CHANNELS.GROVE_CAPABILITY_DECIDE, input) },
+    configureMcp(input: { server: import('@kklyeenook/shared/bot/capabilities').SharedMcp; credential?: string; shared?: boolean }): Promise<void> { return ipcRenderer.invoke(IPC_CHANNELS.GROVE_MCP_CONFIGURE, input) },
     status(): Promise<import('@kklyeenook/shared/bot/grove-settings').GroveStatus> { return ipcRenderer.invoke(IPC_CHANNELS.GROVE_STATUS) },
     configure(input: import('@kklyeenook/shared/bot/grove-settings').GroveConnectRequest): Promise<import('@kklyeenook/shared/bot/grove-settings').GroveStatus> { return ipcRenderer.invoke(IPC_CHANNELS.GROVE_CONFIGURE, input) },
     connections(): Promise<import('@kklyeenook/shared/bot/grove-settings').GroveConnections> { return ipcRenderer.invoke(IPC_CHANNELS.GROVE_CONNECTIONS) },
