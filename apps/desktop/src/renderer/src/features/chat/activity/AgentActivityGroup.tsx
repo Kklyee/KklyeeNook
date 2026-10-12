@@ -152,6 +152,12 @@ const ActivityTimeline = memo(function ActivityTimeline({ scope }: { scope: Acti
   const current = useActivitySelector((groups) =>
     currentActivity(findSegment(groups, scope)?.activities ?? []),
   )
+  const standaloneThinkingId = useActivitySelector((groups) => {
+    const activities = findSegment(groups, scope)?.activities.filter(hasContent) ?? []
+    return activities.length === 1 && activities[0]?.type === 'thinking'
+      ? activities[0].id
+      : undefined
+  })
   if ((!exists && !scope.fallback) || (exists && !ids.length && !running)) return null
   return (
     <div
@@ -160,16 +166,20 @@ const ActivityTimeline = memo(function ActivityTimeline({ scope }: { scope: Acti
       data-running={running}
       className="agent-activity-slot"
     >
-      <ToolTimeline
-        open={open}
-        onOpenChange={setOpen}
-        label={<ActivityHeader scope={scope} current={current} />}
-        trailing={current ? <ActivityHeaderDuration scope={scope} /> : null}
-      >
-        {ids.map((id) => (
-          <AgentActivityRow key={id} runId={scope.runId!} activityId={id} />
-        ))}
-      </ToolTimeline>
+      {standaloneThinkingId ? (
+        <AgentActivityRow runId={scope.runId!} activityId={standaloneThinkingId} />
+      ) : (
+        <ToolTimeline
+          open={open}
+          onOpenChange={setOpen}
+          label={<ActivityHeader scope={scope} current={current} />}
+          trailing={current ? <ActivityHeaderDuration scope={scope} /> : null}
+        >
+          {ids.map((id) => (
+            <AgentActivityRow key={id} runId={scope.runId!} activityId={id} />
+          ))}
+        </ToolTimeline>
+      )}
     </div>
   )
 })
