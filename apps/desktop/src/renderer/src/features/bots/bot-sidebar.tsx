@@ -260,7 +260,7 @@ function BotThreads({
           <Button
             variant="ghost"
             className={
-              threadListRowClassName + ' h-7 justify-start gap-2 px-2 text-left text-[13px] font-normal'
+              threadListRowClassName + ' h-10 justify-start gap-2 px-2 text-left text-[13px] font-normal'
             }
             aria-pressed={snapshot.selectedThreadId === bot.mainThreadId}
             data-active={snapshot.selectedThreadId === bot.mainThreadId || undefined}
@@ -271,7 +271,7 @@ function BotThreads({
           </Button>
           {bot.kind === 'coding' ? (
             <>
-              <div className="mt-2 flex h-7 items-center justify-between px-2 text-[11px] text-muted-foreground">
+              <div className="mt-5 flex h-7 items-center justify-between px-2 text-[11px] text-muted-foreground">
                 <span>WORKSPACES</span>
                 <Button
                   variant="ghost"
