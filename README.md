@@ -145,7 +145,9 @@ Gateway 固定监听 `127.0.0.1:43127`，校验 Tailscale Serve 提供的用户�
 
 Windows Shell 使用 PowerShell 7，受限模式通过 Rust helper、Windows restricted token、ACL 和 Job Object 执行。该沙箱的隔离级别为 `partial`：主要约束普通文件的写入与删除，读取、网络和进程可见性仍然可用。完整边界、系统授权及验证命令见 [Windows 沙箱文档](apps/desktop/native/windows-sandbox/README.md)。
 
-Windows 受限 Shell 首次使用前，运行 `pnpm run sandbox:setup`，通过 UAC 配置所需的系统对象授权。macOS 和 Linux 的受限 Shell 后端当前不可用，需要通过已有权限流程显式使用 `full-access`。
+Windows 受限 Shell 首次使用前，运行 `pnpm run sandbox:setup`，通过 UAC 配置所需的系统对象授权。该授权在每个登录会话重建后失效，`pnpm run sandbox:task` 注册登录时自动修复的计划任务。
+
+当原生 Windows helper 探针报告不可用，或运行在 macOS 与 Linux 上时，受限 Shell 回退到 [Microsoft eXecution Container](https://github.com/microsoft/mxc)。回退后端需要安装 `@microsoft/mxc-sdk`，并通过 `ui.disable = false` 与系统盘根只读授权启动 PowerShell。可用性由 `SandboxBackend.support()` 决定：原生后端报告 `unavailable` 时自动选择 MXC，两者都不可用时拒绝 Bot 的受限命令。
 
 ## 开发与构建
 
@@ -155,6 +157,9 @@ Windows 受限 Shell 首次使用前，运行 `pnpm run sandbox:setup`，通过 
 | `pnpm run remote:dev` | 单独开发 Remote 界面 |
 | `pnpm run remote:build` | 构建 Remote PWA |
 | `pnpm test` | 运行测试，Windows 会先构建沙箱 |
+| `pnpm run sandbox:setup` | 构建并配置 Windows 沙箱系统对象授权 |
+| `pnpm run sandbox:task` | 注册登录时自动修复沙箱授权的计划任务 |
+| `pnpm run sandbox:task:remove` | 移除该计划任务 |
 | `pnpm run lint` | 静态检查 |
 | `pnpm run typecheck` | 检查主进程、桌面界面和 Remote 类型 |
 | `pnpm run build` | 构建 Remote、执行类型检查并构建 Electron 应用 |

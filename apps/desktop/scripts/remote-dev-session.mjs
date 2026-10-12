@@ -57,8 +57,10 @@ export async function beginRemoteDevSession(root) {
         'v1.0',
         'powershell.exe',
       )
+      // PowerShell reports the status of the last statement, so a recorded process that already
+      // exited (a supervisor can die without clearing status.json) must not fail the handover.
       const script =
-        '$app = Get-Process -Id ([int]$env:NOOK_HANDOVER_PID) -ErrorAction SilentlyContinue; if ($app -and $app.Path -eq $env:NOOK_HANDOVER_EXE) { [void]$app.CloseMainWindow(); if (-not $app.WaitForExit(10000)) { $app.Kill(); if (-not $app.WaitForExit(15000)) { throw "Managed application did not exit" } } }'
+        '$app = Get-Process -Id ([int]$env:NOOK_HANDOVER_PID) -ErrorAction SilentlyContinue; if ($app -and $app.Path -eq $env:NOOK_HANDOVER_EXE) { [void]$app.CloseMainWindow(); if (-not $app.WaitForExit(10000)) { $app.Kill(); if (-not $app.WaitForExit(15000)) { throw "Managed application did not exit" } } }; exit 0'
       await promisify(execFile)(powershell, ['-NoProfile', '-NonInteractive', '-Command', script], {
         windowsHide: true,
         timeout: 30000,

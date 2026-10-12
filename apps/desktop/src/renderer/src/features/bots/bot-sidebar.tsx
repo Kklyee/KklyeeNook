@@ -8,7 +8,6 @@ import {
   MessageCircleIcon,
   PlusIcon,
   SearchIcon,
-  Settings2Icon,
 } from 'lucide-react'
 import type { BotSummary } from '@kklyeenook/shared/bot/bot'
 import type { WorkspaceAttachResult } from '@kklyeenook/shared/workspace/workspace'
@@ -240,7 +239,6 @@ function BotThreads({
               <span className="min-w-0 truncate text-center text-sm font-medium text-foreground">
                 {bot.name}
               </span>
-              <Settings2Icon className="size-3.5 text-muted-foreground" />
             </>
           )}
         </Button>

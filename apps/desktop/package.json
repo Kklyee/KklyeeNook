@@ -23,7 +23,9 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "pnpm run typecheck:node && pnpm run typecheck:web",
-    "test:package": "node scripts/verify-package.mjs"
+    "test:package": "node scripts/verify-package.mjs",
+    "sandbox:task": "node scripts/setup-windows-sandbox.mjs --install-task",
+    "sandbox:task:remove": "node scripts/setup-windows-sandbox.mjs --remove-task"
   },
   "dependencies": {
     "@assistant-ui/react-lexical": "0.2.9",

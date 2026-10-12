@@ -52,6 +52,20 @@ test.runIf(process.platform === 'win32')(
 )
 
 test.runIf(process.platform === 'win32')(
+  'tolerates an application pid that already exited',
+  async () => {
+    // A supervisor can die without clearing status.json. PowerShell exits 1 when
+    // Get-Process finds nothing, which must not be mistaken for a failed handover.
+    await state({ supportsDevSession: true, appPid: 2147483646 })
+    const release = await beginRemoteDevSession(process.cwd())
+    await release()
+    await expect(readFile(join(guardian, 'dev-session.json'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    })
+  },
+)
+
+test.runIf(process.platform === 'win32')(
   'rejects an existing live development session and an incompatible supervisor',
   async () => {
     await state({ supportsDevSession: false })

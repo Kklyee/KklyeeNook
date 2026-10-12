@@ -1,6 +1,7 @@
 import type { PermissionMode } from '@kklyeenook/shared/approval/permission'
 import { WindowsSandboxBackend } from './windowsSandboxBackend'
 import type { ShellRuntime } from './shellRuntime'
+import { MxcSandboxBackend } from './mxcSandboxBackend'
 export { WindowsSandboxBackend } from './windowsSandboxBackend'
 export type SandboxSupport = 'full' | 'partial' | 'unavailable'
 export interface SandboxExecutionRequest {
@@ -41,10 +42,29 @@ export class DirectExecutionBackend implements SandboxBackend {
     return request.executeDirect()
   }
 }
+class FallbackSandboxBackend implements SandboxBackend {
+  constructor(
+    private readonly primary: SandboxBackend,
+    private readonly secondary: SandboxBackend,
+  ) {}
+  private active(): SandboxBackend {
+    return this.primary.support() === 'unavailable' ? this.secondary : this.primary
+  }
+  support(): SandboxSupport {
+    const support = this.primary.support()
+    return support === 'unavailable' ? this.secondary.support() : support
+  }
+  execute(request: SandboxExecutionRequest): Promise<SandboxExecutionResult> {
+    return this.active().execute(request)
+  }
+  finishRun(runId: string): Promise<void> {
+    return this.active().finishRun?.(runId) ?? Promise.resolve()
+  }
+}
 export function platformSandboxBackend(userData?: string): SandboxBackend {
-  return process.platform === 'win32'
-    ? new WindowsSandboxBackend(userData)
-    : process.platform === 'darwin'
-      ? new MacSandboxBackend()
-      : new LinuxSandboxBackend()
+  const mxc = new MxcSandboxBackend()
+  if (process.platform === 'win32')
+    return new FallbackSandboxBackend(new WindowsSandboxBackend(userData), mxc)
+  if (process.platform === 'darwin') return new FallbackSandboxBackend(new MacSandboxBackend(), mxc)
+  return new FallbackSandboxBackend(new LinuxSandboxBackend(), mxc)
 }
