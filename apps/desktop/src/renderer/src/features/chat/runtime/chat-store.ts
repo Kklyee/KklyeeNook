@@ -450,6 +450,7 @@ export class ChatStore {
         ? this.pendingCreation
         : { fingerprint, id: input.threadId ?? crypto.randomUUID() }
     this.pendingCreation = creation
+    this.error = undefined
     this.setSending(undefined, true)
     try {
       const created = await this.request<AgentThreadSummary>('/threads', {
@@ -471,6 +472,8 @@ export class ChatStore {
       notifyWorkspaceChanged()
       return created.id
     } catch (error) {
+      if (!this.disposed && selectionVersion === this.botSelectionVersion)
+        this.error = error instanceof Error ? error.message : 'Conversation creation failed'
       if (
         error instanceof AgentRequestError &&
         error.status >= 400 &&

@@ -29,11 +29,17 @@ import {
   type AgentHttpServerOptions,
 } from './http-server'
 
+const thinkingLevelSchema = Type.Union((['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const).map((level) => Type.Literal(level)))
 const createSchema = Type.Object(
   {
     threadId: Type.String({ minLength: 1 }),
     botId: Type.Optional(Type.String({ minLength: 1 })),
     title: Type.Optional(Type.String()),
+    model: Type.Optional(Type.Object(
+      { provider: Type.String({ minLength: 1 }), modelId: Type.String({ minLength: 1 }) },
+      { additionalProperties: false },
+    )),
+    thinkingLevel: Type.Optional(thinkingLevelSchema),
     workspaceId: Type.Optional(Type.Union([Type.String({ minLength: 1 }), Type.Null()])),
     permissionMode: Type.Optional(
       Type.Union([
@@ -81,7 +87,6 @@ const metadataSchema = Type.Partial(
   Type.Object({ title: Type.String({ minLength: 1 }), archived: Type.Boolean(), workspaceId: Type.Union([Type.String({ minLength: 1 }), Type.Null()]) }, { additionalProperties: false }),
   { additionalProperties: false },
 )
-const thinkingLevelSchema = Type.Union((['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const).map((level) => Type.Literal(level)))
 const modelSchema = Type.Object(
   { provider: Type.String({ minLength: 1 }), modelId: Type.String({ minLength: 1 }), thinkingLevel: Type.Optional(thinkingLevelSchema) },
   { additionalProperties: false },

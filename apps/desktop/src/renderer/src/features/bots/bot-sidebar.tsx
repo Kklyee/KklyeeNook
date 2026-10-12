@@ -148,6 +148,7 @@ function BotThreads({
   const { workspaces, reload } = useWorkspaces()
   const items = useAuiState((state) => state.threads.threadItems)
   const ids = useAuiState((state) => state.threads.threadIds)
+  const [initialWorkspaceId] = useState(snapshot.current.metadata?.workspaceId)
   const [query, setQuery] = useState('')
   const [error, setError] = useState('')
   const [pendingWorkspace, setPendingWorkspace] = useState<WorkspaceAttachResult>()
@@ -299,7 +300,7 @@ function BotThreads({
                 .map((workspace) => (
                   <Collapsible
                     key={workspace.id}
-                    defaultOpen={workspace.id === snapshot.current.metadata?.workspaceId}
+                    defaultOpen={workspace.id === initialWorkspaceId}
                   >
                     <div className="flex items-center gap-0.5 pr-2">
                       <CollapsibleTrigger aria-label={'展开或折叠 ' + workspace.displayName} className="group/workspace flex h-[34px] min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left text-[13px] text-muted-foreground hover:bg-hover hover:text-foreground">

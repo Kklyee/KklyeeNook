@@ -823,6 +823,37 @@ test('HTTP reports busy and stale queues as conflicts and cancels execution befo
   ).toBe('unanswered')
 }, 30_000)
 
+test('HTTP creates a workspace conversation with draft model choices and accepts its first message', async () => {
+  const { host, workspaceId } = await setup(false, undefined, undefined, true)
+  await host.bots!.update('coder', { workspaceIds: [workspaceId] })
+  const { request } = await api(host)
+  const creation = {
+    threadId: 'workspace-draft',
+    botId: 'coder',
+    workspaceId,
+    permissionMode: 'read-only',
+    model: { provider: 'custom', modelId: 'custom-model' },
+    thinkingLevel: 'off',
+  }
+  expect((await request('/threads', 'POST', creation)).status).toBe(201)
+  const loaded = await (await request('/threads/workspace-draft')).json()
+  expect(loaded.snapshot.agent).toMatchObject({ model: creation.model, thinkingLevel: 'off' })
+  const submission = await request('/threads/workspace-draft/submissions', 'POST', {
+    type: 'input', requestId: 'first-message', content: 'hello from workspace',
+  })
+  expect(submission.status).toBe(202)
+  const receipt = await submission.json()
+  await (await host.engine.submission(creation.threadId, receipt.submissionId, context())).wait(context())
+  const result = await (await request('/threads/workspace-draft')).json()
+  expect(JSON.stringify(result.snapshot.entries)).toContain('hello from workspace')
+  expect(JSON.stringify(result.snapshot.entries)).toContain('complete')
+  expect((await (await request('/threads')).json()).find((thread) => thread.id === creation.threadId)).toMatchObject({ title: 'hello from workspace', workspaceId })
+  for (const invalid of [
+    { ...creation, threadId: 'invalid-model', model: { provider: '', modelId: 'custom-model' } },
+    { ...creation, threadId: 'invalid-thinking', thinkingLevel: 'invalid' },
+  ]) expect((await request('/threads', 'POST', invalid)).status).toBe(400)
+}, 30_000)
+
 test('durable HTTP keeps authentication, rejects passive writes and preserves scoped idempotency', async () => {
   const { host, workspaceId, requests } = await setup()
   const { baseUrl, request } = await api(host)
