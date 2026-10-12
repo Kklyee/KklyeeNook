@@ -4,9 +4,10 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, test, vi } from 'vitest'
+import { Type } from 'typebox'
 import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/chord/context'
 import { builtinModels } from '@earendil-works/pi-ai/providers/all'
-import { createRegistry } from '@earendil-works/pi-durable'
+import { createRegistry, defineExtension, defineTool } from '@earendil-works/pi-durable'
 import type { AgentConfig } from '@kklyeenook/shared/agent/agentConfig'
 import { MemoryCredentialStore } from '../settings/credentialStore'
 import { AgentEngine } from './agent-engine'
@@ -23,21 +24,22 @@ const config = (baseUrl = 'http://localhost:1234/v1'): AgentConfig => ({
   tools: { enabled: [] },
 })
 
-async function server() {
+async function server(toolName?: string) {
   const requests: { path: string; headers: IncomingHttpHeaders; body: Record<string, unknown> }[] = []
   const server = createServer(async (request, response) => {
     const chunks: Buffer[] = []
     for await (const chunk of request) chunks.push(chunk)
     const body = JSON.parse(Buffer.concat(chunks).toString('utf8'))
     requests.push({ path: request.url!, headers: request.headers, body })
+    const callTool = toolName && !body.messages.some((message: any) => message.role === 'tool' && message.tool_call_id === 'call')
     response.writeHead(200, { 'content-type': 'text/event-stream' })
     response.write(`data: ${JSON.stringify({
       id: 'test', object: 'chat.completion.chunk', created: 1, model: body.model,
-      choices: [{ index: 0, delta: { role: 'assistant', content: 'reply' }, finish_reason: null }],
+      choices: [{ index: 0, delta: callTool ? { role: 'assistant', tool_calls: [{ index: 0, id: 'call', type: 'function', function: { name: (body.tools as any[]).find((tool) => tool.function.description === toolName).function.name, arguments: '{}' } }] } : { role: 'assistant', content: 'reply' }, finish_reason: null }],
     })}\n\n`)
     response.write(`data: ${JSON.stringify({
       id: 'test', object: 'chat.completion.chunk', created: 1, model: body.model,
-      choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+      choices: [{ index: 0, delta: {}, finish_reason: callTool ? 'tool_calls' : 'stop' }],
     })}\n\n`)
     response.end('data: [DONE]\n\n')
   })
@@ -201,3 +203,69 @@ test('unknown custom reasoning models do not advertise or retain unverified effo
   const runtime = new AgentModels(() => settings, () => new MemoryCredentialStore(), emptyAuth)
   expect(runtime.selection().thinkingLevel).toBe('off')
 })
+
+test.each(['custom', 'deepseek'])('tool names are compatible on the wire and restored for %s execution', async (provider) => {
+  const { baseUrl, requests } = await server('bot.request_task')
+  const credentials = new MemoryCredentialStore()
+  credentials.setApiKey(provider, 'synthetic-key')
+  const settings: AgentConfig = {
+    model: { provider, modelID: provider === 'deepseek' ? 'deepseek-flash' : 'custom-model', baseUrl },
+    tools: { enabled: [] },
+  }
+  const runtime = new AgentModels(() => settings, () => credentials, emptyAuth)
+  const model = runtime.models.getModel(provider, settings.model.modelID)!
+  const input = {
+    tools: ['read', 'bot.request_task', 'bot_request_task', 'mcp__server.with.dot__工具'].map((name) => ({ name, description: name, parameters: Type.Object({}) })),
+    messages: [
+      { role: 'user' as const, content: 'hello', timestamp: 1 },
+      { role: 'assistant' as const, content: [{ type: 'toolCall' as const, id: 'old', name: 'bot.request_task', arguments: {} }], api: model.api, provider, model: model.id, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }, stopReason: 'toolUse' as const, timestamp: 2 },
+      { role: 'toolResult' as const, toolCallId: 'old', toolName: 'bot.request_task', content: [{ type: 'text' as const, text: 'done' }], isError: false, timestamp: 3 },
+    ],
+  }
+  const before = JSON.stringify(input)
+  for (const stream of [runtime.models.streamSimple(model, input), runtime.models.stream(model, input)]) {
+    for await (const event of stream) {
+      if (event.type === 'toolcall_end') expect(event.toolCall.name).toBe('bot.request_task')
+      if ('partial' in event) for (const part of event.partial.content) if (part.type === 'toolCall') expect(part.name).toBe('bot.request_task')
+    }
+    expect((await stream.result()).content).toMatchObject([{ type: 'toolCall', name: 'bot.request_task' }])
+  }
+  expect(requests).toHaveLength(2)
+  for (const { body } of requests) {
+    const names = (body.tools as any[]).map((tool) => tool.function.name)
+    expect(names.every((name: string) => /^[a-zA-Z0-9_-]{1,64}$/.test(name))).toBe(true)
+    expect(new Set(names).size).toBe(names.length)
+    expect(names[0]).toBe('read')
+    expect(names[2]).toBe('bot_request_task')
+    expect((body.messages as any[]).find((message) => message.role === 'assistant').tool_calls[0].function.name).toBe(names[1])
+  }
+  expect(JSON.stringify(input)).toBe(before)
+})
+
+test('Durable executes the original dotted tool after an HTTP tool call and continues', async () => {
+  const { baseUrl, requests } = await server('bot.request_task')
+  const directory = await mkdtemp(join(tmpdir(), 'nook-model-tools-'))
+  directories.push(directory)
+  const credentials = new MemoryCredentialStore()
+  credentials.setApiKey('custom', 'synthetic-key')
+  const runtime = new AgentModels(() => config(baseUrl), () => credentials, emptyAuth)
+  const execute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'completed' }] }))
+  const tool = defineTool({ name: 'bot.request_task', description: 'bot.request_task', parameters: Type.Object({}), replay: 'safe', execute })
+  const registry = createRegistry()
+  const extension = defineExtension({ name: 'test.tools', tools: [tool] })
+  registry.install(extension)
+  const engine = await AgentEngine.open(join(directory, 'durable.sqlite'), {
+    models: runtime.models, registry, settings: { retry: { enabled: false } },
+  }, context())
+  engines.push(engine)
+  await engine.create('thread', { ...runtime.selection(), tools: [tool], extensions: [extension] }, context())
+  const conversation = await engine.conversation('thread', context())
+  const submission = await conversation.submit({ type: 'input', content: 'hello', requestId: 'request' }, context())
+  expect((await submission.wait(context())).status).toBe('done')
+  await conversation.waitForIdle(context())
+  expect(execute).toHaveBeenCalledOnce()
+  expect(requests).toHaveLength(2)
+  const entries = await conversation.entries({ order: 'ascending' }, 100, undefined, context())
+  expect(JSON.stringify(entries.items)).toContain('bot.request_task')
+  expect(JSON.stringify(entries.items)).toContain('reply')
+}, 20_000)
