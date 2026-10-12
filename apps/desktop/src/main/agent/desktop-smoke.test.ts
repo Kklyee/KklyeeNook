@@ -190,6 +190,10 @@ app.on('browser-window-created', (_event, window) => {
         await writeFile(join(screenshotRoot, 'bot-editor.png'), (await window.webContents.capturePage()).toPNG())
       }
       const created = await window.webContents.executeJavaScript(${JSON.stringify('(' + verifyDesktopCreateBot.toString() + ')()')})
+      const { execFile } = await import('node:child_process')
+      const { promisify } = await import('node:util')
+      const duplicate = await promisify(execFile)(process.execPath, [${JSON.stringify(join(directory, 'secondary.mjs'))}], { env: process.env, windowsHide: true, timeout: 15000 })
+      if (duplicate.stdout.includes('[agent-backend] process_spawned') || duplicate.stderr.includes('database is locked')) throw new Error('Second application started a duplicate backend')
       process.stdout.write('DESKTOP_SMOKE=' + JSON.stringify({ ...result, restored, created }) + '\\n')
       app.quit()
     } catch (error) { console.error(error); app.exit(1) }
@@ -199,6 +203,10 @@ await import('./main/index.mjs')
 `
     const path = join(directory, 'main.mjs')
     await writeFile(path, script)
+    await writeFile(
+      join(directory, 'secondary.mjs'),
+      `import { app } from 'electron'; app.setPath('userData', ${JSON.stringify(data)}); app.setAppPath(${JSON.stringify(join(directory, 'apps', 'desktop'))}); await import('./main/index.mjs')`,
+    )
     await execute(process.execPath, ['--check', path], { windowsHide: true })
     const env: NodeJS.ProcessEnv = {
       ...process.env,
