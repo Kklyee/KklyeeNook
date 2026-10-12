@@ -134,7 +134,7 @@ test('My Bots remains exclusive after return, delayed selection and collapsed up
     expect(view.element.querySelector('[data-view="my-bots"]')).not.toBeNull()
     expect(view.element.querySelector('[data-view="bot-threads"]')).toBeNull()
     expect(view.element.textContent).not.toContain('WORKSPACES')
-    expect(view.element.textContent).not.toContain('主会话')
+    expect(view.element.textContent).not.toContain('聊天')
     await view.click(view.element.querySelector('[aria-label="Helper"]'))
     expect(view.element.textContent).toContain('Helper work')
     expect(view.element.textContent).not.toContain('Coder work')

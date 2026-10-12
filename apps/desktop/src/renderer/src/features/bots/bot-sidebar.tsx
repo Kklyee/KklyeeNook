@@ -267,11 +267,11 @@ function BotThreads({
             onClick={() => void run(() => store.selectBot(bot.id))}
           >
             <MessageCircleIcon className="size-4" />
-            <span>主会话</span>
+            <span>聊天</span>
           </Button>
           {bot.kind === 'coding' ? (
             <>
-              <div className="flex h-7 items-center justify-between px-2 text-[11px] text-muted-foreground">
+              <div className="mt-2 flex h-7 items-center justify-between px-2 text-[11px] text-muted-foreground">
                 <span>WORKSPACES</span>
                 <Button
                   variant="ghost"
