@@ -401,7 +401,7 @@ export function RemoteThread({
                 onStop={onStop}
                 botName={botName}
               />
-              <SessionStats messages={transcript} compact>
+              <SessionStats messages={transcript} compact status={running ? '正在执行…' : '就绪'}>
                 {contextBudget && <ComposerContext budget={contextBudget} className="shrink-0" />}
               </SessionStats>
             </div>

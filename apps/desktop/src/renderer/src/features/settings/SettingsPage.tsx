@@ -10,6 +10,7 @@ import { settingsNavigation, type SettingsTab } from './settingsNavigation'
 import { AppearanceSettings } from './AppearanceSettings'
 import { RemoteSettings } from './RemoteSettings'
 import { ScheduledTasks } from './scheduled-tasks'
+import { ConversationSettings } from './ConversationSettings'
 
 export function SettingsPage({
   settings,
@@ -106,7 +107,7 @@ export function SettingsPage({
 }
 
 const settingsPanels: Record<
-  Exclude<SettingsTab, 'appearance' | 'remote' | 'tasks'>,
+  Exclude<SettingsTab, 'appearance' | 'remote' | 'tasks' | 'conversations'>,
   ComponentType<{ settings: AgentSettingsSnapshot; onChanged: () => Promise<void> }>
 > = { model: ModelSettings, agent: AgentSettings, plugins: PluginSettings }
 
@@ -124,6 +125,7 @@ function SettingsContent({
   if (tab === 'appearance') return <AppearanceSettings />
   if (tab === 'remote') return <RemoteSettings />
   if (tab === 'tasks') return <ScheduledTasks />
+  if (tab === 'conversations') return <ConversationSettings />
   if (error)
     return (
       <p role="alert" className="text-destructive text-sm">

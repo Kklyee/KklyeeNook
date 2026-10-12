@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
+    "test:ui": "vitest run --config vitest.ui.config.ts",
     "pretest": "pnpm --filter @kklyeenook/desktop sandbox:build",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",

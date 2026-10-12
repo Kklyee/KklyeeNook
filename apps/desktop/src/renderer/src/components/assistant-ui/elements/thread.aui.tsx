@@ -373,16 +373,8 @@ const Composer: FC<{
           <CommandMenu commands={commands} onCommand={(id) => void submit(false, `/${id}`)} />
         </ComposerPrimitive.Root>
       </ComposerPrimitive.Unstable_TriggerPopoverRoot>
-      <SessionStats>
-        {isCompacting ? (
-          <span
-            data-slot="composer-context-compaction"
-            aria-live="polite"
-            className="shrink-0 text-xs"
-          >
-            正在整理上下文…
-          </span>
-        ) : budget.tokens !== undefined &&
+      <SessionStats status={isCompacting ? '正在整理上下文…' : undefined}>
+        {budget.tokens !== undefined &&
           budget.contextWindow !== undefined &&
           budget.contextWindow > 0 ? (
           <ComposerContext budget={budget} className="shrink-0" />
@@ -400,8 +392,8 @@ const ComposerAction: FC<{
   const pending = usePendingSend()
 
   return (
-    <div className="aui-composer-action-wrapper relative flex items-center justify-between">
-      <div className="flex items-center gap-1">
+    <div className="aui-composer-action-wrapper relative flex min-w-0 items-center justify-between gap-2">
+      <div className="flex min-w-0 flex-1 items-center gap-0.5">
         <PermissionSelector />
         {modelSelector && modelSelector.models.length > 0 && (
           <ModelSelectorRoot
@@ -411,14 +403,14 @@ const ComposerAction: FC<{
             onValueChange={modelSelector.onValueChange}
             onEffortChange={modelSelector.onEffortChange}
           >
-            <ModelSelectorTrigger variant="ghost" size="sm" disabled={modelSelector.disabled}>
-              <ModelSelectorValue placeholder="选择模型" />
+            <ModelSelectorTrigger variant="ghost" size="sm" className="h-7 min-w-0 max-w-full gap-1 px-1.5 text-[11px] font-normal [&_[data-slot=model-selector-value]]:gap-1 [&_[data-slot=model-selector-value]>span]:font-normal [&_[data-slot=model-selector-value]>span]:text-muted-foreground" disabled={modelSelector.disabled}>
+              <ModelSelectorValue placeholder="选择模型" className="min-w-0" />
             </ModelSelectorTrigger>
             <ModelSelectorContent searchable />
           </ModelSelectorRoot>
         )}
       </div>
-      <div className="flex items-center gap-1.5">
+      <div className="flex shrink-0 items-center gap-1">
         <AuiIf condition={(s) => s.thread.capabilities.dictation}>
           <AuiIf condition={(s) => s.composer.dictation == null}>
             <ComposerPrimitive.Dictate

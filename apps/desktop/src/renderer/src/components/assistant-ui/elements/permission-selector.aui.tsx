@@ -47,12 +47,12 @@ export function PermissionSelector() {
     }
   }
   return (
-    <div>
+    <div className="shrink-0">
       <Select value={mode} onValueChange={(value) => void change(value)}>
         <SelectTrigger
           disabled={running}
           aria-label="权限模式"
-          className="h-7 w-auto gap-1 border-0 text-xs text-muted-foreground"
+          className="h-7 w-auto gap-1 border-0 px-1.5 text-[11px] font-normal text-muted-foreground"
         >
           <ShieldCheckIcon className="size-3.5" />
           {PERMISSION_LABELS[mode]}

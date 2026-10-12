@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   ComposerPrimitive,
   useAui,
@@ -18,6 +18,11 @@ import {
 import { useChatStore, useChatRuntimeSnapshot } from '../runtime/chat-runtime'
 
 const Targets = createContext<MentionTarget[]>([])
+
+function MentionCandidates({ children }: { children: ReactNode }) {
+  const { open } = unstable_useTriggerPopoverScopeContext()
+  return open ? children : null
+}
 
 function UnavailableBots({ row }: { row: (bot: MentionTarget) => React.ReactNode }) {
   const targets = useContext(Targets)
@@ -178,38 +183,40 @@ export function BotMentionInput({
         aria-label="提及 Bot"
       >
         <ComposerPrimitive.Unstable_TriggerPopover.Directive formatter={botMentionFormatter} />
-        <div className="flex justify-between px-2 py-1 text-[11px] text-muted-foreground">
-          <span>提及 Bot</span>
-          <span>Esc 关闭 · 最多 3 个</span>
-        </div>
-        <ComposerPrimitive.Unstable_TriggerPopoverItems>
-          {(items) => (
-            <>
-              {items.map((item, index) => (
-                <ComposerPrimitive.Unstable_TriggerPopoverItem
-                  key={item.id}
-                  item={item}
-                  index={index}
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-hover data-[highlighted]:bg-hover"
-                  title={item.id}
-                >
-                  {row(targets.find((bot) => bot.botId === item.id)!)}
-                </ComposerPrimitive.Unstable_TriggerPopoverItem>
-              ))}
-              {count >= 3 && (
-                <p className="px-2 py-2 text-xs text-muted-foreground">
-                  已达到 3 个 Bot 的上限，删除一个提及后可继续选择。
-                </p>
-              )}
-              <UnavailableBots row={row} />
-              {error && (
-                <p role="alert" className="px-2 py-2 text-xs text-destructive">
-                  {error}
-                </p>
-              )}
-            </>
-          )}
-        </ComposerPrimitive.Unstable_TriggerPopoverItems>
+        <MentionCandidates>
+          <div className="flex justify-between px-2 py-1 text-[11px] text-muted-foreground">
+            <span>提及 Bot</span>
+            <span>Esc 关闭 · 最多 3 个</span>
+          </div>
+          <ComposerPrimitive.Unstable_TriggerPopoverItems>
+            {(items) => (
+              <>
+                {items.map((item, index) => (
+                  <ComposerPrimitive.Unstable_TriggerPopoverItem
+                    key={item.id}
+                    item={item}
+                    index={index}
+                    className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-hover data-[highlighted]:bg-hover"
+                    title={item.id}
+                  >
+                    {row(targets.find((bot) => bot.botId === item.id)!)}
+                  </ComposerPrimitive.Unstable_TriggerPopoverItem>
+                ))}
+                {count >= 3 && (
+                  <p className="px-2 py-2 text-xs text-muted-foreground">
+                    已达到 3 个 Bot 的上限，删除一个提及后可继续选择。
+                  </p>
+                )}
+                <UnavailableBots row={row} />
+                {error && (
+                  <p role="alert" className="px-2 py-2 text-xs text-destructive">
+                    {error}
+                  </p>
+                )}
+              </>
+            )}
+          </ComposerPrimitive.Unstable_TriggerPopoverItems>
+        </MentionCandidates>
       </ComposerPrimitive.Unstable_TriggerPopover>
     </Targets.Provider>
   )

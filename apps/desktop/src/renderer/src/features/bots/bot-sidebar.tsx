@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { ThreadListPrimitive, useAuiState } from '@assistant-ui/react'
 import {
   ArrowLeftIcon,
@@ -10,12 +10,14 @@ import {
   SearchIcon,
   Settings2Icon,
 } from 'lucide-react'
-import { BotAvatar } from '@kklyeenook/ui/components/bot-avatar'
+import type { BotSummary } from '@kklyeenook/shared/bot/bot'
+import type { WorkspaceAttachResult } from '@kklyeenook/shared/workspace/workspace'
 import { BOT_STATE_LABELS } from '@kklyeenook/shared/bot/bot-state'
+import { BotAvatar } from '@kklyeenook/ui/components/bot-avatar'
+import { threadListRowClassName } from '@kklyeenook/ui/assistant-ui/thread-list-row'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
-import { threadListRowClassName } from '@kklyeenook/ui/assistant-ui/thread-list-row'
 import {
   Dialog,
   DialogContent,
@@ -23,7 +25,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from '../../components/ui/dialog'
-import type { WorkspaceAttachResult } from '@kklyeenook/shared/workspace/workspace'
 import {
   Collapsible,
   CollapsibleContent,
@@ -40,22 +41,119 @@ import { useWorkspaces } from '../workspaces/WorkspaceProvider'
 export function BotSidebar() {
   const store = useChatStore()
   const snapshot = useChatRuntimeSnapshot()
-  const { workspaces, reload } = useWorkspaces()
   const { state, isMobile } = useSidebar()
   const collapsed = state === 'collapsed' && !isMobile
+  const [view, setView] = useState<'bots' | 'threads'>('bots')
+  const bot = snapshot.bots.find((bot) => bot.id === snapshot.selectedBotId)
+  return (
+    <ThreadListRoot className="min-h-full gap-0.5">
+      {view === 'bots' || !bot ? (
+        <MyBotsList
+          bots={snapshot.bots}
+          selectedBotId={snapshot.selectedBotId}
+          collapsed={collapsed}
+          onCreate={() => store.editBot('new')}
+          onSelect={(id) => {
+            setView('threads')
+            void store.selectBot(id).catch(() => undefined)
+          }}
+        />
+      ) : (
+        <BotThreads key={bot.id} bot={bot} collapsed={collapsed} onBack={() => setView('bots')} />
+      )}
+    </ThreadListRoot>
+  )
+}
+
+function MyBotsList({
+  bots,
+  selectedBotId,
+  collapsed,
+  onSelect,
+  onCreate,
+}: {
+  bots: readonly BotSummary[]
+  selectedBotId?: string
+  collapsed: boolean
+  onSelect: (id: string) => void
+  onCreate: () => void
+}) {
+  return (
+    <div data-view="my-bots" className="flex flex-col gap-0.5">
+      <header
+        className={
+          collapsed ? 'flex h-11 items-center justify-center' : 'flex h-11 items-center gap-1 px-2'
+        }
+      >
+        {!collapsed && <h1 className="min-w-0 flex-1 text-[13px] font-medium">My Bots</h1>}
+        <Button
+          variant="ghost"
+          size={collapsed ? 'icon-sm' : 'sm'}
+          className="h-7 gap-1 px-1.5 text-xs font-normal text-muted-foreground"
+          aria-label="创建 Bot"
+          title="创建 Bot"
+          onClick={onCreate}
+        >
+          <PlusIcon className="size-3.5" />
+          {!collapsed && '创建 Bot'}
+        </Button>
+      </header>
+      {bots.map((bot) => (
+        <Button
+          key={bot.id}
+          variant="ghost"
+          title={collapsed ? bot.name : undefined}
+          aria-label={bot.name}
+          aria-pressed={bot.id === selectedBotId}
+          data-active={bot.id === selectedBotId || undefined}
+          className={[
+            threadListRowClassName,
+            collapsed ? 'h-12 justify-center px-0' : 'h-14 justify-start gap-2 px-2 text-left',
+            'font-normal',
+          ].join(' ')}
+          onClick={() => onSelect(bot.id)}
+        >
+          <BotAvatar
+            avatar={bot.avatar}
+            name={bot.name}
+            state={bot.state}
+            size={collapsed ? 30 : 36}
+          />
+          {!collapsed && (
+            <>
+              <span className="min-w-0 flex-1 text-left">
+                <span className="block truncate text-[13px] font-medium">{bot.name}</span>
+                <span className="block truncate text-[11px] text-muted-foreground">
+                  {bot.state === 'idle' ? bot.role : BOT_STATE_LABELS[bot.state]}
+                </span>
+              </span>
+              <ChevronRightIcon className="size-3 text-muted-foreground" />
+            </>
+          )}
+        </Button>
+      ))}
+    </div>
+  )
+}
+
+function BotThreads({
+  bot,
+  collapsed,
+  onBack,
+}: {
+  bot: BotSummary
+  collapsed: boolean
+  onBack: () => void
+}) {
+  const store = useChatStore()
+  const snapshot = useChatRuntimeSnapshot()
+  const { workspaces, reload } = useWorkspaces()
   const items = useAuiState((state) => state.threads.threadItems)
   const ids = useAuiState((state) => state.threads.threadIds)
-  const [showBots, setShowBots] = useState(false)
   const [query, setQuery] = useState('')
   const [error, setError] = useState('')
   const [botMenuOpen, setBotMenuOpen] = useState(false)
   const [pendingWorkspace, setPendingWorkspace] = useState<WorkspaceAttachResult>()
-  const bot = snapshot.bots.find((bot) => bot.id === snapshot.selectedBotId)
-  const coderView = bot?.kind === 'coding' && !showBots && !collapsed
-  useEffect(() => {
-    setShowBots(false)
-    setQuery('')
-  }, [snapshot.selectedBotId])
   const run = async (action: () => Promise<unknown>) => {
     setError('')
     try {
@@ -70,7 +168,7 @@ export function BotSidebar() {
       if (result?.candidates) setPendingWorkspace(result)
       else if (result?.workspace) {
         await reload()
-        store.editBot(bot?.id)
+        store.editBot(bot.id)
       }
     })
   const attachWorkspace = (relinkId?: string) =>
@@ -83,7 +181,7 @@ export function BotSidebar() {
       })
       setPendingWorkspace(undefined)
       await reload()
-      store.editBot(bot?.id)
+      store.editBot(bot.id)
     })
   const rows = ids
     .map((id, index) => ({
@@ -95,9 +193,10 @@ export function BotSidebar() {
     }))
     .filter(
       ({ thread }) =>
-        thread?.botId === bot?.id &&
-        thread?.id !== bot?.mainThreadId &&
-        (!query || thread?.title?.toLocaleLowerCase().includes(query.toLocaleLowerCase())),
+        !thread?.archived &&
+        thread?.botId === bot.id &&
+        thread.id !== bot.mainThreadId &&
+        (!query || thread.title?.toLocaleLowerCase().includes(query.toLocaleLowerCase())),
     )
   const renderRows = (workspaceId: string | null, includeWorkspaces = false) =>
     rows
@@ -105,232 +204,166 @@ export function BotSidebar() {
       .map(({ id, index }) => (
         <ThreadListPrimitive.ItemByIndex key={id} index={index} components={{ ThreadListItem }} />
       ))
-  const archived = snapshot.threads.filter(
-    (thread) => thread.botId === bot?.id && thread.archived && thread.id !== bot?.mainThreadId,
-  )
   return (
-    <ThreadListRoot className="min-h-full gap-1">
+    <div data-view="bot-threads" className="flex flex-col gap-0.5">
       {(error || snapshot.current.error) && (
         <p role="alert" className="px-2 text-xs text-destructive">
           {error || snapshot.current.error}
         </p>
       )}
-      {(
-        <header className="flex min-h-12 items-center gap-2 px-2">
-          {coderView ? (
-            <>
+      <header
+        className={
+          collapsed ? 'flex flex-col items-center gap-1 py-1' : 'flex h-11 items-center gap-1 px-1'
+        }
+      >
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="返回 My Bots"
+          title="返回 My Bots"
+          onClick={onBack}
+        >
+          <ArrowLeftIcon className="size-4" />
+        </Button>
+        <Popover open={botMenuOpen} onOpenChange={setBotMenuOpen}>
+          <PopoverTrigger
+            render={
               <Button
                 variant="ghost"
-                size="icon-sm"
-                aria-label="返回 My Bots"
-                onClick={() => setShowBots(true)}
-              >
-                <ArrowLeftIcon />
-              </Button>
-              <Popover open={botMenuOpen} onOpenChange={setBotMenuOpen}>
-                <PopoverTrigger render={<Button variant="ghost" className="h-auto min-w-0 flex-1 justify-start gap-2 px-1 py-1" aria-label={`${bot.name} 菜单`} />}>
-                  <BotAvatar avatar={bot.avatar} name={bot.name} state={bot.state} size={32} />
-                  <span className="min-w-0 flex-1 text-left"><span className="block truncate text-sm font-semibold">{bot.name}</span><span className="block truncate text-[11px] font-normal text-muted-foreground">{bot.role}</span></span>
-                  <ChevronDownIcon className="size-3 text-muted-foreground" />
-                </PopoverTrigger>
-                <PopoverContent align="start" className="w-48">
-                  <Button variant="ghost" className="justify-start" onClick={() => { setBotMenuOpen(false); store.editBot(bot.id) }}><Settings2Icon className="size-4" />Bot 设置</Button>
-                </PopoverContent>
-              </Popover>
-            </>
-          ) : (
-            <Popover>
-              <PopoverTrigger render={<Button variant="ghost" className="min-w-0 flex-1 justify-start px-0" aria-label="Bot 菜单" />}>
-                {collapsed ? <Settings2Icon /> : <><span className="text-base font-semibold">Chat</span><ChevronDownIcon className="size-3" /></>}
-              </PopoverTrigger>
-              <PopoverContent align="start" className="w-48"><Button variant="ghost" className="justify-start" onClick={() => store.editBot(bot?.id ?? snapshot.bots[0]?.id ?? 'new')}>Bot 设置</Button></PopoverContent>
-            </Popover>
-          )}
-          {!collapsed && <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={coderView ? '新建开发会话' : 'Create Bot'}
-            onClick={() =>
-              coderView ? void run(() => store.createThread()) : store.editBot('new')
+                className={
+                  collapsed
+                    ? 'h-9 min-w-0 justify-center px-0'
+                    : 'h-9 min-w-0 flex-1 justify-start gap-2 px-1'
+                }
+                aria-label={bot.name + ' 菜单'}
+              />
             }
           >
-            <PlusIcon />
-          </Button>}
-        </header>
-      )}
-      {coderView ? (
+            <BotAvatar avatar={bot.avatar} name={bot.name} state={bot.state} size={28} />
+            {!collapsed && (
+              <>
+                <span className="min-w-0 flex-1 truncate text-left text-[13px] font-medium">
+                  {bot.name}
+                </span>
+                <ChevronDownIcon className="size-3 text-muted-foreground" />
+              </>
+            )}
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-48">
+            <Button
+              variant="ghost"
+              className="justify-start"
+              onClick={() => {
+                setBotMenuOpen(false)
+                store.editBot(bot.id)
+              }}
+            >
+              <Settings2Icon className="size-4" />
+              Bot 设置
+            </Button>
+          </PopoverContent>
+        </Popover>
+        {!collapsed && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="新建会话"
+            onClick={() => void run(() => store.createThread({ botId: bot.id }))}
+          >
+            <PlusIcon className="size-4" />
+          </Button>
+        )}
+      </header>
+      {!collapsed && (
         <>
           <Button
             variant="ghost"
-            className={`${threadListRowClassName} justify-start gap-2 px-2 text-left text-[13px] font-normal`}
+            className={
+              threadListRowClassName + ' justify-start gap-2 px-2 text-left text-[13px] font-normal'
+            }
             aria-pressed={snapshot.selectedThreadId === bot.mainThreadId}
-            data-active={snapshot.selectedThreadId === bot.mainThreadId ? '' : undefined}
+            data-active={snapshot.selectedThreadId === bot.mainThreadId || undefined}
             onClick={() => void run(() => store.selectBot(bot.id))}
           >
             <MessageCircleIcon className="size-4" />
             <span>主会话</span>
           </Button>
-          <div className="flex items-center justify-between px-2 text-[11px] text-faint-foreground">
-            <span>WORKSPACES</span>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label="添加 Workspace"
-              onClick={() => void pickWorkspace()}
-            >
-              <PlusIcon />
-            </Button>
-          </div>
-          <div className="flex items-center gap-2 px-2">
-            <SearchIcon className="size-3.5 text-faint-foreground" />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="搜索开发会话…"
-              aria-label="搜索开发会话"
-              className="h-7 border-0 bg-transparent text-xs"
-            />
-          </div>
-          {workspaces
-            .filter(
-              (workspace) =>
-                bot.workspaceIds.includes(workspace.id) ||
-                rows.some(({ thread }) => thread?.workspaceId === workspace.id),
-            )
-            .map((workspace) => (
-              <Collapsible
-                key={workspace.id}
-                defaultOpen={workspace.id === snapshot.current.metadata?.workspaceId}
-                className="space-y-1"
-              >
-                <div className="flex items-center gap-1">
-                <CollapsibleTrigger className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left text-[13px] hover:bg-hover">
-                  <FolderIcon className="size-4 text-muted-foreground" />
-                  <span className="flex-1 truncate">{workspace.displayName}</span>
-                  <ChevronDownIcon className="size-3" />
-                </CollapsibleTrigger>
-                <Button variant="ghost" size="icon-xs" aria-label={`为 ${workspace.displayName} 新建会话`} disabled={!bot.workspaceIds.includes(workspace.id) || workspace.status !== 'attached'} onClick={() => void run(() => store.createThread({ botId: bot.id, workspaceId: workspace.id }))}><PlusIcon className="size-3" /></Button>
-                </div>
-                <CollapsibleContent className="ml-3 flex flex-col gap-0.5">
-                  {renderRows(workspace.id)}
-                  {!rows.some(({ thread }) => thread?.workspaceId === workspace.id) && <p className="px-5 py-1 text-xs text-muted-foreground">暂无会话</p>}
-                </CollapsibleContent>
-              </Collapsible>
-            ))}
-          {rows.some(({ thread }) => !thread?.workspaceId) && (
-            <Collapsible defaultOpen>
-              <CollapsibleTrigger className="px-2 py-2 text-xs text-muted-foreground">
-                其他会话
-              </CollapsibleTrigger>
-              <CollapsibleContent>{renderRows(null)}</CollapsibleContent>
-            </Collapsible>
-          )}
-          {!bot.workspaceIds.length && (
-            <p className="px-2 py-3 text-xs leading-5 text-muted-foreground">
-              在 Coder 设置中授权 Workspace，然后创建开发会话。
-            </p>
-          )}
-        </>
-      ) : (
-        <>
-          {!collapsed && (
-            <p className="px-2 py-2 text-[11px] font-medium tracking-wide text-faint-foreground">
-              MY BOTS
-            </p>
-          )}
-          {snapshot.bots.map((item) => (
-            <Button
-              key={item.id}
-              variant="ghost"
-              title={collapsed ? item.name : undefined}
-              aria-label={item.name}
-              aria-pressed={item.id === snapshot.selectedBotId}
-              className={
-                collapsed
-                  ? 'h-12 justify-center rounded-xl px-0'
-                  : 'h-auto min-h-17 justify-start gap-3 rounded-xl px-3 py-3 text-left'
-              }
-              style={
-                item.id === snapshot.selectedBotId
-                  ? {
-                      background: `color-mix(in srgb, ${item.avatar.accentColor} 12%, transparent)`,
-                    }
-                  : undefined
-              }
-              onClick={() => {
-                setShowBots(false)
-                void run(() => store.selectBot(item.id))
-              }}
-            >
-              <BotAvatar
-                avatar={item.avatar}
-                name={item.name}
-                state={item.state}
-                size={collapsed ? 30 : 42}
-              />
-              {!collapsed && (
-                <>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-foreground">
-                      {item.name}
-                    </span>
-                    <span className="mt-1 block truncate text-xs text-muted-foreground">
-                      {item.state === 'idle' ? item.role : BOT_STATE_LABELS[item.state]}
-                    </span>
-                  </span>
-                  <ChevronRightIcon className="size-3.5 text-faint-foreground" />
-                </>
+          {bot.kind === 'coding' ? (
+            <>
+              <div className="flex h-7 items-center justify-between px-2 text-[11px] text-muted-foreground">
+                <span>WORKSPACES</span>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="添加 Workspace"
+                  onClick={() => void pickWorkspace()}
+                >
+                  <PlusIcon className="size-3" />
+                </Button>
+              </div>
+              <div className="flex items-center gap-1 px-2">
+                <SearchIcon className="size-3 text-muted-foreground" />
+                <Input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="搜索会话…"
+                  aria-label="搜索开发会话"
+                  className="h-7 border-0 bg-transparent text-xs"
+                />
+              </div>
+              {workspaces
+                .filter(
+                  (workspace) =>
+                    bot.workspaceIds.includes(workspace.id) ||
+                    rows.some(({ thread }) => thread?.workspaceId === workspace.id),
+                )
+                .map((workspace) => (
+                  <Collapsible
+                    key={workspace.id}
+                    defaultOpen={workspace.id === snapshot.current.metadata?.workspaceId}
+                  >
+                    <div className="flex items-center gap-0.5">
+                      <CollapsibleTrigger className="flex h-[34px] min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left text-[13px] text-muted-foreground hover:bg-hover hover:text-foreground">
+                        <FolderIcon className="size-4" />
+                        <span className="flex-1 truncate">{workspace.displayName}</span>
+                        <ChevronDownIcon className="size-3" />
+                      </CollapsibleTrigger>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label={'为 ' + workspace.displayName + ' 新建会话'}
+                        disabled={
+                          !bot.workspaceIds.includes(workspace.id) ||
+                          workspace.status !== 'attached'
+                        }
+                        onClick={() =>
+                          void run(() =>
+                            store.createThread({ botId: bot.id, workspaceId: workspace.id }),
+                          )
+                        }
+                      >
+                        <PlusIcon className="size-3" />
+                      </Button>
+                    </div>
+                    <CollapsibleContent className="ml-3 flex flex-col gap-0.5">
+                      {renderRows(workspace.id)}
+                      {!rows.some(({ thread }) => thread?.workspaceId === workspace.id) && (
+                        <p className="px-8 py-1 text-xs text-muted-foreground">暂无会话</p>
+                      )}
+                    </CollapsibleContent>
+                  </Collapsible>
+                ))}
+              {renderRows(null)}
+              {!bot.workspaceIds.length && (
+                <p className="px-2 py-2 text-xs leading-5 text-muted-foreground">
+                  在 Bot 设置中授权 Workspace，然后创建开发会话。
+                </p>
               )}
-            </Button>
-          ))}
-          {!collapsed && bot && (
-            <div className="mt-2">
-              <div className="flex flex-col gap-1">
-                {renderRows(null, true)}
-                <Button
-                  variant="ghost"
-                  className="justify-start text-xs font-normal"
-                  onClick={() => void run(() => store.createThread({ botId: bot.id }))}
-                >
-                  <PlusIcon />
-                  新建会话
-                </Button>
-              </div>
-            </div>
+            </>
+          ) : (
+            renderRows(null, true)
           )}
         </>
-      )}
-      {!collapsed && archived.length > 0 && (
-        <details className="mt-3 px-2">
-          <summary className="cursor-pointer text-xs text-muted-foreground">
-            已归档 · {archived.length}
-          </summary>
-          <div className="mt-2 space-y-1">
-            {archived.map((thread) => (
-              <div key={thread.id} className="flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  className="min-w-0 flex-1 justify-start truncate text-xs"
-                  onClick={() => void run(() => store.switchToThread(thread.id))}
-                >
-                  {thread.title}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => void run(() => store.archive(thread.id, false))}
-                >
-                  恢复
-                </Button>
-              </div>
-            ))}
-          </div>
-        </details>
-      )}
-      {error && (
-        <p role="alert" className="px-2 text-xs text-destructive">
-          {error}
-        </p>
       )}
       <Dialog
         open={!!pendingWorkspace}
@@ -363,6 +396,6 @@ export function BotSidebar() {
           )}
         </DialogContent>
       </Dialog>
-    </ThreadListRoot>
+    </div>
   )
 }

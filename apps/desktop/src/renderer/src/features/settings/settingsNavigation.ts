@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import {
   BotIcon,
+  MessagesSquareIcon,
   CalendarClockIcon,
   ImageIcon,
   PuzzleIcon,
@@ -8,7 +9,7 @@ import {
   SmartphoneIcon,
 } from 'lucide-react'
 
-export type SettingsTab = 'appearance' | 'remote' | 'tasks' | 'model' | 'agent' | 'plugins'
+export type SettingsTab = 'appearance' | 'remote' | 'tasks' | 'conversations' | 'model' | 'agent' | 'plugins'
 export type SettingsLayout = 'preferences' | 'manager'
 
 export type SettingsNavigationItem = {
@@ -47,6 +48,15 @@ export const settingsNavigation: SettingsNavigationItem[] = [
     description: '让 Agent 按计划自动执行提示词。',
     keywords: 'tasks scheduler cron automation 定时 计划 自动化',
     icon: CalendarClockIcon,
+    layout: 'manager',
+  },
+  {
+    id: 'conversations',
+    group: '应用',
+    label: '会话管理',
+    description: '按 Bot 查看会话，管理归档与恢复。',
+    keywords: 'conversations threads archive 会话 归档 恢复 Bot',
+    icon: MessagesSquareIcon,
     layout: 'manager',
   },
   {

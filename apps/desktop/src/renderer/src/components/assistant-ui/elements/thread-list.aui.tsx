@@ -143,7 +143,7 @@ export const ThreadListItem: FC = () => {
         <ThreadListItemPrimitive.Trigger
           ref={triggerRef}
           data-slot="aui_thread-list-item-trigger"
-          className={threadListTriggerClassName}
+          className={cn(threadListTriggerClassName, 'justify-start text-left')}
           onClick={() => {
             const workspaceId = session?.workspaceId
             setActiveWorkspaceId(
