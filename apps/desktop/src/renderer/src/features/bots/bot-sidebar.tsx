@@ -221,7 +221,7 @@ function BotThreads({
           title="返回 My Bots"
           onClick={onBack}
         >
-          <ArrowLeftIcon className="size-4" />
+          <ArrowLeftIcon className="size-3.5" strokeWidth={1.5} />
         </Button>
         <Button
           variant="ghost"
@@ -251,7 +251,7 @@ function BotThreads({
             aria-label="新建会话"
             onClick={() => void run(() => store.createThread({ botId: bot.id }))}
           >
-            <PlusIcon className="size-4" />
+            <PlusIcon className="size-3.5" strokeWidth={1.5} />
           </Button>
         )}
       </header>
