@@ -7,7 +7,7 @@ import {
 import type { AgentQueueMutation } from '@kklyeenook/shared/agent/chat-protocol'
 
 export function QueuedMessages() {
-  const { queue, clearQueue, refresh, updateQueue } = useChatRuntimeExtras()
+  const { queue, queueItems, clearQueue, refresh, updateQueue } = useChatRuntimeExtras()
   const [clearing, setClearing] = useState(false)
   const [error, setError] = useState<string>()
   const clear = async () => {
@@ -30,6 +30,7 @@ export function QueuedMessages() {
     setError(undefined)
     try {
       await updateQueue({
+        ...(action.action === 'steer' ? { itemId: message.id.split(':')[1] } : {}),
         mode: message.steer ? 'steer' : 'followUp',
         expected: message.expected,
         index: message.index,
@@ -47,14 +48,14 @@ export function QueuedMessages() {
   }
   const messages = [
     ...queue.steering.map((text, index) => ({
-      id: `steer:${index}`,
+      id: `steer:${queueItems.filter((item) => item.mode === 'steer')[index].id}`,
       text,
       steer: true,
       index,
       expected: [...queue.steering],
     })),
     ...queue.followUp.map((text, index) => ({
-      id: `followUp:${index}`,
+      id: `followUp:${queueItems.filter((item) => item.mode === 'followUp')[index].id}`,
       text,
       steer: false,
       index,

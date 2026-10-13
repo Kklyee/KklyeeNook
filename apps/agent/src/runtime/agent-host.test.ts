@@ -1016,6 +1016,15 @@ test('HTTP reports busy and stale queues as conflicts and cancels execution befo
     (await request(`/threads/unrelated-thread/submissions/${queued.submissionId}`, 'DELETE'))
       .status,
   ).toBe(404)
+  const steer = {
+    mode: 'followUp', itemId: String(queued.submissionId), expected: ['stale'], index: 4, action: 'steer',
+  }
+  expect((await request('/threads/continued-thread/queue/item', 'POST', steer)).status).toBe(200)
+  const repeated = await request('/threads/continued-thread/queue/item', 'POST', steer)
+  expect(repeated.status).toBe(200)
+  expect(await repeated.json()).toEqual([
+    expect.objectContaining({ id: queued.submissionId, mode: 'steer' }),
+  ])
   await request('/threads/continued-thread', 'DELETE')
   expect(await host.pendingApprovals('continued-thread', context())).toEqual([])
   expect(

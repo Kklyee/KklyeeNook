@@ -65,6 +65,24 @@ const message = (text: string): AppendMessage => ({
   metadata: { custom: {} },
 })
 
+test('steer refreshes a consumed queue item without resubmitting it', async () => {
+  let mutations = 0
+  let refreshes = 0
+  const store = setup(async (url) => {
+    if (url.endsWith('/queue/item')) {
+      mutations++
+      return new Response(JSON.stringify({ error: { code: 'queue_changed', message: 'Queue changed' } }), { status: 409 })
+    }
+    if (url.endsWith('/threads')) return response([metadata('a')])
+    refreshes++
+    return response(snapshot('a'))
+  })
+  await store.switchToThread('a')
+  await expect(store.updateQueue({ mode: 'followUp', itemId: '42', expected: ['old'], index: 0, action: 'steer' })).resolves.toBeUndefined()
+  expect(mutations).toBe(1)
+  expect(refreshes).toBe(2)
+})
+
 function setup(
   fetcher?: (url: string, init?: RequestInit) => Promise<Response>,
   bots: BotSummary[] = [],

@@ -94,6 +94,7 @@ const modelSchema = Type.Object(
 const thinkingSchema = Type.Object({ level: thinkingLevelSchema }, { additionalProperties: false })
 const queueMutationSchema = Type.Object(
   {
+    itemId: Type.Optional(Type.String({ minLength: 1 })),
     mode: Type.Union([Type.Literal('steer'), Type.Literal('followUp')]),
     expected: Type.Array(Type.String()),
     index: Type.Integer({ minimum: 0 }),
@@ -356,18 +357,22 @@ async function mutateQueue(
   const text = (item: InboxItem) => (item.mode === 'write' ? '' : contentText(item.content))
   const current = (await host.engine.harness.snapshot(InboxDoc, conversationId, context))?.items ?? []
   const candidates = current.filter((item) => item.mode === mode)
-  if (JSON.stringify(candidates.map(text)) !== JSON.stringify(input.expected)) throw new HttpError(409, 'queue_changed', 'Queue changed')
-  if (input.index >= candidates.length) throw new HttpError(409, 'queue_changed', 'Queue changed')
+  const targetedSteer = input.action === 'steer' && input.itemId !== undefined
+  if (!targetedSteer && JSON.stringify(candidates.map(text)) !== JSON.stringify(input.expected)) throw new HttpError(409, 'queue_changed', 'Queue changed')
+  if (!targetedSteer && input.index >= candidates.length) throw new HttpError(409, 'queue_changed', 'Queue changed')
   if (input.action === 'steer' && mode !== 'followUp') throw new HttpError(400, 'bad_request', 'Invalid queue operation')
   if (input.action === 'edit' && (typeof input.value !== 'string' || !input.value.trim())) throw new HttpError(400, 'bad_request', 'Invalid queue operation')
   if (input.action === 'move' && (typeof input.value !== 'number' || input.value < 0 || input.value >= candidates.length)) throw new HttpError(400, 'bad_request', 'Invalid queue operation')
-  const target = candidates[input.index]!
+  const target = targetedSteer ? current.find((item) => String(item.id) === input.itemId) : candidates[input.index]
+  if (!target) throw new HttpError(409, 'queue_changed', 'Queue changed')
+  if (targetedSteer && target.mode === 'steer') return current
   if (input.action === 'remove') await host.engine.harness.abortSubmission(target.id, context, conversationId)
   else await host.engine.harness.commit(async (tx) => {
     const doc = await tx.doc(InboxDoc, conversationId)
-    if (JSON.stringify(doc.items.filter((item) => item.mode === mode).map(text)) !== JSON.stringify(input.expected))
+    if (!targetedSteer && JSON.stringify(doc.items.filter((item) => item.mode === mode).map(text)) !== JSON.stringify(input.expected))
       throw new HttpError(409, 'queue_changed', 'Queue changed')
     const index = doc.items.findIndex((item) => item.id === target.id)
+    if (targetedSteer && index >= 0 && doc.items[index]?.mode === 'steer') return
     if (index < 0 || doc.items[index]?.mode !== mode) throw new HttpError(409, 'queue_changed', 'Queue changed')
     if (input.action === 'edit') {
       const item = doc.items[index]

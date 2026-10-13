@@ -66,6 +66,7 @@ export type AgentSubmissionInput = {
 }
 
 export type AgentQueueMutation = {
+  itemId?: string
   mode: 'steer' | 'followUp'
   expected: string[]
   index: number

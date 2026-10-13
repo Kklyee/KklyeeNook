@@ -65,6 +65,7 @@ export type ChatExtras = {
     config?: { provider?: string; modelId?: string; thinkingLevel?: ModelThinkingLevel }
   }
   queue: AgentProjectedThread['queue']
+  queueItems: AgentProjectionState['queue']
   contextUsage: AgentProjectedThread['contextUsage']
   compaction: AgentProjectedThread['compaction']
   refresh(): Promise<void>
@@ -660,10 +661,16 @@ export class ChatStore {
 
   async updateQueue(input: AgentQueueMutation) {
     if (!this.selectedThreadId) return
-    await this.request(`/threads/${encodeURIComponent(this.selectedThreadId)}/queue/item`, {
-      method: 'POST',
-      body: input,
-    })
+    try {
+      await this.request(`/threads/${encodeURIComponent(this.selectedThreadId)}/queue/item`, {
+        method: 'POST',
+        body: input,
+      })
+    } catch (error) {
+      if (!(error instanceof AgentRequestError) || error.status !== 409 || input.action !== 'steer' || !input.itemId) throw error
+      await this.refresh()
+      if (this.projection.queue.some((item) => String(item.id) === input.itemId && item.mode === 'followUp')) throw error
+    }
   }
 
   async respondToApproval(approvalId: string, approved: boolean) {
@@ -760,6 +767,7 @@ export class ChatStore {
       state: { messages: this.projected.transcript },
       metadata: { id, config },
       queue: this.projected.queue,
+      queueItems: this.projection.queue,
       contextUsage: this.projected.contextUsage,
       compaction: this.projected.compaction,
       refresh: () => this.refresh(),
@@ -809,6 +817,7 @@ export class ChatStore {
     const parsed = this.parseQueueId(id)
     if (!parsed) return
     await this.updateQueue({
+      ...(mode === 'steer' ? { itemId: parsed.itemId } : {}),
       mode: parsed.mode,
       expected: parsed.expected,
       index: parsed.index,
@@ -822,7 +831,7 @@ export class ChatStore {
     const items = this.projection.queue.filter((item) => item.mode === mode)
     const index = items.findIndex((item) => String(item.id) === raw)
     if (index < 0) return undefined
-    return { mode, index, expected: items.map(queueItemText) }
+    return { mode, index, itemId: raw, expected: items.map(queueItemText) }
   }
 
   private patchMetadata(patch: Partial<AgentThreadSummary>) {
