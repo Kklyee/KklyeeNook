@@ -15,6 +15,17 @@ const entry = (id: number, message: NonNullable<EntryRecord['model']>[number]): 
 })
 const reduce = (snapshot: SnapshotEvent, events: readonly AgentEvent[]) => events.reduce(applyAgentEvent, snapshot)
 
+test('message model metadata comes from its response and survives later configuration changes', () => {
+  const snapshot = emptySnapshot()
+  const response = { ...fauxAssistantMessage('reply'), provider: 'original', model: 'old-model', thinkingLevel: 'high' as const }
+  snapshot.entries = [entry(1, response)]
+  snapshot.agent = { model: { provider: 'new', modelId: 'new-model' }, thinkingLevel: 'low' }
+  const projected = projectDurableThread({ ...emptyDurableProjectionState(), snapshot })
+  expect(projected.messages[0].metadata?.custom?.durable).toMatchObject({ provider: 'original', model: 'old-model', thinkingLevel: 'high' })
+  snapshot.entries = [entry(1, fauxAssistantMessage('legacy'))]
+  expect(projectDurableThread({ ...emptyDurableProjectionState(), snapshot }).messages[0].metadata?.custom?.durable).toHaveProperty('thinkingLevel', undefined)
+})
+
 test('collaboration results stay with their own call even when a provider reuses a tool call ID', () => {
   const snapshot = emptySnapshot()
   const call = () => {

@@ -172,6 +172,8 @@ test('Durable executes through real pi-ai HTTP dispatch without persisting crede
   expect((await submission.wait(context())).status).toBe('done')
   await conversation.waitForIdle(context())
   const entries = await conversation.entries({ order: 'ascending' }, 100, undefined, context())
+  const response = entries.items.flatMap((entry) => entry.model ?? []).find((message) => message.role === 'assistant')
+  expect(response).toMatchObject({ provider: 'custom', model: 'custom-model', thinkingLevel: 'off' })
   expect(JSON.stringify(entries.items)).toContain('reply')
   expect(JSON.stringify(entries.items)).not.toContain('synthetic-private-key')
   expect(JSON.stringify(await conversation.agent(context()))).not.toContain('synthetic-private-key')

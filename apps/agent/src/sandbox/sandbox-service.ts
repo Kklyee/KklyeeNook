@@ -50,11 +50,11 @@ export class SandboxService {
     toolCallId?: string,
   ): Promise<SandboxExecutionResult> {
     const authorized = await this.authorize(request, toolCallId)
-    return authorized.mode === 'full-access' && !authorized.botId
+    return authorized.mode === 'full-access'
       ? new DirectExecutionBackend().execute({ ...execution, mode: authorized.mode })
       : this.backend.execute({
           ...execution,
-          mode: authorized.mode === 'full-access' ? 'workspace-write' : authorized.mode,
+          mode: authorized.mode,
           workspaceRoot: authorized.workspace?.rootPath,
         })
   }

@@ -404,6 +404,7 @@ function buildAssistant(
           entryId: entry?.id,
           provider: group.last.provider,
           model: group.last.model,
+          thinkingLevel: group.last.thinkingLevel,
           usage: group.last.usage,
           stopReason: group.last.stopReason,
         },

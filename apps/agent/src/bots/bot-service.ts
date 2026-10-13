@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { defaultBot, type BotInput, type BotProfile } from '@kklyeenook/shared/bot/bot'
+import { defaultBot, LEGACY_CODING_INSTRUCTIONS, type BotInput, type BotProfile } from '@kklyeenook/shared/bot/bot'
 import type { BotRepo } from '../db/repositories/bot-repo'
 import type { AgentSessionRepo } from '../db/repositories/agent-session-repo'
 import type { WorkspaceService } from '../workspace/workspaceService'
@@ -39,7 +39,7 @@ export class BotService {
     }
     const existingCoder = await this.get('coder')
     if (
-      existingCoder.instructions ===
+      existingCoder.instructions === LEGACY_CODING_INSTRUCTIONS || existingCoder.instructions ===
       'Help with code development, documentation, debugging and tests. Follow the authorized workspace instructions and request approval for side effects when required.'
     )
       await this.repo.save({

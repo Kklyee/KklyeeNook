@@ -13,7 +13,7 @@ export class SandboxPolicy {
       if (!workspace) return { outcome: 'deny', reason: 'Bot 需要一个已授权的 Workspace' }
       const target = await this.paths.resolve(resource.kind === 'path' ? resource.path : resource.cwd ?? '.', workspace.rootPath)
       if (!target.inside) return { outcome: 'deny', reason: '目标超出当前 Bot 授权的 Workspace' }
-      if (resource.kind === 'command' && this.backend.support() === 'unavailable') return { outcome: 'deny', reason: '当前平台不能为 Bot 提供 Workspace 沙箱' }
+      if (resource.kind === 'command' && mode !== 'full-access' && this.backend.support() === 'unavailable') return { outcome: 'deny', reason: '当前平台不能为 Bot 提供 Workspace 沙箱' }
     }
     if (resource.kind === 'path') {
       if (mode === 'full-access') return { outcome: 'allow' }

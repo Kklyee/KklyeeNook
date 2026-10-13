@@ -154,17 +154,20 @@ test('shell fails closed and executes direct only with full access or one-shot a
 
 
 
-test('Bot full access stays within its Workspace and shell always uses the scoped backend', async () => {
+test('Bot full access executes directly while other modes stay in the Workspace sandbox', async () => {
   const execute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'scoped' }], details: {} }))
   const sandbox = new SandboxService({ support: () => 'partial', execute })
   const file = { ...request(join(outside, 'escape.txt'), 'full-access'), botId: 'coder' }
   await expect(sandbox.resolveFile(file)).rejects.toThrow('超出')
   await expect(sandbox.resolveFile({ ...file, workspace: undefined })).rejects.toThrow('已授权')
   const shell: PermissionRequest = { ...request('.', 'full-access'), botId: 'coder', toolName: 'bash', resource: { kind: 'command', command: 'echo scoped' } }
-  const executeDirect = vi.fn()
+  const executeDirect = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'direct' }], details: {} }))
   await sandbox.execute(shell, { command: 'echo scoped', cwd: root, runId: 'bot-run', executeDirect })
-  expect(executeDirect).not.toHaveBeenCalled()
+  expect(executeDirect).toHaveBeenCalledTimes(1)
+  expect(execute).not.toHaveBeenCalled()
+  await sandbox.execute({ ...shell, mode: 'workspace-write' }, { command: 'echo scoped', cwd: root, executeDirect })
   expect(execute).toHaveBeenCalledWith(expect.objectContaining({ mode: 'workspace-write', workspaceRoot: root }))
   await expect(sandbox.execute({ ...shell, resource: { kind: 'command', command: 'echo escaped', cwd: outside } }, { command: 'echo escaped', cwd: outside, executeDirect })).rejects.toThrow('超出')
-  await expect(new SandboxService(new LinuxSandboxBackend()).execute(shell, { command: 'echo scoped', cwd: root, executeDirect })).rejects.toThrow('沙箱')
+  await new SandboxService(new LinuxSandboxBackend()).execute(shell, { command: 'echo scoped', cwd: root, executeDirect })
+  await expect(new SandboxService(new LinuxSandboxBackend()).execute({ ...shell, mode: 'workspace-write' }, { command: 'echo scoped', cwd: root, executeDirect })).rejects.toThrow('沙箱')
 })

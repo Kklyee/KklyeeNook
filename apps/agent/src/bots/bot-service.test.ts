@@ -10,6 +10,7 @@ import { DrizzleWorkspaceRepo } from '../db/repositories/workspaceRepo'
 import { WorkspaceService } from '../workspace/workspaceService'
 import { ToolRegistry } from '../tools/toolRegistry'
 import { BotService } from './bot-service'
+import { defaultBot, LEGACY_CODING_INSTRUCTIONS } from '@kklyeenook/shared/bot/bot'
 
 let close: () => void
 let directory: string
@@ -111,10 +112,13 @@ test('validates defaults and tools, immediately revokes access, preserves built-
 
 test('updates the untouched built-in Coding prompt and preserves customized instructions', async () => {
   await bots.initialize()
-  expect((await bots.get('coder')).instructions).toContain("You are an expert coding assistant operating inside KKlyeeNook's durable agent runtime.")
+  expect((await bots.get('coder')).instructions).toBe(defaultBot('coder', 'Coder', true).instructions)
+  await bots.update('coder', { instructions: LEGACY_CODING_INSTRUCTIONS })
+  await bots.initialize()
+  expect((await bots.get('coder')).instructions).toBe(defaultBot('coder', 'Coder', true).instructions)
   await bots.update('coder', { instructions: 'Help with code development, documentation, debugging and tests. Follow the authorized workspace instructions and request approval for side effects when required.' })
   await bots.initialize()
-  expect((await bots.get('coder')).instructions).toContain('Use only tools actually provided by the runtime.')
+  expect((await bots.get('coder')).instructions).toBe(defaultBot('coder', 'Coder', true).instructions)
   await bots.update('coder', { instructions: 'Custom coding instructions' })
   await bots.initialize()
   expect((await bots.get('coder')).instructions).toBe('Custom coding instructions')

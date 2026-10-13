@@ -41,6 +41,7 @@ import {
   type ModelOption,
 } from '@/renderer/src/components/assistant-ui/elements/model-selector'
 import { TooltipIconButton } from '@/renderer/src/components/assistant-ui/elements/tooltip-icon-button'
+import { MessageModel } from './message-model.aui'
 import { Button } from '@/renderer/src/components/ui/button'
 import { Skeleton } from '@/renderer/src/components/ui/skeleton'
 import { cn } from '@/renderer/src/lib/utils'
@@ -629,6 +630,7 @@ const AssistantActionBar: FC = () => {
           </ActionBarPrimitive.ExportMarkdown>
         </ActionBarMorePrimitive.Content>
       </ActionBarMorePrimitive.Root>
+      <MessageModel />
     </ActionBarPrimitive.Root>
   )
 }

@@ -31,6 +31,7 @@ import {
 } from '@kklyeenook/shared/agent/agentConfig'
 import { resolveModelInput } from '@kklyeenook/shared/agent/modelCapabilities'
 import type { CredentialStore } from '../settings/credentialStore'
+import { limitModelProvider } from './model-stream'
 
 const apis: Record<string, () => ProviderStreams> = {
   'anthropic-messages': anthropicMessagesApi,
@@ -153,7 +154,7 @@ export class AgentModels {
       }
     }
     this.models.clearProviders()
-    for (const provider of providers.values()) this.models.setProvider(provider)
+    for (const provider of providers.values()) this.models.setProvider(limitModelProvider(provider))
   }
 
   private model(provider: ProviderConfig, definition: ProviderModelConfig & { baseUrl?: string }, template?: Model<Api>): Model<Api> {

@@ -38,7 +38,7 @@ const grepSchema = Type.Object({
 
 const shellSchema = Type.Object({
   command: Type.String({ description: 'Shell command to execute' }),
-  timeout: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 2147483, description: 'Timeout in seconds (optional, no default timeout)' })),
+  timeout: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 2147483, description: 'Timeout in seconds (default: 120). Set explicitly for longer commands.' })),
   cwd: Type.Optional(Type.String({ description: 'Explicit command working directory; required without a workspace' })),
 })
 
@@ -233,8 +233,8 @@ function createShell(cwd: string): BuiltinTool {
       : ['You can inspect PI_* environment variables for current model and session details.'],
     description:
       process.platform === 'win32'
-        ? 'Execute a PowerShell 7 command using native Windows paths in all permission modes. The launcher sets cwd to the workspace root unless an explicit cwd is supplied. Return stdout, stderr and exit code. Optional timeout is in seconds. Large results are retained with a resultRef for read_tool_result.'
-        : 'Execute a shell command and return stdout and stderr. Optional timeout is in seconds. Large results are retained with a resultRef for read_tool_result.',
+        ? 'Execute a PowerShell 7 command using native Windows paths in all permission modes. The launcher sets cwd to the workspace root unless an explicit cwd is supplied. Return stdout, stderr and exit code. Timeout defaults to 120 seconds; set it explicitly for longer commands. Large results are retained with a resultRef for read_tool_result.'
+        : 'Execute a shell command and return stdout and stderr. Timeout defaults to 120 seconds; set it explicitly for longer commands. Large results are retained with a resultRef for read_tool_result.',
     parameters: shellSchema,
     async execute(_id, input, signal) {
       const args = input as { command: string; cwd?: string }

@@ -118,6 +118,28 @@ test('timeout aborts the adapter and returns TIMEOUT', async () => {
   expect(vi.getTimerCount()).toBe(0)
 })
 
+test.each([undefined, 180])('shell timeout defaults to 120 seconds and honors an explicit %s', async (seconds) => {
+  vi.useFakeTimers()
+  const { registry, harness, sandbox } = setup()
+  registerBuiltinTools(registry, directory)
+  vi.spyOn(sandbox.policy, 'evaluate').mockResolvedValue({ outcome: 'allow' })
+  vi.spyOn(sandbox.paths, 'resolve').mockResolvedValue({ path: directory, inside: true })
+  vi.spyOn(sandbox, 'execute').mockImplementation(async (_request, execution) => execution.executeDirect())
+  let signal: AbortSignal | undefined
+  const completion = harness.execute('run', {
+    id: 'shell', toolName: 'bash', args: { command: 'waiting', cwd: directory, ...(seconds ? { timeout: seconds } : {}) },
+  }, { executionContext: { conversationId: 'chat', mode: 'full-access' } }, async (_args, current) => {
+    signal = current
+    return new Promise(() => {})
+  })
+  const duration = (seconds ?? 120) * 1000
+  await vi.advanceTimersByTimeAsync(duration - 1)
+  expect(signal?.aborted).toBe(false)
+  await vi.advanceTimersByTimeAsync(1)
+  expect(await completion).toMatchObject({ error: { code: 'TIMEOUT', message: `Tool timed out after ${duration} ms` } })
+  expect(signal?.aborted).toBe(true)
+})
+
 test('denied permissions become PERMISSION_DENIED before execution', async () => {
   const { harness, call, sandbox } = setup()
   vi.spyOn(sandbox.policy, 'evaluate').mockResolvedValue({ outcome: 'deny', reason: 'denied' })

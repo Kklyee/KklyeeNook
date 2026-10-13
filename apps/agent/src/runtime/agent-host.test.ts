@@ -1905,7 +1905,7 @@ test('scheduled tasks persist their Bot and dispatch using its identity', async 
   )
   expect(thread?.botId).toBe('coder')
   expect(JSON.stringify(fixture.requests)).toContain(
-    'expert coding assistant operating inside KKlyeeNook',
+    'You are the KKlyeeNook coding assistant.',
   )
   await expect(
     scheduler.create({

@@ -63,7 +63,7 @@ export class ToolExecutionHarness {
           definition.timeoutMs ??
           (call.toolName === 'bash' && typeof args.timeout === 'number'
             ? args.timeout * 1000
-            : undefined)
+            : call.toolName === 'bash' ? 120_000 : undefined)
         const timer =
           timeoutMs === undefined
             ? undefined
