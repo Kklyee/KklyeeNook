@@ -33,7 +33,7 @@ export function BotMentionChip({
       <PopoverTrigger
         render={<button type="button" />}
         data-bot-id={botId}
-        className="relative mx-0.5 inline-flex max-w-full items-baseline rounded-md border border-border/70 bg-hover py-0.5 pr-1.5 pl-7 align-baseline text-[0.875em] leading-normal font-medium hover:bg-selected focus-visible:outline-2 focus-visible:outline-ring"
+        className="relative mx-0.5 inline-flex max-w-full items-baseline rounded-md border border-border/70 bg-transparent py-0.5 pr-1.5 pl-7 align-baseline text-[0.8em] leading-normal font-medium hover:underline focus-visible:outline-2 focus-visible:outline-ring"
         aria-label={`${name}${bot ? '' : ' · 不可用'}`}
         onMouseEnter={() => {
           timer.current = setTimeout(() => setOpen(true), 250)
