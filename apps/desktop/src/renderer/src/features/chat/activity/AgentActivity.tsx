@@ -92,9 +92,11 @@ export function ActivityCrossfade({
 export const AgentActivityRow = memo(function AgentActivityRow({
   runId,
   activityId,
+  standalone = false,
 }: {
   runId: string
   activityId: string
+  standalone?: boolean
 }) {
   const activity = useActivitySelector((groups) =>
     groups
@@ -122,7 +124,7 @@ export const AgentActivityRow = memo(function AgentActivityRow({
         >
           <CollapsibleTrigger className={cn(
             'group/trigger flex h-[32px] w-full min-w-0 items-center gap-2 rounded-sm text-left text-[13px] text-foreground outline-none hover:bg-hover focus-visible:ring-1 focus-visible:ring-border-strong',
-            activity.type === 'thinking' ? 'pr-2 pl-0' : 'px-2',
+            standalone ? 'pr-2 pl-0' : 'px-2',
           )}>
             <ActivityCrossfade transitionKey={`${activity.type}:${activity.status}`}>
               <ActivityIcon type={activity.type} status={activity.status} />

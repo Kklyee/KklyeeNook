@@ -176,7 +176,7 @@ const ActivityTimeline = memo(function ActivityTimeline({ scope }: { scope: Acti
       className="agent-activity-slot"
     >
       {standaloneThinkingId ? (
-        <AgentActivityRow runId={scope.runId!} activityId={standaloneThinkingId} />
+        <AgentActivityRow runId={scope.runId!} activityId={standaloneThinkingId} standalone />
       ) : (
         <ToolTimeline
           open={open}
