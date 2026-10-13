@@ -3,7 +3,6 @@ import {
   CheckIcon,
   CornerDownRightIcon,
   GripVerticalIcon,
-  ListXIcon,
   PencilIcon,
   Trash2Icon,
   XIcon,
@@ -35,7 +34,6 @@ type DragSession = {
 
 export function MessageQueue({
   queued,
-  onClear,
   onRemove,
   onSteer,
   onEdit,
@@ -46,7 +44,6 @@ export function MessageQueue({
   ...props
 }: ComponentProps<'div'> & {
   queued: readonly QueuedMessage[]
-  onClear: () => void
   onRemove: (message: QueuedMessage) => void
   onSteer: (message: QueuedMessage) => void
   onEdit: (message: QueuedMessage, text: string) => Promise<boolean>
@@ -103,21 +100,10 @@ export function MessageQueue({
       style={{ ...props.style, height: visible ? height : 0 }}
     >
       <div ref={contentRef} className="flow-root">
-        <section className="bg-surface-opaque border-border/60 mx-3 border-b pb-1 shadow-sm" aria-label="待执行消息">
-          <div className="flex h-5 items-center justify-end">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="text-faint-foreground size-5"
-              aria-label="清空待执行消息"
-              title="清空"
-              disabled={clearing}
-              onClick={onClear}
-            >
-              <ListXIcon className="size-3.5" />
-            </Button>
-          </div>
+        <section
+          className="message-queue-surface bg-surface-opaque border-border mx-3 rounded-t-xl border border-b-0 px-2 py-1"
+          aria-label="待执行消息"
+        >
           <ol
             ref={listRef}
             className="text-muted-foreground flex max-h-60 flex-col gap-0.5 overflow-y-auto text-[13px]"

@@ -241,11 +241,6 @@ async function handle(context: Context, prefix: string, host: AgentHost): Promis
   if (parts.length === 3 && action === 'queue' && method === 'GET') {
     return context.json((await host.engine.harness.snapshot(InboxDoc, conversation.id, ctx))?.items ?? [])
   }
-  if (parts.length === 4 && action === 'queue' && parts[3] === 'clear' && method === 'POST') {
-    const queue = (await host.engine.harness.snapshot(InboxDoc, conversation.id, ctx))?.items ?? []
-    await Promise.all(queue.filter((item) => item.mode !== 'write').map((item) => host.engine.harness.abortSubmission(item.id, ctx, conversation.id)))
-    return context.json((await host.engine.harness.snapshot(InboxDoc, conversation.id, ctx))?.items ?? [])
-  }
   if (parts.length === 4 && action === 'queue' && parts[3] === 'item' && method === 'POST') {
     return context.json(await mutateQueue(host, conversation.id, await parse(context, queueMutationSchema), ctx))
   }

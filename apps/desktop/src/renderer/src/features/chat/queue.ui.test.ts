@@ -34,7 +34,6 @@ function mount(overrides: Partial<Parameters<typeof MessageQueue>[0]> = {}) {
   const props = {
     queued,
     clearing: false,
-    onClear: vi.fn(),
     onRemove: vi.fn(),
     onSteer: vi.fn(),
     onEdit: vi.fn(async () => true),
@@ -160,8 +159,7 @@ test('each queued message exposes steer, edit and delete without extra text', ()
   expect(props.onSteer).toHaveBeenCalledExactlyOnceWith(queued[2])
   act(() => (labels('删除')[1] as HTMLElement).click())
   expect(props.onRemove).toHaveBeenCalledExactlyOnceWith(queued[1])
-  act(() => (labels('清空待执行消息')[0] as HTMLElement).click())
-  expect(props.onClear).toHaveBeenCalledOnce()
+  expect(labels('清空待执行消息')).toHaveLength(0)
 })
 
 test('editing a queued message saves on Enter and cancels on Escape', async () => {

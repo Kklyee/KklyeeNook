@@ -206,16 +206,19 @@ body,
 }
 
 .composer,
+.message-queue-surface,
 .aui-edit-composer-root {
   background: oklch(from var(--ui-control) l c h / 1);
 }
 
 :root.has-wallpaper .composer,
+:root.has-wallpaper .message-queue-surface,
 :root.has-wallpaper .aui-edit-composer-root {
   background: oklch(0.975 0.008 280);
 }
 
 :root.dark.has-wallpaper .composer,
+:root.dark.has-wallpaper .message-queue-surface,
 :root.dark.has-wallpaper .aui-edit-composer-root {
   background: oklch(0.32 0.012 280);
 }

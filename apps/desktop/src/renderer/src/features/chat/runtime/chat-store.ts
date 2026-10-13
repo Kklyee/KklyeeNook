@@ -69,7 +69,6 @@ export type ChatExtras = {
   contextUsage: AgentProjectedThread['contextUsage']
   compaction: AgentProjectedThread['compaction']
   refresh(): Promise<void>
-  clearQueue(): Promise<void>
   setModel(input: {
     provider: string
     modelId: string
@@ -652,13 +651,6 @@ export class ChatStore {
     await this.reloadBots()
   }
 
-  async clearQueue() {
-    if (!this.selectedThreadId) return
-    await this.request(`/threads/${encodeURIComponent(this.selectedThreadId)}/queue/clear`, {
-      method: 'POST',
-    })
-  }
-
   async updateQueue(input: AgentQueueMutation) {
     if (!this.selectedThreadId) return
     try {
@@ -771,7 +763,6 @@ export class ChatStore {
       contextUsage: this.projected.contextUsage,
       compaction: this.projected.compaction,
       refresh: () => this.refresh(),
-      clearQueue: () => this.clearQueue(),
       setModel: (input) => this.setModel(input),
       setThinkingLevel: (level) => this.setThinkingLevel(level),
       updateQueue: (input) => this.updateQueue(input),

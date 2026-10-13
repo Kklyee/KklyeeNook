@@ -7,21 +7,9 @@ import {
 import type { AgentQueueMutation } from '@kklyeenook/shared/agent/chat-protocol'
 
 export function QueuedMessages() {
-  const { queue, queueItems, clearQueue, refresh, updateQueue } = useChatRuntimeExtras()
+  const { queue, queueItems, refresh, updateQueue } = useChatRuntimeExtras()
   const [clearing, setClearing] = useState(false)
   const [error, setError] = useState<string>()
-  const clear = async () => {
-    setClearing(true)
-    setError(undefined)
-    try {
-      await clearQueue()
-      await refresh()
-    } catch (error) {
-      setError(error instanceof Error ? error.message : '清空失败，请重试')
-    } finally {
-      setClearing(false)
-    }
-  }
   const mutate = async (
     message: QueuedMessage,
     action: Pick<AgentQueueMutation, 'action'> & { value?: string | number },
@@ -65,7 +53,7 @@ export function QueuedMessages() {
   return (
     <MessageQueue
       queued={messages}
-      onClear={() => void clear()}
+      className="relative z-10 -mb-px"
       onRemove={(message) => void mutate(message, { action: 'remove' })}
       onSteer={(message) => void mutate(message, { action: 'steer' })}
       onEdit={(message, text) => mutate(message, { action: 'edit', value: text })}

@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({ updateQueue: vi.fn(async () => {}), refresh: v
 vi.mock('./runtime/chat-runtime', () => ({ useChatRuntimeExtras: () => ({
   queue: { steering: [], followUp: ['Text\n[image]'] },
   queueItems: [{ id: 77, mode: 'followUp' }],
-  updateQueue: mocks.updateQueue, refresh: mocks.refresh, clearQueue: vi.fn(),
+  updateQueue: mocks.updateQueue, refresh: mocks.refresh,
 }) }))
 vi.mock('@/renderer/src/components/assistant-ui/elements/message-queue', () => ({
   MessageQueue: ({ queued, onRemove }: { queued: { id: string }[]; onRemove: (message: { id: string }) => void }) =>
