@@ -13,7 +13,7 @@ import { ThreadPrimitive, useAui, useAuiEvent, useAuiState } from '@assistant-ui
 
 import type { ChatExtras } from '@/renderer/src/features/chat/runtime/chat-store'
 
-const ScrollFollowerContext = createContext<{ following: boolean; resume(): void; pause(): void; viewport: RefObject<HTMLDivElement | null>; scrollToMessage: RefObject<((id: string) => void) | null>; scrollToBottom: RefObject<(() => void) | null> }>({ following: true, resume: () => {}, pause: () => {}, viewport: { current: null }, scrollToMessage: { current: null }, scrollToBottom: { current: null } })
+const ScrollFollowerContext = createContext<{ following: boolean; resume(): void; pause(): void; scrollToMessage: RefObject<((id: string) => void) | null> }>({ following: true, resume: () => {}, pause: () => {}, scrollToMessage: { current: null } })
 
 export function useScrollFollower() {
   return useContext(ScrollFollowerContext)
@@ -26,13 +26,11 @@ export function ThreadScrollViewport({
   const aui = useAui()
   const [historyError, setHistoryError] = useState<string>()
   const loadOlder = useRef(() => {})
-  const scrollToBottom = useRef<(() => void) | null>(null)
   const scrollToMessage = useRef<((id: string) => void) | null>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const followRef = useRef(true)
   const smoothRef = useRef(false)
-  const scheduleRef = useRef(() => {})
   const initializeRef = useRef(() => {})
   const pauseRef = useRef(() => {})
   const threadId = useAuiState((state) => state.threads.mainThreadId)
@@ -41,9 +39,7 @@ export function ThreadScrollViewport({
   const pause = useCallback(() => pauseRef.current(), [])
   const [following, setFollowing] = useState(true)
   const resume = useCallback(() => {
-    followRef.current = true
-    setFollowing(true)
-    scheduleRef.current()
+    initializeRef.current()
   }, [])
 
   useAuiEvent('thread.runStart', () => {
@@ -68,11 +64,6 @@ export function ThreadScrollViewport({
     const tick = () => {
       frame = 0
       if (!followRef.current) return
-      if (scrollToBottom.current) {
-        scrollToBottom.current()
-        lastTop = viewport.scrollTop
-        return
-      }
       const before = viewport.scrollTop
       const diff = target - before
       viewport.scrollTop =
@@ -89,8 +80,7 @@ export function ThreadScrollViewport({
       cancelAnimationFrame(frame)
       frame = 0
       target = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
-      if (scrollToBottom.current) scrollToBottom.current()
-      else viewport.scrollTop = target
+      viewport.scrollTop = target
       lastTop = viewport.scrollTop
     }
     const initialize = () => {
@@ -100,7 +90,7 @@ export function ThreadScrollViewport({
     }
     const resize = () => {
       if (!followRef.current) return
-      if (scrollToBottom.current || smoothRef.current) schedule()
+      if (smoothRef.current) schedule()
       else snapToBottom()
     }
     const scroll = () => {
@@ -134,7 +124,6 @@ export function ThreadScrollViewport({
       )
         pause()
     }
-    scheduleRef.current = schedule
     initializeRef.current = initialize
     pauseRef.current = pause
     const observer = new ResizeObserver(resize)
@@ -149,7 +138,6 @@ export function ThreadScrollViewport({
     return () => {
       observer.disconnect()
       cancelAnimationFrame(frame)
-      scheduleRef.current = () => {}
       initializeRef.current = () => {}
       pauseRef.current = () => {}
       viewport.removeEventListener('scroll', scroll)
@@ -177,7 +165,7 @@ export function ThreadScrollViewport({
   }
 
   return (
-    <ScrollFollowerContext.Provider value={{ following, resume, pause, viewport: viewportRef, scrollToMessage, scrollToBottom }}>
+    <ScrollFollowerContext.Provider value={{ following, resume, pause, scrollToMessage }}>
       <ThreadPrimitive.Viewport
         {...props}
         ref={viewportRef}

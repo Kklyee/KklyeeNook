@@ -25,7 +25,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-test('jump to latest uses the virtual scroller and stays following during measurement corrections', () => {
+test('jump to latest reaches the DOM bottom and stays following during measurement corrections', () => {
   const frames = new Map<number, FrameRequestCallback>()
   let nextFrame = 0
   let resize!: ResizeObserverCallback
@@ -33,10 +33,8 @@ test('jump to latest uses the virtual scroller and stays following during measur
   vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id))
   vi.stubGlobal('ResizeObserver', class { constructor(callback: ResizeObserverCallback) { resize = callback } observe() {} disconnect() {} })
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {}, removeEventListener() {} }))
-  const jump = vi.fn(() => { (container.firstElementChild as HTMLDivElement).scrollTop = 900 })
   function Controls() {
     const follower = useScrollFollower()
-    follower.scrollToBottom.current = jump
     return createElement('button', { onClick: follower.resume, 'data-following': follower.following }, 'Latest')
   }
   const container = document.createElement('div')
@@ -49,10 +47,8 @@ test('jump to latest uses the virtual scroller and stays following during measur
   const button = container.querySelector('button')!
   act(() => { viewport.dispatchEvent(new WheelEvent('wheel', { deltaY: -100 })) })
   expect(button.dataset.following).toBe('false')
-  jump.mockClear()
   act(() => { button.click() })
   act(() => { for (const [id, callback] of [...frames]) { frames.delete(id); callback(0) } })
-  expect(jump).toHaveBeenCalledTimes(1)
   expect(viewport.scrollTop).toBe(900)
   act(() => { viewport.dispatchEvent(new Event('scroll')); viewport.scrollTop = 800; viewport.dispatchEvent(new Event('scroll')) })
   expect(button.dataset.following).toBe('true')
