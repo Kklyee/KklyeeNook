@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest'
+import { fromThreadMessageLike } from '@assistant-ui/react'
 import { fauxAssistantMessage } from '@earendil-works/pi-ai/providers/faux'
 import type { AgentEvent, EntryRecord, SnapshotEvent } from '@earendil-works/pi-durable'
 import {
@@ -42,6 +43,31 @@ test('execution includes intermediate replies and exposes only the terminal resp
   ]
   const projected = projectDurableThread({ ...emptyDurableProjectionState(), snapshot })
   expect(projected.messages[1].metadata?.custom?.execution).toEqual({ startedAt: 1000, endedAt: 11000, finalPartIndex: 2 })
+})
+
+test('blank parts do not shift the final response behind file changes into the execution process', () => {
+  const snapshot = emptySnapshot()
+  const progress = { ...fauxAssistantMessage(''), timestamp: 1000, stopReason: 'toolUse' as const }
+  progress.content = [
+    { type: 'text', text: '  ' },
+    { type: 'thinking', thinking: '\n', thinkingSignature: '' },
+    { type: 'toolCall', id: 'edit', name: 'edit', arguments: { path: 'test.ts' } },
+  ]
+  const final = { ...fauxAssistantMessage('Fixed'), timestamp: 9000 }
+  final.content.unshift({ type: 'text', text: '' })
+  snapshot.entries = [
+    entry(1, progress),
+    entry(2, { role: 'toolResult', toolCallId: 'edit', toolName: 'edit', content: [], isError: false, timestamp: 8000 }),
+    entry(3, final),
+  ]
+  const projected = projectDurableThread({ ...emptyDurableProjectionState(), snapshot }).messages[0]
+  const message = fromThreadMessageLike(projected, projected.id!, { type: 'complete', reason: 'stop' })
+  const parts = message.content
+  const execution = message.metadata?.custom?.execution as { finalPartIndex: number }
+  expect(parts).toHaveLength(2)
+  expect(parts[0]).toMatchObject({ type: 'tool-call', toolName: 'edit' })
+  expect(execution.finalPartIndex).toBe(1)
+  expect(parts[execution.finalPartIndex]).toMatchObject({ type: 'text', text: 'Fixed', parentId: 'durable-step:2' })
 })
 
 test('streaming replies stay in the execution process until a terminal response arrives', () => {

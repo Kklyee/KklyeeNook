@@ -370,8 +370,12 @@ function projectTranscript(
         usage: { inputTokens: message.usage.input, outputTokens: message.usage.output },
       })
       for (const part of message.content) {
-        if (part.type === 'text') group.parts.push({ type: 'text', text: part.text, parentId })
-        else if (part.type === 'thinking') group.parts.push({ type: 'reasoning', text: part.redacted ? '[reasoning redacted]' : part.thinking, parentId })
+        if (part.type === 'text') {
+          if (part.text.trim()) group.parts.push({ type: 'text', text: part.text, parentId })
+        } else if (part.type === 'thinking') {
+          const text = part.redacted ? '[reasoning redacted]' : part.thinking
+          if (text.trim()) group.parts.push({ type: 'reasoning', text, parentId })
+        }
         else if (part.type === 'toolCall') {
           const tool = toolResults.get(`${index}:${part.id}`)
           const approval = approvalByCall.get(part.id)
