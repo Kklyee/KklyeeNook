@@ -7,6 +7,7 @@ import {
 } from '@earendil-works/chord/context'
 import {
   defineDoc,
+  defineDocFamily,
   defineExtension,
   defineTask,
   LiveDoc,
@@ -75,6 +76,13 @@ const groveDoc = defineDoc<GroveState>({
   initial: () => ({ workers: {}, policies: {}, generations: {} }),
 })
 
+const groveArchive = defineDocFamily<{
+  request?: NonNullable<GroveState['requests']>[string]
+  mention?: NonNullable<GroveState['mentions']>[string]
+}, { request?: NonNullable<GroveState['requests']>[string]; mention?: NonNullable<GroveState['mentions']>[string] }>({
+  kind: 'nook.grove.archive', version: 1, family: true, scope: 'session', initial: (input) => input,
+})
+
 export type GroveCaller = { threadId: string; parentTaskId?: string }
 
 export class BotCoordinationService {
@@ -106,6 +114,7 @@ export class BotCoordinationService {
             let task = await this.requireTask(record.input.id)
             if (terminal(task)) {
               await this.deliverResult(task, context)
+              await this.archiveTask(task.id, context)
               await runtime.commit(
                 () => ({
                   status: 'terminal',
@@ -300,6 +309,7 @@ export class BotCoordinationService {
             }
             if (terminal(task)) {
               await this.deliverResult(task, context)
+              await this.archiveTask(task.id, context)
               await runtime.commit(
                 () => ({
                   status: 'terminal',
@@ -380,6 +390,7 @@ export class BotCoordinationService {
         submit: async (record, runtime, context) => {
           try {
             await this.processMentions(record.input.id, context)
+            await this.archiveMention(record.input.id, context)
             await runtime.commit(
               () => ({
                 status: 'terminal',
@@ -390,6 +401,7 @@ export class BotCoordinationService {
           } catch (error) {
             context.abortSignal?.throwIfAborted()
             if (!(error instanceof BotError)) throw error
+            await this.archiveMention(record.input.id, context)
             await runtime.commit(
               () => ({
                 status: 'terminal',
@@ -423,7 +435,11 @@ export class BotCoordinationService {
     }, context)
     for (const task of await this.repo.tasks()) {
       if (!terminal(task)) await this.schedule(task, context)
-      else await this.deliverResult(task, context)
+      else { await this.deliverResult(task, context); await this.archiveTask(task.id, context) }
+    }
+    const state = await host.engine.harness.snapshot(groveDoc, context)
+    for (const [id, plan] of Object.entries(state?.mentions ?? {})) {
+      if (plan.worker !== undefined && (plan.receipt || plan.error) && (await host.engine.harness.commit((tx) => tx.task(plan.worker as TaskId), context))?.state.status === 'terminal') await this.archiveMention(id, context)
     }
     if (this.remote) await this.startPump(context)
   }
@@ -466,7 +482,7 @@ export class BotCoordinationService {
     ])
     return {
       messages,
-      tasks: tasks.map((task) => ({ ...task, ...state?.requests?.[task.id] })),
+      tasks: await Promise.all(tasks.map(async (task) => ({ ...task, ...state?.requests?.[task.id] ?? await this.requestMetadata(task.id, context) }))),
       policies: state?.policies ?? {},
       limits: GROVE_LIMITS,
       identities: await this.repo.identities(),
@@ -522,12 +538,14 @@ export class BotCoordinationService {
       throw new BotError(400, (error as Error).message)
     }
     const id = operationId(threadId, input.requestId, 'mentions')
-    const existing = (await this.host.engine.harness.snapshot(groveDoc, context))?.mentions?.[id]
+    const existing = (await this.host.engine.harness.snapshot(groveDoc, context))?.mentions?.[id] ?? (await this.host.engine.harness.snapshot(groveArchive, id, context))?.mention
     const clean = copyJson(input, { omitUndefinedProperties: true }) as JsonRepresentation<
       Omit<ContextInput, 'entry'>
     >
     if (existing && JSON.stringify(existing.input) !== JSON.stringify(clean))
       throw new BotError(409, 'Message ID already used with different mention content')
+    if (existing?.receipt) return existing.receipt
+    if (existing?.error) throw new BotError(409, existing.error)
     if (!existing) {
       const targets = await this.mentionTargets(threadId, context)
       for (const mention of input.botMentions ?? []) {
@@ -556,7 +574,7 @@ export class BotCoordinationService {
 
   private async processMentions(id: string, context: Context) {
     return this.host.bots!.withLock(`grove:mentions:${id}`, async () => {
-      const plan = (await this.host.engine.harness.snapshot(groveDoc, context))!.mentions![id]
+      const plan = (await this.host.engine.harness.snapshot(groveDoc, context))?.mentions?.[id] ?? (await this.host.engine.harness.snapshot(groveArchive, id, context))!.mention!
       if (plan.error) throw new BotError(409, plan.error)
       if (!plan.receipt) {
         const conversation = await this.host.engine.conversation(plan.threadId, context)
@@ -711,9 +729,8 @@ export class BotCoordinationService {
           existing.toBotId !== input.toBotId ||
           existing.instruction !== input.instruction ||
           existing.sourceThreadId !== caller.threadId ||
-          (await this.host.engine.harness.snapshot(groveDoc, context))?.requests?.[id]
-            ?.requestedWorkspaceId !== input.workspaceId ||
-          ((await this.host.engine.harness.snapshot(groveDoc, context))?.requests?.[id]?.mode ??
+          (await this.requestMetadata(id, context))?.requestedWorkspaceId !== input.workspaceId ||
+          ((await this.requestMetadata(id, context))?.mode ??
             'await') !== (input.mode ?? 'await')
         )
           throw new BotError(409, 'Operation ID already used with different input')
@@ -729,12 +746,13 @@ export class BotCoordinationService {
 
       const tasks = await this.repo.tasks()
       const state = await this.host.engine.harness.snapshot(groveDoc, context)
+      const requests = new Map(await Promise.all(tasks.map(async (task) => [task.id, state?.requests?.[task.id] ?? await this.requestMetadata(task.id, context)] as const)))
       if (
         input.sourceSubmissionId !== undefined &&
         tasks.filter(
           (task) =>
             task.sourceThreadId === caller.threadId &&
-            state?.requests?.[task.id]?.sourceSubmissionId === input.sourceSubmissionId,
+            requests.get(task.id)?.sourceSubmissionId === input.sourceSubmissionId,
         ).length >= GROVE_LIMITS.tasksPerChain
       )
         throw new BotError(403, 'Source submission collaboration budget exhausted')
@@ -1087,6 +1105,27 @@ export class BotCoordinationService {
     }
   }
 
+  private async requestMetadata(id: string, context: Context) {
+    return (await this.host.engine.harness.snapshot(groveDoc, context))?.requests?.[id] ?? (await this.host.engine.harness.snapshot(groveArchive, id, context))?.request
+  }
+
+  private async archiveTask(id: string, context: Context) {
+    await this.host.engine.harness.commit(async (tx) => {
+      const state = await tx.doc(groveDoc)
+      if (state.requests?.[id]) (await tx.doc(groveArchive, id, {})).request = state.requests[id]
+      delete state.requests?.[id]
+      delete state.workers[id]
+    }, context)
+  }
+
+  private async archiveMention(id: string, context: Context) {
+    await this.host.engine.harness.commit(async (tx) => {
+      const state = await tx.doc(groveDoc)
+      if (state.mentions?.[id]) (await tx.doc(groveArchive, id, {})).mention = state.mentions[id]
+      delete state.mentions?.[id]
+    }, context)
+  }
+
   private async requireTask(id: string) {
     const task = await this.repo.getTask(id)
     if (!task) throw new BotError(404, 'Collaboration task not found')
@@ -1240,7 +1279,7 @@ export class BotCoordinationService {
     await this.host.engine.harness.commit(async (tx) => {
       const state = await tx.doc(groveDoc)
       state.capabilities ??= {}
-      for (const entry of incoming) state.capabilities[entry.operation.id] ??= entry
+      for (const entry of incoming) if (!['completed', 'failed', 'rejected'].includes(entry.operation.state)) state.capabilities[entry.operation.id] ??= entry
     }, context)
     const entries = Object.values(
       (await this.host.engine.harness.snapshot(groveDoc, context))?.capabilities ?? {},
@@ -1260,6 +1299,7 @@ export class BotCoordinationService {
             entry.operation.error,
             context.abortSignal,
           )
+        await this.host.engine.harness.commit(async (tx) => { delete (await tx.doc(groveDoc)).capabilities?.[entry.operation.id] }, context)
         continue
       }
       try {

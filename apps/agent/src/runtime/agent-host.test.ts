@@ -1945,3 +1945,34 @@ test('scheduled tasks persist their Bot and dispatch using its identity', async 
     }),
   ).rejects.toThrow('another Bot')
 })
+
+
+test('HTTP and SSE initially load two runs and history returns two older runs', async () => {
+  const { host } = await setup(false)
+  await host.create({ threadId: 'paged' }, context())
+  for (let index = 1; index <= 5; index++) {
+    const receipt = await host.conversations.submit('paged', { type: 'input', requestId: `page-${index}`, content: `input-${index}` }, context())
+    await (await host.engine.submission('paged', receipt.submissionId, context())).wait(context())
+    await (await host.engine.conversation('paged', context())).waitForIdle(context())
+  }
+  const { request } = await api(host)
+  const latest = await (await request('/threads/paged?runs=2')).json()
+  const users = (entries: any[]) => entries.flatMap((entry) => (entry.model ?? []).filter((message: any) => message.role === 'user').map((message: any) => message.content))
+  expect(users(latest.snapshot.entries)).toEqual(['input-4', 'input-5'])
+  expect(latest.history.hasMore).toBe(true)
+  const older = await (await request(`/threads/paged/history?before=${latest.history.sinceEntry}`)).json()
+  expect(users(older.entries)).toEqual(['input-2', 'input-3'])
+  const first = await (await request(`/threads/paged/history?before=${older.sinceEntry}`)).json()
+  expect(users(first.entries)).toEqual(['input-1'])
+  expect(first.hasMore).toBe(false)
+  const controller = new AbortController()
+  const stream = await fetch((await api(host)).baseUrl + '/threads/paged/events?runs=2', { signal: controller.signal })
+  const reader = stream.body!.getReader()
+  try {
+    const text = new TextDecoder().decode((await reader.read()).value)
+    const data = text.split('\n').find((line) => line.startsWith('data: '))!
+    const frame = JSON.parse(data.slice(6))
+    expect(users(frame.events[0].entries)).toEqual(['input-4', 'input-5'])
+    expect(frame.contextUsage).toEqual(latest.contextUsage)
+  } finally { controller.abort(); await reader.cancel().catch(() => undefined) }
+}, 30_000)

@@ -7,10 +7,13 @@ import {
   useState,
   type ComponentProps,
   type ReactNode,
+  type RefObject,
 } from 'react'
-import { ThreadPrimitive, useAuiEvent, useAuiState } from '@assistant-ui/react'
+import { ThreadPrimitive, useAui, useAuiEvent, useAuiState } from '@assistant-ui/react'
 
-const ScrollFollowerContext = createContext({ following: true, resume: () => {}, pause: () => {} })
+import type { ChatExtras } from '@/renderer/src/features/chat/runtime/chat-store'
+
+const ScrollFollowerContext = createContext<{ following: boolean; resume(): void; pause(): void; viewport: RefObject<HTMLDivElement | null>; scrollToMessage: RefObject<((id: string) => void) | null> }>({ following: true, resume: () => {}, pause: () => {}, viewport: { current: null }, scrollToMessage: { current: null } })
 
 export function useScrollFollower() {
   return useContext(ScrollFollowerContext)
@@ -20,6 +23,10 @@ export function ThreadScrollViewport({
   children,
   ...props
 }: ComponentProps<typeof ThreadPrimitive.Viewport> & { children: ReactNode }) {
+  const aui = useAui()
+  const [historyError, setHistoryError] = useState<string>()
+  const loadOlder = useRef(() => {})
+  const scrollToMessage = useRef<((id: string) => void) | null>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const followRef = useRef(true)
@@ -93,6 +100,7 @@ export function ThreadScrollViewport({
       else snapToBottom()
     }
     const scroll = () => {
+      if (!followRef.current && viewport.scrollTop <= 120) loadOlder.current()
       const top = viewport.scrollTop
       const bottom = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
       if (top < lastTop - 1 && bottom >= lastBottom) {
@@ -108,7 +116,7 @@ export function ThreadScrollViewport({
       lastBottom = bottom
     }
     const wheel = (event: WheelEvent) => {
-      if (event.deltaY < 0) pause()
+      if (event.deltaY < 0) { pause(); if (viewport.scrollTop <= 120) loadOlder.current() }
     }
     const touchStart = (event: TouchEvent) => {
       touchY = event.touches[0].clientY
@@ -161,8 +169,15 @@ export function ThreadScrollViewport({
     initializeRef.current()
   }, [threadId, isLoading, hasMessages])
 
+  loadOlder.current = () => {
+    const extras = aui.thread.getState().extras as ChatExtras | undefined
+    if (!extras?.history?.hasMore || extras.history.loading) return
+    setHistoryError(undefined)
+    void extras.loadOlder().catch(() => setHistoryError('历史加载失败，请向上滚动重试'))
+  }
+
   return (
-    <ScrollFollowerContext.Provider value={{ following, resume, pause }}>
+    <ScrollFollowerContext.Provider value={{ following, resume, pause, viewport: viewportRef, scrollToMessage }}>
       <ThreadPrimitive.Viewport
         {...props}
         ref={viewportRef}
@@ -172,6 +187,7 @@ export function ThreadScrollViewport({
         scrollToBottomOnThreadSwitch={false}
       >
         <div ref={contentRef} className="flex min-h-full shrink-0 flex-col">
+          {historyError && <div role="status" className="text-muted-foreground py-2 text-center text-xs">{historyError}</div>}
           {children}
         </div>
       </ThreadPrimitive.Viewport>

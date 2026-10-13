@@ -174,7 +174,6 @@ export const AgentActivityRow = memo(function AgentActivityRow({
             />
           </CollapsibleTrigger>
           <CollapsibleContent
-            keepMounted
             className={cn(collapsePanel, 'activity-panel outline-none')}
           >
             <div className="ml-5 min-w-0 border-l border-border px-3 py-2 text-xs text-muted-foreground">

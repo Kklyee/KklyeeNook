@@ -1,3 +1,5 @@
+import { snapshotContextUsage } from '@kklyeenook/shared/agent/projection'
+import { threadHistory } from '../runtime/thread-history'
 import { randomUUID } from 'node:crypto'
 import type { Context } from 'hono'
 import type { Context as ChordContext } from '@earendil-works/chord'
@@ -184,8 +186,12 @@ async function handle(context: Context, prefix: string, host: AgentHost): Promis
   if (parts.length === 2 && method === 'GET') {
     const metadata = await host.conversations.get(threadId, ctx)
     const conversation = await host.engine.conversation(threadId, ctx)
+    const snapshot = await host.conversations.snapshot(threadId, ctx)
+    const history = context.req.query('runs') === '2' ? await threadHistory(host, threadId, snapshot, ctx) : undefined
     return context.json({
-      snapshot: await host.conversations.snapshot(threadId, ctx),
+      contextUsage: snapshotContextUsage(snapshot, host.models.contextWindow(snapshot.agent.model)),
+      history: history && { sinceEntry: history.sinceEntry, hasMore: history.hasMore },
+      snapshot: history ? { ...snapshot, entries: history.entries } : snapshot,
       approvals: await host.pendingApprovals(threadId, ctx),
       queue: (await host.engine.harness.snapshot(InboxDoc, conversation.id, ctx))?.items ?? [],
       metadata,
@@ -209,6 +215,11 @@ async function handle(context: Context, prefix: string, host: AgentHost): Promis
   }
   await host.conversations.get(threadId, ctx)
   const conversation = await host.engine.conversation(threadId, ctx)
+  if (parts.length === 3 && action === 'history' && method === 'GET') {
+    const before = Number(context.req.query('before'))
+    if (!Number.isSafeInteger(before) || before <= 0) throw new HttpError(400, 'bad_request', 'Invalid history cursor.')
+    return context.json(await threadHistory(host, threadId, await host.conversations.snapshot(threadId, ctx), ctx, before))
+  }
   if (parts.length === 3 && action === 'submissions' && method === 'POST') {
     const input = await parse(context, inputSchema)
     return context.json(
@@ -304,13 +315,19 @@ async function handle(context: Context, prefix: string, host: AgentHost): Promis
       let tail: Promise<void> = Promise.resolve()
       const send = (batch: readonly AgentEvent[]) => {
         tail = tail.then(async () => {
+          const snapshots = await Promise.all(batch.map(async (event) => {
+            if (event.type !== 'snapshot' || context.req.query('runs') !== '2') return event
+            const history = await threadHistory(host, threadId, event, streamContext)
+            return { ...event, entries: history.entries }
+          }))
           const frame: AgentFrame = {
             type: batch.some((event) => event.type === 'snapshot') ? 'reset' : 'events',
             threadId,
             epoch,
             sequence: ++sequence,
             contextWindow: host.models.contextWindow((await host.engine.harness.snapshot(AgentDoc, conversation.id, streamContext))?.model),
-            events: batch,
+            events: snapshots,
+            contextUsage: batch.some((event) => event.type !== 'message_update') ? snapshotContextUsage(events.snapshot, host.models.contextWindow(events.snapshot.agent.model)) : undefined,
             approvals: await host.pendingApprovals(threadId, streamContext),
             queue:
               (await host.engine.harness.snapshot(InboxDoc, conversation.id, streamContext))

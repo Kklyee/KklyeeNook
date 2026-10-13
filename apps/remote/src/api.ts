@@ -19,17 +19,22 @@ export async function api<T>(path: string, method = 'GET', body?: unknown): Prom
 import type { RemoteConversationSnapshot } from '@kklyeenook/shared/remote/index'
 
 export const conversationSnapshots = new Map<string, RemoteConversationSnapshot>()
+export function cacheConversation(id: string, snapshot: RemoteConversationSnapshot) {
+  conversationSnapshots.delete(id)
+  conversationSnapshots.set(id, snapshot)
+  while (conversationSnapshots.size > 8) conversationSnapshots.delete(conversationSnapshots.keys().next().value!)
+}
 const loadingConversations = new Map<string, Promise<RemoteConversationSnapshot>>()
 
 export function loadConversation(id: string) {
   let promise = loadingConversations.get(id)
   if (!promise) {
     const cached = conversationSnapshots.get(id)
-    if (cached) return Promise.resolve(cached)
+    if (cached) { cacheConversation(id, cached); return Promise.resolve(cached) }
     promise = api<RemoteConversationSnapshot>(`/conversations/${id}`).then(snapshot => {
       const current = conversationSnapshots.get(id)
       if (current) return current
-      conversationSnapshots.set(id, snapshot)
+      cacheConversation(id, snapshot)
       return snapshot
     }).finally(() => loadingConversations.delete(id))
     loadingConversations.set(id, promise)

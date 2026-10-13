@@ -67,7 +67,7 @@ test('blank parts do not shift the final response behind file changes into the e
   expect(parts).toHaveLength(2)
   expect(parts[0]).toMatchObject({ type: 'tool-call', toolName: 'edit' })
   expect(execution.finalPartIndex).toBe(1)
-  expect(parts[execution.finalPartIndex]).toMatchObject({ type: 'text', text: 'Fixed', parentId: 'durable-step:2' })
+  expect(parts[execution.finalPartIndex]).toMatchObject({ type: 'text', text: 'Fixed', parentId: 'durable-step:root:9000:1' })
 })
 
 test('streaming replies stay in the execution process until a terminal response arrives', () => {
@@ -271,4 +271,32 @@ test('events without additional snapshot fields do not invent execution or mutat
   ]
   expect(reduce(snapshot, events)).toBe(snapshot)
   expect(applyAgentEvent(snapshot, { ...emptySnapshot(), agent: { thinkingLevel: 'low' } }).agent.thinkingLevel).toBe('low')
+})
+
+
+test('prepending history preserves existing message and part identities', () => {
+  const snapshot = { ...emptySnapshot(), entries: [
+    entry(10, { role: 'user', content: 'Latest input', timestamp: 100 }),
+    entry(11, { ...fauxAssistantMessage('Latest answer'), timestamp: 110 }),
+  ] }
+  const current = projectDurableThread({ ...emptyDurableProjectionState(), snapshot }).messages
+  const expanded = projectDurableThread({ ...emptyDurableProjectionState(), snapshot: { ...snapshot, entries: [
+    entry(1, { role: 'user', content: 'Earlier input', timestamp: 10 }),
+    entry(2, { ...fauxAssistantMessage('Earlier answer'), timestamp: 20 }),
+    ...snapshot.entries,
+  ] } }).messages.slice(-2)
+  expect(expanded.map((message) => message.id)).toEqual(current.map((message) => message.id))
+  expect(expanded[1].content).toEqual(current[1].content)
+})
+
+
+test('steps with the same timestamp keep distinct part groups', () => {
+  const snapshot = { ...emptySnapshot(), entries: [
+    entry(1, { ...fauxAssistantMessage('Progress'), timestamp: 100, stopReason: 'toolUse' as const }),
+    entry(2, { ...fauxAssistantMessage('Final'), timestamp: 100 }),
+  ] }
+  const message = projectDurableThread({ ...emptyDurableProjectionState(), snapshot }).messages[0]
+  const parts = message.content as { parentId?: string }[]
+  expect(parts[0].parentId).not.toBe(parts[1].parentId)
+  expect(message.metadata?.custom?.execution).toMatchObject({ finalPartIndex: 1 })
 })

@@ -1,6 +1,5 @@
 import { memo, useMemo, useState } from 'react'
 import { useAui, useAuiState, type ThreadMessage } from '@assistant-ui/react'
-import type { ChatExtras } from '../runtime/chat-store'
 import { CheckIcon, CircleAlertIcon } from 'lucide-react'
 import type { AgentActivity } from '@kklyeenook/shared/agent/agentActivity'
 import { ToolTimeline } from '@/renderer/src/components/assistant-ui/elements/tool-timeline'
@@ -69,7 +68,6 @@ export function AgentActivityGroup({ afterPartIndex }: { afterPartIndex?: number
   )
   const boundary = useActivitySelector((groups) => {
     const thread = aui.thread.getState()
-    const transcript = (thread.extras as ChatExtras | undefined)?.state?.messages
     const match = (message: ThreadMessage): ActivityRun | undefined => {
       const messageRunId = message.metadata.custom?.runId
       if (typeof messageRunId === 'string') {
@@ -80,7 +78,7 @@ export function AgentActivityGroup({ afterPartIndex }: { afterPartIndex?: number
         message.content.flatMap((part) => (part.type === 'tool-call' ? [part.toolCallId] : [])),
       )
       const timestamp =
-        transcript?.[Number(message.id.split(':')[1])]?.timestamp ?? message.createdAt.getTime()
+        message.createdAt.getTime()
       return (
         groups.find(
           (group) =>

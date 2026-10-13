@@ -6,7 +6,7 @@ import { Button } from '@kklyeenook/ui/components/button'
 import { defaultBot, type BotProfile } from '@kklyeenook/shared/bot/bot'
 import { BOT_STATE_LABELS } from '@kklyeenook/shared/bot/bot-state'
 import type { RemoteConversationSnapshot, RemoteState } from '@kklyeenook/shared/remote/index'
-import { api, conversationSnapshots } from './api'
+import { api, cacheConversation } from './api'
 import { useBots } from './bot-provider'
 
 export const navigateBot = (path: string) => {
@@ -73,7 +73,7 @@ export function BotMainPage({ id }: { id: string }) {
     api<RemoteConversationSnapshot>(`/bots/${id}/main`, 'POST')
       .then((snapshot) => {
         if (!active) return
-        conversationSnapshots.set(snapshot.id, snapshot)
+        cacheConversation(snapshot.id, snapshot)
         navigateBot(`/bots/${id}/conversations/${snapshot.id}`)
       })
       .catch((error) => {

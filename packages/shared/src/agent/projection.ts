@@ -46,6 +46,7 @@ export type AgentProjectionState = {
   epoch?: string
   sequence: number
   contextWindow?: number
+  contextUsage?: AgentContextUsage
 }
 
 export type AgentProjectedThread = {
@@ -78,6 +79,7 @@ export function reduceDurableFrame(
       epoch: frame.epoch,
       sequence: frame.sequence,
       contextWindow: frame.contextWindow,
+      contextUsage: frame.contextUsage,
     }
   }
   if (frame.sequence !== current.sequence + 1) throw new Error('Agent event sequence gap')
@@ -88,6 +90,7 @@ export function reduceDurableFrame(
     epoch: frame.epoch,
     sequence: frame.sequence,
     contextWindow: frame.contextWindow ?? current.contextWindow,
+    contextUsage: frame.contextUsage ?? current.contextUsage,
   }
 }
 
@@ -119,7 +122,7 @@ export function projectDurableThread(state: AgentProjectionState): AgentProjecte
   return {
     messages,
     transcript,
-    contextUsage: snapshotContextUsage(snapshot, state.contextWindow),
+    contextUsage: state.contextUsage ?? snapshotContextUsage(snapshot, state.contextWindow),
     compaction: { active: snapshot.compactions.length > 0 },
     isRunning: isSnapshotRunning(snapshot),
     queue: queueText(state.queue),
@@ -364,7 +367,7 @@ function projectTranscript(
       group.lastIndex = index
       group.last = message
       group.live = group.live || item.live === true
-      const parentId = `durable-step:${index}`
+      const parentId = `durable-step:${inputId ?? "root"}:${message.timestamp}:${group.steps.length}`
       group.steps.push({
         messageId: parentId,
         usage: { inputTokens: message.usage.input, outputTokens: message.usage.output },
@@ -390,7 +393,7 @@ function projectTranscript(
     if (message.role === 'user') {
       inputId = item.entry ? String(item.entry.id) : undefined
       output.push({
-        id: `durable-msg:${index}`,
+        id: `durable-msg:${inputId ?? "root"}:${message.timestamp}:user`,
         role: 'user',
         createdAt: new Date(message.timestamp),
         content: userContent(message.content),
@@ -413,10 +416,10 @@ function buildAssistant(
   const status = assistantStatus(group, snapshot)
   const settled = status?.type === 'complete' || status?.type === 'incomplete'
   const finalPartIndex = !group.live && ['stop', 'length'].includes(group.last.stopReason)
-    ? group.parts.findIndex((part) => part.type === 'text' && part.parentId === `durable-step:${group.lastIndex}`)
+    ? group.parts.findIndex((part) => part.type === 'text' && part.parentId === `durable-step:${group.inputId ?? "root"}:${group.last.timestamp}:${group.steps.length - 1}`)
     : -1
   return {
-    id: `durable-msg:${group.firstIndex}`,
+    id: `durable-msg:${group.inputId ?? "root"}:${items[group.firstIndex].message.timestamp}:assistant`,
     role: 'assistant',
     createdAt: new Date(group.last.timestamp),
     content: isCompaction

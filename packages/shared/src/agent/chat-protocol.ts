@@ -25,6 +25,7 @@ export type AgentFrame = {
   threadId: string
   epoch: string
   sequence: number
+  contextUsage?: import('./projection').AgentContextUsage
   contextWindow?: number
   events: readonly AgentEvent[]
   approvals: readonly AgentApproval[]
@@ -45,7 +46,15 @@ export type AgentThreadSummary = {
   thinkingLevel?: ModelThinkingLevel
 }
 
+export type AgentHistoryPage = {
+  entries: SnapshotEvent['entries']
+  sinceEntry?: number
+  hasMore: boolean
+}
+
 export type AgentThreadSnapshot = {
+  history?: Omit<AgentHistoryPage, 'entries'>
+  contextUsage?: import('./projection').AgentContextUsage
   contextWindow?: number
   snapshot: SnapshotEvent
   approvals: readonly AgentApproval[]

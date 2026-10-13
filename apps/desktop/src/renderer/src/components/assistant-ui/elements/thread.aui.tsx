@@ -1,5 +1,8 @@
 'use client'
 
+import { unstable_useThreadMessageIds } from '@assistant-ui/react'
+import { useVirtualizer } from '@tanstack/react-virtual'
+
 import { PermissionSelector } from './permission-selector.aui'
 import { WorkspaceComposerLabel } from '@/renderer/src/features/workspaces/WorkspaceComposerLabel'
 import { SessionStats } from './session-stats.aui'
@@ -240,7 +243,7 @@ const ThreadRoot: FC<{
           </AuiIf>
 
           <div data-slot="aui_message-group" className="mb-14 flex flex-col gap-y-6 empty:hidden">
-            <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
+            <VirtualMessages />
             <MentionNavigation />
             {(isCompacting || commandSurface?.result?.title === 'Compacting') && (
               <ContextCompactionProgress />
@@ -283,7 +286,33 @@ const ThreadWithCommands: FC<ComponentProps<typeof ThreadRoot>> = (props) => {
   return <ThreadRoot {...props} commandSurface={commandSurface} />
 }
 
-const ThreadMessage: FC = () => {
+const messageComponents = { Message: ThreadMessage }
+
+function VirtualMessages() {
+  const { viewport, scrollToMessage } = useScrollFollower()
+  const ids = unstable_useThreadMessageIds()
+  const virtualizer = useVirtualizer({
+    count: ids.length,
+    getScrollElement: () => viewport.current,
+    estimateSize: () => 240,
+    getItemKey: (index) => ids[index]!,
+    anchorTo: 'end',
+    followOnAppend: false,
+    overscan: 4,
+    gap: 24,
+  })
+  scrollToMessage.current = (id) => {
+    const index = ids.indexOf(id)
+    if (index >= 0) virtualizer.scrollToIndex(index, { align: 'start' })
+  }
+  return <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+    {virtualizer.getVirtualItems().map((item) => <div key={item.key} ref={virtualizer.measureElement} data-index={item.index} className="absolute top-0 left-0 w-full" style={{ transform: `translateY(${item.start}px)` }}>
+      <ThreadPrimitive.Unstable_MessageById messageId={ids[item.index]!} components={messageComponents} />
+    </div>)}
+  </div>
+}
+
+function ThreadMessage() {
   const { AssistantMessage: AssistantMessageComponent = AssistantMessage, readOnly } =
     useContext(ThreadComponentsContext)
   const role = useAuiState((s) => s.message.role)

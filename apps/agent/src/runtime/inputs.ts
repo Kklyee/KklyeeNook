@@ -244,6 +244,7 @@ export class AgentInputs {
         return copyJson(doc) as PreparedInput
       }, context)
     }
+    this.builder.release(input.contextAttachmentIds ?? [])
     return conversation.submit(prepared.draft, context)
   }
 

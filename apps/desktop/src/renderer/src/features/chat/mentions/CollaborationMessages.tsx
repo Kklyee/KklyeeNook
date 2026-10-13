@@ -28,26 +28,14 @@ export const CollaborationMessages: ToolCallMessagePartComponent = ({
   const details = normalized?.details as { collaborationId?: string } | undefined
   const collaborationId = details?.collaborationId
   useEffect(() => {
-    let active = true
     setTasks([])
-    const refresh = async () => {
-      try {
-        const state = await store.grove()
-        if (active) {
-          setTasks(
-            state.tasks.filter(
-              (task) => task.sourceThreadId === selectedThreadId && task.id === collaborationId,
-            ),
-          )
-        }
-      } catch {}
-    }
-    void refresh()
-    const timer = setInterval(() => void refresh(), 2000)
-    return () => {
-      active = false
-      clearInterval(timer)
-    }
+    if (!collaborationId) return
+    const unsubscribe = store.subscribeGrove((state) => {
+      const tasks = state.tasks.filter((task) => task.sourceThreadId === selectedThreadId && task.id === collaborationId)
+      setTasks(tasks)
+      if (tasks.length && tasks.every((task) => ['completed', 'failed', 'rejected', 'cancelled'].includes(task.status))) unsubscribe()
+    })
+    return unsubscribe
   }, [store, selectedThreadId, collaborationId])
   return tasks.length ? (
     <div className="flex flex-col gap-2" aria-label="Bot 协作消息" aria-live="polite">

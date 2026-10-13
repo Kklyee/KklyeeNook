@@ -20,6 +20,10 @@ export class ContextBuilder {
     private readonly memoryRepo?: AgentMemoryRepo,
   ) {}
 
+  release(ids: readonly string[]) {
+    this.attachmentService.release(ids)
+  }
+
   async build(
     attachmentIds: readonly string[],
     workspaceId?: string,

@@ -12,8 +12,7 @@ export function useAgentRunOverviews() {
   return useQuery({
     queryKey,
     queryFn: () => window.api.listAgentRunOverviews(),
-    refetchInterval: 1000,
-    refetchIntervalInBackground: true,
+    refetchInterval: (query) => query.state.data?.some((run) => activeStatuses.has(run.status)) ? 1000 : 5000,
   })
 }
 

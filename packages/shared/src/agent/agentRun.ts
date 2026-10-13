@@ -47,5 +47,7 @@ export interface AgentRun {
 }
 
 export interface LoadAgentRunsRequest {
+  sinceEntry?: number
+  details?: boolean
   sessionId: string
 }

@@ -44,7 +44,7 @@ export function ToolTimeline({
             {trailing}
           </CollapsibleTrigger>
         </BranchList.Trigger>
-        <CollapsibleContent keepMounted className={cn(collapsePanel, 'activity-panel outline-none')}>
+        <CollapsibleContent className={cn(collapsePanel, 'activity-panel outline-none')}>
           <BranchList.Items className="mt-1">{children}</BranchList.Items>
         </CollapsibleContent>
       </Collapsible>

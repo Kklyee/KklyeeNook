@@ -24,6 +24,9 @@ export class SandboxService {
   elevate(toolCallId: string, request: PermissionRequest, mode: PermissionRequest['mode']): void {
     this.elevations.set(toolCallId, { request: JSON.stringify(request), mode })
   }
+  clearElevation(toolCallId: string) {
+    this.elevations.delete(toolCallId)
+  }
   async authorize(request: PermissionRequest, toolCallId?: string): Promise<PermissionRequest> {
     const elevation = toolCallId ? this.elevations.get(toolCallId) : undefined
     if (elevation?.request === JSON.stringify(request)) {

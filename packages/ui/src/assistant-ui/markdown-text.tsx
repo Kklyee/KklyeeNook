@@ -78,7 +78,7 @@ const PacedMarkdown = memo(function PacedMarkdown({
         componentsByLanguage={markdownComponentsByLanguage}
         mode="streaming"
         smooth={false}
-        animated={wordFade}
+        animated={isRunning ? wordFade : false}
         controls={false}
       />
     </TextMessagePartProvider>

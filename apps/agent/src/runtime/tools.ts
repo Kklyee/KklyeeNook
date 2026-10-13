@@ -155,6 +155,7 @@ export class AgentTools {
         details: copyJson(details, { omitUndefinedProperties: true }),
       }
     } finally {
+      this.sandbox.clearElevation(call.id)
       if (!this.resources) await this.sandbox.finishRun(runId)
     }
   }

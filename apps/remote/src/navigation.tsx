@@ -21,7 +21,7 @@ import {
   CollapsibleTrigger,
 } from '@kklyeenook/ui/components/collapsible'
 import { ThreadListRow } from '@kklyeenook/ui/assistant-ui/thread-list-row'
-import { api, conversationSnapshots } from './api'
+import { api, cacheConversation } from './api'
 import { useBots } from './bot-provider'
 
 export const NavigationContext = createContext<() => void>(() => undefined)
@@ -77,7 +77,7 @@ export function Navigation({
         'POST',
         { workspaceId, requestId: crypto.randomUUID() },
       )
-      conversationSnapshots.set(snapshot.id, snapshot)
+      cacheConversation(snapshot.id, snapshot)
       select('/bots/' + bot.id + '/conversations/' + snapshot.id)
     } catch (error) {
       setError((error as Error).message)

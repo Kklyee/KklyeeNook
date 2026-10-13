@@ -148,3 +148,12 @@ test('preserves consumed steer boundaries within the same run activity history',
   expect(segments[0].activities).toMatchObject([{ content: 'Reasoning before replying', status: 'completed' }])
   expect(segments[1].activities).toMatchObject([{ content: 'Adjusted reasoning', status: 'running' }])
 })
+
+
+test('lightweight run lists omit transcript and tool payloads', async () => {
+  const { projection, harness, message } = fixture()
+  harness.testSnapshot.entries = [{ id: 3, conversationId: 1, kind: 'pi.assistant', byTaskId: 1, model: [{ ...message, content: [{ type: 'text', text: 'Large retained result' }] }] }] as unknown as EntryRecord[]
+  const runs = await projection.list('thread', BACKGROUND_CONTEXT, { details: false })
+  expect(runs).toHaveLength(2)
+  expect(runs.every((run) => run.result === '' && !run.toolCalls.length && !run.toolResults.length)).toBe(true)
+})

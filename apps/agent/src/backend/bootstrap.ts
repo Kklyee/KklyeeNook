@@ -386,15 +386,15 @@ export async function createAgentBackend(
           case 'skills:reload':
             return skillLoader.reload()
           case 'agent-run:list': {
-            return runProjection.list(request.request.sessionId, BACKGROUND_CONTEXT)
+            return runProjection.list(request.request.sessionId, BACKGROUND_CONTEXT, request.request)
           }
           case 'agent-run:overview-list': {
             const threads = await host!.conversations.list(BACKGROUND_CONTEXT)
-            return (
-              await Promise.all(
-                threads.map((thread) => runProjection.list(thread.id, BACKGROUND_CONTEXT)),
-              )
-            ).flat()
+            return Promise.all(threads.map(async (thread) => {
+              const runs = await runProjection.list(thread.id, BACKGROUND_CONTEXT, { details: false })
+              const run = runs.find((run) => !run.parentRunId)
+              return { sessionId: thread.id, sessionTitle: thread.title, runId: run?.id, scheduledTaskId: run?.scheduledTaskId, status: run?.status ?? 'idle', startedAt: run?.startedAt, completedAt: run?.completedAt, updatedAt: run?.updatedAt ?? thread.updatedAt ?? 0 }
+            }))
           }
           case 'agent-execution-record:list':
             return runProjection.records(request.request.runId, BACKGROUND_CONTEXT)

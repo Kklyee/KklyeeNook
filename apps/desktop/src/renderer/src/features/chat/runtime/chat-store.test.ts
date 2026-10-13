@@ -33,6 +33,7 @@ afterEach(() => {
   stores.splice(0).forEach((store) => store.dispose())
   Source.instances = []
   clearPendingContextAttachmentIds()
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
@@ -133,7 +134,7 @@ function setup(
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: RequestInit) =>
-      url.endsWith('/bots') ? Promise.resolve(response(bots)) : request(url, init),
+      url.endsWith('/bots') ? Promise.resolve(response(bots)) : request(url.replace(/\?runs=2$/, ''), init),
     ),
   )
   const store = new ChatStore('http://localhost/secret/api/agent', () => ({}))
@@ -401,4 +402,74 @@ test('restarts after StrictMode cleanup and keeps Bot creation and main conversa
   await store.selectBot('custom')
   expect(store.getSnapshot().selectedThreadId).toBe(created.mainThreadId)
   expect(store.getSnapshot().current.loading).toBe(false)
+})
+
+
+test('deduplicates older page loads and keeps them across stream resets', async () => {
+  const entries = [1, 2, 3, 4].map((id) => ({ id, conversationId: 1, kind: 'pi.user', model: [{ role: 'user', content: String(id), timestamp: id }] }))
+  let pages = 0
+  let finish!: () => void
+  const store = setup(async (url) => {
+    if (url.endsWith('/threads')) return response([metadata('a'), metadata('b')])
+    if (url.includes('/history?before=3')) {
+      pages++
+      await new Promise<void>((resolve) => { finish = resolve })
+      return response({ entries: entries.slice(0, 2), sinceEntry: 1, hasMore: false })
+    }
+    return response({ ...snapshot('a'), snapshot: { ...emptySnapshot(), entries: entries.slice(2) }, history: { sinceEntry: 3, hasMore: true } })
+  })
+  await store.switchToThread('a')
+  const ids = store.getSnapshot().current.messages.map((message) => message.id)
+  const load = store.loadOlder()
+  await store.loadOlder()
+  expect(pages).toBe(1)
+  finish()
+  await load
+  expect(store.getSnapshot().current.messages.slice(-2).map((message) => message.id)).toEqual(ids)
+  Source.instances.at(-1)!.send({ ...frame('a'), events: [{ ...emptySnapshot(), entries: entries.slice(2) } as never] })
+  expect(store.getSnapshot().current.messages).toHaveLength(4)
+  expect(store.getSnapshot().extras.history.hasMore).toBe(false)
+})
+
+test('ignores older page responses after switching conversations', async () => {
+  let finish!: () => void
+  const store = setup(async (url) => {
+    if (url.endsWith('/threads')) return response([metadata('a'), metadata('b')])
+    if (url.includes('/history?')) {
+      await new Promise<void>((resolve) => { finish = resolve })
+      return response({ entries: [], sinceEntry: 1, hasMore: false })
+    }
+    return response({ ...snapshot('a'), history: { sinceEntry: 3, hasMore: true } })
+  })
+  await store.switchToThread('a')
+  const load = store.loadOlder()
+  await store.switchToThread('b')
+  finish()
+  await load
+  expect(store.getSnapshot().selectedThreadId).toBe('b')
+  expect(store.getSnapshot().extras.history.sinceEntry).toBe(3)
+})
+
+
+test('collaboration cards share one poll and release it after the last subscriber', async () => {
+  const store = new ChatStore('http://localhost/secret/api/agent', () => ({}), false)
+  stores.push(store)
+  let requests = 0
+  vi.stubGlobal('fetch', vi.fn(async () => {
+    requests++
+    return response({ messages: [], tasks: [] })
+  }))
+  vi.useFakeTimers()
+  const first = vi.fn()
+  const second = vi.fn()
+  const stopFirst = store.subscribeGrove(first)
+  const stopSecond = store.subscribeGrove(second)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(requests).toBe(1)
+  await vi.advanceTimersByTimeAsync(2000)
+  expect(requests).toBe(2)
+  stopFirst()
+  stopSecond()
+  await vi.advanceTimersByTimeAsync(2000)
+  expect(requests).toBe(2)
 })

@@ -24,7 +24,7 @@ export async function discoverRemoteModels({
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (apiKey?.trim()) headers.Authorization = `Bearer ${apiKey.trim()}`
 
-  const response = await fetchImpl(endpoint, { headers })
+  const response = await fetchImpl(endpoint, { headers, signal: AbortSignal.timeout(15_000) })
   if (!response.ok) {
     throw new Error(`获取模型目录失败（HTTP ${response.status}）`)
   }

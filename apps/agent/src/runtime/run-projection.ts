@@ -8,22 +8,48 @@ import type { ToolResult } from '@kklyeenook/shared/tool/tool'
 import type { AgentHost } from './agent-host'
 import { runMembershipDoc } from './run-membership'
 import { inputDoc } from './inputs'
+import type { LoadAgentRunsRequest } from '@kklyeenook/shared/agent/agentRun'
 
 type Record = TaskRecord<JsonValue, JsonValue, JsonValue>
-type Group = { id: string; input?: SubmissionId; conversation: ConversationRecord; tasks: Record[]; snapshot: SnapshotEvent }
+type Group = { id: string; input?: SubmissionId; conversation: ConversationRecord; tasks: Record[]; snapshot?: SnapshotEvent }
 
 export class RunProjection {
   constructor(private readonly host: AgentHost) {}
 
-  async list(threadId: string, context: Context): Promise<AgentRun[]> {
+  async list(threadId: string, context: Context, options: Omit<LoadAgentRunsRequest, 'sessionId'> = {}): Promise<AgentRun[]> {
     const root = await this.host.engine.conversation(threadId, context)
     const graph = await this.graph(root.id, context)
-    const groups = await this.groups(graph, context)
+    let groups = await this.groups(graph, context)
+    if (options.sinceEntry !== undefined) {
+      const selected = new Set<string>()
+      for (const group of groups) {
+        if (group.conversation.owner) continue
+        const submission = group.input === undefined ? undefined : await this.host.engine.harness.submission(group.input, context)
+        const entry = (await submission?.status(context))?.entry
+        if (entry !== undefined && entry >= options.sinceEntry) selected.add(group.id)
+      }
+      let changed = true
+      while (changed) {
+        changed = false
+        for (const group of groups) {
+          const owner = graph.tasks.find((task) => task.id === group.conversation.owner?.taskId)
+          const parent = groups.find((candidate) => candidate.tasks.some((task) => task.id === owner?.owner))
+          if (parent && selected.has(parent.id) && !selected.has(group.id)) { selected.add(group.id); changed = true }
+        }
+      }
+      groups = groups.filter((group) => selected.has(group.id))
+    }
+    const snapshots = new Map<ConversationId, SnapshotEvent>()
+    if (options.details !== false) for (const group of groups) {
+      let snapshot = snapshots.get(group.conversation.id)
+      if (!snapshot) { snapshot = await this.snapshot(group.conversation.id, context); snapshots.set(group.conversation.id, snapshot) }
+      group.snapshot = snapshot
+    }
     const byTask = new Map<number, Group>(groups.flatMap((group) => group.tasks.map((task) => [task.id, group] as const)))
     const runs = await Promise.all(groups.map(async (group): Promise<AgentRun> => {
       const first = group.tasks[0]
       const last = group.tasks.at(-1)!
-      const records = this.project(group, graph.tasks, threadId)
+      const records = options.details === false ? [] : this.project(group, graph.tasks, threadId)
       const owner = group.conversation.owner ? graph.tasks.find((task) => task.id === group.conversation.owner!.taskId) : undefined
       const status = last.state.status === 'terminal'
         ? last.state.outcome.status === 'completed' ? 'completed' : last.state.outcome.status === 'aborted' ? 'aborted' : 'failed'
@@ -68,13 +94,13 @@ export class RunProjection {
     const graph = await this.graph(root.conversationId, context)
     const group = (await this.groups(graph, context)).find((item) => item.id === runId)
     if (!group) throw new Error('Run not found')
+    group.snapshot = await this.snapshot(group.conversation.id, context)
     return this.project(group, graph.tasks, root.threadId)
   }
 
   private async groups(graph: { conversations: ConversationRecord[]; tasks: Record[] }, context: Context) {
     const groups: Group[] = []
     for (const conversation of graph.conversations) {
-      const snapshot = await this.snapshot(conversation.id, context)
       const membership = await this.host.engine.harness.snapshot(runMembershipDoc, conversation.id, context)
       const current = new Map<string, Group>()
       const tasks = graph.tasks.filter((task) => task.conversationId === conversation.id && task.kind === GenerationTask.definition.name).sort((a, b) => a.id - b.id)
@@ -83,7 +109,7 @@ export class RunProjection {
         const key = input === undefined ? 'task:' + task.id : 'input:' + input
         let group = current.get(key)
         if (!group) {
-          group = { id: conversation.owner ? 'durable-child:' + conversation.id : String(task.id), input: input as SubmissionId | undefined, conversation, tasks: [], snapshot }
+          group = { id: conversation.owner ? 'durable-child:' + conversation.id : String(task.id), input: input as SubmissionId | undefined, conversation, tasks: [] }
           current.set(key, group)
           groups.push(group)
         }
@@ -113,7 +139,7 @@ export class RunProjection {
       }
     }
     push({ type: 'agent_started' }, group.tasks[0].startedAt ?? 0)
-    for (const entry of group.snapshot.entries) {
+    for (const entry of group.snapshot!.entries) {
       for (const message of entry.model ?? []) {
         if (message.role === 'user') input = { id: String(entry.id), text: typeof message.content === 'string' ? message.content : message.content.filter(part => part.type === 'text').map(part => part.text).join('\n'), timestamp: message.timestamp }
       }
@@ -132,8 +158,8 @@ export class RunProjection {
       }
     }
     const liveTask = tasks.filter((task) => task.conversationId === group.conversation.id && task.kind === GenerationTask.definition.name && task.state.status !== 'terminal' && task.state.status !== 'completing').sort((a, b) => b.id - a.id)[0]
-    if (liveTask && ids.has(liveTask.id) && group.snapshot.generation?.message) {
-      assistant(group.snapshot.generation.message, true)
+    if (liveTask && ids.has(liveTask.id) && group.snapshot!.generation?.message) {
+      assistant(group.snapshot!.generation.message, true)
     }
     const last = group.tasks.at(-1)!
     if (last.state.status === 'terminal') {

@@ -18,7 +18,7 @@ import type {
 } from '@kklyeenook/shared/remote/index'
 import { Button } from '@kklyeenook/ui/components/button'
 import { MessageQueue } from '@kklyeenook/ui/assistant-ui/message-queue'
-import { api, conversationSnapshots, loadConversation } from './api'
+import { api, cacheConversation, conversationSnapshots, loadConversation } from './api'
 import { Controls, Choice, type Selection } from './Controls'
 import { Approval } from './Approval'
 import { Navigation, NavigationContext } from './navigation'
@@ -410,7 +410,7 @@ function NewConversation({ state, projectId }: { state: RemoteState; projectId: 
                 ...(attachments.length ? { attachments } : {}),
               },
             )
-            conversationSnapshots.set(result.id, result)
+            cacheConversation(result.id, result)
             navigate(`/projects/${projectId}/conversations/${result.id}`)
           } catch (error) {
             setError((error as Error).message)
@@ -460,7 +460,7 @@ function Conversation({
       if (event.type === 'snapshot') {
         seq = event.seq
         setSnapshot(event.snapshot)
-        conversationSnapshots.set(id, event.snapshot)
+        cacheConversation(id, event.snapshot)
         setConnected(true)
         setError('')
         return
@@ -508,7 +508,7 @@ function Conversation({
             return { ...current, error: event.error }
         }
       })()
-      conversationSnapshots.set(id, next)
+      cacheConversation(id, next)
       setSnapshot(next)
     })
     source.onerror = () => {
@@ -530,7 +530,7 @@ function Conversation({
       await api(path, 'POST', input)
       if (refresh) {
         const value = await api<RemoteConversationSnapshot>(`/conversations/${id}`)
-        conversationSnapshots.set(id, value)
+        cacheConversation(id, value)
         setSnapshot(value)
         if (bot) await reloadBots()
       }
@@ -632,7 +632,7 @@ function Conversation({
             onRenamed={(title) => {
               const next = { ...snapshot, title }
               setSnapshot(next)
-              conversationSnapshots.set(id, next)
+              cacheConversation(id, next)
             }}
           />
         )}

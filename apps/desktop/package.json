@@ -34,7 +34,8 @@
     "@kklyeenook/agent": "workspace:*",
     "@kklyeenook/shared": "workspace:*",
     "@lexical/react": "0.49.0",
-    "lexical": "0.49.0"
+    "lexical": "0.49.0",
+    "@tanstack/react-virtual": "3.14.18"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.3",

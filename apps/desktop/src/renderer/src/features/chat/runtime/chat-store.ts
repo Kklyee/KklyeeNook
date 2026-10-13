@@ -15,6 +15,7 @@ import type { BotState } from '@kklyeenook/shared/bot/bot'
 import type { Workspace } from '@kklyeenook/shared/workspace/workspace'
 import type {
   AgentFrame,
+  AgentHistoryPage,
   AgentQueueMutation,
   AgentSubmissionInput,
   AgentThreadSnapshot,
@@ -34,6 +35,8 @@ import {
 import { notifyWorkspaceChanged } from '../../workspaces/WorkspaceProvider'
 
 import type { Message, ModelThinkingLevel } from '@earendil-works/pi-ai'
+
+type GroveSnapshot = { messages: BotMessage[]; tasks: BotTask[]; policies: Record<string, BotReceptionPolicy>; contacts: NetworkBotIdentity[]; identities: NetworkBotIdentity[]; network: { enabled: boolean; error?: string } }
 
 type Listener = () => void
 
@@ -68,6 +71,8 @@ export type ChatExtras = {
   queueItems: AgentProjectionState['queue']
   contextUsage: AgentProjectedThread['contextUsage']
   compaction: AgentProjectedThread['compaction']
+  history: { sinceEntry?: number; hasMore: boolean; loading: boolean }
+  loadOlder(): Promise<void>
   refresh(): Promise<void>
   setModel(input: {
     provider: string
@@ -141,6 +146,8 @@ export class ChatStore {
   private loading = false
   private listLoading = false
   private error: string | undefined
+  private history: ChatExtras['history'] = { hasMore: false, loading: false }
+  private projectionTimer: ReturnType<typeof setTimeout> | undefined
   private source: EventSource | undefined
   private sending: SendingState = { creating: false, threads: new Set() }
   private pendingAdmission:
@@ -204,6 +211,11 @@ export class ChatStore {
 
   dispose() {
     this.disposed = true
+    clearTimeout(this.projectionTimer)
+    this.projectionTimer = undefined
+    clearInterval(this.groveTimer)
+    this.groveTimer = undefined
+    this.groveListeners.clear()
     clearInterval(this.botTimer)
     this.botTimer = undefined
     this.botSelectionVersion++
@@ -221,6 +233,7 @@ export class ChatStore {
   async reloadBots() {
     const bots = await this.request<BotSummary[]>('/bots')
     if (this.disposed) return
+    if (JSON.stringify(this.bots) === JSON.stringify(bots)) return
     this.bots = bots
     this.emit()
   }
@@ -238,6 +251,9 @@ export class ChatStore {
     this.source = undefined
     this.selectedThreadId = undefined
     this.metadata = undefined
+    clearTimeout(this.projectionTimer)
+    this.projectionTimer = undefined
+    this.history = { hasMore: false, loading: false }
     this.projection = emptyDurableProjectionState()
     this.projected = emptyProjected
     this.selectedBotId = id
@@ -269,8 +285,25 @@ export class ChatStore {
     }>('/bot-options')
   }
 
+  private groveListeners = new Set<(state: GroveSnapshot) => void>()
+  private groveTimer: ReturnType<typeof setInterval> | undefined
+  private groveRequest: Promise<GroveSnapshot> | undefined
+
+  subscribeGrove(listener: (state: GroveSnapshot) => void) {
+    this.groveListeners.add(listener)
+    const refresh = () => { void this.grove().then((state) => this.groveListeners.forEach((listener) => listener(state))).catch(() => undefined) }
+    if (!this.groveTimer) {
+      refresh()
+      this.groveTimer = setInterval(refresh, 2000)
+    } else void this.grove().then((state) => { if (this.groveListeners.has(listener)) listener(state) }).catch(() => undefined)
+    return () => {
+      this.groveListeners.delete(listener)
+      if (!this.groveListeners.size) { clearInterval(this.groveTimer); this.groveTimer = undefined }
+    }
+  }
+
   grove() {
-    return this.request<{ messages: BotMessage[]; tasks: BotTask[]; policies: Record<string, BotReceptionPolicy>; contacts: NetworkBotIdentity[]; identities: NetworkBotIdentity[]; network: { enabled: boolean; error?: string } }>('/grove')
+    return this.groveRequest ??= this.request<GroveSnapshot>('/grove').finally(() => { this.groveRequest = undefined })
   }
   mentionTargets() {
     const threadId = this.selectedThreadId ?? (this.draft
@@ -374,6 +407,9 @@ export class ChatStore {
     this.source = undefined
     this.selectedThreadId = undefined
     this.draft = undefined
+    clearTimeout(this.projectionTimer)
+    this.projectionTimer = undefined
+    this.history = { hasMore: false, loading: false }
     this.projection = emptyDurableProjectionState()
     this.projected = emptyProjected
     this.metadata = undefined
@@ -390,6 +426,9 @@ export class ChatStore {
     this.source = undefined
     this.selectedThreadId = threadId
     this.draft = undefined
+    clearTimeout(this.projectionTimer)
+    this.projectionTimer = undefined
+    this.history = { hasMore: false, loading: false }
     this.projection = emptyDurableProjectionState()
     this.projected = emptyProjected
     this.metadata = undefined
@@ -398,15 +437,17 @@ export class ChatStore {
     this.emit()
     try {
       const value = await this.request<AgentThreadSnapshot>(
-        `/threads/${encodeURIComponent(threadId)}`,
+        `/threads/${encodeURIComponent(threadId)}?runs=2`,
       )
       if (this.selectedThreadId !== threadId || version !== this.connectionVersion) return
+      this.history = { ...value.history, hasMore: value.history?.hasMore ?? false, loading: false }
       this.metadata = value.metadata ?? this.threads.find((thread) => thread.id === threadId)
       this.selectedBotId = this.metadata?.botId ?? this.selectedBotId
       this.botEditorId = undefined
       this.projection = {
         snapshot: value.snapshot,
         contextWindow: value.contextWindow,
+        contextUsage: value.contextUsage,
         approvals: value.approvals,
         queue: value.queue,
         sequence: 0,
@@ -439,6 +480,9 @@ export class ChatStore {
     this.selectedThreadId = undefined
     this.selectedBotId = this.draft.botId ?? this.selectedBotId
     this.botEditorId = undefined
+    clearTimeout(this.projectionTimer)
+    this.projectionTimer = undefined
+    this.history = { hasMore: false, loading: false }
     this.projection = emptyDurableProjectionState()
     this.projected = emptyProjected
     this.metadata = {
@@ -680,10 +724,33 @@ export class ChatStore {
     )
   }
 
+  async loadOlder() {
+    const threadId = this.selectedThreadId
+    const before = this.history.sinceEntry
+    if (!threadId || before === undefined || !this.history.hasMore || this.history.loading) return
+    const version = this.connectionVersion
+    this.history = { ...this.history, loading: true }
+    this.emit()
+    try {
+      const page = await this.request<AgentHistoryPage>(`/threads/${encodeURIComponent(threadId)}/history?before=${before}`)
+      if (version !== this.connectionVersion || this.disposed) return
+      const snapshot = this.projection.snapshot!
+      const existing = new Set(snapshot.entries.map((entry) => entry.id))
+      this.projection = { ...this.projection, snapshot: { ...snapshot, entries: [...page.entries.filter((entry) => !existing.has(entry.id)), ...snapshot.entries] } }
+      this.history = { sinceEntry: page.sinceEntry, hasMore: page.hasMore, loading: false }
+      this.projected = projectDurableThread(this.projection)
+    } finally {
+      if (version === this.connectionVersion && !this.disposed) {
+        this.history = { ...this.history, loading: false }
+        this.emit()
+      }
+    }
+  }
+
   private connect(threadId: string) {
     this.source?.close()
     const source = new EventSource(
-      `${this.endpoint}/threads/${encodeURIComponent(threadId)}/events`,
+      `${this.endpoint}/threads/${encodeURIComponent(threadId)}/events?runs=2`,
     )
     this.source = source
     source.onmessage = (message) => {
@@ -693,11 +760,23 @@ export class ChatStore {
         if (frame.threadId !== threadId) return
         const next = reduceDurableFrame(this.projection, frame)
         if (next === this.projection) return
-        this.projection = next
-        this.projected = projectDurableThread(this.projection)
+        const old = this.projection.snapshot
+        const fresh = next.snapshot
+        if (frame.type === 'reset' && old && fresh && fresh.entries.length) {
+          const first = fresh.entries[0].id
+          this.projection = { ...next, snapshot: { ...fresh, entries: [...old.entries.filter((entry) => entry.id < first), ...fresh.entries] } }
+        } else this.projection = next
         this.error = undefined
         this.loading = false
-        this.emit()
+        const publish = () => {
+          this.projectionTimer = undefined
+          this.projected = projectDurableThread(this.projection)
+          this.emit()
+        }
+        if (frame.type === 'reset' || frame.events.some((event) => event.type !== 'message_update')) {
+          clearTimeout(this.projectionTimer)
+          publish()
+        } else this.projectionTimer ??= setTimeout(publish, 30)
       } catch {
         this.error = 'Event stream interrupted. Reconnecting…'
         this.emit()
@@ -764,6 +843,8 @@ export class ChatStore {
     }
     return {
       state: { messages: this.projected.transcript },
+      history: this.history,
+      loadOlder: () => this.loadOlder(),
       metadata: { id, config },
       queue: this.projected.queue,
       queueItems: this.projection.queue,

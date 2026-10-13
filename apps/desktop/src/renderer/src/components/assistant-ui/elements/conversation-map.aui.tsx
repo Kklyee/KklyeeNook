@@ -7,7 +7,7 @@ export function ConversationMapAui() {
   const messages = useAuiState((state) => state.thread.messages)
   const viewport = useThreadViewport((state) => state.element.viewport)
   const height = useThreadViewport((state) => state.height.viewport)
-  const { pause } = useScrollFollower()
+  const { pause, scrollToMessage } = useScrollFollower()
   const [activeId, setActiveId] = useState<string>()
   const [visibleIds, setVisibleIds] = useState<string[]>([])
   const entries = useMemo(
@@ -92,7 +92,7 @@ export function ConversationMapAui() {
             const target = Array.from(
               viewport!.querySelectorAll<HTMLElement>('[data-message-id]'),
             ).find((element) => element.dataset.messageId === id)
-            if (!target) return
+            if (!target) { pause(); scrollToMessage.current?.(id); return }
             pause()
             viewport!.scrollTo({
               top:

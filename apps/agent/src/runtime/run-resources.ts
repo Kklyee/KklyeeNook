@@ -112,7 +112,8 @@ export class RunResources {
       await update()
     })
     void watch.closed.then(() => {
-      this.watches.delete(id)
+      if (this.watches.get(id) === watch) this.watches.delete(id)
+      void update()
     })
     context.abortSignal?.throwIfAborted()
   }
