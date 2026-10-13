@@ -1,5 +1,7 @@
 'use client'
 
+import { useLayoutEffect } from 'react'
+
 import { unstable_useThreadMessageIds } from '@assistant-ui/react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 
@@ -289,7 +291,7 @@ const ThreadWithCommands: FC<ComponentProps<typeof ThreadRoot>> = (props) => {
 const messageComponents = { Message: ThreadMessage }
 
 function VirtualMessages() {
-  const { viewport, scrollToMessage } = useScrollFollower()
+  const { viewport, scrollToMessage, scrollToBottom } = useScrollFollower()
   const ids = unstable_useThreadMessageIds()
   const virtualizer = useVirtualizer({
     count: ids.length,
@@ -301,10 +303,14 @@ function VirtualMessages() {
     overscan: 4,
     gap: 24,
   })
-  scrollToMessage.current = (id) => {
-    const index = ids.indexOf(id)
-    if (index >= 0) virtualizer.scrollToIndex(index, { align: 'start' })
-  }
+  useLayoutEffect(() => {
+    scrollToBottom.current = () => virtualizer.scrollToEnd()
+    scrollToMessage.current = (id) => {
+      const index = ids.indexOf(id)
+      if (index >= 0) virtualizer.scrollToIndex(index, { align: 'start' })
+    }
+    return () => { scrollToBottom.current = null; scrollToMessage.current = null }
+  }, [ids, virtualizer, scrollToBottom, scrollToMessage])
   return <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
     {virtualizer.getVirtualItems().map((item) => <div key={item.key} ref={virtualizer.measureElement} data-index={item.index} className="absolute top-0 left-0 w-full" style={{ transform: `translateY(${item.start}px)` }}>
       <ThreadPrimitive.Unstable_MessageById messageId={ids[item.index]!} components={messageComponents} />

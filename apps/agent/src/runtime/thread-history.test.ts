@@ -1,7 +1,9 @@
-import { expect, test } from 'vitest'
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context'
+import type { AgentHost } from './agent-host'
+import { expect, test, vi } from 'vitest'
 import type { EntryRecord } from '@earendil-works/pi-durable'
 import { emptySnapshot } from './projection'
-import { sliceRunHistory } from './thread-history'
+import { runStarts, sliceRunHistory } from './thread-history'
 
 const snapshot = { ...emptySnapshot(), entries: Array.from({ length: 20 }, (_, index) => ({ id: index + 1 } as EntryRecord)) }
 
@@ -22,4 +24,16 @@ test('empty and not-yet-started threads do not lose their entries', () => {
   expect(sliceRunHistory(emptySnapshot(), []).entries).toEqual([])
   expect(sliceRunHistory(snapshot, []).entries).toEqual(snapshot.entries)
   expect(sliceRunHistory(snapshot, [1]).hasMore).toBe(false)
+})
+
+
+test('opening a long thread reads only three recent submission boundaries', async () => {
+  const submission = vi.fn(async (input: number) => ({ status: async () => ({ entry: input * 10 }) }))
+  const host = { engine: { harness: {
+    snapshot: async () => ({ tasks: Object.fromEntries(Array.from({ length: 1000 }, (_, index) => [index + 1, index + 1])) }),
+    submission,
+  } } } as unknown as AgentHost
+  expect(await runStarts(host, 1 as never, BACKGROUND_CONTEXT)).toEqual([10000, 9990, 9980])
+  expect(submission).toHaveBeenCalledTimes(3)
+  expect(await runStarts(host, 1 as never, BACKGROUND_CONTEXT, 9990)).toEqual([9980, 9970, 9960])
 })

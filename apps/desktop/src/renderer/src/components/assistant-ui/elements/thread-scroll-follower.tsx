@@ -13,7 +13,7 @@ import { ThreadPrimitive, useAui, useAuiEvent, useAuiState } from '@assistant-ui
 
 import type { ChatExtras } from '@/renderer/src/features/chat/runtime/chat-store'
 
-const ScrollFollowerContext = createContext<{ following: boolean; resume(): void; pause(): void; viewport: RefObject<HTMLDivElement | null>; scrollToMessage: RefObject<((id: string) => void) | null> }>({ following: true, resume: () => {}, pause: () => {}, viewport: { current: null }, scrollToMessage: { current: null } })
+const ScrollFollowerContext = createContext<{ following: boolean; resume(): void; pause(): void; viewport: RefObject<HTMLDivElement | null>; scrollToMessage: RefObject<((id: string) => void) | null>; scrollToBottom: RefObject<(() => void) | null> }>({ following: true, resume: () => {}, pause: () => {}, viewport: { current: null }, scrollToMessage: { current: null }, scrollToBottom: { current: null } })
 
 export function useScrollFollower() {
   return useContext(ScrollFollowerContext)
@@ -26,6 +26,7 @@ export function ThreadScrollViewport({
   const aui = useAui()
   const [historyError, setHistoryError] = useState<string>()
   const loadOlder = useRef(() => {})
+  const scrollToBottom = useRef<(() => void) | null>(null)
   const scrollToMessage = useRef<((id: string) => void) | null>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -57,7 +58,6 @@ export function ThreadScrollViewport({
     let frame = 0
     let target = 0
     let lastTop = viewport.scrollTop
-    let lastBottom = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
     let touchY = 0
     const pause = () => {
       followRef.current = false
@@ -68,13 +68,17 @@ export function ThreadScrollViewport({
     const tick = () => {
       frame = 0
       if (!followRef.current) return
+      if (scrollToBottom.current) {
+        scrollToBottom.current()
+        lastTop = viewport.scrollTop
+        return
+      }
       const before = viewport.scrollTop
       const diff = target - before
       viewport.scrollTop =
         reducedMotion.matches || Math.abs(diff) < 0.5 ? target : before + diff * 0.18
       if (viewport.scrollTop === before && diff !== 0) viewport.scrollTop = target
       lastTop = viewport.scrollTop
-      lastBottom = target
       if (Math.abs(target - lastTop) >= 0.5) frame = requestAnimationFrame(tick)
     }
     const schedule = () => {
@@ -85,9 +89,9 @@ export function ThreadScrollViewport({
       cancelAnimationFrame(frame)
       frame = 0
       target = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
-      viewport.scrollTop = target
+      if (scrollToBottom.current) scrollToBottom.current()
+      else viewport.scrollTop = target
       lastTop = viewport.scrollTop
-      lastBottom = target
     }
     const initialize = () => {
       followRef.current = true
@@ -96,16 +100,13 @@ export function ThreadScrollViewport({
     }
     const resize = () => {
       if (!followRef.current) return
-      if (smoothRef.current) schedule()
+      if (scrollToBottom.current || smoothRef.current) schedule()
       else snapToBottom()
     }
     const scroll = () => {
       if (!followRef.current && viewport.scrollTop <= 120) loadOlder.current()
       const top = viewport.scrollTop
-      const bottom = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
-      if (top < lastTop - 1 && bottom >= lastBottom) {
-        pause()
-      } else if (
+      if (
         !followRef.current &&
         top > lastTop &&
         viewport.scrollHeight - viewport.clientHeight - top <= 80
@@ -113,7 +114,6 @@ export function ThreadScrollViewport({
         resume()
       }
       lastTop = top
-      lastBottom = bottom
     }
     const wheel = (event: WheelEvent) => {
       if (event.deltaY < 0) { pause(); if (viewport.scrollTop <= 120) loadOlder.current() }
@@ -177,7 +177,7 @@ export function ThreadScrollViewport({
   }
 
   return (
-    <ScrollFollowerContext.Provider value={{ following, resume, pause, viewport: viewportRef, scrollToMessage }}>
+    <ScrollFollowerContext.Provider value={{ following, resume, pause, viewport: viewportRef, scrollToMessage, scrollToBottom }}>
       <ThreadPrimitive.Viewport
         {...props}
         ref={viewportRef}

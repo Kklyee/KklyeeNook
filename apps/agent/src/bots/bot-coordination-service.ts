@@ -433,14 +433,27 @@ export class BotCoordinationService {
     await host.engine.harness.commit(async (tx) => {
       await tx.doc(groveDoc)
     }, context)
-    for (const task of await this.repo.tasks()) {
+    const tasks = await this.repo.tasks()
+    for (const task of tasks) {
       if (!terminal(task)) await this.schedule(task, context)
-      else { await this.deliverResult(task, context); await this.archiveTask(task.id, context) }
+      else await this.deliverResult(task, context)
     }
     const state = await host.engine.harness.snapshot(groveDoc, context)
-    for (const [id, plan] of Object.entries(state?.mentions ?? {})) {
-      if (plan.worker !== undefined && (plan.receipt || plan.error) && (await host.engine.harness.commit((tx) => tx.task(plan.worker as TaskId), context))?.state.status === 'terminal') await this.archiveMention(id, context)
-    }
+    const completed = tasks.filter((task) => terminal(task) && (state?.requests?.[task.id] || state?.workers[task.id] !== undefined))
+    const mentions = Object.entries(state?.mentions ?? {}).filter(([, plan]) => plan.worker !== undefined && (plan.receipt || plan.error))
+    if (completed.length || mentions.length) await host.engine.harness.commit(async (tx) => {
+      const doc = await tx.doc(groveDoc)
+      for (const task of completed) {
+        if (doc.requests?.[task.id]) (await tx.doc(groveArchive, task.id, {})).request = doc.requests[task.id]
+        delete doc.requests?.[task.id]
+        delete doc.workers[task.id]
+      }
+      for (const [id, plan] of mentions) {
+        if ((await tx.task(plan.worker as TaskId))?.state.status !== 'terminal' || !doc.mentions?.[id]) continue
+        ;(await tx.doc(groveArchive, id, {})).mention = doc.mentions[id]
+        delete doc.mentions[id]
+      }
+    }, context)
     if (this.remote) await this.startPump(context)
   }
 

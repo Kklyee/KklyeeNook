@@ -16,17 +16,19 @@ type Group = { id: string; input?: SubmissionId; conversation: ConversationRecor
 export class RunProjection {
   constructor(private readonly host: AgentHost) {}
 
-  async list(threadId: string, context: Context, options: Omit<LoadAgentRunsRequest, 'sessionId'> = {}): Promise<AgentRun[]> {
+  async list(threadId: string, context: Context, options: Omit<LoadAgentRunsRequest, 'sessionId'> & { latestOnly?: boolean } = {}): Promise<AgentRun[]> {
     const root = await this.host.engine.conversation(threadId, context)
     const graph = await this.graph(root.id, context)
     let groups = await this.groups(graph, context)
     if (options.sinceEntry !== undefined) {
       const selected = new Set<string>()
-      for (const group of groups) {
+      for (const group of [...groups].sort((a, b) => b.tasks[0].id - a.tasks[0].id)) {
         if (group.conversation.owner) continue
         const submission = group.input === undefined ? undefined : await this.host.engine.harness.submission(group.input, context)
         const entry = (await submission?.status(context))?.entry
-        if (entry !== undefined && entry >= options.sinceEntry) selected.add(group.id)
+        if (entry === undefined) continue
+        if (entry < options.sinceEntry) break
+        selected.add(group.id)
       }
       let changed = true
       while (changed) {
@@ -39,6 +41,7 @@ export class RunProjection {
       }
       groups = groups.filter((group) => selected.has(group.id))
     }
+    if (options.latestOnly) groups = groups.filter((group) => !group.conversation.owner).sort((a, b) => b.tasks[0].id - a.tasks[0].id).slice(0, 1)
     const snapshots = new Map<ConversationId, SnapshotEvent>()
     if (options.details !== false) for (const group of groups) {
       let snapshot = snapshots.get(group.conversation.id)
@@ -201,16 +204,14 @@ export class RunProjection {
         do {
           const page = await tx.scanTasks({ conversationId: id }, 256, cursor)
           tasks.push(...page.items)
-          for (const task of page.items) {
-            let children: typeof cursor
-            do {
-              const page = await tx.scanConversations({ ownerTaskId: task.id }, 256, children)
-              pending.push(...page.items.map((item) => item.id))
-              children = page.next
-            } while (children)
-          }
           cursor = page.next
         } while (cursor)
+        let children: import('@earendil-works/pi-durable').Cursor | undefined
+        do {
+          const page = await tx.scanConversations({ ownerConversationId: id }, 256, children)
+          pending.push(...page.items.map((item) => item.id))
+          children = page.next
+        } while (children)
       }
       return { conversations, tasks }
     }, context)

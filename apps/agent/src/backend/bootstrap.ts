@@ -391,7 +391,7 @@ export async function createAgentBackend(
           case 'agent-run:overview-list': {
             const threads = await host!.conversations.list(BACKGROUND_CONTEXT)
             return Promise.all(threads.map(async (thread) => {
-              const runs = await runProjection.list(thread.id, BACKGROUND_CONTEXT, { details: false })
+              const runs = await runProjection.list(thread.id, BACKGROUND_CONTEXT, { details: false, latestOnly: true })
               const run = runs.find((run) => !run.parentRunId)
               return { sessionId: thread.id, sessionTitle: thread.title, runId: run?.id, scheduledTaskId: run?.scheduledTaskId, status: run?.status ?? 'idle', startedAt: run?.startedAt, completedAt: run?.completedAt, updatedAt: run?.updatedAt ?? thread.updatedAt ?? 0 }
             }))

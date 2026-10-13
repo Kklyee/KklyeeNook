@@ -296,7 +296,7 @@ test('steps with the same timestamp keep distinct part groups', () => {
     entry(2, { ...fauxAssistantMessage('Final'), timestamp: 100 }),
   ] }
   const message = projectDurableThread({ ...emptyDurableProjectionState(), snapshot }).messages[0]
-  const parts = message.content as { parentId?: string }[]
+  const parts = message.content as readonly { parentId?: string }[]
   expect(parts[0].parentId).not.toBe(parts[1].parentId)
   expect(message.metadata?.custom?.execution).toMatchObject({ finalPartIndex: 1 })
 })

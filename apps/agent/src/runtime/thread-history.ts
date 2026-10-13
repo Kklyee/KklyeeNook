@@ -15,17 +15,24 @@ export function sliceRunHistory(snapshot: SnapshotEvent, starts: readonly number
   }
 }
 
-export async function runStarts(host: AgentHost, id: ConversationId, context: Context) {
+export async function runStarts(host: AgentHost, id: ConversationId, context: Context, before?: number) {
   const membership = await host.engine.harness.snapshot(runMembershipDoc, id, context)
   const live = await host.engine.harness.snapshot(LiveDoc, id, context)
-  const starts = await Promise.all([...new Set([...Object.values(membership?.tasks ?? {}), ...(live?.run?.inputs.slice(0, 1) ?? [])])].map(async (input) => {
+  const inputs = [...new Set([
+    ...(live?.run?.inputs.slice(0, 1) ?? []),
+    ...Object.entries(membership?.tasks ?? {}).sort(([a], [b]) => Number(b) - Number(a)).map(([, input]) => input),
+  ])]
+  const starts: number[] = []
+  for (const input of inputs) {
     const submission = await host.engine.harness.submission(input as SubmissionId, context)
-    return (await submission?.status(context))?.entry
-  }))
-  return starts.filter((entry): entry is NonNullable<typeof entry> => entry !== undefined)
+    const entry = (await submission?.status(context))?.entry
+    if (entry !== undefined && (before === undefined || entry < before)) starts.push(entry)
+    if (starts.length === 3) break
+  }
+  return starts
 }
 
 export async function threadHistory(host: AgentHost, threadId: string, snapshot: SnapshotEvent, context: Context, before?: number) {
   const conversation = await host.engine.conversation(threadId, context)
-  return sliceRunHistory(snapshot, await runStarts(host, conversation.id, context), before)
+  return sliceRunHistory(snapshot, await runStarts(host, conversation.id, context, before), before)
 }

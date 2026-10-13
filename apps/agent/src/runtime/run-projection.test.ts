@@ -38,13 +38,13 @@ function fixture() {
     conversation: async () => ({ id: 1 }),
     task: async (id: number) => tasks.find((task) => task.id === id),
     scanTasks: async () => ({ items: tasks }),
-    scanConversations: async () => ({ items: [] }),
+    scanConversations: vi.fn(async () => ({ items: [] })),
   }
   const harness = {
     testSnapshot: emptySnapshot(),
     commit: async <T>(fn: (transaction: typeof tx) => Promise<T>) => fn(tx),
     snapshot: async () => ({ tasks: { '1': 1, '2': 2 } }),
-    submission: async () => undefined,
+    submission: vi.fn(async () => undefined),
   }
   const host = {
     engine: {
@@ -71,7 +71,7 @@ function fixture() {
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
   }
-  return { projection: new RunProjection(host as unknown as AgentHost), harness, tasks, message }
+  return { projection: new RunProjection(host as unknown as AgentHost), harness, tasks, message, tx }
 }
 
 test('projects thinking while the provider is streaming before any assistant entry is saved', async () => {
@@ -156,4 +156,21 @@ test('lightweight run lists omit transcript and tool payloads', async () => {
   const runs = await projection.list('thread', BACKGROUND_CONTEXT, { details: false })
   expect(runs).toHaveLength(2)
   expect(runs.every((run) => run.result === '' && !run.toolCalls.length && !run.toolResults.length)).toBe(true)
+})
+
+
+test('discovers child conversations once per conversation instead of per historical task', async () => {
+  const { projection, tasks, tx } = fixture()
+  for (let id = 3; id <= 1000; id++) tasks.push({ ...tasks[0], id })
+  await projection.list('thread', BACKGROUND_CONTEXT, { details: false })
+  expect(tx.scanConversations).toHaveBeenCalledTimes(1)
+  expect(tx.scanConversations).toHaveBeenCalledWith({ ownerConversationId: 1 }, 256, undefined)
+})
+
+
+test('overview reads scheduling metadata only for the latest root run', async () => {
+  const { projection, harness } = fixture()
+  const runs = await projection.list('thread', BACKGROUND_CONTEXT, { details: false, latestOnly: true })
+  expect(runs.map((run) => run.id)).toEqual(['2'])
+  expect(harness.submission).toHaveBeenCalledTimes(1)
 })
