@@ -99,7 +99,7 @@ export function MessageQueue({
       {...props}
       style={{ ...props.style, height: visible ? height : 0 }}
     >
-      <div ref={contentRef} className="flow-root">
+      <div ref={contentRef} className="flow-root pt-px">
         <section
           className="message-queue-surface bg-surface-opaque border-border mx-3 rounded-t-xl border border-b-0 px-2 py-1"
           aria-label="待执行消息"

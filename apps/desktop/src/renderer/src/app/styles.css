@@ -277,11 +277,19 @@ body,
     color: color-mix(in oklab, var(--ui-fg-muted) 85%, var(--ui-fg-faint));
   }
 
-  .composer:focus-within {
+  .aui-composer-root:focus-within .composer {
     border-color: var(--ui-border-strong);
     box-shadow:
       inset 0 1px 0 oklch(1 0 0 / 0.03),
       0 0 0 1px var(--ui-focus);
+  }
+
+  .aui-composer-root:focus-within .message-queue-surface {
+    border-color: var(--ui-border-strong);
+    box-shadow:
+      -1px 0 0 var(--ui-focus),
+      1px 0 0 var(--ui-focus),
+      0 -1px 0 var(--ui-focus);
   }
 
   .material-raised {
