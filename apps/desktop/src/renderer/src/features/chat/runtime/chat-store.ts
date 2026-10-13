@@ -794,6 +794,7 @@ export class ChatStore {
     const parsed = this.parseQueueId(id)
     if (!parsed) return
     await this.updateQueue({
+      itemId: parsed.itemId,
       mode: parsed.mode,
       expected: parsed.expected,
       index: parsed.index,

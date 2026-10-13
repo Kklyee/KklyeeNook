@@ -1025,6 +1025,25 @@ test('HTTP reports busy and stale queues as conflicts and cancels execution befo
   expect(await repeated.json()).toEqual([
     expect.objectContaining({ id: queued.submissionId, mode: 'steer' }),
   ])
+  const imageQueued = await (await request('/threads/continued-thread/submissions', 'POST', {
+    type: 'input', content: [{ type: 'text', text: 'Image message' }, { type: 'image', data: 'c3ludGhldGlj', mimeType: 'image/png' }],
+    requestId: 'image-queued', whenBusy: 'followUp',
+  })).json()
+  expect((await request('/threads/continued-thread/queue/item', 'POST', {
+    mode: 'followUp', expected: ['Image message\n[image]'], index: 0, action: 'move', value: 0,
+  })).status).toBe(200)
+  const remove = { mode: 'followUp', itemId: String(queued.submissionId), expected: ['stale'], index: 9, action: 'remove' }
+  expect((await request('/threads/continued-thread/queue/item', 'POST', remove)).status).toBe(200)
+  const removedAgain = await request('/threads/continued-thread/queue/item', 'POST', remove)
+  expect(removedAgain.status).toBe(200)
+  expect(await removedAgain.json()).toEqual([expect.objectContaining({ id: imageQueued.submissionId, mode: 'followUp' })])
+  const alreadyPlaced = await request('/threads/continued-thread/queue/item', 'POST', {
+    ...remove, itemId: String(first.submissionId), index: 0,
+  })
+  expect(alreadyPlaced.status).toBe(200)
+  expect(await alreadyPlaced.json()).toEqual([expect.objectContaining({ id: imageQueued.submissionId, mode: 'followUp' })])
+  expect(await host.pendingApprovals('continued-thread', context())).toHaveLength(1)
+  expect((await host.conversations.status('continued-thread', queued.submissionId, context())).status).toBe('unanswered')
   await request('/threads/continued-thread', 'DELETE')
   expect(await host.pendingApprovals('continued-thread', context())).toEqual([])
   expect(

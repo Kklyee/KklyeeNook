@@ -30,7 +30,7 @@ export function QueuedMessages() {
     setError(undefined)
     try {
       await updateQueue({
-        ...(action.action === 'steer' ? { itemId: message.id.split(':')[1] } : {}),
+        ...(['steer', 'remove'].includes(action.action) ? { itemId: message.id.split(':')[1] } : {}),
         mode: message.steer ? 'steer' : 'followUp',
         expected: message.expected,
         index: message.index,

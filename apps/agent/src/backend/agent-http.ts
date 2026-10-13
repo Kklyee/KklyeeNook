@@ -21,7 +21,6 @@ import type { AgentFrame } from '@kklyeenook/shared/agent/chat-protocol'
 import { AgentHost } from '../runtime/agent-host'
 import { botSchema } from '../bots/bot-schema'
 import { approvalSignalDoc } from '../runtime/approvals'
-import { contentText } from '../runtime/projection'
 import {
   HttpError,
   readJsonBody,
@@ -354,28 +353,35 @@ async function mutateQueue(
   context: ChordContext,
 ) {
   const mode = input.mode
-  const text = (item: InboxItem) => (item.mode === 'write' ? '' : contentText(item.content))
+  const text = (item: InboxItem) => item.mode === 'write' ? '' : typeof item.content === 'string' ? item.content : item.content.map((part) => part.type === 'text' ? part.text : '[image]').join('\n')
   const current = (await host.engine.harness.snapshot(InboxDoc, conversationId, context))?.items ?? []
   const candidates = current.filter((item) => item.mode === mode)
-  const targetedSteer = input.action === 'steer' && input.itemId !== undefined
-  if (!targetedSteer && JSON.stringify(candidates.map(text)) !== JSON.stringify(input.expected)) throw new HttpError(409, 'queue_changed', 'Queue changed')
-  if (!targetedSteer && input.index >= candidates.length) throw new HttpError(409, 'queue_changed', 'Queue changed')
+  const targeted = (input.action === 'steer' || input.action === 'remove') && input.itemId !== undefined
+  if (!targeted && JSON.stringify(candidates.map(text)) !== JSON.stringify(input.expected)) throw new HttpError(409, 'queue_changed', 'Queue changed')
+  if (!targeted && input.index >= candidates.length) throw new HttpError(409, 'queue_changed', 'Queue changed')
   if (input.action === 'steer' && mode !== 'followUp') throw new HttpError(400, 'bad_request', 'Invalid queue operation')
   if (input.action === 'edit' && (typeof input.value !== 'string' || !input.value.trim())) throw new HttpError(400, 'bad_request', 'Invalid queue operation')
   if (input.action === 'move' && (typeof input.value !== 'number' || input.value < 0 || input.value >= candidates.length)) throw new HttpError(400, 'bad_request', 'Invalid queue operation')
-  const target = targetedSteer ? current.find((item) => String(item.id) === input.itemId) : candidates[input.index]
+  const target = targeted ? current.find((item) => String(item.id) === input.itemId) : candidates[input.index]
+  if (!target && targeted && input.action === 'remove') return current
   if (!target) throw new HttpError(409, 'queue_changed', 'Queue changed')
-  if (targetedSteer && target.mode === 'steer') return current
-  if (input.action === 'remove') await host.engine.harness.abortSubmission(target.id, context, conversationId)
-  else await host.engine.harness.commit(async (tx) => {
+  if (target.mode === 'write') throw new HttpError(400, 'bad_request', 'Invalid queue operation')
+  if (targeted && input.action === 'steer' && target.mode === 'steer') return current
+  await host.engine.harness.commit(async (tx) => {
     const doc = await tx.doc(InboxDoc, conversationId)
-    if (!targetedSteer && JSON.stringify(doc.items.filter((item) => item.mode === mode).map(text)) !== JSON.stringify(input.expected))
+    if (!targeted && JSON.stringify(doc.items.filter((item) => item.mode === mode).map(text)) !== JSON.stringify(input.expected))
       throw new HttpError(409, 'queue_changed', 'Queue changed')
     const index = doc.items.findIndex((item) => item.id === target.id)
-    if (targetedSteer && index >= 0 && doc.items[index]?.mode === 'steer') return
-    if (index < 0 || doc.items[index]?.mode !== mode) throw new HttpError(409, 'queue_changed', 'Queue changed')
-    if (input.action === 'edit') {
+    if (input.action === 'remove' && targeted && index < 0) return
+    if (targeted && input.action === 'steer' && index >= 0 && doc.items[index]?.mode === 'steer') return
+    if (index < 0 || (doc.items[index]?.mode !== mode && !(targeted && input.action === 'remove'))) throw new HttpError(409, 'queue_changed', 'Queue changed')
+    if (input.action === 'remove') {
+      if (doc.items[index]?.mode === 'write') throw new HttpError(400, 'bad_request', 'Invalid queue operation')
+      tx.settleSubmission(target.id, { status: 'unanswered', reason: 'aborted' })
+      doc.items.splice(index, 1)
+    } else if (input.action === 'edit') {
       const item = doc.items[index]
+      if (item.mode === 'write') throw new HttpError(400, 'bad_request', 'Invalid queue operation')
       item.content = input.value as never
     } else if (input.action === 'steer') {
       doc.items[index] = { ...doc.items[index], mode: 'steer' } as never
