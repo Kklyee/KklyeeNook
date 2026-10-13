@@ -15,6 +15,41 @@ const entry = (id: number, message: NonNullable<EntryRecord['model']>[number]): 
 })
 const reduce = (snapshot: SnapshotEvent, events: readonly AgentEvent[]) => events.reduce(applyAgentEvent, snapshot)
 
+test('execution includes intermediate replies and exposes only the terminal response as final', () => {
+  const snapshot = emptySnapshot()
+  const progress = { ...fauxAssistantMessage('Checking files'), timestamp: 1000, stopReason: 'toolUse' as const }
+  progress.content.push({ type: 'toolCall', id: 'read', name: 'read', arguments: {} })
+  const final = { ...fauxAssistantMessage('Fixed'), timestamp: 9000, durationMs: 2000 }
+  snapshot.entries = [
+    entry(1, { role: 'user', content: 'Fix', timestamp: 0 }),
+    entry(2, progress),
+    entry(3, { role: 'toolResult', toolCallId: 'read', toolName: 'read', content: [], isError: false, timestamp: 8000 }),
+    entry(4, final),
+  ]
+  const projected = projectDurableThread({ ...emptyDurableProjectionState(), snapshot })
+  expect(projected.messages[1].metadata?.custom?.execution).toEqual({ startedAt: 1000, endedAt: 11000, finalPartIndex: 2 })
+})
+
+test('streaming replies stay in the execution process until a terminal response arrives', () => {
+  const snapshot = emptySnapshot()
+  const progress = { ...fauxAssistantMessage('Checking'), timestamp: 1000, stopReason: 'toolUse' as const }
+  snapshot.entries = [entry(1, progress)]
+  snapshot.generation = { attempt: 1, message: { ...fauxAssistantMessage('Partial'), timestamp: 4000, stopReason: 'pending' } }
+  const projected = projectDurableThread({ ...emptyDurableProjectionState(), snapshot })
+  expect(projected.messages[0].metadata?.custom?.execution).toEqual({ startedAt: 1000 })
+})
+
+test('a failed response does not promote intermediate progress to a final answer', () => {
+  const snapshot = emptySnapshot()
+  snapshot.entries = [
+    entry(1, { ...fauxAssistantMessage('Checking'), timestamp: 1000, stopReason: 'toolUse' }),
+    entry(2, { ...fauxAssistantMessage(''), timestamp: 5000, durationMs: 3000, stopReason: 'error', errorMessage: 'Failed' }),
+  ]
+  const projected = projectDurableThread({ ...emptyDurableProjectionState(), snapshot })
+  expect(projected.messages[0].metadata?.custom?.execution).toEqual({ startedAt: 1000, endedAt: 8000 })
+  expect(projected.messages[0].status).toMatchObject({ type: 'incomplete', error: 'Failed' })
+})
+
 test('message model metadata comes from its response and survives later configuration changes', () => {
   const snapshot = emptySnapshot()
   const response = { ...fauxAssistantMessage('reply'), provider: 'original', model: 'old-model', thinkingLevel: 'high' as const }

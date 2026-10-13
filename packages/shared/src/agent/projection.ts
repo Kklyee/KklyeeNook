@@ -9,6 +9,12 @@ type ContentPart = Exclude<ThreadMessageLike['content'], string>[number]
 type ToolCallPart = Extract<ContentPart, { type: 'tool-call' }>
 type Step = NonNullable<NonNullable<ThreadMessageLike['metadata']>['steps']>[number]
 
+export type AgentMessageExecution = {
+  startedAt: number
+  endedAt?: number
+  finalPartIndex?: number
+}
+
 type TranscriptItem = {
   message: Message
   entry?: EntryRecord
@@ -389,6 +395,11 @@ function buildAssistant(
 ): ThreadMessageLike {
   const entry = items[group.lastIndex]?.entry
   const isCompaction = entry ? isCompactionEntry(entry) : false
+  const status = assistantStatus(group, snapshot)
+  const settled = status?.type === 'complete' || status?.type === 'incomplete'
+  const finalPartIndex = !group.live && ['stop', 'length'].includes(group.last.stopReason)
+    ? group.parts.findIndex((part) => part.type === 'text' && part.parentId === `durable-step:${group.lastIndex}`)
+    : -1
   return {
     id: `durable-msg:${group.firstIndex}`,
     role: 'assistant',
@@ -396,7 +407,7 @@ function buildAssistant(
     content: isCompaction
       ? [{ type: 'data', name: 'pi-compaction-summary', data: { summary: contentText(group.last) } }]
       : group.parts,
-    status: assistantStatus(group, snapshot),
+    status,
     metadata: {
       steps: group.steps,
       custom: {
@@ -411,6 +422,11 @@ function buildAssistant(
         ...(entry?.byTaskId ? { runId: String(entry.byTaskId) } : {}),
         outputIndex,
         activityInputId: group.inputId,
+        ...(!isCompaction ? { execution: {
+          startedAt: items[group.firstIndex].message.timestamp,
+          ...(settled ? { endedAt: group.last.timestamp + (group.last.durationMs ?? 0) } : {}),
+          ...(finalPartIndex >= 0 ? { finalPartIndex } : {}),
+        } satisfies AgentMessageExecution } : {}),
       },
     },
   }

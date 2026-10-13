@@ -42,6 +42,8 @@ import {
 } from '@/renderer/src/components/assistant-ui/elements/model-selector'
 import { TooltipIconButton } from '@/renderer/src/components/assistant-ui/elements/tooltip-icon-button'
 import { MessageModel } from './message-model.aui'
+import { ExecutionProcess } from '@/renderer/src/features/chat/activity/ExecutionProcess'
+import type { AgentMessageExecution } from '@kklyeenook/shared/agent/projection'
 import { Button } from '@/renderer/src/components/ui/button'
 import { Skeleton } from '@/renderer/src/components/ui/skeleton'
 import { cn } from '@/renderer/src/lib/utils'
@@ -531,7 +533,6 @@ const AssistantMessage: FC = () => {
         className="text-foreground flex flex-col gap-4 px-2 text-[15px] leading-relaxed wrap-break-word"
       >
         <StreamingMessage>
-          <AgentActivityGroup />
           <AssistantMessageParts />
         </StreamingMessage>
         <MessageError />
@@ -556,15 +557,33 @@ const AssistantMessage: FC = () => {
 const bodyParts = groupPartByType({ text: ['group-text'] })
 
 const AssistantMessageParts = memo(function AssistantMessageParts() {
+  const execution = useAuiState((state) => state.message.metadata.custom?.execution as AgentMessageExecution | undefined)
+  const partCount = useAuiState((state) => state.message.content.length)
+  const finalParentId = useAuiState((state) => {
+    const part = execution?.finalPartIndex === undefined ? undefined : state.message.content[execution.finalPartIndex]
+    return part?.type === 'text' ? part.parentId : undefined
+  })
+  const groupParts = useMemo<ComponentProps<typeof MessagePrimitive.GroupedParts>['groupBy']>(() => {
+    if (!execution) return bodyParts
+    return (part, context) => {
+      const path = bodyParts(part, context) ?? []
+      return part.type === 'text' && finalParentId !== undefined && part.parentId === finalParentId ? path : ['group-process', ...path]
+    }
+  }, [finalParentId, !!execution])
   return (
-    <MessagePrimitive.GroupedParts groupBy={bodyParts} indicator="never">
+    <>
+    {execution && (partCount === 0 || execution.finalPartIndex === 0) && <ExecutionProcess />}
+    {!execution && <AgentActivityGroup />}
+    <MessagePrimitive.GroupedParts groupBy={groupParts} indicator="never">
       {({ part, children }) => {
         switch (part.type) {
+          case 'group-process':
+            return <ExecutionProcess>{children}</ExecutionProcess>
           case 'group-text':
             return (
               <>
                 <StreamingText indices={part.indices}>{children}</StreamingText>
-                <AgentActivityGroup afterPartIndex={part.indices.at(-1)} />
+                {(!execution || (part.indices.at(-1) ?? 0) < (execution.finalPartIndex ?? Infinity)) && <AgentActivityGroup afterPartIndex={part.indices.at(-1)} />}
               </>
             )
           case 'text':
@@ -588,6 +607,7 @@ const AssistantMessageParts = memo(function AssistantMessageParts() {
         }
       }}
     </MessagePrimitive.GroupedParts>
+    </>
   )
 })
 
