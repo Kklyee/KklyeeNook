@@ -5,7 +5,7 @@ import { ExecutionProcess } from './ExecutionProcess'
 
 const state = vi.hoisted(() => ({ message: {
   status: { type: 'running' },
-  metadata: { custom: { execution: { startedAt: 1000, endedAt: 5000 } } },
+  metadata: { steps: [{ messageId: 'first' }, { messageId: 'last' }], custom: { execution: { startedAt: 1000, endedAt: 5000, finalPartIndex: undefined as number | undefined } } },
 } }))
 
 vi.mock('@assistant-ui/react', () => ({ useAuiState: (selector: (value: typeof state) => unknown) => selector(state) }))
@@ -13,32 +13,39 @@ vi.mock('./AgentActivityProvider', () => ({ useActivitySelector: (selector: (gro
 vi.mock('./AgentActivityGroup', () => ({ AgentActivityGroup: () => null }))
 vi.mock('./AgentActivity', () => ({ ActivityDuration: () => '4秒' }))
 
-afterEach(() => { state.message.status.type = 'running' })
+afterEach(() => {
+  state.message.status.type = 'running'
+  state.message.metadata.steps = [{ messageId: 'first' }, { messageId: 'last' }]
+  state.message.metadata.custom.execution.finalPartIndex = undefined
+})
 
-test.each([false, true])('execution auto-collapses on completion unless explicitly expanded: %s', async (manual) => {
+test.each([1, 2])('only completed replies with at least two steps become collapsible: %s', async (steps) => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+  state.message.metadata.steps = Array.from({ length: steps }, (_, index) => ({ messageId: String(index) }))
   const element = document.createElement('div')
   document.body.append(element)
   const root = createRoot(element)
   const render = () => root.render(createElement(ExecutionProcess, null, 'Intermediate progress'))
   try {
     await act(render)
-    const trigger = element.querySelector('button')!
-    expect(trigger.getAttribute('aria-expanded')).toBe('true')
-    expect(trigger.textContent).toContain('正在执行')
-    if (manual) {
-      await act(() => trigger.click())
-      await act(() => trigger.click())
-    }
+    expect(element.querySelector('button')).toBeNull()
+    expect(element.textContent).toContain('4秒')
+    expect(element.textContent).toContain('Intermediate progress')
     state.message.status.type = 'complete'
+    state.message.metadata.custom.execution.finalPartIndex = 3
     await act(render)
-    expect(trigger.getAttribute('aria-expanded')).toBe(String(manual))
-    expect(trigger.textContent).toContain('执行过程')
-    expect(trigger.textContent).toContain('4秒')
-    if (!manual) {
-      await act(() => trigger.click())
-      expect(trigger.getAttribute('aria-expanded')).toBe('true')
+    const trigger = element.querySelector('button')
+    if (steps === 1) {
+      expect(trigger).toBeNull()
       expect(element.textContent).toContain('Intermediate progress')
+    } else {
+      expect(trigger!.getAttribute('aria-expanded')).toBe('false')
+      expect(trigger!.textContent).toContain('执行过程')
+      await act(() => trigger!.click())
+      expect(trigger!.getAttribute('aria-expanded')).toBe('true')
+      expect(element.textContent).toContain('Intermediate progress')
+      await act(render)
+      expect(trigger!.getAttribute('aria-expanded')).toBe('true')
     }
   } finally {
     await act(() => root.unmount())

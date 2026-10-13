@@ -12,7 +12,9 @@ export function ExecutionProcess({ children }: { children?: ReactNode }) {
   const execution = useAuiState((state) => state.message.metadata.custom?.execution as AgentMessageExecution | undefined)
   const inputId = useAuiState((state) => state.message.metadata.custom?.activityInputId as string | undefined)
   const status = useAuiState((state) => state.message.status?.type)
+  const stepCount = useAuiState((state) => state.message.metadata.steps?.length ?? 0)
   const running = status === 'running' || status === 'requires-action'
+  const foldable = !running && execution?.finalPartIndex !== undefined && stepCount >= 2
   const [manualOpen, setManualOpen] = useState<boolean>()
   const startedAt = useActivitySelector((groups) =>
     groups.find((group) => inputId !== undefined && group.segments.some((segment) => segment.inputId === inputId))?.run.startedAt,
@@ -20,19 +22,19 @@ export function ExecutionProcess({ children }: { children?: ReactNode }) {
   const endedAt = useActivitySelector((groups) =>
     groups.find((group) => inputId !== undefined && group.segments.some((segment) => segment.inputId === inputId))?.run.completedAt,
   )
+  const duration = <ActivityDuration startedAt={startedAt ?? execution?.startedAt} endedAt={running ? undefined : endedAt ?? execution?.endedAt} />
+  const content = <div className="flex flex-col gap-4 pt-3"><AgentActivityGroup />{children}</div>
+  if (!foldable) return <div className="min-w-0"><div className="flex items-center py-1">{duration}</div>{content}</div>
   return (
-    <Collapsible open={manualOpen ?? running} onOpenChange={setManualOpen} className="min-w-0">
+    <Collapsible open={manualOpen ?? false} onOpenChange={setManualOpen} className="min-w-0">
       <CollapsibleTrigger className="text-muted-foreground hover:text-foreground flex w-full items-center gap-2 py-1 text-xs transition-colors">
         <ChevronRightIcon className="size-3.5 shrink-0 transition-transform [[data-open]>&]:rotate-90" />
-        <span>{running ? '正在执行' : '执行过程'}</span>
+        <span>执行过程</span>
         <span aria-hidden="true">·</span>
-        <ActivityDuration startedAt={startedAt ?? execution?.startedAt} endedAt={running ? undefined : endedAt ?? execution?.endedAt} />
+        {duration}
       </CollapsibleTrigger>
       <CollapsibleContent className={collapsePanel}>
-        <div className="flex flex-col gap-4 pt-3">
-          <AgentActivityGroup />
-          {children}
-        </div>
+        {content}
       </CollapsibleContent>
     </Collapsible>
   )
