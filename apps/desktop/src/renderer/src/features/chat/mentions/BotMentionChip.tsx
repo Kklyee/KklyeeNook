@@ -33,7 +33,7 @@ export function BotMentionChip({
       <PopoverTrigger
         render={<button type="button" />}
         data-bot-id={botId}
-        className="mx-0.5 inline-flex max-w-full items-center gap-1 rounded-md border border-border/70 bg-hover px-1.5 py-0.5 align-middle text-xs font-medium hover:bg-selected focus-visible:outline-2 focus-visible:outline-ring"
+        className="relative mx-0.5 inline-flex max-w-full items-baseline rounded-md border border-border/70 bg-hover py-0.5 pr-1.5 pl-7 align-baseline text-[0.875em] leading-normal font-medium hover:bg-selected focus-visible:outline-2 focus-visible:outline-ring"
         aria-label={`${name}${bot ? '' : ' · 不可用'}`}
         onMouseEnter={() => {
           timer.current = setTimeout(() => setOpen(true), 250)
@@ -53,8 +53,10 @@ export function BotMentionChip({
             .then(() => aui.composer.setText(''))
         }}
       >
-        <BotAvatar avatar={bot?.avatar ?? defaultBot(botId, name).avatar} name={name} size={18} />
-        <span className="truncate">@{name}</span>
+        <span className="absolute top-1/2 left-1.5 flex -translate-y-1/2">
+          <BotAvatar avatar={bot?.avatar ?? defaultBot(botId, name).avatar} name={name} size={18} />
+        </span>
+        <span className="truncate">{name}</span>
       </PopoverTrigger>
       <PopoverContent
         initialFocus={false}
