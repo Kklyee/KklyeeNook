@@ -14,7 +14,7 @@ import { AgentActivityGroup } from '@/renderer/src/features/chat/activity/AgentA
 import { QueuedMessages } from '@/renderer/src/features/chat/QueuedMessages'
 import { usePendingSend } from '@/renderer/src/features/chat/runtime/SendState'
 import { BotMentionInput } from '@/renderer/src/features/chat/mentions/BotMentionInput'
-import { MessageMentionRenderer } from '@/renderer/src/features/chat/mentions/MessageMentionRenderer'
+import { UserMessageText } from './user-message-text.aui'
 import { MentionNavigation } from '@/renderer/src/features/chat/mentions/BotMentionChip'
 import { Image } from './image-preview'
 import { ImageThumbnail } from '@kklyeenook/ui/assistant-ui/image-thumbnail'
@@ -306,7 +306,7 @@ const ThreadScrollToBottom: FC = () => {
       variant="outline"
       disabled={following}
       onClick={resume}
-      className="aui-thread-scroll-to-bottom material-control hover:border-border-strong absolute -top-12 z-10 self-center rounded-full p-4 disabled:invisible"
+      className="aui-thread-scroll-to-bottom bg-surface-opaque hover:bg-surface-opaque hover:border-border-strong absolute -top-12 z-10 self-center rounded-full p-4 shadow-sm disabled:invisible"
     >
       <ArrowDownIcon />
     </TooltipIconButton>
@@ -697,7 +697,7 @@ const UserMessage: FC = () => {
 
       <div className="aui-user-message-content-wrapper relative col-start-2 min-w-0">
         <div className="aui-user-message-content peer bg-muted text-foreground rounded-xl px-4 py-2 wrap-break-word empty:hidden">
-          <MessagePrimitive.Parts components={{ Text: MessageMentionRenderer, File: UserFilePart, Image: UserImagePart }} />
+          <MessagePrimitive.Parts components={{ Text: UserMessageText, File: UserFilePart, Image: UserImagePart }} />
         </div>
         {!readOnly && (
           <div className="aui-user-action-bar-wrapper absolute start-0 top-1/2 -translate-x-full -translate-y-1/2 pe-2 peer-empty:hidden rtl:translate-x-full">

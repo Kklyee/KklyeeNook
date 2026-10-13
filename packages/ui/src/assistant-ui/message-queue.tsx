@@ -103,7 +103,7 @@ export function MessageQueue({
       style={{ ...props.style, height: visible ? height : 0 }}
     >
       <div ref={contentRef} className="flow-root">
-        <section className="border-border/60 mx-3 border-b pb-1" aria-label="待执行消息">
+        <section className="bg-surface-opaque border-border/60 mx-3 border-b pb-1 shadow-sm" aria-label="待执行消息">
           <div className="flex h-5 items-center justify-end">
             <Button
               type="button"

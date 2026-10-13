@@ -24,6 +24,7 @@ import { assistantToolkit } from '../tools/AssistantToolkit'
 import { cn } from '@/renderer/src/lib/utils'
 import { collapsePanel, ShimmerLabel } from '@/renderer/src/lib/surfaces'
 import { usePreview } from '../../preview/PreviewProvider'
+import { Button } from '@/renderer/src/components/ui/button'
 
 export const ActivityDuration = memo(function ActivityDuration({
   startedAt,
@@ -183,6 +184,9 @@ export const AgentActivityRow = memo(function AgentActivityRow({
                   isRunning={activity.status === 'running'}
                 >
                   <ThinkingContent />
+                  <Button type="button" variant="ghost" size="xs" className="mt-2 px-0 text-xs" onClick={() => setOpen(false)}>
+                    收起思考
+                  </Button>
                 </TextMessagePartProvider>
               ) : (
                 <ActivityToolDetail activity={activity} />

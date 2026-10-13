@@ -188,6 +188,7 @@
   --color-surface: var(--ui-surface);
   --color-surface-muted: var(--ui-surface-muted);
   --color-surface-raised: var(--ui-surface-raised);
+  --color-surface-opaque: oklch(from var(--ui-surface-raised) l c h / 1);
   --color-faint-foreground: var(--ui-fg-faint);
   --color-border-strong: var(--ui-border-strong);
 
