@@ -3,7 +3,7 @@ import type { Provider } from '@earendil-works/pi-ai/models'
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream'
 
 export const MODEL_REQUEST_TIMEOUT = 600_000
-export const MODEL_IDLE_TIMEOUT = 90_000
+export const MODEL_IDLE_TIMEOUT = 300_000
 
 export function limitModelStream(
   model: Model<Api>,
@@ -27,7 +27,7 @@ export function limitModelStream(
   signal?.addEventListener('abort', abort, { once: true })
   if (signal?.aborted) abort()
   const totalTimer = setTimeout(() => timeout('模型请求超过 10 分钟，已停止本次请求。'), MODEL_REQUEST_TIMEOUT)
-  let idleTimer = setTimeout(() => timeout('模型连续 90 秒没有返回数据，已停止本次请求。'), MODEL_IDLE_TIMEOUT)
+  let idleTimer = setTimeout(() => timeout('模型连续 5 分钟没有返回数据，已停止本次请求。'), MODEL_IDLE_TIMEOUT)
   void (async () => {
     let rejectAbort: () => void = () => {}
     try {
@@ -46,7 +46,7 @@ export function limitModelStream(
           return
         }
         clearTimeout(idleTimer)
-        idleTimer = setTimeout(() => timeout('模型连续 90 秒没有返回数据，已停止本次请求。'), MODEL_IDLE_TIMEOUT)
+        idleTimer = setTimeout(() => timeout('模型连续 5 分钟没有返回数据，已停止本次请求。'), MODEL_IDLE_TIMEOUT)
         const event = next.value
         if (thinkingLevel !== undefined) {
           const message = event.type === 'done' ? event.message : event.type === 'error' ? event.error : event.partial

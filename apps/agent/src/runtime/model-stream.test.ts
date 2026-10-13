@@ -19,7 +19,7 @@ test('a silent provider is aborted and settles with a visible idle error', async
   const stream = limitModelStream(model, (current) => { signal = current; return source })
   await vi.advanceTimersByTimeAsync(MODEL_IDLE_TIMEOUT)
   expect(signal?.aborted).toBe(true)
-  expect(await stream.result()).toMatchObject({ stopReason: 'error', errorMessage: expect.stringContaining('90 秒') })
+  expect(await stream.result()).toMatchObject({ stopReason: 'error', errorMessage: expect.stringContaining('5 分钟') })
   expect(vi.getTimerCount()).toBe(0)
 })
 
@@ -33,7 +33,7 @@ test('idle timeout preserves partial text and thinking instead of losing progres
   source.push({ type: 'text_delta', contentIndex: 0, delta: 'working', partial })
   await vi.advanceTimersByTimeAsync(60_000)
   expect(vi.getTimerCount()).toBe(2)
-  await vi.advanceTimersByTimeAsync(30_000)
+  await vi.advanceTimersByTimeAsync(MODEL_IDLE_TIMEOUT - 60_000)
   expect((await stream.result()).content).toEqual(partial.content)
   expect(vi.getTimerCount()).toBe(0)
 })
@@ -61,6 +61,35 @@ test('successful completion forwards the message and clears all timers', async (
   source.push({ type: 'done', reason: 'stop', message })
   expect(await stream.result()).toEqual(message)
   await vi.advanceTimersByTimeAsync(0)
+  expect(vi.getTimerCount()).toBe(0)
+})
+
+test('a normal response may wait longer than 90 seconds before returning', async () => {
+  vi.useFakeTimers()
+  const source = new AssistantMessageEventStream()
+  let signal: AbortSignal | undefined
+  const stream = limitModelStream(model, (current) => { signal = current; return source })
+  await vi.advanceTimersByTimeAsync(240_000)
+  expect(signal?.aborted).toBe(false)
+  const message = fauxAssistantMessage('reply')
+  source.push({ type: 'done', reason: 'stop', message })
+  expect(await stream.result()).toEqual(message)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(vi.getTimerCount()).toBe(0)
+})
+
+test('tool execution after a model response is outside the model timeout', async () => {
+  vi.useFakeTimers()
+  const source = new AssistantMessageEventStream()
+  let signal: AbortSignal | undefined
+  const stream = limitModelStream(model, (current) => { signal = current; return source })
+  const message = fauxAssistantMessage('')
+  message.content = [{ type: 'toolCall', id: 'call', name: 'bash', arguments: { command: 'long check' } }]
+  message.stopReason = 'toolUse'
+  source.push({ type: 'done', reason: 'toolUse', message })
+  expect(await stream.result()).toEqual(message)
+  await vi.advanceTimersByTimeAsync(MODEL_REQUEST_TIMEOUT + 1)
+  expect(signal?.aborted).toBe(false)
   expect(vi.getTimerCount()).toBe(0)
 })
 
