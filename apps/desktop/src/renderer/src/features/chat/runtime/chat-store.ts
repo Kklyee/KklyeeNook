@@ -653,11 +653,18 @@ export class ChatStore {
 
   async updateQueue(input: AgentQueueMutation) {
     if (!this.selectedThreadId) return
+    const threadId = this.selectedThreadId
+    const { epoch, sequence } = this.projection
     try {
-      await this.request(`/threads/${encodeURIComponent(this.selectedThreadId)}/queue/item`, {
+      const queue = await this.request<AgentProjectionState['queue']>(`/threads/${encodeURIComponent(threadId)}/queue/item`, {
         method: 'POST',
         body: input,
       })
+      if (this.selectedThreadId === threadId && this.projection.epoch === epoch && this.projection.sequence === sequence) {
+        this.projection = { ...this.projection, queue }
+        this.projected = projectDurableThread(this.projection)
+        this.emit()
+      }
     } catch (error) {
       if (!(error instanceof AgentRequestError) || error.status !== 409 || input.action !== 'steer' || !input.itemId) throw error
       await this.refresh()

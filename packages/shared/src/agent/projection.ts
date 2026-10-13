@@ -105,6 +105,17 @@ export function projectDurableThread(state: AgentProjectionState): AgentProjecte
   const transcriptItems = snapshotToTranscript(snapshot)
   const transcript = transcriptItems.map((item) => item.message)
   const messages = projectTranscript(transcriptItems, snapshot, state.approvals)
+  const activeIndex = messages.findLastIndex((message) => message.role === 'assistant' && ['running', 'requires-action'].includes(message.status?.type ?? ''))
+  let steerIndex = activeIndex < 0 ? messages.length : activeIndex
+  for (const item of state.queue) {
+    if (item.mode !== 'steer') continue
+    messages.splice(steerIndex++, 0, {
+      id: `queued-steer:${item.id}`,
+      role: 'user',
+      content: userContent(item.content),
+      metadata: { custom: { pendingSteer: true, submissionId: String(item.id) } },
+    })
+  }
   return {
     messages,
     transcript,

@@ -686,6 +686,7 @@ const UserImagePart: ImageMessagePartComponent = (part) => (
 
 const UserMessage: FC = () => {
   const { readOnly } = useContext(ThreadComponentsContext)
+  const pendingSteer = useAuiState((state) => state.message.metadata.custom?.pendingSteer === true)
 
   return (
     <MessagePrimitive.Root
@@ -699,14 +700,15 @@ const UserMessage: FC = () => {
         <div className="aui-user-message-content peer bg-muted text-foreground rounded-xl px-4 py-2 wrap-break-word empty:hidden">
           <MessagePrimitive.Parts components={{ Text: UserMessageText, File: UserFilePart, Image: UserImagePart }} />
         </div>
-        {!readOnly && (
+        {!readOnly && !pendingSteer && (
           <div className="aui-user-action-bar-wrapper absolute start-0 top-1/2 -translate-x-full -translate-y-1/2 pe-2 peer-empty:hidden rtl:translate-x-full">
             <UserActionBar />
           </div>
         )}
       </div>
 
-      {!readOnly && (
+      {pendingSteer && <span className="text-faint-foreground text-right text-[11px]">引导已接收，等待当前步骤结束后生效</span>}
+      {!readOnly && !pendingSteer && (
         <BranchPicker
           data-slot="aui_user-branch-picker"
           className="col-span-full col-start-1 row-start-3 -me-1 justify-end"

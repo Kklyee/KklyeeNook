@@ -8,12 +8,26 @@ import {
   reduceDurableFrame,
 } from '@kklyeenook/shared/agent/projection'
 import { emptySnapshot } from './projection'
+import type { AgentFrame } from '@kklyeenook/shared/agent/chat-protocol'
 
 const entry = (id: number, message: NonNullable<EntryRecord['model']>[number]): EntryRecord => ({
   id: id as never, conversationId: 1 as never, kind: `pi.${message.role}`,
   data: {}, model: [message],
 })
 const reduce = (snapshot: SnapshotEvent, events: readonly AgentEvent[]) => events.reduce(applyAgentEvent, snapshot)
+
+test('queued steer appears in the conversation immediately without hiding the active assistant', () => {
+  const snapshot = emptySnapshot()
+  snapshot.generation = { attempt: 1, message: { ...fauxAssistantMessage('Working'), stopReason: 'pending' } }
+  const queue: AgentFrame['queue'] = [{ id: 42 as never, mode: 'steer', content: 'Correction' }]
+  const projected = projectDurableThread({ ...emptyDurableProjectionState(), snapshot, queue })
+  expect(projected.messages[0]).toMatchObject({ id: 'queued-steer:42', role: 'user', metadata: { custom: { pendingSteer: true } } })
+  expect(projected.messages.at(-1)).toMatchObject({ role: 'assistant', status: { type: 'running' } })
+  snapshot.entries = [entry(1, { role: 'user', content: 'Correction', timestamp: 1 })]
+  const consumed = projectDurableThread({ ...emptyDurableProjectionState(), snapshot, queue: [] })
+  expect(consumed.messages.filter((message) => message.role === 'user')).toHaveLength(1)
+  expect(consumed.messages.some((message) => message.metadata?.custom?.pendingSteer)).toBe(false)
+})
 
 test('execution includes intermediate replies and exposes only the terminal response as final', () => {
   const snapshot = emptySnapshot()

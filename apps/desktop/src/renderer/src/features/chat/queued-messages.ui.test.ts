@@ -5,8 +5,8 @@ import { QueuedMessages } from './QueuedMessages'
 
 const mocks = vi.hoisted(() => ({ updateQueue: vi.fn(async () => {}), refresh: vi.fn(async () => {}) }))
 vi.mock('./runtime/chat-runtime', () => ({ useChatRuntimeExtras: () => ({
-  queue: { steering: [], followUp: ['Text\n[image]'] },
-  queueItems: [{ id: 77, mode: 'followUp' }],
+  queue: { steering: ['Guidance'], followUp: ['Text\n[image]'] },
+  queueItems: [{ id: 78, mode: 'steer' }, { id: 77, mode: 'followUp' }],
   updateQueue: mocks.updateQueue, refresh: mocks.refresh,
 }) }))
 vi.mock('@/renderer/src/components/assistant-ui/elements/message-queue', () => ({

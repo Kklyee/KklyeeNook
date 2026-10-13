@@ -34,22 +34,13 @@ export function QueuedMessages() {
       setClearing(false)
     }
   }
-  const messages = [
-    ...queue.steering.map((text, index) => ({
-      id: `steer:${queueItems.filter((item) => item.mode === 'steer')[index].id}`,
-      text,
-      steer: true,
-      index,
-      expected: [...queue.steering],
-    })),
-    ...queue.followUp.map((text, index) => ({
+  const messages = queue.followUp.map((text, index) => ({
       id: `followUp:${queueItems.filter((item) => item.mode === 'followUp')[index].id}`,
       text,
       steer: false,
       index,
       expected: [...queue.followUp],
-    })),
-  ]
+    }))
   return (
     <MessageQueue
       queued={messages}

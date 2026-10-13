@@ -83,6 +83,40 @@ test('steer refreshes a consumed queue item without resubmitting it', async () =
   expect(refreshes).toBe(2)
 })
 
+test('queue deletion and steering update the UI from the mutation receipt without waiting for refresh', async () => {
+  const queued: AgentFrame['queue'] = [{ id: 42 as never, mode: 'followUp', content: 'Correction' }]
+  const store = setup(async (url, init) => {
+    if (url.endsWith('/queue/item')) {
+      const input = JSON.parse(String(init?.body))
+      return response(input.action === 'steer' ? [{ ...queued[0], mode: 'steer' }] : [])
+    }
+    if (url.endsWith('/threads')) return response([metadata('a')])
+    return response({ ...snapshot('a'), queue: queued })
+  })
+  await store.switchToThread('a')
+  await store.updateQueue({ itemId: '42', mode: 'followUp', expected: ['Correction'], index: 0, action: 'steer' })
+  expect(store.getSnapshot().current.messages).toContainEqual(expect.objectContaining({ role: 'user', metadata: { custom: { pendingSteer: true, submissionId: '42' } } }))
+  await store.updateQueue({ itemId: '42', mode: 'steer', expected: ['Correction'], index: 0, action: 'remove' })
+  expect(store.getSnapshot().extras.queueItems).toEqual([])
+  expect(store.getSnapshot().current.messages.some((message) => message.metadata?.custom?.pendingSteer)).toBe(false)
+})
+
+test('an older mutation receipt cannot restore a queue consumed by a newer stream frame', async () => {
+  let release!: () => void
+  const queued: AgentFrame['queue'] = [{ id: 42 as never, mode: 'followUp', content: 'Correction' }]
+  const store = setup(async (url) => {
+    if (url.endsWith('/queue/item')) return new Promise<Response>((resolve) => { release = () => resolve(response(queued)) })
+    if (url.endsWith('/threads')) return response([metadata('a')])
+    return response({ ...snapshot('a'), queue: queued })
+  })
+  await store.switchToThread('a')
+  const mutation = store.updateQueue({ itemId: '42', mode: 'followUp', expected: ['Correction'], index: 0, action: 'steer' })
+  Source.instances.at(-1)!.send(frame('a', 0, 'newer'))
+  release()
+  await mutation
+  expect(store.getSnapshot().extras.queueItems).toEqual([])
+})
+
 function setup(
   fetcher?: (url: string, init?: RequestInit) => Promise<Response>,
   bots: BotSummary[] = [],
