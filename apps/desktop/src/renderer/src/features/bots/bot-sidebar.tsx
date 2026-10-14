@@ -149,6 +149,7 @@ function BotThreads({
   const store = useChatStore()
   const snapshot = useChatRuntimeSnapshot()
   const { workspaces, reload } = useWorkspaces()
+  const { isMobile } = useSidebar()
   const items = useAuiState((state) => state.threads.threadItems)
   const ids = useAuiState((state) => state.threads.threadIds)
   const [initialWorkspaceId] = useState(snapshot.current.metadata?.workspaceId)
@@ -262,7 +263,7 @@ function BotThreads({
           <Button
             variant="ghost"
             className={
-              threadListRowClassName + ' my-4 h-10 justify-start gap-2 px-2 text-left text-[13px] font-normal'
+              threadListRowClassName + ' mt-4 mb-2 h-11 justify-start gap-2 rounded-xl px-3 text-left text-[13px] font-normal'
             }
             aria-pressed={snapshot.selectedThreadId === bot.mainThreadId}
             data-active={snapshot.selectedThreadId === bot.mainThreadId || undefined}
@@ -305,8 +306,8 @@ function BotThreads({
                     key={workspace.id}
                     defaultOpen={workspace.id === initialWorkspaceId}
                   >
-                    <div className="flex items-center gap-0.5 pr-2">
-                      <CollapsibleTrigger aria-label={'展开或折叠 ' + workspace.displayName} className="group/workspace flex h-[34px] min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left text-[13px] text-muted-foreground hover:bg-hover hover:text-foreground">
+                    <div className="flex h-[34px] items-center gap-0.5 rounded-lg pr-2 transition-colors hover:bg-hover focus-within:bg-hover">
+                      <CollapsibleTrigger aria-label={'展开或折叠 ' + workspace.displayName} className="group/workspace flex h-full min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left text-[13px] text-muted-foreground hover:bg-transparent hover:text-foreground active:bg-transparent">
                         <FolderIcon className="size-4 group-data-[panel-open]/workspace:hidden" />
                         <FolderOpenIcon className="hidden size-4 text-brand group-data-[panel-open]/workspace:block" />
                         <span className="flex-1 truncate">{workspace.displayName}</span>
@@ -314,6 +315,7 @@ function BotThreads({
                       <Button
                         variant="ghost"
                         size="icon-xs"
+                        className="hover:bg-transparent active:bg-transparent"
                         aria-label={'为 ' + workspace.displayName + ' 新建会话'}
                         disabled={
                           !bot.workspaceIds.includes(workspace.id) ||
@@ -344,7 +346,12 @@ function BotThreads({
               )}
             </>
           ) : (
-            renderRows(null, true)
+            <>
+              <div className="flex h-8 items-center px-2 text-[11px] font-medium tracking-wide text-muted-foreground">
+                最近会话
+              </div>
+              {renderRows(null, true)}
+            </>
           )}
         </>
       )}

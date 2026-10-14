@@ -1,5 +1,12 @@
 import { useState } from 'react'
-import { MoreHorizontalIcon } from 'lucide-react'
+import {
+  ArchiveIcon,
+  ArchiveRestoreIcon,
+  LoaderCircleIcon,
+  MoreHorizontalIcon,
+  PencilIcon,
+  Trash2Icon,
+} from 'lucide-react'
 import type { RemoteConversationSummary } from '@kklyeenook/shared/remote/index'
 import { Button } from '@kklyeenook/ui/components/button'
 import { Input } from '@kklyeenook/ui/components/input'
@@ -51,19 +58,20 @@ export function ThreadActions({
         <PopoverContent className="w-40 space-y-1 p-2">
           <Button
             variant="ghost"
-            className="w-full justify-start"
+            className="w-full justify-start gap-2 text-[13px]"
             onClick={() => {
               setTitle(thread.title)
               setDialog('rename')
             }}
           >
+            <PencilIcon className="size-4 text-brand" />
             重命名
           </Button>
           {!isMain && (
             <>
               <Button
                 variant="ghost"
-                className="w-full justify-start"
+                className="w-full justify-between gap-2 text-[13px]"
                 disabled={busy}
                 onClick={() =>
                   void run(async () => {
@@ -74,14 +82,24 @@ export function ThreadActions({
                   })
                 }
               >
-                {thread.archived ? '恢复会话' : '归档会话'}
+                <span className="flex items-center gap-2">
+                  {thread.archived ? (
+                    <ArchiveRestoreIcon className="size-4 text-muted-foreground" />
+                  ) : (
+                    <ArchiveIcon className="size-4 text-muted-foreground" />
+                  )}
+                  {thread.archived ? '恢复' : '归档'}
+                </span>
+                {busy && <LoaderCircleIcon className="size-4 animate-spin text-brand" />}
               </Button>
               <Button
-                variant="destructive"
-                className="w-full justify-start"
+                variant="ghost"
+                className="w-full justify-start gap-2 text-[13px] text-destructive hover:bg-destructive/10 hover:text-destructive"
+                disabled={busy}
                 onClick={() => setDialog('delete')}
               >
-                删除会话
+                <Trash2Icon className="size-4 text-destructive" />
+                删除
               </Button>
             </>
           )}
@@ -120,10 +138,11 @@ export function ThreadActions({
             </p>
           )}
           <DialogFooter>
-            <Button variant="outline" disabled={busy} onClick={() => setDialog(undefined)}>
+            <Button variant="outline" className="text-[13px]" disabled={busy} onClick={() => setDialog(undefined)}>
               取消
             </Button>
             <Button
+              className="text-[13px]"
               disabled={busy || (dialog === 'rename' && !title.trim())}
               variant={dialog === 'delete' ? 'destructive' : 'default'}
               onClick={() =>
@@ -138,7 +157,8 @@ export function ThreadActions({
                 })
               }
             >
-              确认
+              {busy && <LoaderCircleIcon className="size-4 animate-spin" />}
+              {busy ? (dialog === 'delete' ? '删除中…' : '保存中…') : '确认'}
             </Button>
           </DialogFooter>
         </DialogContent>

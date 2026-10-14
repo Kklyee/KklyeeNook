@@ -22,7 +22,15 @@ import {
   useAui,
   useAuiState,
 } from '@assistant-ui/react'
-import { MoreHorizontalIcon, PlusIcon } from 'lucide-react'
+import {
+  ArchiveIcon,
+  CircleAlertIcon,
+  LoaderCircleIcon,
+  MoreHorizontalIcon,
+  PencilIcon,
+  PlusIcon,
+  Trash2Icon,
+} from 'lucide-react'
 import {
   forwardRef,
   useEffect,
@@ -109,6 +117,7 @@ export const ThreadListNew = forwardRef<
 ThreadListNew.displayName = 'ThreadListNew'
 
 export const ThreadListItem: FC = () => {
+  const { isMobile } = useSidebar()
   const runtimeIsRunning = useAuiState((s) => s.threadListItem.isRunning)
   const sessionId = useAuiState((s) => s.threadListItem.remoteId)
   const { conversations, workspaces, setActiveWorkspaceId } = useWorkspaces()
@@ -130,7 +139,7 @@ export const ThreadListItem: FC = () => {
   return (
     <ThreadListItemPrimitive.Root
       data-slot="aui_thread-list-item"
-      className={cn(threadListRowClassName, 'mb-1 h-8')}
+      className={cn(threadListRowClassName, isMobile ? 'mb-1 h-10' : 'mb-1 h-8')}
     >
       {isRenaming ? (
         <ThreadListItemRename
@@ -140,23 +149,25 @@ export const ThreadListItem: FC = () => {
           }}
         />
       ) : (
-        <ThreadListItemPrimitive.Trigger
-          ref={triggerRef}
-          data-slot="aui_thread-list-item-trigger"
-          className={cn(threadListTriggerClassName, 'justify-start text-left')}
-          onClick={() => {
-            const workspaceId = session?.workspaceId
-            setActiveWorkspaceId(
-              workspaceId && workspaces.some((workspace) => workspace.id === workspaceId)
-                ? workspaceId
-                : null,
-            )
-          }}
-        >
-          <ThreadListRowContent title={<ThreadListItemPrimitive.Title fallback="新对话" />} running={isRunning || isWaiting} updatedAt={updatedAt} />
-        </ThreadListItemPrimitive.Trigger>
+        <>
+          <ThreadListItemPrimitive.Trigger
+            ref={triggerRef}
+            data-slot="aui_thread-list-item-trigger"
+            className={cn(threadListTriggerClassName, isMobile && 'pe-10', 'justify-start text-left')}
+            onClick={() => {
+              const workspaceId = session?.workspaceId
+              setActiveWorkspaceId(
+                workspaceId && workspaces.some((workspace) => workspace.id === workspaceId)
+                  ? workspaceId
+                  : null,
+              )
+            }}
+          >
+            <ThreadListRowContent title={<ThreadListItemPrimitive.Title fallback="新对话" />} running={isRunning || isWaiting} updatedAt={updatedAt} />
+          </ThreadListItemPrimitive.Trigger>
+          <ThreadListItemMore isMobile={isMobile} onRename={() => setIsRenaming(true)} />
+        </>
       )}
-      <ThreadListItemMore onRename={() => setIsRenaming(true)} />
     </ThreadListItemPrimitive.Root>
   )
 }
@@ -165,12 +176,22 @@ const ThreadListItemRename: FC<{ onDone: (restoreFocus: boolean) => void }> = ({
   const aui = useAui()
   const title = useAuiState((s) => s.threadListItem.title) ?? ''
   const [value, setValue] = useState(title)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const settledRef = useRef(false)
+  const focusAfterErrorRef = useRef(false)
 
   useEffect(() => {
     inputRef.current?.select()
   }, [])
+
+  useEffect(() => {
+    if (!saving && error && focusAfterErrorRef.current) {
+      focusAfterErrorRef.current = false
+      inputRef.current?.focus()
+    }
+  }, [saving, error])
 
   const commit = (restoreFocus: boolean) => {
     if (settledRef.current) return
@@ -182,14 +203,19 @@ const ThreadListItemRename: FC<{ onDone: (restoreFocus: boolean) => void }> = ({
       return
     }
 
+    setSaving(true)
+    setError('')
+
     // Deferred so a synchronous throw lands on the rejection path too.
     Promise.resolve()
       .then(() => aui.threadListItem.rename(next))
       .then(
         () => onDone(restoreFocus),
-        () => {
+        (error) => {
           settledRef.current = false
-          if (restoreFocus) inputRef.current?.focus()
+          focusAfterErrorRef.current = restoreFocus
+          setSaving(false)
+          setError(error instanceof Error ? error.message : '重命名失败')
         },
       )
   }
@@ -201,38 +227,86 @@ const ThreadListItemRename: FC<{ onDone: (restoreFocus: boolean) => void }> = ({
   }
 
   return (
-    <Input
-      ref={inputRef}
-      autoFocus
-      data-slot="aui_thread-list-item-rename"
-      aria-label="Rename thread"
-      value={value}
-      className="h-7 min-w-0 flex-1 border-border bg-transparent ps-2.5 pe-9 text-sm text-foreground placeholder:text-faint-foreground focus-visible:border-ring focus-visible:ring-0"
-      onChange={(event) => setValue(event.target.value)}
-      onBlur={() => commit(false)}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') {
-          event.preventDefault()
-          commit(true)
-        } else if (event.key === 'Escape') {
-          event.preventDefault()
-          cancel()
-        }
-      }}
-    />
+    <div className="flex min-w-0 flex-1 items-center gap-2 px-2">
+      <Input
+        ref={inputRef}
+        autoFocus
+        disabled={saving}
+        data-slot="aui_thread-list-item-rename"
+        aria-label="Rename thread"
+        aria-invalid={!!error}
+        title={error || undefined}
+        value={value}
+        className={cn(
+          'h-7 min-w-0 flex-1 border-border bg-transparent ps-2.5 pe-2 text-sm text-foreground placeholder:text-faint-foreground focus-visible:border-ring focus-visible:ring-0',
+          error && 'border-destructive focus-visible:border-destructive',
+        )}
+        onChange={(event) => setValue(event.target.value)}
+        onBlur={() => commit(false)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault()
+            commit(true)
+          } else if (event.key === 'Escape') {
+            event.preventDefault()
+            cancel()
+          }
+        }}
+      />
+      {saving && (
+        <LoaderCircleIcon className="size-4 shrink-0 animate-spin text-brand" aria-label="Saving name" />
+      )}
+      {error && (
+        <>
+          <CircleAlertIcon className="size-4 shrink-0 text-destructive" aria-label={error} title={error} />
+          <span role="alert" className="sr-only">{error}</span>
+        </>
+      )}
+    </div>
   )
 }
 
-const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
+const ThreadListItemMore: FC<{ onRename: () => void; isMobile: boolean }> = ({
+  onRename,
+  isMobile,
+}) => {
+  const aui = useAui()
+  const [open, setOpen] = useState(false)
+  const [pendingAction, setPendingAction] = useState<'archive' | 'delete'>()
+  const [error, setError] = useState('')
+  const runAction = async (action: 'archive' | 'delete') => {
+    if (pendingAction) return
+    setPendingAction(action)
+    setError('')
+    try {
+      if (action === 'archive') await aui.threadListItem.archive()
+      else await aui.threadListItem.delete()
+      setOpen(false)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : '操作失败')
+    } finally {
+      setPendingAction(undefined)
+    }
+  }
+
   return (
-    <ThreadListItemMorePrimitive.Root sharedFocusGroup>
+    <ThreadListItemMorePrimitive.Root
+      sharedFocusGroup
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!pendingAction || nextOpen) setOpen(nextOpen)
+      }}
+    >
       <ThreadListItemMorePrimitive.Trigger
         render={
           <Button
             variant="ghost"
             size="icon"
             data-slot="aui_thread-list-item-more"
-            className="pointer-events-none absolute end-1 top-1/2 size-6 -translate-y-1/2 rounded-md p-0 text-faint-foreground opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-has-focus-visible:pointer-events-auto group-has-focus-visible:opacity-100 hover:bg-hover hover:text-foreground active:bg-active focus-visible:border-ring focus-visible:ring-0 data-[state=open]:pointer-events-auto data-[state=open]:bg-selected data-[state=open]:text-foreground data-[state=open]:opacity-100 data-[state=open]:hover:bg-selected"
+            className={cn(
+              'pointer-events-none absolute end-1 top-1/2 size-6 -translate-y-1/2 rounded-md p-0 text-faint-foreground opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-has-focus-visible:pointer-events-auto group-has-focus-visible:opacity-100 hover:bg-hover hover:text-foreground active:bg-active focus-visible:border-ring focus-visible:ring-0 data-[state=open]:pointer-events-auto data-[state=open]:bg-selected data-[state=open]:text-foreground data-[state=open]:opacity-100 data-[state=open]:hover:bg-selected',
+              isMobile && 'pointer-events-auto size-8 opacity-100',
+            )}
           />
         }
       >
@@ -244,35 +318,51 @@ const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
         align="start"
         sideOffset={6}
         data-slot="aui_thread-list-item-more-content"
-        className="material-raised data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:animate-out data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-32 overflow-hidden rounded-xl p-1.5"
+        className="material-raised data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:animate-out data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-36 overflow-hidden rounded-xl p-1.5"
       >
         <ThreadListItemMorePrimitive.Item
           data-slot="aui_thread-list-item-more-item"
-          className="text-muted-foreground hover:bg-hover hover:text-foreground focus:bg-hover focus:text-foreground active:bg-active data-highlighted:bg-hover data-highlighted:text-foreground transition-colors flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none select-none"
-          onSelect={onRename}
+          disabled={pendingAction !== undefined}
+          className="text-foreground hover:bg-hover focus:bg-hover active:bg-active data-highlighted:bg-hover transition-colors flex min-h-9 cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] outline-none select-none disabled:pointer-events-none disabled:opacity-50"
+          onSelect={() => {
+            setOpen(false)
+            onRename()
+          }}
         >
-          Rename
+          <PencilIcon className="size-4 shrink-0 text-brand" />
+          <span className="min-w-0 flex-1 font-medium">重命名</span>
         </ThreadListItemMorePrimitive.Item>
-        <ThreadListItemPrimitive.Archive
-          render={
-            <ThreadListItemMorePrimitive.Item
-              data-slot="aui_thread-list-item-more-item"
-              className="text-muted-foreground hover:bg-hover hover:text-foreground focus:bg-hover focus:text-foreground active:bg-active data-highlighted:bg-hover data-highlighted:text-foreground transition-colors flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none select-none"
-            />
-          }
+        <ThreadListItemMorePrimitive.Item
+          data-slot="aui_thread-list-item-more-item"
+          disabled={pendingAction !== undefined}
+          className="text-foreground hover:bg-hover focus:bg-hover active:bg-active data-highlighted:bg-hover transition-colors flex min-h-9 cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] outline-none select-none disabled:pointer-events-none disabled:opacity-50"
+          onSelect={(event) => {
+            event.preventDefault()
+            void runAction('archive')
+          }}
         >
-          Archive
-        </ThreadListItemPrimitive.Archive>
-        <ThreadListItemPrimitive.Delete
-          render={
-            <ThreadListItemMorePrimitive.Item
-              data-slot="aui_thread-list-item-more-item"
-              className="text-muted-foreground hover:bg-hover hover:text-foreground focus:bg-hover focus:text-foreground active:bg-active data-highlighted:bg-hover data-highlighted:text-foreground transition-colors flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none select-none"
-            />
-          }
+          <ArchiveIcon className="size-4 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1 font-medium">归档</span>
+          {pendingAction === 'archive' && (
+            <LoaderCircleIcon className="size-4 shrink-0 animate-spin text-brand" />
+          )}
+        </ThreadListItemMorePrimitive.Item>
+        <ThreadListItemMorePrimitive.Item
+          data-slot="aui_thread-list-item-more-item"
+          disabled={pendingAction !== undefined}
+          className="text-destructive hover:bg-destructive/10 hover:text-destructive focus:bg-destructive/10 focus:text-destructive active:bg-destructive/15 data-highlighted:bg-destructive/10 data-highlighted:text-destructive transition-colors flex min-h-9 cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] outline-none select-none disabled:pointer-events-none disabled:opacity-50"
+          onSelect={(event) => {
+            event.preventDefault()
+            void runAction('delete')
+          }}
         >
-          Delete
-        </ThreadListItemPrimitive.Delete>
+          <Trash2Icon className="size-4 shrink-0 text-destructive" />
+          <span className="min-w-0 flex-1 font-medium">删除</span>
+          {pendingAction === 'delete' && (
+            <LoaderCircleIcon className="size-4 shrink-0 animate-spin text-destructive" />
+          )}
+        </ThreadListItemMorePrimitive.Item>
+        {error && <p role="alert" className="px-2.5 py-2 text-xs text-destructive">{error}</p>}
       </ThreadListItemMorePrimitive.Content>
     </ThreadListItemMorePrimitive.Root>
   )

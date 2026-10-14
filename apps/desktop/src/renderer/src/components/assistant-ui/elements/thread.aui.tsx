@@ -3,7 +3,6 @@
 import { ThreadMessages } from './thread-messages'
 
 import { PermissionSelector } from './permission-selector.aui'
-import { WorkspaceComposerLabel } from '@/renderer/src/features/workspaces/WorkspaceComposerLabel'
 import { SessionStats } from './session-stats.aui'
 
 import {
@@ -246,7 +245,10 @@ const ThreadRoot: FC<{
             <ThreadHistorySkeleton />
           </AuiIf>
 
-          <div data-slot="aui_message-group" className="mb-14 flex flex-col gap-y-6 empty:hidden">
+          <div
+            data-slot="aui_message-group"
+            className={cn('flex flex-col gap-y-6 empty:hidden', isEmpty ? 'mb-0' : 'mb-14')}
+          >
             {activitiesReady && <ThreadMessages components={messageComponents} />}
             <MentionNavigation />
             {(isCompacting || commandSurface?.result?.title === 'Compacting') && (
@@ -263,7 +265,7 @@ const ThreadRoot: FC<{
           {!readOnly && (
             <ThreadPrimitive.ViewportFooter
               className={cn(
-                'aui-thread-viewport-footer material-base flex flex-col gap-2 overflow-visible rounded-t-(--composer-radius) pb-1',
+                'aui-thread-viewport-footer material-base flex flex-col gap-2 overflow-visible rounded-t-(--composer-radius) pb-3',
                 isEmpty ? 'relative' : 'sticky bottom-0 mt-auto',
               )}
             >
@@ -359,7 +361,6 @@ const Composer: FC<{
         result={result && ['Compacting', '/compact'].includes(result.title) ? undefined : result}
         onClose={closeResult}
       />
-      <WorkspaceComposerLabel />
       <ComposerPrimitive.Unstable_TriggerPopoverRoot>
         <ComposerPrimitive.Root
           className="aui-composer-root  relative  flex w-full flex-col "

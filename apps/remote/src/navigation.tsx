@@ -144,36 +144,42 @@ export function Navigation({
             <>
               <Button
                 variant="ghost"
-                className="mb-4 h-14 w-full justify-start gap-3"
+                className="mt-4 mb-2 h-11 w-full justify-start gap-2 rounded-xl px-3 text-left text-[13px] font-normal"
                 onClick={() => select('/bots/' + bot.id)}
               >
-                <MessageCircleIcon />
-                主会话
+                <MessageCircleIcon className="size-4" />
+                聊天
               </Button>
               <p className="px-2 text-xs text-muted-foreground">WORKSPACES</p>
               {options.workspaces
                 .filter((workspace) => bot.workspaceIds.includes(workspace.id))
                 .map((workspace) => (
                   <Collapsible key={workspace.id} defaultOpen>
-                    <CollapsibleTrigger className="flex min-h-11 w-full items-center gap-2 px-2 text-sm">
-                      <FolderIcon className="size-4" />
-                      <span className="flex-1 text-left">{workspace.displayName}</span>
-                      <ChevronDownIcon className="size-3" />
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="ml-3">
-                      {rows(workspace.id)}
+                    <div className="flex h-11 items-center gap-0.5 rounded-lg px-1 transition-colors hover:bg-hover focus-within:bg-hover">
+                      <CollapsibleTrigger className="flex h-full min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left text-[13px] text-muted-foreground hover:bg-transparent hover:text-foreground active:bg-transparent">
+                        <FolderIcon className="size-4" />
+                        <span className="flex-1 truncate">{workspace.displayName}</span>
+                        <ChevronDownIcon className="size-3 shrink-0" />
+                      </CollapsibleTrigger>
                       <Button
                         variant="ghost"
-                        className="min-h-11 w-full justify-start text-xs"
+                        size="icon"
+                        className="size-10 hover:bg-transparent active:bg-transparent"
+                        aria-label={'为 ' + workspace.displayName + ' 新建会话'}
                         disabled={busy || workspace.status !== 'attached'}
                         onClick={() => void create(workspace.id)}
                       >
-                        <PlusIcon />
-                        新建开发会话
+                        <PlusIcon className="size-4" />
                       </Button>
+                    </div>
+                    <CollapsibleContent className="ml-3">
+                      {rows(workspace.id)}
                     </CollapsibleContent>
                   </Collapsible>
                 ))}
+              <p className="px-2 py-2 text-[11px] font-medium tracking-wide text-muted-foreground">
+                最近会话
+              </p>
               {rows(null)}
             </>
           ) : (
