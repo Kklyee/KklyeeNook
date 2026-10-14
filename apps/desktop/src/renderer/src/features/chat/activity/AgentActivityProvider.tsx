@@ -20,11 +20,15 @@ export interface ActivityRun {
   segments: readonly ActivitySegment[]
 }
 
-function createActivityStore() {
-  let groups: readonly ActivityRun[] = []
+const activityCache = new Map<string, readonly ActivityRun[]>()
+
+function createActivityStore(initial: readonly ActivityRun[] = [], ready = true) {
+  let groups = initial
+  let loaded = ready
   const listeners = new Set<() => void>()
   return {
     getSnapshot: () => groups,
+    getReady: () => loaded,
     subscribe: (listener: () => void) => {
       listeners.add(listener)
       return () => {
@@ -32,7 +36,8 @@ function createActivityStore() {
       }
     },
     publish: (next: readonly ActivityRun[]) => {
-      if (groups.length === next.length && groups.every((group, index) => group === next[index])) return
+      if (loaded && groups.length === next.length && groups.every((group, index) => group === next[index])) return
+      loaded = true
       groups = next
       listeners.forEach((listener) => listener())
     },
@@ -46,20 +51,31 @@ export function useActivitySelector<T>(selector: (groups: readonly ActivityRun[]
   return useSyncExternalStore(store.subscribe, () => selector(store.getSnapshot()))
 }
 
-export function AgentActivityProvider({
+export function useActivityReady() {
+  const store = useContext(AgentActivityContext)
+  return useSyncExternalStore(store.subscribe, store.getReady)
+}
+
+export function AgentActivityProvider(props: { sessionId?: string; children: ReactNode }) {
+  return <SessionActivityProvider key={props.sessionId} {...props} />
+}
+
+function SessionActivityProvider({
   sessionId,
   children,
 }: {
   sessionId?: string
   children: ReactNode
 }) {
-  const [store] = useState(createActivityStore)
+  const [store] = useState(() => {
+    const cached = sessionId ? activityCache.get(sessionId) : undefined
+    return createActivityStore(cached, !sessionId || cached !== undefined)
+  })
   const chat = useChatStore()
   const { refreshFile } = usePreview()
   const refreshPreviewFile = useEffectEvent(refreshFile)
 
   useEffect(() => {
-    store.publish([])
     if (!sessionId) return
     let disposed = false
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -115,7 +131,13 @@ export function AgentActivityProvider({
           }
         }
         initialized = true
+        activityCache.delete(sessionId)
+        activityCache.set(sessionId, groups)
+        while (activityCache.size > 8) activityCache.delete(activityCache.keys().next().value!)
         store.publish(groups)
+      } catch (error) {
+        if (!disposed) store.publish(store.getSnapshot())
+        throw error
       } finally {
         loading = false
         if (!disposed && dirty) schedule()
@@ -124,7 +146,8 @@ export function AgentActivityProvider({
     let snapshot = chat.getSnapshot()
     const unsubscribe = chat.subscribe(() => {
       const next = chat.getSnapshot()
-      if (next.current.messages !== snapshot.current.messages || next.extras.history.sinceEntry !== snapshot.extras.history.sinceEntry) schedule()
+      if (snapshot.current.loading && !next.current.loading) void load().catch(error => console.error('[AgentActivity] could not load activity history', error))
+      else if (next.current.messages !== snapshot.current.messages || next.extras.history.sinceEntry !== snapshot.extras.history.sinceEntry) schedule()
       snapshot = next
     })
     const poll = setInterval(() => { if (chat.getSnapshot().current.projected.isRunning) schedule() }, 500)

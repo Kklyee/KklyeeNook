@@ -22,8 +22,9 @@ export function useScrollFollower() {
 
 export function ThreadScrollViewport({
   children,
+  contentReady = true,
   ...props
-}: ComponentProps<typeof ThreadPrimitive.Viewport> & { children: ReactNode }) {
+}: ComponentProps<typeof ThreadPrimitive.Viewport> & { children: ReactNode; contentReady?: boolean }) {
   const aui = useAui()
   const [historyError, setHistoryError] = useState<string>()
   const loadOlder = useRef(() => {})
@@ -163,7 +164,7 @@ export function ThreadScrollViewport({
   }, [threadId, isLoading])
 
   useLayoutEffect(() => {
-    if (isLoading || initialized.current) return
+    if (isLoading || !contentReady || initialized.current) return
     initialized.current = true
     const saved = scrollPositions.get(threadId)
     if (saved && !saved.following && viewportRef.current) {
@@ -171,7 +172,7 @@ export function ThreadScrollViewport({
       setFollowing(false)
       viewportRef.current.scrollTop = saved.top
     } else initializeRef.current()
-  }, [threadId, isLoading, hasMessages])
+  }, [threadId, isLoading, hasMessages, contentReady])
 
   loadOlder.current = () => {
     const extras = aui.thread.getState().extras as ChatExtras | undefined

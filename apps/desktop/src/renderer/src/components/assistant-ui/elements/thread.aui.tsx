@@ -12,6 +12,7 @@ import {
   UserMessageAttachments,
 } from '@/renderer/src/components/assistant-ui/elements/attachment.aui'
 import { File } from './file-preview'
+import { useActivityReady } from '@/renderer/src/features/chat/activity/AgentActivityProvider'
 import { AgentActivityGroup } from '@/renderer/src/features/chat/activity/AgentActivityGroup'
 import { QueuedMessages } from '@/renderer/src/features/chat/QueuedMessages'
 import { usePendingSend } from '@/renderer/src/features/chat/runtime/SendState'
@@ -210,6 +211,8 @@ const ThreadRoot: FC<{
   commandSurface,
 }) => {
   const { Welcome = ThreadWelcome } = useContext(ThreadComponentsContext)
+  const activitiesReady = useActivityReady()
+  const historyLoading = useAuiState(isHistoryLoadingView)
 
   return (
     <ThreadPrimitive.Root
@@ -222,6 +225,7 @@ const ThreadRoot: FC<{
       }}
     >
       <ThreadScrollViewport
+        contentReady={activitiesReady}
         turnAnchor="bottom"
         data-slot="aui_thread-viewport "
         className="relative flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto [overflow-anchor:none] [scroll-behavior:auto] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -236,12 +240,12 @@ const ThreadRoot: FC<{
           <AuiIf condition={(state) => !readOnly && isNewChatView(state)}>
             <Welcome />
           </AuiIf>
-          <AuiIf condition={isHistoryLoadingView}>
+          <AuiIf condition={() => historyLoading || !activitiesReady}>
             <ThreadHistorySkeleton />
           </AuiIf>
 
           <div data-slot="aui_message-group" className="mb-14 flex flex-col gap-y-6 empty:hidden">
-            <ThreadMessages components={messageComponents} />
+            {activitiesReady && <ThreadMessages components={messageComponents} />}
             <MentionNavigation />
             {(isCompacting || commandSurface?.result?.title === 'Compacting') && (
               <ContextCompactionProgress />

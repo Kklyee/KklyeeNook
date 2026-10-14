@@ -97,3 +97,24 @@ test('first open snaps immediately and returning restores paused history without
   expect(viewport.scrollTop).toBe(320)
   expect(raf).not.toHaveBeenCalled()
 })
+
+
+test('restores a saved location only after message and activity content are ready', () => {
+  vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1))
+  vi.stubGlobal('cancelAnimationFrame', vi.fn())
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {}, removeEventListener() {} }))
+  vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(1000)
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(100)
+  scrollPositions.set('thread', { top: 320, following: false })
+  const container = document.createElement('div')
+  document.body.append(container)
+  root = createRoot(container)
+  const render = (contentReady: boolean) => root!.render(createElement(ThreadScrollViewport, { contentReady, children: contentReady ? 'Complete history and activities' : 'Skeleton' }))
+  act(() => render(false))
+  const viewport = container.firstElementChild as HTMLDivElement
+  expect(viewport.scrollTop).toBe(0)
+  act(() => render(true))
+  expect(viewport.scrollTop).toBe(320)
+  expect(container.textContent).toContain('Complete history and activities')
+})
