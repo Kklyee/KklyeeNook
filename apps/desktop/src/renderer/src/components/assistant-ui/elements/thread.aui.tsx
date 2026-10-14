@@ -18,6 +18,7 @@ import { QueuedMessages } from '@/renderer/src/features/chat/QueuedMessages'
 import { usePendingSend } from '@/renderer/src/features/chat/runtime/SendState'
 import { BotMentionInput } from '@/renderer/src/features/chat/mentions/BotMentionInput'
 import { UserMessageText } from './user-message-text.aui'
+import { FileChangeCards } from '@/renderer/src/features/chat/tools/FileChangeCards'
 import { MentionNavigation } from '@/renderer/src/features/chat/mentions/BotMentionChip'
 import { Image } from './image-preview'
 import { ImageThumbnail } from '@kklyeenook/ui/assistant-ui/image-thumbnail'
@@ -538,6 +539,7 @@ const AssistantMessage: FC = () => {
         <StreamingMessage>
           <AssistantMessageParts />
         </StreamingMessage>
+        <FileChangeCards />
         <MessageError />
       </div>
 
@@ -657,7 +659,7 @@ const UserFilePart: FileMessagePartComponent = (part) => (
 )
 
 const UserImagePart: ImageMessagePartComponent = (part) => (
-  <div data-slot="aui_user-message-image" className="me-2 inline-flex py-1 align-top last:me-0">
+  <div data-slot="aui_user-message-image" className="block py-1">
     <ImageThumbnail {...part} />
   </div>
 )
