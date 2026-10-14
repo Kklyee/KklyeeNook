@@ -147,6 +147,8 @@ export class ChatStore {
   private listLoading = false
   private error: string | undefined
   private historyStarts = new Map<string, number>()
+  private threadCache = new Map<string, { projection: AgentProjectionState; projected: AgentProjectedThread; metadata: AgentThreadSummary; history: ChatExtras['history'] }>()
+  private operationVersion = 0
   private history: ChatExtras['history'] = { hasMore: false, loading: false }
   private projectionTimer: ReturnType<typeof setTimeout> | undefined
   private source: EventSource | undefined
@@ -212,6 +214,7 @@ export class ChatStore {
 
   dispose() {
     this.disposed = true
+    this.threadCache.clear()
     clearTimeout(this.projectionTimer)
     this.projectionTimer = undefined
     clearInterval(this.groveTimer)
@@ -421,6 +424,7 @@ export class ChatStore {
 
   async switchToThread(threadId: string, force = false) {
     if (this.selectedThreadId === threadId && !this.loading && !force) return
+    const cached = this.threadCache.get(threadId)
     const version = ++this.connectionVersion
     this.botSelectionVersion++
     this.source?.close()
@@ -429,18 +433,32 @@ export class ChatStore {
     this.draft = undefined
     clearTimeout(this.projectionTimer)
     this.projectionTimer = undefined
-    this.history = { hasMore: false, loading: false }
-    this.projection = emptyDurableProjectionState()
-    this.projected = emptyProjected
-    this.metadata = undefined
-    this.loading = true
+    this.history = cached ? { ...cached.history, loading: false } : { hasMore: false, loading: false }
+    this.projection = cached ? { ...cached.projection, epoch: undefined, sequence: -1 } : emptyDurableProjectionState()
+    this.projected = cached?.projected ?? emptyProjected
+    this.metadata = cached ? { ...cached.metadata, ...this.threads.find((thread) => thread.id === threadId) } : undefined
+    this.loading = !cached
+    if (cached) {
+      this.selectedBotId = this.metadata?.botId ?? this.selectedBotId
+      this.botEditorId = undefined
+    }
     this.error = undefined
     this.emit()
+    const initialProjection = this.projection
+    const operationVersion = this.operationVersion
+    if (cached) this.connect(threadId)
     try {
       const value = await this.request<AgentThreadSnapshot>(
         `/threads/${encodeURIComponent(threadId)}?runs=2`,
       )
       if (this.selectedThreadId !== threadId || version !== this.connectionVersion) return
+      if (cached && (this.projection !== initialProjection || this.operationVersion !== operationVersion)) {
+        if (this.operationVersion === operationVersion) {
+          this.metadata = value.metadata ?? this.metadata
+          this.emit()
+        }
+        return
+      }
       const sinceEntry = this.historyStarts.get(threadId)
       while (sinceEntry !== undefined && value.history?.hasMore && value.history.sinceEntry !== undefined && value.history.sinceEntry > sinceEntry) {
         const before = value.history.sinceEntry
@@ -451,6 +469,7 @@ export class ChatStore {
         value.history = { sinceEntry: page.sinceEntry, hasMore: page.hasMore }
         if (page.sinceEntry === undefined || page.sinceEntry >= before) break
       }
+      if (cached && (this.projection !== initialProjection || this.operationVersion !== operationVersion)) return
       if (sinceEntry !== undefined && value.history?.sinceEntry !== undefined && value.history.sinceEntry < sinceEntry) {
         value.snapshot = { ...value.snapshot, entries: value.snapshot.entries.filter((entry) => entry.id >= sinceEntry) }
         value.history = { sinceEntry, hasMore: true }
@@ -471,9 +490,10 @@ export class ChatStore {
       this.projected = projectDurableThread(this.projection)
       this.loading = false
       this.emit()
-      this.connect(threadId)
+      if (!cached) this.connect(threadId)
     } catch (error) {
       if (this.selectedThreadId !== threadId || version !== this.connectionVersion) return
+      if (cached && (this.projection !== initialProjection || this.operationVersion !== operationVersion)) return
       this.loading = false
       this.error = error instanceof Error ? error.message : 'Conversation load failed'
       this.emit()
@@ -566,7 +586,7 @@ export class ChatStore {
     }
   }
 
-  async submit(message: AppendMessage, whenBusy?: 'steer' | 'followUp' | 'reject') {
+  async submit(message: AppendMessage, whenBusy: 'steer' | 'followUp' | 'reject' = 'followUp') {
     if (this.draft) await this.persistThread(this.draft)
     else if (!this.selectedThreadId && this.selectedBotId) await this.selectBot(this.selectedBotId)
     const threadId = this.selectedThreadId ?? (await this.persistThread())
@@ -659,6 +679,7 @@ export class ChatStore {
 
   async delete(threadId: string) {
     await this.request(`/threads/${encodeURIComponent(threadId)}`, { method: 'DELETE' })
+    this.threadCache.delete(threadId)
     this.threads = this.threads.filter((thread) => thread.id !== threadId)
     if (this.selectedThreadId === threadId) {
       if (this.selectedBotId) await this.selectBot(this.selectedBotId)
@@ -956,6 +977,7 @@ export class ChatStore {
     path: string,
     init: { method?: string; body?: unknown } = {},
   ): Promise<T> {
+    if (init.method && init.method !== 'GET') this.operationVersion++
     const response = await fetch(`${this.endpoint}${path}`, {
       method: init.method ?? 'GET',
       headers: init.body === undefined ? undefined : { 'content-type': 'application/json' },
@@ -973,6 +995,11 @@ export class ChatStore {
   }
 
   private emit() {
+    if (!this.disposed && this.selectedThreadId && !this.loading && this.metadata && this.projection.snapshot) {
+      this.threadCache.delete(this.selectedThreadId)
+      this.threadCache.set(this.selectedThreadId, { projection: this.projection, projected: this.projected, metadata: this.metadata, history: this.history })
+      while (this.threadCache.size > 8) this.threadCache.delete(this.threadCache.keys().next().value!)
+    }
     this.snapshotCache = undefined
     this.listeners.forEach((listener) => listener())
   }

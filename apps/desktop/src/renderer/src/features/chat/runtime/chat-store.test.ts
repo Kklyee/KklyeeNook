@@ -1,5 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest'
 import type { AppendMessage } from '@assistant-ui/react'
+import { fauxAssistantMessage } from '@earendil-works/pi-ai/providers/faux'
 import { emptySnapshot } from '@kklyeenook/agent/runtime/projection'
 import { ChatStore } from './chat-store'
 import {
@@ -521,4 +522,66 @@ test('keeps the original history start when a newer latest window requires an ov
   expect(store.getSnapshot().current.messages.slice(0, 2).map((message) => message.id)).toEqual(ids)
   expect(store.getSnapshot().current.messages).toHaveLength(4)
   expect(store.getSnapshot().extras.history.sinceEntry).toBe(3)
+})
+
+
+test('cached conversations remain interactive during refresh and ignore a late stale response', async () => {
+  let reads = 0
+  let finish!: (response: Response) => void
+  const requests: Array<{ url: string; body: any }> = []
+  const value = (text: string) => ({ ...snapshot('a'), metadata: { ...metadata('a'), botId: 'coder' }, queue: [{ id: 42, mode: 'followUp', content: 'Queued' }], snapshot: { ...emptySnapshot(), entries: [{ id: 1, conversationId: 1, kind: 'pi.assistant', model: [{ ...fauxAssistantMessage(text), timestamp: 1 }] }] } })
+  const store = setup(async (url, init) => {
+    if (url.endsWith('/threads')) return response([metadata('a'), metadata('b')])
+    if (init?.method === 'POST') {
+      requests.push({ url, body: init.body ? JSON.parse(String(init.body)) : undefined })
+      return response(url.endsWith('/queue/item') ? [] : { ok: true })
+    }
+    if (url.endsWith('/threads/a')) {
+      if (++reads === 1) return response(value('Cached reply'))
+      return new Promise((resolve) => { finish = resolve })
+    }
+    return response(snapshot('b'))
+  })
+  await store.switchToThread('a')
+  await store.switchToThread('b')
+  const refresh = store.switchToThread('a')
+  expect(store.getSnapshot().current.loading).toBe(false)
+  expect(JSON.stringify(store.getSnapshot().current.messages)).toContain('Cached reply')
+  await store.submit(message('New message'))
+  await store.cancel()
+  await store.updateQueue({ mode: 'followUp', itemId: '42', expected: ['Queued'], index: 0, action: 'remove' })
+  expect(requests.filter((request) => request.url.endsWith('/submissions'))).toHaveLength(1)
+  expect(requests.find((request) => request.url.endsWith('/submissions'))?.body.whenBusy).toBe('followUp')
+  expect(requests.some((request) => request.url.endsWith('/cancel'))).toBe(true)
+  expect(requests.some((request) => request.url.endsWith('/queue/item'))).toBe(true)
+  const live = value('Live reply')
+  Source.instances.at(-1)!.send({ ...frame('a', 1, 'fresh'), type: 'reset', queue: [], events: [live.snapshot as never] })
+  finish(response(value('Old refresh')))
+  await refresh
+  expect(JSON.stringify(store.getSnapshot().current.messages)).toContain('Live reply')
+  expect(JSON.stringify(store.getSnapshot().current.messages)).not.toContain('Old refresh')
+  expect(store.getSnapshot().extras.queueItems).toEqual([])
+})
+
+test('a background read cannot undo a successful queue mutation before its stream event arrives', async () => {
+  let reads = 0
+  let finish!: (response: Response) => void
+  const value = { ...snapshot('a'), queue: [{ id: 42, mode: 'followUp', content: 'Queued' }] }
+  const store = setup(async (url) => {
+    if (url.endsWith('/threads')) return response([metadata('a'), metadata('b')])
+    if (url.endsWith('/queue/item')) return response([])
+    if (url.endsWith('/threads/a')) {
+      if (++reads === 1) return response(value)
+      return new Promise((resolve) => { finish = resolve })
+    }
+    return response(snapshot('b'))
+  })
+  await store.switchToThread('a')
+  await store.switchToThread('b')
+  const refresh = store.switchToThread('a')
+  await store.updateQueue({ mode: 'followUp', itemId: '42', expected: ['Queued'], index: 0, action: 'remove' })
+  finish(response(value))
+  await refresh
+  expect(store.getSnapshot().extras.queueItems).toEqual([])
+  expect(store.getSnapshot().current.loading).toBe(false)
 })

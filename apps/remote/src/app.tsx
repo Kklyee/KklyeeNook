@@ -441,6 +441,7 @@ function Conversation({
   const [connected, setConnected] = useState(false)
   const [busy, setBusy] = useState(false)
   const [sending, setSending] = useState(false)
+  const mutationVersion = useRef(0)
   const [error, setError] = useState('')
   useEffect(() => {
     let active = true
@@ -529,15 +530,19 @@ function Conversation({
     }
   }, [id])
   const mutate = async (path: string, input?: unknown, refresh = false, send = false) => {
+    const version = ++mutationVersion.current
     const setPending = send ? setSending : setBusy
     setPending(true)
     setError('')
     try {
       await api(path, 'POST', input)
       if (refresh) {
+        const current = conversationSnapshots.get(id)
         const value = await api<RemoteConversationSnapshot>(`/conversations/${id}`)
-        cacheConversation(id, value)
-        setSnapshot(value)
+        if (version === mutationVersion.current && conversationSnapshots.get(id) === current) {
+          cacheConversation(id, value)
+          setSnapshot(value)
+        }
         if (bot) await reloadBots()
       }
       return true
@@ -674,6 +679,7 @@ function Conversation({
         }
         pendingSteer={(snapshot?.queue ?? []).filter((message) => message.steer)}
         onSend={async (content, mode, attachments, requestId) => {
+          mutationVersion.current++
           setSending(true)
           setError('')
           try {

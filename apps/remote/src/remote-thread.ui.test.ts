@@ -1,5 +1,5 @@
 import { act, createElement } from 'react'
-import { useAuiState } from '@assistant-ui/react'
+import { useAui, useAuiState } from '@assistant-ui/react'
 import { createRoot } from 'react-dom/client'
 import { expect, test, vi } from 'vitest'
 import { RemoteThread } from './remote-thread'
@@ -111,5 +111,34 @@ test('returning to remote history restores the saved location instead of followi
     height.mockRestore()
     client.mockRestore()
     scrollPositions.clear()
+  }
+})
+
+
+test('sending from displayed history submits once and lets the server handle an already busy run', async () => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true, ResizeObserver: class { observe() {} disconnect() {} } })
+  Object.defineProperty(HTMLElement.prototype, 'scrollTo', { value: vi.fn(), configurable: true })
+  const send = vi.fn(async () => {})
+  function Send() {
+    const aui = useAui()
+    return createElement('button', { 'data-testid': 'send', onClick: () => {
+      aui.thread.composer().setText('Fresh input')
+      void aui.thread.composer().send()
+    } }, 'Send')
+  }
+  const element = document.createElement('div')
+  document.body.append(element)
+  const root = createRoot(element)
+  try {
+    await act(() => root.render(createElement(RemoteThread, {
+      messages: [{ id: 'old', role: 'assistant', timestamp: 1, status: 'complete', content: [{ type: 'text', text: 'Cached answer' }] }],
+      running: false, busy: false, disabled: false, controls: createElement(Send), onSend: send,
+    })))
+    await act(async () => { element.querySelector<HTMLButtonElement>('[data-testid="send"]')!.click() })
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send).toHaveBeenCalledWith('Fresh input', 'followUp', [], expect.any(String))
+  } finally {
+    await act(() => root.unmount())
+    element.remove()
   }
 })

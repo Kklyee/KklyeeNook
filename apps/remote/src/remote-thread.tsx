@@ -373,11 +373,7 @@ export function RemoteThread({
               input: {
                 content,
                 attachments,
-                mode: running
-                  ? message.steer
-                    ? ('steer' as const)
-                    : ('followUp' as const)
-                  : ('normal' as const),
+                mode: message.steer ? ('steer' as const) : ('followUp' as const),
                 requestId: crypto.randomUUID(),
               },
             }
