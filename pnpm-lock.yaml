@@ -309,6 +309,9 @@ importers:
       '@earendil-works/pi-durable':
         specifier: 1.1.0
         version: 1.1.0(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.4)(undici@8.11.2)(ws@8.22.0)(zod@4.6.5)
+      diff:
+        specifier: 8.0.4
+        version: 8.0.4
     devDependencies:
       '@assistant-ui/react':
         specifier: 0.15.17

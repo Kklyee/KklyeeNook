@@ -230,3 +230,12 @@ test('Bot APIs require authenticated identity and validate immutable profile fie
   await app.request('/api/bots/coder/main', { method: 'POST', headers })
   expect(port.botMain).toHaveBeenCalledWith('coder')
 })
+
+
+test('forwards stable queue item identity to remote mutations', async () => {
+  const { app, port } = fixture()
+  const mutation = { itemId: '42', mode: 'followUp', expected: ['stale'], index: 8, action: 'steer' }
+  const response = await app.request('/api/conversations/chat/queue/item', { method: 'POST', headers, body: JSON.stringify(mutation) })
+  expect(response.status).toBe(200)
+  expect(port.updateQueue).toHaveBeenCalledWith('chat', mutation)
+})

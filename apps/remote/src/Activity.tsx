@@ -31,13 +31,14 @@ export function Activity({ activities, waiting = false }: { activities: RemoteAc
   const current = [...activities].reverse().find(activity => activity.status === 'running' || activity.status === 'waiting') ?? activities.at(-1)
   const running = waiting || activities.some(activity => activity.status === 'running' || activity.status === 'waiting')
   const failed = current?.status === 'failed'
-  const label = running || failed ? current?.label ?? '思考中' : activities[0]?.summary ?? '本轮活动已完成'
+  const representative = running || failed ? current : [...activities].reverse().find((activity) => activity.type !== 'thinking') ?? current
+  const label = representative?.label ?? (running ? '思考中' : '本轮活动已完成')
   const duration = current?.endedAt && activities[0]?.startedAt ? `${Math.max(0, (current.endedAt - activities[0].startedAt) / 1000).toFixed(1)}s` : undefined
   return <section aria-label="Agent Activity" data-slot="agent-activity-slot" className="py-2">
-    <ToolTimeline open={open} onOpenChange={setOpen} label={<span className="flex min-w-0 items-center gap-2">{running || failed ? current ? <ActivityIcon type={current.type} status={current.status} /> : <Loader2Icon className="size-3.5 shrink-0 animate-spin" /> : <CheckIcon className="size-3.5 shrink-0" />}<ShimmerLabel active={running} className="truncate">{label}</ShimmerLabel></span>} trailing={<span className="shrink-0 text-xs text-muted-foreground">{duration}</span>}>
+    <ToolTimeline open={open} onOpenChange={setOpen} label={<span className="flex min-w-0 items-center gap-2">{running || failed ? current ? <ActivityIcon type={current.type} status={current.status} /> : <Loader2Icon className="size-3.5 shrink-0 animate-spin" /> : representative ? <ActivityIcon type={representative.type} status={representative.status} /> : <CheckIcon className="size-3.5 shrink-0" />}<ShimmerLabel active={running} className="truncate">{label}</ShimmerLabel></span>} trailing={<span className="shrink-0 text-xs text-muted-foreground">{duration}</span>}>
       {activities.map(activity => <details key={activity.id} className="mobile-activity-row my-2 rounded-xl p-3">
         <summary className="flex min-h-6 cursor-pointer list-none items-center gap-2"><ActivityIcon type={activity.type} status={activity.status} /><span className="min-w-0 flex-1 truncate text-sm">{activity.label}</span>{activity.status === 'running' ? <Loader2Icon className="size-3.5 shrink-0 animate-spin" /> : activity.status === 'completed' ? <CheckIcon className="size-3.5 shrink-0 text-success" /> : null}</summary>
-        {activity.detail && <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words text-xs leading-relaxed text-muted-foreground">{activity.detail}</pre>}
+        {activity.detail && <><pre className="mt-3 whitespace-pre-wrap break-words text-xs leading-relaxed text-muted-foreground">{activity.detail}</pre><button type="button" className="mt-2 min-h-11 text-xs text-muted-foreground" onClick={(event) => { event.currentTarget.closest('details')!.open = false }}>{activity.type === 'thinking' ? '收起思考' : '收起'}</button></>}
       </details>)}
     </ToolTimeline>
   </section>

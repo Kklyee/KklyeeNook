@@ -1,4 +1,5 @@
 import { expect, test, vi } from 'vitest'
+import { fauxAssistantMessage } from '@earendil-works/pi-ai/providers/faux'
 import type { AgentSessionRecord } from '../db/repositories/agent-session-repo'
 import type { AgentHost } from '../runtime/agent-host'
 import type { WorkspaceService } from '../workspace/workspaceService'
@@ -19,6 +20,7 @@ function fixture() {
   snapshot.agent = { model: { provider: 'private-provider', modelId: 'basic' }, thinkingLevel: 'off' }
   const inbox = { items: [] as any[] }
   const queue = inbox.items
+  const settleSubmission = vi.fn()
   const stop = vi.fn(async () => {})
   let listener: ((events: any[]) => Promise<void>) | undefined
   let approvalListener: (() => Promise<void>) | undefined
@@ -42,13 +44,13 @@ function fixture() {
     pendingApprovals: vi.fn(async () => []), decideApproval: vi.fn(async () => {}),
     engine: {
       conversation: vi.fn(async () => ({ id: 1 })),
-      harness: { snapshot: vi.fn(async () => inbox), abortSubmission: vi.fn(async () => {}), commit: vi.fn(async (fn: any) => fn({ doc: async () => inbox })), watchDoc: vi.fn(async () => ({ stop: vi.fn(async () => {}), start: (fn: typeof approvalListener) => { approvalListener = fn } })) },
+      harness: { snapshot: vi.fn(async () => inbox), abortSubmission: vi.fn(async () => {}), commit: vi.fn(async (fn: any) => fn({ doc: async () => inbox, settleSubmission })), watchDoc: vi.fn(async () => ({ stop: vi.fn(async () => {}), start: (fn: typeof approvalListener) => { approvalListener = fn } })) },
       watch: vi.fn(async () => ({ snapshot, stop, start: (fn: typeof listener) => { listener = fn } })),
     },
   }
   const save = vi.fn()
   const port = createRemoteAgentPort(workspaces as unknown as WorkspaceService, host as unknown as AgentHost, config, save, attachments)
-  return { port, host, attachments, workspaces, snapshot, session, sessions, queue, save, stop, emit: (events: any[]) => listener?.(events), emitApproval: () => approvalListener?.() }
+  return { port, host, attachments, workspaces, snapshot, session, sessions, queue, settleSubmission, save, stop, emit: (events: any[]) => listener?.(events), emitApproval: () => approvalListener?.() }
 }
 
 test('validates uploads before admission and releases staged context after both success and failure', async () => {
@@ -192,6 +194,7 @@ test('preserves completed tool and thinking activity at desktop text boundaries 
     { id: 3, model: [{ role: 'toolResult', toolCallId: 'read', toolName: 'read', content: [{ type: 'text', text: 'output' }], isError: false, timestamp: 3, details: { secret: 'hidden' } }] },
     { id: 4, model: [{ role: 'assistant', content: [{ type: 'text', text: 'After' }], timestamp: 4, usage }] },
   ] as any
+  snapshot.entries = snapshot.entries.map((entry) => ({ ...entry, kind: 'pi.message' }))
   const first = await port.getConversation('chat')
   expect(first.activities).toEqual([
     expect.objectContaining({ type: 'thinking', status: 'completed', textOffset: 0, detail: 'Plan' }),
@@ -227,4 +230,54 @@ test('stops watches when the initial snapshot fails and suppresses delivery afte
   cancel()
   await vi.waitFor(() => expect(stop).toHaveBeenCalledTimes(3))
   expect(events).toHaveLength(previous)
+})
+
+
+test('targets remote steer and remove by ID despite stale queue positions', async () => {
+  const { port, host, queue, settleSubmission } = fixture()
+  queue.push({ id: 1, mode: 'followUp', content: 'a' }, { id: 2, mode: 'followUp', content: 'b' })
+  await port.updateQueue('chat', { itemId: '2', mode: 'followUp', index: 9, expected: ['stale'], action: 'steer' })
+  expect(queue[1].mode).toBe('steer')
+  await port.updateQueue('chat', { itemId: '2', mode: 'followUp', index: 9, expected: ['stale'], action: 'steer' })
+  await port.updateQueue('chat', { itemId: '2', mode: 'followUp', index: 9, expected: ['stale'], action: 'remove' })
+  expect(queue.map((item) => item.id)).toEqual([1])
+  expect(settleSubmission).toHaveBeenCalledWith(2, { status: 'unanswered', reason: 'aborted' })
+  await port.updateQueue('chat', { itemId: '2', mode: 'followUp', index: 9, expected: ['stale'], action: 'remove' })
+  expect(host.engine.harness.abortSubmission).not.toHaveBeenCalled()
+})
+
+test('does not abort an active submission if its queued item is consumed during remove', async () => {
+  const { port, host, queue } = fixture()
+  queue.push({ id: 1, mode: 'followUp', content: 'a' })
+  const settleSubmission = vi.fn()
+  host.engine.harness.commit.mockImplementationOnce(async (fn) => {
+    queue.splice(0)
+    return fn({ doc: async () => ({ items: queue }), settleSubmission })
+  })
+  await port.updateQueue('chat', { itemId: '1', mode: 'followUp', index: 0, expected: ['a'], action: 'remove' })
+  expect(settleSubmission).not.toHaveBeenCalled()
+  expect(host.engine.harness.abortSubmission).not.toHaveBeenCalled()
+})
+
+
+test('remote transcript retains final reply, execution timing, file summary and response model settings', () => {
+  const { snapshot, session } = fixture()
+  const progress = { ...fauxAssistantMessage('Checking'), timestamp: 1000, stopReason: 'toolUse' as const }
+  progress.content.push({ type: 'toolCall', id: 'edit', name: 'write', arguments: { path: 'test.ts', content: 'hello' } })
+  progress.usage = { ...progress.usage, input: 10 }
+  const final = { ...fauxAssistantMessage('Fixed'), timestamp: 9000, durationMs: 2000, provider: 'original', model: 'old-model', thinkingLevel: 'high' as const }
+  final.usage = { ...final.usage, input: 20 }
+  snapshot.entries = [
+    { id: 1, kind: 'pi.assistant', model: [progress] },
+    { id: 2, kind: 'pi.toolResult', model: [{ role: 'toolResult', toolCallId: 'edit', toolName: 'write', content: [], isError: false, timestamp: 8000 }] },
+    { id: 3, kind: 'pi.assistant', model: [final] },
+  ] as any
+  const message = agentRemoteSnapshot({ snapshot, metadata: session, queue: [], approvals: [], permission: 'workspace-write' }).messages[0]
+  expect(message.stepCount).toBe(2)
+  expect(message.usage?.input).toBe(30)
+  expect(message.execution).toEqual({ startedAt: 1000, endedAt: 11000, finalPartIndex: 2 })
+  expect(message.content[message.execution!.finalPartIndex!]).toEqual({ type: 'text', text: 'Fixed' })
+  expect(message.model).toEqual({ provider: 'original', model: 'old-model', thinkingLevel: 'high' })
+  expect(message.fileChanges).toEqual([expect.objectContaining({ path: 'test.ts' })])
+  expect(JSON.stringify(message)).not.toContain('hello')
 })

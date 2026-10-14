@@ -9,7 +9,8 @@
   "dependencies": {
     "@earendil-works/chord": "1.1.0",
     "@earendil-works/pi-ai": "1.1.0",
-    "@earendil-works/pi-durable": "1.1.0"
+    "@earendil-works/pi-durable": "1.1.0",
+    "diff": "8.0.4"
   },
   "devDependencies": {
     "@assistant-ui/react": "0.15.17"

@@ -48,3 +48,14 @@
 [data-slot='message-queue'] li > div:last-of-type { margin-left: auto; }
 [data-slot='approval-card'] button { min-height: 2.75rem; }
 @keyframes nook-word-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.mobile-composer,
+.message-queue-surface { background: oklch(from var(--ui-control) l c h / 1); }
+.aui-composer-root:focus-within .mobile-composer {
+  border-color: var(--ui-border-strong);
+  box-shadow: 0 0 0 1px var(--ui-focus);
+}
+.aui-composer-root:focus-within .message-queue-surface {
+  border-color: var(--ui-border-strong);
+  box-shadow: -1px 0 0 var(--ui-focus), 1px 0 0 var(--ui-focus), 0 -1px 0 var(--ui-focus);
+}

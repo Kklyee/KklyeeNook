@@ -231,29 +231,38 @@ export function createRemoteAgentPort(
       []
     const items = current.filter((item) => item.mode === input.mode)
     const text = (item: InboxItem) => (item.mode === 'write' ? '' : contentText(item.content))
-    if (
+    const targeted = (input.action === 'remove' || input.action === 'steer') && input.itemId !== undefined
+    if (!targeted && (
       JSON.stringify(items.map(text)) !== JSON.stringify(input.expected) ||
       input.index >= items.length
-    )
+    ))
       throw new RemoteError(409, 'Queue changed; refresh and retry')
     if (input.action === 'move' && input.value >= items.length)
       throw new RemoteError(400, 'Invalid queue operation')
-    const target = items[input.index]!
-    if (input.action === 'remove')
-      await host.engine.harness.abortSubmission(target.id, BACKGROUND_CONTEXT, conversation.id)
-    else
-      await host.engine.harness.commit(async (tx) => {
+    const target = targeted ? current.find((item) => String(item.id) === input.itemId) : items[input.index]
+    if (!target && targeted && input.action === 'remove') return
+    if (!target) throw new RemoteError(409, 'Queue changed; refresh and retry')
+    if (target.mode === 'write') throw new RemoteError(400, 'Invalid queue operation')
+    if (targeted && input.action === 'steer' && target.mode === 'steer') return
+    await host.engine.harness.commit(async (tx) => {
         const doc = await tx.doc(InboxDoc, conversation.id)
         if (
-          JSON.stringify(doc.items.filter((item) => item.mode === input.mode).map(text)) !==
+          !targeted && JSON.stringify(doc.items.filter((item) => item.mode === input.mode).map(text)) !==
           JSON.stringify(input.expected)
         )
           throw new RemoteError(409, 'Queue changed; refresh and retry')
         const index = doc.items.findIndex((item) => item.id === target.id)
-        if (index < 0 || doc.items[index]?.mode !== input.mode)
+        if (targeted && input.action === 'remove' && index < 0) return
+        if (targeted && input.action === 'steer' && index >= 0 && doc.items[index]?.mode === 'steer') return
+        if (index < 0 || (doc.items[index]?.mode !== input.mode && !(targeted && input.action === 'remove')))
           throw new RemoteError(409, 'Queue changed; refresh and retry')
-        if (input.action === 'edit') {
+        if (input.action === 'remove') {
+          if (doc.items[index]?.mode === 'write') throw new RemoteError(400, 'Invalid queue operation')
+          tx.settleSubmission(target.id, { status: 'unanswered', reason: 'aborted' })
+          doc.items.splice(index, 1)
+        } else if (input.action === 'edit') {
           const item = doc.items[index]
+          if (item.mode === 'write') throw new RemoteError(400, 'Invalid queue operation')
           item.content = input.value as never
         } else if (input.action === 'steer')
           doc.items[index] = { ...doc.items[index], mode: 'steer' } as never

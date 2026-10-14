@@ -48,6 +48,11 @@ export interface RemoteMessage {
   } | { type: 'data'; name: 'tool-call'; data: { toolCallId: string } }>
   status?: 'running' | 'complete' | 'failed' | 'cancelled'
   usage?: { input: number; output: number; cacheRead: number; cacheWrite: number }
+  execution?: { startedAt: number; endedAt?: number; finalPartIndex?: number }
+  stepCount?: number
+  model?: { provider?: string; model?: string; thinkingLevel?: string }
+  pendingSteer?: boolean
+  fileChanges?: Array<{ path: string; operation: 'created' | 'modified'; additions?: number; deletions?: number }>
 }
 export interface RemoteActivity {
   id: string
@@ -72,6 +77,7 @@ export interface RemoteQueueItem {
   expected: string[]
 }
 export type RemoteQueueMutation = {
+  itemId?: string
   mode: 'steer' | 'followUp'
   expected: string[]
   index: number

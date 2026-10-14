@@ -19,7 +19,7 @@ import type {
 import { Button } from '@kklyeenook/ui/components/button'
 import { MessageQueue } from '@kklyeenook/ui/assistant-ui/message-queue'
 import { api, cacheConversation, conversationSnapshots, loadConversation } from './api'
-import { Controls, Choice, type Selection } from './Controls'
+import { Controls, type Selection } from './Controls'
 import { Approval } from './Approval'
 import { Navigation, NavigationContext } from './navigation'
 import { HistorySkeleton, ListSkeleton } from './Loading'
@@ -435,7 +435,7 @@ function Conversation({
   botId?: string
   id: string
 }) {
-  const { bots, options, reload: reloadBots } = useBots()
+  const { bots, reload: reloadBots } = useBots()
   const bot = bots.find((bot) => bot.id === botId)
   const project = useProject(projectId)
   const [snapshot, setSnapshot] = useState<RemoteConversationSnapshot | undefined>(() =>
@@ -548,12 +548,13 @@ function Conversation({
     value?: string | number,
   ) =>
     mutate(`/conversations/${id}/queue/item`, {
+      itemId: message.id,
       mode: message.steer ? 'steer' : 'followUp',
       expected: message.expected,
       index: message.index,
       action,
       value,
-    })
+    }, true)
   const running = snapshot?.status === 'running'
   const idleModel = bot?.model ?? state.defaults
   const selection: Selection = {
@@ -637,38 +638,6 @@ function Conversation({
           />
         )}
       </Header>
-      {bot && (
-        <div className="flex shrink-0 items-center gap-2 px-4 py-2">
-          <Choice
-            label="Workspace"
-            value={snapshot?.projectId || 'none'}
-            disabled={!snapshot || !connected || busy || running}
-            options={[
-              { value: 'none', label: '无 Workspace' },
-              ...options.workspaces
-                .filter(
-                  (workspace) =>
-                    bot.workspaceIds.includes(workspace.id) && workspace.status === 'attached',
-                )
-                .map((workspace) => ({ value: workspace.id, label: workspace.displayName })),
-            ]}
-            onChange={(value) => {
-              void mutate(
-                `/conversations/${id}/workspace`,
-                { workspaceId: value === 'none' ? null : value },
-                true,
-              )
-            }}
-          />
-          <Button
-            variant="ghost"
-            className="ml-auto text-xs"
-            onClick={() => navigate(`/bots/${bot.id}/edit`)}
-          >
-            Bot 设置
-          </Button>
-        </div>
-      )}
       {(error || snapshot?.error) && (
         <p role="alert" className="px-4 py-2 text-sm text-destructive">
           {error || snapshot?.error}
@@ -685,6 +654,18 @@ function Conversation({
         busy={sending}
         disabled={!connected || !snapshot || busy}
         controls={controls}
+        queue={
+          <MessageQueue
+            className="relative z-10 -mb-px"
+            queued={(snapshot?.queue ?? []).filter((message) => !message.steer)}
+            clearing={busy || !connected}
+            onRemove={(message) => { void queueAction(message, 'remove') }}
+            onSteer={(message) => { void queueAction(message, 'steer') }}
+            onEdit={(message, value) => queueAction(message, 'edit', value)}
+            onMove={(message, offset) => { void queueAction(message, 'move', message.index + offset) }}
+          />
+        }
+        pendingSteer={(snapshot?.queue ?? []).filter((message) => message.steer)}
         onSend={async (content, mode, attachments, requestId) => {
           setSending(true)
           setError('')
@@ -706,23 +687,6 @@ function Conversation({
           void mutate(`/conversations/${id}/cancel`)
         }}
       >
-        <MessageQueue
-          queued={snapshot?.queue ?? []}
-          clearing={busy || !connected}
-          onClear={() => {
-            void mutate(`/conversations/${id}/queue/clear`)
-          }}
-          onRemove={(message) => {
-            void queueAction(message, 'remove')
-          }}
-          onSteer={(message) => {
-            void queueAction(message, 'steer')
-          }}
-          onEdit={(message, value) => queueAction(message, 'edit', value)}
-          onMove={(message, offset) => {
-            void queueAction(message, 'move', message.index + offset)
-          }}
-        />
         {snapshot?.approvals.map((approval) => (
           <Approval
             key={approval.id}

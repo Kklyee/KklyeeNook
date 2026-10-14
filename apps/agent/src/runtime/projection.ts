@@ -1,9 +1,10 @@
-import { snapshotContextUsage } from '@kklyeenook/shared/agent/projection'
+import { projectDurableThread, snapshotContextUsage } from '@kklyeenook/shared/agent/projection'
 export { applyAgentEvent as applyDurableEvent } from '@kklyeenook/shared/agent/projection'
 import { calculateAgentContextBudget } from '@kklyeenook/shared/agent/agentContextBudget'
 import { DEFAULT_AGENT_COMPACTION_SETTINGS, type AgentCompactionSettings } from '@kklyeenook/shared/agent/agentConfig'
-import type { AssistantMessage, Message, UserMessage } from '@earendil-works/pi-ai'
-import type { EntryRecord, InboxItem, SnapshotEvent } from '@earendil-works/pi-durable'
+import { collectAgentFileChanges } from '@kklyeenook/shared/agent/agentFileChanges'
+import type { Message, UserMessage } from '@earendil-works/pi-ai'
+import type { InboxItem, SnapshotEvent } from '@earendil-works/pi-durable'
 import type {
   RemoteActivity,
   RemoteApproval,
@@ -82,9 +83,43 @@ export function isDurableRunning(snapshot: SnapshotEvent) {
 }
 
 export function agentMessages(snapshot: SnapshotEvent): RemoteMessage[] {
-  const messages = snapshot.entries.flatMap((entry) => entryMessages(entry, false))
-  if (snapshot.generation?.message) messages.push(messageToRemote(snapshot.generation.message, `partial:${snapshot.generation.attempt}`, true))
-  return messages.filter((message): message is RemoteMessage => Boolean(message))
+  const projected = projectDurableThread({ snapshot, approvals: [], queue: [], sequence: 0 })
+  const rawMessages = snapshot.entries.flatMap((entry) => entry.model ?? [])
+  if (snapshot.generation?.message) rawMessages.push(snapshot.generation.message)
+  return projected.messages.filter((message) => message.role !== 'system').map((message) => {
+    const parts = typeof message.content === 'string' ? [{ type: 'text' as const, text: message.content }] : message.content
+    const custom = message.metadata?.custom
+    const durable = custom?.durable as RemoteMessage['model'] & { usage?: RemoteMessage['usage'] } | undefined
+    const execution = custom?.execution as RemoteMessage['execution']
+    const usage = rawMessages.filter((raw) => raw.role === 'assistant' && execution && raw.timestamp >= execution.startedAt && raw.timestamp <= message.createdAt!.getTime()).reduce((total, raw) => {
+      if (raw.role === 'assistant') {
+        total.input += raw.usage.input
+        total.output += raw.usage.output
+        total.cacheRead += raw.usage.cacheRead
+        total.cacheWrite += raw.usage.cacheWrite
+      }
+      return total
+    }, { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 })
+    const fileChanges = collectAgentFileChanges(parts.filter((part) => part.type === 'tool-call').map((part) => ({
+      toolName: part.toolName, args: part.args, result: part.result, isError: part.isError, approvalRejected: part.approval?.approved === false,
+    }))).map(({ diff: _diff, ...file }) => file)
+    return {
+      id: message.id!, role: message.role as 'user' | 'assistant', timestamp: message.createdAt!.getTime(),
+      content: parts.flatMap((part): RemoteMessage['content'] => {
+        if (part.type === 'text' || part.type === 'reasoning') return [{ type: part.type, text: part.text }]
+        if (part.type === 'image' && part.image) return [{ type: 'image', image: part.image }]
+        if (part.type === 'data' && part.name === 'pi-compaction-summary') return [{ type: 'text', text: (part.data as { summary: string }).summary }]
+        if (part.type === 'tool-call') return [{ type: 'data', name: 'tool-call', data: { toolCallId: part.toolCallId! } }]
+        return []
+      }),
+      ...(message.role === 'assistant' ? {
+        status: message.status?.type === 'running' || message.status?.type === 'requires-action' ? 'running' as const : message.status?.type === 'incomplete' ? message.status.reason === 'cancelled' ? 'cancelled' as const : 'failed' as const : 'complete' as const,
+        execution, stepCount: message.metadata?.steps?.length,
+        model: durable ? { provider: durable.provider, model: durable.model, thinkingLevel: durable.thinkingLevel } : undefined,
+        usage: execution ? usage : durable?.usage, ...(fileChanges.length ? { fileChanges } : {}),
+      } : {}),
+    }
+  })
 }
 
 export function agentQueue(items: readonly InboxItem[]): RemoteQueueItem[] {
@@ -172,45 +207,7 @@ export function agentActivities(snapshot: SnapshotEvent, taskRuns: Readonly<Reco
   })
 }
 
-function entryMessages(entry: EntryRecord, streaming: boolean) {
-  return (entry.model ?? []).map((message, index) => messageToRemote(message, `${entry.id}:${index}`, streaming))
-}
-
-function messageToRemote(message: Message, id: string, streaming: boolean): RemoteMessage | undefined {
-  if (message.role !== 'user' && message.role !== 'assistant') return undefined
-  const content: RemoteMessage['content'] = []
-  const raw = message.content
-  if (typeof raw === 'string') content.push({ type: 'text', text: raw })
-  else {
-    for (const part of raw) {
-      if (part.type === 'text') content.push({ type: 'text', text: part.text })
-      if (part.type === 'thinking') content.push({ type: 'reasoning', text: part.redacted ? '[reasoning redacted]' : part.thinking })
-      if (part.type === 'image' && /^image\/(png|jpeg|gif|webp)$/.test(part.mimeType)) content.push({ type: 'image', image: `data:${part.mimeType};base64,${part.data}` })
-      if (part.type === 'toolCall') content.push({ type: 'data', name: 'tool-call', data: { toolCallId: part.id } })
-    }
-  }
-  return {
-    id,
-    role: message.role,
-    timestamp: message.timestamp,
-    content,
-    ...(message.role === 'assistant' ? assistantFields(message, streaming) : {}),
-  }
-}
-
-function assistantFields(message: AssistantMessage, streaming: boolean) {
-  return {
-    status: streaming ? 'running' as const : message.stopReason === 'error' ? 'failed' as const : message.stopReason === 'aborted' ? 'cancelled' as const : 'complete' as const,
-    usage: {
-      input: message.usage.input,
-      output: message.usage.output,
-      cacheRead: message.usage.cacheRead,
-      cacheWrite: message.usage.cacheWrite,
-    },
-  }
-}
-
 export function contentText(content: UserMessage['content']) {
   if (typeof content === 'string') return content
-  return content.filter((part) => part.type === 'text').map((part) => part.text).join('\n')
+  return content.map((part) => part.type === 'text' ? part.text : '[image]').join('\n')
 }

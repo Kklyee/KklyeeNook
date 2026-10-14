@@ -6,6 +6,6 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     exclude: configDefaults.exclude,
-    include: ['apps/desktop/src/**/*.ui.test.ts'],
+    include: ['apps/desktop/src/**/*.ui.test.ts', 'apps/remote/src/**/*.ui.test.ts'],
   },
 })

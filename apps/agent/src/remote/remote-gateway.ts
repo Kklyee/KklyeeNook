@@ -251,6 +251,7 @@ export function createRemoteGatewayApp(port: RemoteAgentPort, options: RemoteGat
       throw new RemoteError(400, 'Expected queue is required')
     const base = {
       mode,
+      ...(input.itemId !== undefined ? { itemId: text(input, 'itemId') } : {}),
       index: integer(input, 'index'),
       expected: input.expected as string[],
     } satisfies Pick<RemoteQueueMutation, 'mode' | 'index' | 'expected'>

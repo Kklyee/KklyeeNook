@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useMemo, useRef, useState, useLayoutEffect, type FormEvent, type ReactNode, type ComponentProps } from 'react'
 import { ArrowDownIcon, CopyIcon } from 'lucide-react'
 import {
   ActionBarPrimitive,
@@ -18,6 +18,7 @@ import type {
   RemoteContextBudget,
   RemoteFileAttachment,
   RemoteMessage,
+  RemoteQueueItem,
   RemoteSendMessageInput,
 } from '@kklyeenook/shared/remote/index'
 import { MarkdownText } from '@kklyeenook/ui/assistant-ui/markdown-text'
@@ -40,11 +41,13 @@ import {
 } from '@kklyeenook/ui/assistant-ui/attachment.aui'
 import { remoteAttachmentAdapter, serializeAttachments } from './attachments'
 import { ApiError } from './api'
+import { ExecutionProcess, MessageModel, FileChanges } from './message-details'
 
 const convertMessage = (message: RemoteMessage): ThreadMessageLike => ({
   id: message.id,
   role: message.role,
-  content: message.content,
+  content: message.content.map((part, index) => part.type === 'text' && message.execution?.finalPartIndex !== undefined && index >= message.execution.finalPartIndex ? { ...part, parentId: 'final' } : part),
+  metadata: { custom: { execution: message.execution, stepCount: message.stepCount, model: message.model, fileChanges: message.fileChanges, pendingSteer: message.pendingSteer } },
   createdAt: new Date(message.timestamp),
   ...(message.role === 'assistant'
     ? {
@@ -67,32 +70,47 @@ function AssistantMessage() {
   return (
     <StreamingMessage>
       <MessagePrimitive.Root className="min-w-0 py-4">
-        <InlineActivity />
-        <MessagePrimitive.GroupedParts groupBy={bodyParts} indicator="never">
-          {({ part, children }) => {
-            if (part.type === 'group-text')
-              return (
-                <>
-                  <StreamingText indices={part.indices}>{children}</StreamingText>
-                  <InlineActivity afterPartIndex={part.indices.at(-1)} />
-                </>
-              )
-            if (part.type === 'text') return <MarkdownText />
-            if (part.type === 'image') return children
-            return null
-          }}
-        </MessagePrimitive.GroupedParts>
+        <AssistantParts />
+        <FileChanges />
         {answered && (
-          <ActionBarPrimitive.Root hideWhenRunning className="mt-2 flex">
+          <ActionBarPrimitive.Root hideWhenRunning className="mt-2 flex items-center">
             <ActionBarPrimitive.Copy asChild>
-              <Button variant="ghost" className="min-h-11" aria-label="Copy message">
-                <CopyIcon className="size-3.5" />
-              </Button>
+              <Button variant="ghost" className="min-h-11" aria-label="Copy message"><CopyIcon className="size-3.5" /></Button>
             </ActionBarPrimitive.Copy>
+            <MessageModel />
           </ActionBarPrimitive.Root>
         )}
       </MessagePrimitive.Root>
     </StreamingMessage>
+  )
+}
+
+function AssistantParts() {
+  const execution = useAuiState((state) => state.message.metadata.custom?.execution as RemoteMessage['execution'])
+  const partCount = useAuiState((state) => state.message.content.length)
+  const groupBy = useMemo<ComponentProps<typeof MessagePrimitive.GroupedParts>['groupBy']>(() => (part, context) => {
+    const path = bodyParts(part, context) ?? []
+    return !execution || (part.type === 'text' && part.parentId === 'final') ? path : ['group-process', ...path]
+  }, [!!execution])
+  return (<>
+        {execution && (partCount === 0 || execution.finalPartIndex === 0) && <ExecutionProcess />}
+        {!execution && <InlineActivity />}
+        <MessagePrimitive.GroupedParts groupBy={groupBy} indicator="never">
+          {({ part, children }) => {
+            if (part.type === 'group-process') return <ExecutionProcess>{children}</ExecutionProcess>
+            if (part.type === 'group-text')
+              return (
+                <>
+                  <StreamingText indices={part.indices}>{children}</StreamingText>
+                  {(!execution || (part.indices.at(-1) ?? 0) < (execution.finalPartIndex ?? Infinity)) && <InlineActivity afterPartIndex={part.indices.at(-1)} />}
+                </>
+              )
+            if (part.type === 'text') return <MarkdownText />
+            if (part.type === 'image') return <ImageThumbnail {...part} />
+            return null
+          }}
+        </MessagePrimitive.GroupedParts>
+    </>
   )
 }
 const bodyParts = groupPartByType({ text: ['group-text'] })
@@ -101,13 +119,37 @@ const messageComponents = { UserMessage, AssistantMessage }
 function UserMessage() {
   return (
     <MessagePrimitive.Root className="ml-auto my-4 max-w-[90%] rounded-2xl bg-surface-muted px-4 py-3 text-base">
-      <MessagePrimitive.Parts components={{ Text: UserText, Image: ImageThumbnail }} />
+      <MessagePrimitive.Parts components={{ Text: UserText, Image: UserImage }} />
+      <PendingSteer />
     </MessagePrimitive.Root>
   )
 }
 
+function PendingSteer() {
+  const pending = useAuiState((state) => state.message.metadata.custom?.pendingSteer)
+  return pending ? <p className="mt-1 text-xs text-muted-foreground">引导已接收，等待当前步骤结束后生效</p> : null
+}
+
+function UserImage(props: React.ComponentProps<typeof ImageThumbnail>) {
+  return <div className="block py-1"><ImageThumbnail {...props} /></div>
+}
+
 function UserText({ text }: { text: string }) {
-  return <span className="whitespace-pre-wrap break-words">{text}</span>
+  const ref = useRef<HTMLDivElement>(null)
+  const [long, setLong] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  useLayoutEffect(() => {
+    const element = ref.current!
+    const measure = () => setLong(element.scrollHeight > 256)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [text])
+  return <div>
+    <div className={long && !expanded ? 'max-h-64 overflow-hidden' : undefined}><div ref={ref} className="whitespace-pre-wrap break-words">{text}</div></div>
+    {long && <Button variant="ghost" className="mt-1 px-0 text-xs" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? '收起' : '展开全文'}</Button>}
+  </div>
 }
 
 function Composer({
@@ -117,8 +159,10 @@ function Composer({
   controls,
   onStop,
   botName,
+  queue,
 }: {
   botName?: string
+  queue?: ReactNode
   running: boolean
   busy: boolean
   disabled: boolean
@@ -146,7 +190,8 @@ function Composer({
   }
   const cancel = running
   return (
-    <ComposerPrimitive.Root onSubmit={submit}>
+    <ComposerPrimitive.Root className="aui-composer-root" onSubmit={submit}>
+      {queue}
       <ComposerBar className="mobile-composer rounded-3xl p-3">
         <ComposerAttachments showNames />
         {error && (
@@ -236,9 +281,13 @@ export function RemoteThread({
   onStop,
   botName,
   botKind,
+  queue,
+  pendingSteer = [],
 }: {
   botName?: string
   botKind?: 'coding' | 'personal'
+  queue?: ReactNode
+  pendingSteer?: RemoteQueueItem[]
   messages: RemoteMessage[]
   contextBudget?: RemoteContextBudget
   activities?: RemoteActivity[]
@@ -265,22 +314,14 @@ export function RemoteThread({
     | undefined
   >(undefined)
   const messages = useMemo(() => {
-    const result: RemoteMessage[] = []
-    for (const message of transcript) {
-      const previous = result.at(-1)
-      if (message.role === 'assistant' && previous?.role === 'assistant')
-        result[result.length - 1] = {
-          ...previous,
-          content: [...previous.content, ...message.content],
-          status: message.status,
-        }
-      else result.push(message)
-    }
+    const result = [...transcript]
+    const steer = pendingSteer.map((item): RemoteMessage => ({ id: `queued-steer:${item.id}`, role: 'user', timestamp: 0, content: [{ type: 'text', text: item.text }], pendingSteer: true }))
+    result.splice(running && result.at(-1)?.role === 'assistant' ? result.length - 1 : result.length, 0, ...steer)
     const last = result.at(-1)
     if (running && last?.role === 'assistant')
       result[result.length - 1] = { ...last, status: 'running' }
     return result
-  }, [transcript, running])
+  }, [transcript, running, pendingSteer])
   const lastMessage = messages.at(-1)
   const statsReady = !running && !busy && !loading && !sendError &&
     lastMessage?.role === 'assistant' && lastMessage.status === 'complete' &&
@@ -382,7 +423,7 @@ export function RemoteThread({
                 <ThreadPrimitive.ScrollToBottom asChild>
                   <Button
                     variant="secondary"
-                    className="mx-auto min-h-11 disabled:hidden"
+                    className="mx-auto min-h-11 bg-surface-opaque hover:bg-surface-opaque disabled:hidden"
                     aria-label="Scroll to latest"
                   >
                     <ArrowDownIcon />
@@ -404,6 +445,7 @@ export function RemoteThread({
                 controls={controls}
                 onStop={onStop}
                 botName={botName}
+                queue={queue}
               />
               <SessionStats
                 messages={transcript}
