@@ -117,7 +117,7 @@ export const AgentActivityRow = memo(function AgentActivityRow({
       style={{ '--animation-duration': 'var(--motion-expand)' } as React.CSSProperties}
     >
       <CollapsibleTrigger className={cn(
-        'group/trigger flex h-[32px] w-full min-w-0 items-center gap-2 rounded-sm text-left text-[13px] text-foreground outline-none hover:bg-hover focus-visible:ring-1 focus-visible:ring-border-strong',
+        'group/trigger flex h-[32px] w-full min-w-0 items-center gap-2 rounded-sm text-left text-[13px] text-muted-foreground outline-none hover:bg-hover hover:text-foreground focus-visible:ring-1 focus-visible:ring-border-strong',
         standalone ? 'pr-2 pl-0' : 'px-2',
       )}>
         <ActivityCrossfade transitionKey={`${activity.type}:${activity.status}`}>

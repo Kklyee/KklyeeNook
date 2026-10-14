@@ -56,7 +56,6 @@ import { ContextCompactionProgress, ContextCompactionSummary } from './context-c
 import { useComposerCommands } from '@/renderer/src/features/chat/commands/useComposerCommands'
 import { formatMessageTimestamp, formatMessageTimestampFull } from '@kklyeenook/shared/formatMessageTimestamp'
 import {
-  ActionBarMorePrimitive,
   ActionBarPrimitive,
   AuiIf,
   type AssistantState,
@@ -77,11 +76,8 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   CopyIcon,
-  DownloadIcon,
   MicIcon,
-  MoreHorizontalIcon,
   PencilIcon,
-  RefreshCwIcon,
   SquareIcon,
 } from 'lucide-react'
 import {
@@ -632,31 +628,6 @@ const AssistantActionBar: FC = () => {
           <CopyIcon />
         </AuiIf>
       </ActionBarPrimitive.Copy>
-      <ActionBarPrimitive.Reload render={<TooltipIconButton tooltip="Refresh" />}>
-        <RefreshCwIcon />
-      </ActionBarPrimitive.Reload>
-      <ActionBarMorePrimitive.Root>
-        <ActionBarMorePrimitive.Trigger
-          render={<TooltipIconButton tooltip="More" className="data-[state=open]:bg-selected" />}
-        >
-          <MoreHorizontalIcon />
-        </ActionBarMorePrimitive.Trigger>
-        <ActionBarMorePrimitive.Content
-          side="bottom"
-          align="start"
-          sideOffset={6}
-          className="aui-action-bar-more-content material-raised data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:animate-out data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-[8rem] overflow-hidden rounded-xl p-1.5"
-        >
-          <ActionBarPrimitive.ExportMarkdown
-            render={
-              <ActionBarMorePrimitive.Item className="aui-action-bar-more-item hover:bg-hover hover:text-foreground focus:bg-hover focus:text-foreground data-highlighted:bg-hover data-highlighted:text-foreground active:bg-active transition-colors flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none select-none" />
-            }
-          >
-            <DownloadIcon className="size-4" />
-            Export as Markdown
-          </ActionBarPrimitive.ExportMarkdown>
-        </ActionBarMorePrimitive.Content>
-      </ActionBarMorePrimitive.Root>
       <MessageModel />
     </ActionBarPrimitive.Root>
   )
