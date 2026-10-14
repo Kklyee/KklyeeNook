@@ -465,7 +465,7 @@ export class AgentHost {
   async botSummaries(context: Context) {
     const bots = (await this.bots?.list()) ?? []
     const threads = await this.conversations.list(context)
-    const priorities = ['idle', 'completed', 'error', 'thinking', 'working', 'waiting'] as const
+    const priorities = ['idle', 'completed', 'thinking', 'working', 'waiting'] as const
     return Promise.all(
       bots.map(async (bot) => {
         let state: (typeof priorities)[number] = 'idle'
@@ -474,6 +474,7 @@ export class AgentHost {
             await this.conversations.snapshot(thread.id, context),
             (await this.pendingApprovals(thread.id, context)).length > 0,
           )
+          if (current === 'error') continue
           if (priorities.indexOf(current) > priorities.indexOf(state)) state = current
         }
         return { ...bot, state }

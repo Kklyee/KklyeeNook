@@ -7,9 +7,6 @@
 .bot-avatar[data-state='completed'] > svg {
   animation: bot-complete 550ms ease-out 1;
 }
-.bot-avatar[data-state='error'] > svg {
-  animation: bot-error 320ms ease-out 1;
-}
 @keyframes bot-think {
   0%,
   100% {
@@ -35,18 +32,6 @@
   }
   45% {
     transform: scale(1.08);
-  }
-}
-@keyframes bot-error {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-  30% {
-    transform: translateX(-2px);
-  }
-  70% {
-    transform: translateX(2px);
   }
 }
 @media (prefers-reduced-motion: reduce) {

@@ -195,12 +195,17 @@ export function Navigation({
                   onClick={() => select('/bots/' + item.id)}
                 >
                   <BotAvatar avatar={item.avatar} name={item.name} state={item.state} size={42} />
-                  <span className="min-w-0 text-left">
+                  <span className="min-w-0 flex-1 text-left">
                     <span className="block truncate text-sm font-medium">{item.name}</span>
                     <span className="mt-1 block truncate text-xs text-muted-foreground">
-                      {item.role} · {BOT_STATE_LABELS[item.state]}
+                      {item.role}
                     </span>
                   </span>
+                  {(item.state === 'thinking' || item.state === 'working' || item.state === 'waiting') && (
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {BOT_STATE_LABELS[item.state]}
+                    </span>
+                  )}
                 </Button>
               ))}
               {bot && (

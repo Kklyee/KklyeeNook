@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { ThreadListPrimitive, useAuiState } from '@assistant-ui/react'
 import {
   ArrowLeftIcon,
-  ChevronRightIcon,
   FolderIcon,
   FolderOpenIcon,
   MessageCircleIcon,
@@ -122,10 +121,14 @@ function MyBotsList({
               <span className="min-w-0 flex-1 text-left">
                 <span className="block truncate text-[13px] font-medium">{bot.name}</span>
                 <span className="block truncate text-[11px] text-muted-foreground">
-                  {bot.state === 'idle' ? bot.role : BOT_STATE_LABELS[bot.state]}
+                  {bot.role}
                 </span>
               </span>
-              <ChevronRightIcon className="size-3 text-muted-foreground" />
+              {(bot.state === 'thinking' || bot.state === 'working' || bot.state === 'waiting') && (
+                <span className="shrink-0 text-[11px] text-muted-foreground">
+                  {BOT_STATE_LABELS[bot.state]}
+                </span>
+              )}
             </>
           )}
         </Button>

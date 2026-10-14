@@ -42,14 +42,19 @@ export function BotsPage() {
                 onClick={() => navigateBot(`/bots/${bot.id}`)}
               >
                 <BotAvatar avatar={bot.avatar} name={bot.name} state={bot.state} size={48} />
-                <span className="min-w-0">
+                <span className="min-w-0 flex-1">
                   <span className="block truncate text-base font-medium text-foreground">
                     {bot.name}
                   </span>
                   <span className="mt-1 block truncate text-xs text-muted-foreground">
-                    {bot.state === 'idle' ? bot.role : BOT_STATE_LABELS[bot.state]}
+                    {bot.role}
                   </span>
                 </span>
+                {(bot.state === 'thinking' || bot.state === 'working' || bot.state === 'waiting') && (
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {BOT_STATE_LABELS[bot.state]}
+                  </span>
+                )}
               </Button>
               <Button
                 variant="ghost"
