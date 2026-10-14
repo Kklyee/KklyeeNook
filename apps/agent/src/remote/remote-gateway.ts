@@ -197,13 +197,6 @@ export function createRemoteGatewayApp(port: RemoteAgentPort, options: RemoteGat
     await port.archiveConversation(context.req.param('id'), input.archived)
     return context.json({ ok: true })
   })
-  app.post('/api/conversations/:id/workspace', async (context) => {
-    const input = await body(context)
-    if (input.workspaceId !== null && (typeof input.workspaceId !== 'string' || !input.workspaceId))
-      throw new RemoteError(400, 'Workspace is required')
-    await port.setWorkspace(context.req.param('id'), input.workspaceId as string | null)
-    return context.json({ ok: true })
-  })
   app.post('/api/conversations/:id/messages', async (context) => {
     const input = await body(context)
     const mode = text(input, 'mode')

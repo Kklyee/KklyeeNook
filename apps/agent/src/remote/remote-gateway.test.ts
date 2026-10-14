@@ -35,7 +35,7 @@ function fixture() {
   let listener: ((event: RemoteEvent) => void) | undefined
   const unsubscribe = vi.fn()
   const port: RemoteAgentPort = {
-    listBots: vi.fn(async () => []), saveBot: vi.fn(), botAction: vi.fn(), botOptions: vi.fn(), botMain: vi.fn(), botConversations: vi.fn(async () => []), createBotConversation: vi.fn(), archiveConversation: vi.fn(), deleteConversation: vi.fn(), setWorkspace: vi.fn(),
+    listBots: vi.fn(async () => []), saveBot: vi.fn(), botAction: vi.fn(), botOptions: vi.fn(), botMain: vi.fn(), botConversations: vi.fn(async () => []), createBotConversation: vi.fn(), archiveConversation: vi.fn(), deleteConversation: vi.fn(),
     assertConversation: vi.fn(),
     getState: vi.fn(async () => ({ models: [], permissions: ['read-only' as const], defaults: { permission: 'read-only' as const, provider: 'test', modelId: 'test', thinkingLevel: 'off' } })),
     listProjects: vi.fn(async () => [{ id: 'project', name: 'App', conversationCount: 1, activeRunCount: 1 }]),

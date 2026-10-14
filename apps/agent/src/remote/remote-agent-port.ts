@@ -67,7 +67,6 @@ export interface RemoteAgentPort {
   ): Promise<RemoteConversationSnapshot>
   archiveConversation(id: string, archived: boolean): Promise<void>
   deleteConversation(id: string): Promise<void>
-  setWorkspace(id: string, workspaceId: string | null): Promise<void>
   assertConversation(id: string): Promise<void>
   getState(): Promise<RemoteState>
   listProjects(): Promise<RemoteProject[]>
@@ -333,10 +332,6 @@ export function createRemoteAgentPort(
       await requireSession(id)
       await host.assertExtraThread(id, BACKGROUND_CONTEXT)
       await host.conversations.tombstone(id, BACKGROUND_CONTEXT)
-    },
-    async setWorkspace(id, workspaceId) {
-      await requireSession(id)
-      await host.conversations.update(id, { workspaceId }, BACKGROUND_CONTEXT)
     },
     async assertConversation(id) {
       await requireSession(id)
