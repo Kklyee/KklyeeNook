@@ -139,7 +139,7 @@ const ThreadHistorySkeleton: FC = () => (
   <div
     data-slot="aui_thread-history-skeleton"
     role="status"
-    className="animate-in fade-in fill-mode-both flex flex-col gap-y-6 [animation-delay:150ms] [animation-duration:200ms]"
+    className="flex flex-col gap-y-6"
   >
     <span className="sr-only">Loading conversation</span>
     <Skeleton className="ml-auto h-9 w-2/5 rounded-xl motion-reduce:animate-none" />
@@ -622,14 +622,14 @@ const AssistantActionBar: FC = () => {
   return (
     <ActionBarPrimitive.Root
       hideWhenRunning
-      className="aui-assistant-action-bar-root text-muted-foreground animate-in fade-in col-start-3 row-start-2 -ms-1 flex gap-1 opacity-55 duration-200 transition-opacity hover:opacity-100 focus-within:opacity-100"
+      className="aui-assistant-action-bar-root text-muted-foreground col-start-3 row-start-2 -ms-1 flex gap-1 opacity-55 duration-200 transition-opacity hover:opacity-100 focus-within:opacity-100"
     >
       <ActionBarPrimitive.Copy render={<TooltipIconButton tooltip="Copy" />}>
         <AuiIf condition={(s) => s.message.isCopied}>
           <CheckIcon className="animate-in zoom-in-50 fade-in duration-200 ease-out" />
         </AuiIf>
         <AuiIf condition={(s) => !s.message.isCopied}>
-          <CopyIcon className="animate-in zoom-in-75 fade-in duration-150" />
+          <CopyIcon />
         </AuiIf>
       </ActionBarPrimitive.Copy>
       <ActionBarPrimitive.Reload render={<TooltipIconButton tooltip="Refresh" />}>

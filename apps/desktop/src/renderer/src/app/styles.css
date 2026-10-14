@@ -549,7 +549,6 @@ body,
 
 .agent-activity-slot {
   min-height: 32px;
-  animation: activity-entrance var(--motion-normal) var(--motion-ease);
 }
 
 .activity-crossfade {
@@ -574,28 +573,6 @@ body,
   animation: activity-fade-out var(--motion-fast) var(--motion-ease) both;
 }
 
-.activity-row-entrance {
-  display: grid;
-  grid-template-rows: 0fr;
-  opacity: 0;
-  transform: translateY(2px);
-  transition:
-    grid-template-rows var(--motion-normal) var(--motion-ease),
-    opacity var(--motion-fast) var(--motion-ease),
-    transform var(--motion-normal) var(--motion-ease);
-}
-
-.activity-row-entrance[data-entered='true'] {
-  grid-template-rows: 1fr;
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.activity-row-inner {
-  min-height: 0;
-  overflow: hidden;
-}
-
 .activity-panel {
   opacity: 1;
   transition:
@@ -606,17 +583,6 @@ body,
 .activity-panel[data-starting-style],
 .activity-panel[data-ending-style] {
   opacity: 0;
-}
-
-@keyframes activity-entrance {
-  from {
-    opacity: 0;
-    transform: translateY(2px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 @keyframes activity-fade-in {
@@ -640,7 +606,6 @@ body,
 @media (prefers-reduced-motion: reduce) {
   .aui-md [data-sd-animate],
   .aui-md [data-sd-animate-marker],
-  .agent-activity-slot,
   .activity-crossfade-layer {
     animation: none !important;
   }
@@ -649,7 +614,6 @@ body,
     opacity: 0;
   }
 
-  .activity-row-entrance,
   .activity-panel {
     transition: none;
   }
