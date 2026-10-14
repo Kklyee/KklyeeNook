@@ -16,9 +16,9 @@ function Message() {
   )
 }
 
-function App({ text, complete = false }: { text: string; complete?: boolean }) {
+function App({ text, complete = false, layout }: { text: string; complete?: boolean; layout?: string }) {
   const runtime = useExternalStoreRuntime({
-    messages: [{ id: 'reply', role: 'assistant' as const, content: text ? [{ type: 'text' as const, text }] : [], metadata: { custom: { layout: complete ? 'final' : 'process' } }, status: complete ? { type: 'complete' as const, reason: 'stop' as const } : { type: 'running' as const } }],
+    messages: [{ id: 'reply', role: 'assistant' as const, content: text ? [{ type: 'text' as const, text }] : [], metadata: { custom: { layout: layout ?? (complete ? 'final' : 'process') } }, status: complete ? { type: 'complete' as const, reason: 'stop' as const } : { type: 'running' as const } }],
     convertMessage: message => message,
     isRunning: !complete,
     onNew: async () => {},
@@ -43,6 +43,32 @@ test('streamed text remains visible when the final reply renderer remounts', asy
     expect(element.textContent).toBe('First half and the rest')
     await act(() => root.render(createElement(App, { text: 'First half and the rest', complete: true })))
     expect(element.textContent).toBe('First half and the rest')
+  } finally {
+    await act(() => root.unmount())
+    element.remove()
+  }
+})
+
+test('large stream chunks are paced and continue from the displayed prefix after remount', async () => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+  const element = document.createElement('div')
+  document.body.append(element)
+  const root = createRoot(element)
+  const text = 'abcdefghijklmnopqrstuvwxyz'.repeat(8)
+  try {
+    await act(() => root.render(createElement(App, { text: '' })))
+    await act(() => root.render(createElement(App, { text })))
+    await act(() => new Promise(resolve => setTimeout(resolve, 100)))
+    const before = element.textContent!
+    expect(before.length).toBeGreaterThan(0)
+    expect(before.length).toBeLessThan(text.length)
+    await act(() => root.render(createElement(App, { text, layout: 'regrouped' })))
+    expect(element.textContent!.startsWith(before)).toBe(true)
+    expect(element.textContent!.length).toBeLessThan(text.length)
+    await act(() => root.render(createElement(App, { text: text + ' finished', complete: true })))
+    expect(element.textContent!.startsWith(before)).toBe(true)
+    await act(() => new Promise(resolve => setTimeout(resolve, 1500)))
+    expect(element.textContent).toBe(text + ' finished')
   } finally {
     await act(() => root.unmount())
     element.remove()

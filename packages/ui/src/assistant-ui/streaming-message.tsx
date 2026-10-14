@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo, useRef, type ReactNode } from 'react'
 import { useAui, useAuiEvent, useAuiState } from '@assistant-ui/react'
 
-const StreamingMessageContext = createContext({ live: false, fresh: false, initialPartCount: 0 })
+const StreamingMessageContext = createContext({ live: false, fresh: false, initialPartCount: 0, progress: null as Map<number, string> | null })
 const StreamingTextContext = createContext(false)
 const StreamingThreadContext = createContext<{
   current: { threadId?: string; history: Set<string> | null }
@@ -26,13 +26,14 @@ export function StreamingMessage({ children }: { children: ReactNode }) {
   const isLast = useAuiState((state) => state.message.isLast)
   const tracking = useContext(StreamingThreadContext)
   const aui = useAui()
+  const progress = useRef(new Map<number, string>()).current
   const initialPartCount = useRef(aui.message.getState().content.length).current
   const fresh = useRef(isLast && !!tracking?.current.history && !tracking.current.history.has(id)).current
   const live = useRef(active || fresh)
   if (active) live.current = true
   const value = useMemo(
-    () => ({ live: live.current, fresh, initialPartCount }),
-    [active, fresh, initialPartCount],
+    () => ({ live: live.current, fresh, initialPartCount, progress }),
+    [active, fresh, initialPartCount, progress],
   )
   return (
     <StreamingMessageContext.Provider value={value}>{children}</StreamingMessageContext.Provider>
@@ -53,3 +54,5 @@ export function StreamingText({
 }
 
 export const useStreamingMessage = () => useContext(StreamingTextContext)
+
+export const useStreamingProgress = () => useContext(StreamingMessageContext).progress

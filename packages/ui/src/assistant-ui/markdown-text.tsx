@@ -10,11 +10,13 @@ import {
   useIsStreamdownCodeBlock,
 } from '@assistant-ui/react-streamdown'
 import remarkGfm from 'remark-gfm'
-import { type FC, lazy, memo, Suspense, useMemo } from 'react'
+import { type FC, lazy, memo, Suspense, useLayoutEffect, useMemo, useState } from 'react'
 import {
   TextMessagePartProvider,
   type TextMessagePartProps,
   useMessagePartText,
+  useAui,
+  useSmooth,
 } from '@assistant-ui/react'
 import { CheckIcon, CopyIcon } from 'lucide-react'
 
@@ -24,6 +26,7 @@ import type { HighlighterProps } from './shiki-highlighter.aui'
 import { resolveCodeLanguage } from './code-language'
 import { useCopyToClipboard } from '../hooks/use-copy-to-clipboard'
 import { cn } from '../lib/utils'
+import { useStreamingMessage, useStreamingProgress } from './streaming-message'
 
 type MarkdownTextProps = Partial<TextMessagePartProps> & {
   components?: Parameters<typeof memoizeMarkdownComponents>[0]
@@ -36,14 +39,26 @@ const MermaidDiagram = (props: MermaidDiagramProps) => <Suspense fallback={<Code
 const SyntaxHighlighter = (props: HighlighterProps) => <Suspense fallback={<CodeFallback code={props.code} />}><LazyHighlighter {...props} /></Suspense>
 
 const remarkPlugins = [remarkGfm]
-const wordFade = { animation: 'nook-word-fade', sep: 'word' as const, duration: 120, stagger: 0 }
+const pacing = { drainMs: Infinity, maxCharIntervalMs: 4, maxCharsPerFrame: 4, minCommitMs: 16 }
 
 const MarkdownTextImpl: FC<MarkdownTextProps> = ({ components }) => {
   const raw = useMessagePartText()
+  const live = useStreamingMessage()
+  const progress = useStreamingProgress()
+  const query = useAui().part.query
+  const index = query?.type === 'index' ? query.index : 0
+  const [prefix] = useState(() => {
+    const previous = progress?.get(index)
+    return previous !== undefined && raw.text.startsWith(previous) ? previous : live ? '' : raw.text
+  })
+  const base = raw.text.startsWith(prefix) ? prefix : ''
+  const part = useSmooth({ ...raw, text: raw.text.slice(base.length), ...(live ? { status: { type: 'running' as const } } : {}) }, live ? pacing : false)
+  const text = base + part.text
+  useLayoutEffect(() => { progress?.set(index, text) }, [progress, index, text])
   return (
     <MarkdownBody
-      text={raw.text}
-      isRunning={raw.status.type === 'running'}
+      text={text}
+      isRunning={raw.status.type === 'running' || text !== raw.text}
       components={components}
     />
   )
@@ -73,7 +88,7 @@ const MarkdownBody = memo(function MarkdownBody({
         componentsByLanguage={markdownComponentsByLanguage}
         mode="streaming"
         smooth={false}
-        animated={isRunning ? wordFade : false}
+        animated={false}
         controls={false}
       />
     </TextMessagePartProvider>
