@@ -33,7 +33,7 @@ export function ToolTimeline({
         style={{ '--animation-duration': 'var(--motion-expand)' } as React.CSSProperties}
       >
         <BranchList.Trigger>
-          <CollapsibleTrigger className="group/trigger flex h-[32px] w-full min-w-0 items-center gap-2 rounded-sm bg-transparent text-left text-[13px] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-border-strong">
+          <CollapsibleTrigger className="group/trigger flex h-[32px] w-full min-w-0 items-center gap-2 rounded-sm bg-transparent text-left text-[13px] text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-border-strong">
             <span className="flex h-[32px] min-w-0 flex-1 items-center gap-2">
               {label}
               <ChevronRightIcon
