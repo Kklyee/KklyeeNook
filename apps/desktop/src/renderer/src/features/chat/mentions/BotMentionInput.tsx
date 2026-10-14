@@ -8,7 +8,7 @@ import {
 } from '@assistant-ui/react'
 import { LexicalComposerInput, type DirectiveChipProps } from '@assistant-ui/react-lexical'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
-import { COMMAND_PRIORITY_NORMAL, KEY_ENTER_COMMAND } from 'lexical'
+import { COMMAND_PRIORITY_HIGH, COMMAND_PRIORITY_NORMAL, KEY_ENTER_COMMAND, PASTE_COMMAND } from 'lexical'
 import { BotAvatar } from '@kklyeenook/ui/components/bot-avatar'
 import { defaultBot } from '@kklyeenook/shared/bot/bot'
 import {
@@ -59,6 +59,28 @@ function UnavailableBots({ row }: { row: (bot: MentionTarget) => React.ReactNode
 
 function MentionChip({ directiveId, directiveType, label }: DirectiveChipProps) {
   return directiveType === 'bot' ? <BotMentionChip botId={directiveId} displayName={label} navigate={false} /> : <span className="text-sm">{label}</span>
+}
+
+function PastePlugin() {
+  const [editor] = useLexicalComposerContext()
+  const aui = useAui()
+  useEffect(
+    () =>
+      editor.registerCommand(
+        PASTE_COMMAND,
+        (event) => {
+          const clipboardData = (event as ClipboardEvent).clipboardData
+          const files = Array.from(clipboardData?.files ?? [])
+          if (!files.length || !aui.thread.getState().capabilities.attachments) return false
+          event.preventDefault()
+          void Promise.all(files.map((file) => aui.composer.addAttachment(file)))
+          return true
+        },
+        COMMAND_PRIORITY_HIGH,
+      ),
+    [editor, aui],
+  )
+  return null
 }
 
 function SubmitPlugin({ submit }: { submit: (steer?: boolean) => Promise<void> }) {
@@ -170,6 +192,7 @@ export function BotMentionInput({
         className="aui-composer-input relative max-h-48 min-h-11 w-full overflow-y-auto px-3 py-1 text-[15px] leading-6 outline-none [&_.aui-lexical-placeholder]:pointer-events-none [&_.aui-lexical-placeholder]:absolute [&_.aui-lexical-placeholder]:inset-x-0 [&_.aui-lexical-placeholder]:top-0 [&_.aui-lexical-placeholder]:truncate [&_.aui-lexical-placeholder]:px-3 [&_.aui-lexical-placeholder]:py-1 [&_.aui-lexical-placeholder]:text-faint-foreground [&_[contenteditable]]:min-h-11 [&_[contenteditable]]:outline-none"
       >
         <SubmitPlugin submit={submit} />
+        <PastePlugin />
       </LexicalComposerInput>
       <ComposerPrimitive.Unstable_TriggerPopover
         char="@"
