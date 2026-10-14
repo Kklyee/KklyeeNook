@@ -19,7 +19,7 @@ KklyeeNook 使用 Electron、React 和 TypeScript 构建，结合 [pi](https://g
     <td><img src="docs/screenshots/home.png" alt="KklyeeNook 桌面首页与新会话输入" width="320" /></td>
     <td><img src="docs/screenshots/desktop.png" alt="KklyeeNook 桌面会话与 Agent 执行活动" width="320" /></td>
     <td><img src="docs/screenshots/appearance.png" alt="KklyeeNook 主题、壁纸与毛玻璃外观设置" width="320" /></td>
-    <td><img src="docs/screenshots/remote-chat.png" alt="Remote 手机端聊天与上下文信息" width="150" /></td>
+    <td><img src="docs/screenshots/remote-chat.jpg" alt="Remote 手机端聊天与上下文信息" width="150" /></td>
   </tr>
 </table>
 
