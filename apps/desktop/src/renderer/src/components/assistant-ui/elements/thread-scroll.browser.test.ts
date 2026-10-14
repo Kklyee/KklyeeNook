@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 import { expect, test } from 'vitest'
 
-test('real virtual messages reach the DOM bottom after clicking latest and growing the last message', async () => {
+test('virtual history restores without jumping and still follows the latest message after resize', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'nook-scroll-'))
   try {
     await build({
@@ -17,7 +17,7 @@ test('real virtual messages reach the DOM bottom after clicking latest and growi
         resolveDir: dirname(fileURLToPath(import.meta.url)),
         loader: 'tsx',
         contents: `
-        import React from 'react'
+        import React, { useState } from 'react'
         import { createRoot } from 'react-dom/client'
         import { AssistantRuntimeProvider, ThreadPrimitive, useExternalStoreRuntime, useAuiState } from '@assistant-ui/react'
         import { ThreadScrollViewport, useScrollFollower } from './thread-scroll-follower'
@@ -33,32 +33,42 @@ test('real virtual messages reach the DOM bottom after clicking latest and growi
           return <div style={{ position: 'sticky', bottom: 0, height: 100, background: 'white' }}><button id="latest" onClick={follower.resume} data-following={follower.following}>Latest</button></div>
         }
         function App() {
+          const [visible, setVisible] = useState(true)
+          window.setHistoryVisible = setVisible
           const runtime = useExternalStoreRuntime({ messages, convertMessage: message => message, isRunning: false, onNew: async () => {} })
-          return <AssistantRuntimeProvider runtime={runtime}><ThreadPrimitive.Root><ThreadScrollViewport data-test="scroll-viewport" style={{ height: 500, width: 700, overflow: 'auto' }}>
+          return <AssistantRuntimeProvider runtime={runtime}><ThreadPrimitive.Root>{visible ? <ThreadScrollViewport data-test="scroll-viewport" style={{ height: 500, width: 700, overflow: 'auto' }}>
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, paddingTop: 16 }}>
               <div style={{ display: 'flex', flexDirection: 'column', marginBottom: 56 }}><ThreadMessages components={components} /></div>
               <Footer />
             </div>
-          </ThreadScrollViewport></ThreadPrimitive.Root></AssistantRuntimeProvider>
+          </ThreadScrollViewport> : <div>Other conversation</div>}</ThreadPrimitive.Root></AssistantRuntimeProvider>
         }
         createRoot(document.getElementById('root')).render(<App />)
         const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
         window.verifyScroll = async () => {
           await sleep(300)
-          const viewport = document.querySelector('[data-test="scroll-viewport"]')
-          const position = () => ({ top: viewport.scrollTop, height: viewport.scrollHeight, client: viewport.clientHeight, remaining: viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop, visible: [...document.querySelectorAll('[data-message]')].filter(element => { const rect = element.getBoundingClientRect(); const view = viewport.getBoundingClientRect(); return rect.bottom > view.top && rect.top < view.bottom }).length, rendered: document.querySelectorAll('[data-message]').length, ids: [...document.querySelectorAll('[data-message]')].map(element => element.dataset.message) })
+          let viewport = document.querySelector('[data-test="scroll-viewport"]')
+          const position = () => ({ following: document.getElementById('latest').dataset.following, top: viewport.scrollTop, height: viewport.scrollHeight, client: viewport.clientHeight, remaining: viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop, visible: [...document.querySelectorAll('[data-message]')].filter(element => { const rect = element.getBoundingClientRect(); const view = viewport.getBoundingClientRect(); return rect.bottom > view.top && rect.top < view.bottom }).length, rendered: document.querySelectorAll('[data-message]').length, ids: [...document.querySelectorAll('[data-message]')].map(element => element.dataset.message) })
           viewport.dispatchEvent(new WheelEvent('wheel', { deltaY: -100 }))
           viewport.scrollTop = 500
           viewport.dispatchEvent(new Event('scroll'))
           await sleep(300)
           const before = position()
+          window.setHistoryVisible(false)
+          await sleep(50)
+          window.setHistoryVisible(true)
+          await new Promise(requestAnimationFrame)
+          viewport = document.querySelector('[data-test="scroll-viewport"]')
+          const restored = position()
+          await sleep(300)
+          const settled = position()
           document.getElementById('latest').click()
           await sleep(1000)
           const after = position()
           const last = document.querySelector('[data-message="59"]')
           if (last) last.style.height = '2000px'
           await sleep(500)
-          return { before, after, grown: position(), lastVisible: !!last }
+          return { before, restored, settled, after, grown: position(), lastVisible: !!last }
         }
       `,
       },
@@ -105,6 +115,9 @@ test('real virtual messages reach the DOM bottom after clicking latest and growi
     })
     if (!stdout.includes('SCROLL_RESULT:')) throw new Error(stdout + stderr)
     const result = JSON.parse(stdout.split('SCROLL_RESULT:')[1].split('\n')[0])
+    expect(Math.abs(result.restored.top - result.before.top), JSON.stringify(result)).toBeLessThanOrEqual(1)
+    expect(Math.abs(result.settled.top - result.before.top), JSON.stringify(result)).toBeLessThanOrEqual(1)
+    expect(result.restored.visible, JSON.stringify(result)).toBeGreaterThan(0)
     expect(result.before.remaining, JSON.stringify(result)).toBeGreaterThan(1000)
     expect(result.before.visible, JSON.stringify(result)).toBeGreaterThan(0)
     expect(result.after.remaining, JSON.stringify(result)).toBeLessThanOrEqual(1)

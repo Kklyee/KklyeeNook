@@ -3,9 +3,13 @@ import {
   ThreadPrimitive,
   unstable_useThreadMessageIds,
   useThreadViewport,
+  useAuiState,
 } from '@assistant-ui/react'
-import { useVirtualizer } from '@tanstack/react-virtual'
+import { useVirtualizer, type VirtualItem } from '@tanstack/react-virtual'
+import { scrollPositions } from '@kklyeenook/ui/assistant-ui/scroll-position'
 import { useScrollFollower } from './thread-scroll-follower'
+
+const measurements = new Map<string, VirtualItem[]>()
 
 export function ThreadMessages({
   components,
@@ -15,8 +19,11 @@ export function ThreadMessages({
   const { scrollToMessage, following, resume } = useScrollFollower()
   const viewport = useThreadViewport((state) => state.element.viewport)
   const ids = unstable_useThreadMessageIds()
+  const threadId = useAuiState((state) => state.threads.mainThreadId)
   const virtualizer = useVirtualizer({
     count: ids.length,
+    initialMeasurementsCache: measurements.get(threadId),
+    initialOffset: scrollPositions.get(threadId)?.top,
     getScrollElement: () => viewport,
     estimateSize: () => 240,
     getItemKey: (index) => ids[index]!,
@@ -25,6 +32,10 @@ export function ThreadMessages({
     overscan: 4,
     gap: 24,
   })
+  useLayoutEffect(() => () => {
+    const snapshot = virtualizer.takeSnapshot()
+    if (snapshot.length) measurements.set(threadId, snapshot)
+  }, [threadId, virtualizer])
   const size = virtualizer.getTotalSize()
   useLayoutEffect(() => {
     if (following) resume()

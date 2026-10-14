@@ -473,3 +473,52 @@ test('collaboration cards share one poll and release it after the last subscribe
   await vi.advanceTimersByTimeAsync(2000)
   expect(requests).toBe(2)
 })
+
+
+test('reloads the previously viewed history range before exposing a revisited conversation', async () => {
+  const entries = [1, 2, 3, 4].map((id) => ({ id, conversationId: 1, kind: 'pi.user', model: [{ role: 'user', content: String(id), timestamp: id }] }))
+  let pages = 0
+  const store = setup(async (url) => {
+    if (url.endsWith('/threads')) return response([metadata('a'), metadata('b')])
+    if (url.includes('/history?before=3')) {
+      pages++
+      return response({ entries: entries.slice(0, 2), sinceEntry: 1, hasMore: false })
+    }
+    if (url.includes('/threads/b')) return response(snapshot('b'))
+    return response({ ...snapshot('a'), snapshot: { ...emptySnapshot(), entries: entries.slice(2) }, history: { sinceEntry: 3, hasMore: true } })
+  })
+  await store.switchToThread('a')
+  await store.loadOlder()
+  const ids = store.getSnapshot().current.messages.map((message) => message.id)
+  await store.switchToThread('b')
+  const observed: number[] = []
+  const unsubscribe = store.subscribe(() => {
+    const value = store.getSnapshot()
+    if (value.selectedThreadId === 'a' && !value.current.loading) observed.push(value.current.messages.length)
+  })
+  await store.switchToThread('a')
+  unsubscribe()
+  expect(pages).toBe(2)
+  expect(observed).not.toContain(2)
+  expect(store.getSnapshot().current.messages.map((message) => message.id)).toEqual(ids)
+})
+
+
+test('keeps the original history start when a newer latest window requires an overlapping older page', async () => {
+  const entries = [1, 2, 3, 4, 5, 6].map((id) => ({ id, conversationId: 1, kind: 'pi.user', model: [{ role: 'user', content: String(id), timestamp: id }] }))
+  let newer = false
+  const store = setup(async (url) => {
+    if (url.endsWith('/threads')) return response([metadata('a'), metadata('b')])
+    if (url.includes('/threads/b')) return response(snapshot('b'))
+    if (url.includes('/history?before=5')) return response({ entries: entries.slice(0, 4), sinceEntry: 1, hasMore: false })
+    return response({ ...snapshot('a'), snapshot: { ...emptySnapshot(), entries: newer ? entries.slice(4) : entries.slice(2, 4) }, history: { sinceEntry: newer ? 5 : 3, hasMore: true } })
+  })
+  await store.switchToThread('a')
+  const ids = store.getSnapshot().current.messages.map((message) => message.id)
+  await store.switchToThread('b')
+  newer = true
+  await store.switchToThread('a')
+  expect(store.getSnapshot().current.messages.slice(0, 2).map((message) => message.id)).toEqual(ids)
+  expect(store.getSnapshot().current.messages).toHaveLength(4)
+  expect(store.getSnapshot().extras.history.sinceEntry).toBe(3)
+})

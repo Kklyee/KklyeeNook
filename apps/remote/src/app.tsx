@@ -22,7 +22,7 @@ import { api, cacheConversation, conversationSnapshots, loadConversation } from 
 import { Controls, type Selection } from './Controls'
 import { Approval } from './Approval'
 import { Navigation, NavigationContext } from './navigation'
-import { HistorySkeleton, ListSkeleton } from './Loading'
+import { HistorySkeleton, ListSkeleton, ThreadSkeleton } from './Loading'
 import { Skeleton } from '@kklyeenook/ui/components/skeleton'
 import { ThreadListRow } from '@kklyeenook/ui/assistant-ui/thread-list-row'
 import { BotProvider, useBots } from './bot-provider'
@@ -37,11 +37,7 @@ const Thread = lazy(() =>
 function RemoteThread(props: React.ComponentProps<typeof Thread>) {
   return (
     <Suspense
-      fallback={
-        <div className="min-h-0 flex-1 overflow-hidden px-4">
-          <HistorySkeleton />
-        </div>
-      }
+      fallback={<ThreadSkeleton />}
     >
       <Thread {...props} />
     </Suspense>
@@ -150,8 +146,9 @@ function Route({ route }: { route: string }) {
     if (botId !== 'new' && !parts[2]) return <BotMainPage key={botId} id={botId} />
     if (!state)
       return (
-        <div className="remote-app p-5">
-          <p role={error ? 'alert' : 'status'}>{error || '正在载入…'}</p>
+        <div className="remote-app">
+          <div className="remote-header flex h-[69px] shrink-0 items-center border-b border-border px-5"><Skeleton className="h-4 w-24" /></div>
+          {error ? <p role="alert" className="p-5">{error}</p> : <ThreadSkeleton />}
         </div>
       )
     if (botId === 'new' || parts[2] === 'edit')
@@ -447,17 +444,27 @@ function Conversation({
   const [error, setError] = useState('')
   useEffect(() => {
     let active = true
+    let receivedSnapshot = false
+    void loadConversation(id).then((value) => {
+      if (active && !receivedSnapshot) setSnapshot(value)
+    }).catch((error) => {
+      if (active && !receivedSnapshot) setError(error.message)
+    })
     const source = new EventSource(`/api/conversations/${id}/events`)
     let seq = 0
     source.onopen = () => {
+      seq = 0
       if (conversationSnapshots.has(id)) {
         setConnected(true)
         setError('')
       }
     }
     source.addEventListener('remote', (message: MessageEvent) => {
+      if (!active) return
       const event = JSON.parse(message.data) as RemoteEvent
+      if (event.seq <= seq) return
       if (event.type === 'snapshot') {
+        receivedSnapshot = true
         seq = event.seq
         setSnapshot(event.snapshot)
         cacheConversation(id, event.snapshot)
@@ -465,7 +472,6 @@ function Conversation({
         setError('')
         return
       }
-      if (event.seq <= seq) return
       seq = event.seq
       if (event.type === 'error') setError(event.error)
       const current = conversationSnapshots.get(id)
@@ -644,6 +650,7 @@ function Conversation({
         </p>
       )}
       <RemoteThread
+        conversationId={id}
         botName={bot?.name}
         botKind={bot?.kind}
         messages={snapshot?.messages ?? []}

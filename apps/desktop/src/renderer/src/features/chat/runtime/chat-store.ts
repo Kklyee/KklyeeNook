@@ -146,6 +146,7 @@ export class ChatStore {
   private loading = false
   private listLoading = false
   private error: string | undefined
+  private historyStarts = new Map<string, number>()
   private history: ChatExtras['history'] = { hasMore: false, loading: false }
   private projectionTimer: ReturnType<typeof setTimeout> | undefined
   private source: EventSource | undefined
@@ -440,6 +441,21 @@ export class ChatStore {
         `/threads/${encodeURIComponent(threadId)}?runs=2`,
       )
       if (this.selectedThreadId !== threadId || version !== this.connectionVersion) return
+      const sinceEntry = this.historyStarts.get(threadId)
+      while (sinceEntry !== undefined && value.history?.hasMore && value.history.sinceEntry !== undefined && value.history.sinceEntry > sinceEntry) {
+        const before = value.history.sinceEntry
+        const page = await this.request<AgentHistoryPage>(`/threads/${encodeURIComponent(threadId)}/history?before=${before}`)
+        if (this.selectedThreadId !== threadId || version !== this.connectionVersion) return
+        const existing = new Set(value.snapshot.entries.map((entry) => entry.id))
+        value.snapshot = { ...value.snapshot, entries: [...page.entries.filter((entry) => !existing.has(entry.id)), ...value.snapshot.entries] }
+        value.history = { sinceEntry: page.sinceEntry, hasMore: page.hasMore }
+        if (page.sinceEntry === undefined || page.sinceEntry >= before) break
+      }
+      if (sinceEntry !== undefined && value.history?.sinceEntry !== undefined && value.history.sinceEntry < sinceEntry) {
+        value.snapshot = { ...value.snapshot, entries: value.snapshot.entries.filter((entry) => entry.id >= sinceEntry) }
+        value.history = { sinceEntry, hasMore: true }
+      }
+      if (value.history?.sinceEntry !== undefined) this.historyStarts.set(threadId, value.history.sinceEntry)
       this.history = { ...value.history, hasMore: value.history?.hasMore ?? false, loading: false }
       this.metadata = value.metadata ?? this.threads.find((thread) => thread.id === threadId)
       this.selectedBotId = this.metadata?.botId ?? this.selectedBotId
@@ -738,6 +754,7 @@ export class ChatStore {
       const existing = new Set(snapshot.entries.map((entry) => entry.id))
       this.projection = { ...this.projection, snapshot: { ...snapshot, entries: [...page.entries.filter((entry) => !existing.has(entry.id)), ...snapshot.entries] } }
       this.history = { sinceEntry: page.sinceEntry, hasMore: page.hasMore, loading: false }
+      if (page.sinceEntry !== undefined) this.historyStarts.set(threadId, page.sinceEntry)
       this.projected = projectDurableThread(this.projection)
     } finally {
       if (version === this.connectionVersion && !this.disposed) {

@@ -4,16 +4,19 @@ import { act, createElement, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, expect, test, vi } from 'vitest'
 
+const state = vi.hoisted(() => ({ id: 'thread', loading: false }))
+
 vi.mock('@assistant-ui/react', async () => {
   const { forwardRef, createElement } = await import('react')
   return {
     ThreadPrimitive: { Viewport: forwardRef<HTMLDivElement, { children: ReactNode }>((props, ref) => createElement('div', { ref }, props.children)) },
     useAui: () => ({ thread: { getState: () => ({}) } }),
     useAuiEvent: () => {},
-    useAuiState: (selector: (state: unknown) => unknown) => selector({ threads: { mainThreadId: 'thread' }, thread: { isLoading: false, messages: [{}] } }),
+    useAuiState: (selector: (state: unknown) => unknown) => selector({ threads: { mainThreadId: state.id }, thread: { isLoading: state.loading, messages: [{}] } }),
   }
 })
 
+import { scrollPositions } from '@kklyeenook/ui/assistant-ui/scroll-position'
 import { ThreadScrollViewport, useScrollFollower } from './thread-scroll-follower'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -23,6 +26,9 @@ afterEach(() => {
   root = undefined
   document.body.innerHTML = ''
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+  scrollPositions.clear()
+  state.id = 'thread'
 })
 
 test('jump to latest reaches the DOM bottom and stays following during measurement corrections', () => {
@@ -55,4 +61,39 @@ test('jump to latest reaches the DOM bottom and stays following during measureme
   act(() => { resize([], {} as ResizeObserver); for (const [id, callback] of [...frames]) { frames.delete(id); callback(0) } })
   expect(viewport.scrollTop).toBe(900)
   expect(button.dataset.following).toBe('true')
+})
+
+
+test('first open snaps immediately and returning restores paused history without scheduling a scroll', () => {
+  const raf = vi.fn(() => 1)
+  const observers: ResizeObserverCallback[] = []
+  vi.stubGlobal('requestAnimationFrame', raf)
+  vi.stubGlobal('cancelAnimationFrame', vi.fn())
+  vi.stubGlobal('ResizeObserver', class { constructor(callback: ResizeObserverCallback) { observers.push(callback) } observe() {} disconnect() {} })
+  vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {}, removeEventListener() {} }))
+  vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(1000)
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(100)
+  const container = document.createElement('div')
+  document.body.append(container)
+  root = createRoot(container)
+  const render = () => root!.render(createElement(ThreadScrollViewport, { key: state.id, children: 'History' }))
+  act(render)
+  let viewport = container.firstElementChild as HTMLDivElement
+  expect(viewport.scrollTop).toBe(900)
+  act(() => {
+    viewport.dispatchEvent(new WheelEvent('wheel', { deltaY: -100 }))
+    viewport.scrollTop = 320
+    viewport.dispatchEvent(new Event('scroll'))
+  })
+  state.id = 'other'
+  act(render)
+  viewport = container.firstElementChild as HTMLDivElement
+  expect(viewport.scrollTop).toBe(900)
+  state.id = 'thread'
+  act(render)
+  viewport = container.firstElementChild as HTMLDivElement
+  expect(viewport.scrollTop).toBe(320)
+  act(() => observers.at(-1)!([], {} as ResizeObserver))
+  expect(viewport.scrollTop).toBe(320)
+  expect(raf).not.toHaveBeenCalled()
 })

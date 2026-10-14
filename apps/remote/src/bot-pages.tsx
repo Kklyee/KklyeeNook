@@ -8,6 +8,7 @@ import { BOT_STATE_LABELS } from '@kklyeenook/shared/bot/bot-state'
 import type { RemoteConversationSnapshot, RemoteState } from '@kklyeenook/shared/remote/index'
 import { api, cacheConversation } from './api'
 import { useBots } from './bot-provider'
+import { ThreadSkeleton } from './Loading'
 
 export const navigateBot = (path: string) => {
   location.hash = path
@@ -84,11 +85,11 @@ export function BotMainPage({ id }: { id: string }) {
     }
   }, [id])
   return (
-    <div className="remote-app p-5">
-      <Button variant="ghost" onClick={() => navigateBot('/')}>
-        返回 My Bots
-      </Button>
-      <p className="mt-5 text-sm text-muted-foreground">{error || '正在打开主会话…'}</p>
+    <div className="remote-app">
+      <header className="remote-header flex h-[69px] shrink-0 items-center border-b border-border px-3">
+        <Button variant="ghost" onClick={() => navigateBot('/')} className="min-h-11">返回 My Bots</Button>
+      </header>
+      {error ? <p role="alert" className="p-5 text-sm text-destructive">{error}</p> : <ThreadSkeleton />}
     </div>
   )
 }

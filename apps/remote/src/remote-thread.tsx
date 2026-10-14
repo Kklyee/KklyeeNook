@@ -41,6 +41,7 @@ import {
 } from '@kklyeenook/ui/assistant-ui/attachment.aui'
 import { remoteAttachmentAdapter, serializeAttachments } from './attachments'
 import { ApiError } from './api'
+import { scrollPositions } from '@kklyeenook/ui/assistant-ui/scroll-position'
 import { ExecutionProcess, MessageModel, FileChanges } from './message-details'
 
 const convertMessage = (message: RemoteMessage): ThreadMessageLike => ({
@@ -283,11 +284,13 @@ export function RemoteThread({
   botKind,
   queue,
   pendingSteer = [],
+  conversationId,
 }: {
   botName?: string
   botKind?: 'coding' | 'personal'
   queue?: ReactNode
   pendingSteer?: RemoteQueueItem[]
+  conversationId?: string
   messages: RemoteMessage[]
   contextBudget?: RemoteContextBudget
   activities?: RemoteActivity[]
@@ -306,6 +309,21 @@ export function RemoteThread({
   onStop?: () => void
 }) {
   const [sendError, setSendError] = useState('')
+  const viewport = useRef<HTMLDivElement>(null)
+  const positioned = useRef(false)
+  const savedPosition = conversationId ? scrollPositions.get(conversationId) : undefined
+  const [following, setFollowing] = useState(savedPosition?.following ?? true)
+  useLayoutEffect(() => {
+    if (loading || positioned.current || !viewport.current) return
+    viewport.current.scrollTop = savedPosition && !savedPosition.following ? savedPosition.top : viewport.current.scrollHeight
+    positioned.current = true
+  }, [loading, transcript.length])
+  useLayoutEffect(() => {
+    const element = viewport.current
+    return () => {
+      if (conversationId && positioned.current && element) scrollPositions.set(conversationId, { top: element.scrollTop, following: element.scrollHeight - element.clientHeight - element.scrollTop <= 1 })
+    }
+  }, [conversationId])
   const pending = useRef<
     | {
         fingerprint: string
@@ -393,9 +411,17 @@ export function RemoteThread({
       <AssistantRuntimeProvider runtime={runtime}>
         <StreamingThread>
           <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col">
-            <ThreadPrimitive.Viewport className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="relative flex min-h-0 flex-1 flex-col">
+            {loading && <div className="absolute inset-0 overflow-hidden px-5"><div className="mx-auto w-full max-w-3xl"><HistorySkeleton /></div></div>}
+            <ThreadPrimitive.Viewport ref={viewport} autoScroll={following} onScroll={(event) => {
+              if (!positioned.current) return
+              const element = event.currentTarget
+              const following = element.scrollHeight - element.clientHeight - element.scrollTop <= 1
+              setFollowing(following)
+              if (conversationId) scrollPositions.set(conversationId, { top: element.scrollTop, following })
+            }} scrollToBottomOnInitialize={false} scrollToBottomOnThreadSwitch={false} aria-busy={loading} className={`min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${loading ? 'invisible' : ''}`}>
+
               <div className="mx-auto w-full max-w-3xl">
-                {loading && <HistorySkeleton />}
                 {!loading && !messages.length && botName && (
                   <div className="py-10 text-center">
                     <h2 className="text-xl font-medium">
@@ -432,6 +458,7 @@ export function RemoteThread({
                 </ThreadPrimitive.ScrollToBottom>
               </div>
             </ThreadPrimitive.Viewport>
+            </div>
             <div className="composer-dock mx-auto w-full max-w-3xl shrink-0 px-3 pt-2">
               {sendError && (
                 <p role="alert" className="mb-2 text-xs text-destructive">
@@ -447,6 +474,7 @@ export function RemoteThread({
                 botName={botName}
                 queue={queue}
               />
+              <div data-slot="remote-session-stats" className="h-7">
               <SessionStats
                 messages={transcript}
                 ready={statsReady}
@@ -454,6 +482,7 @@ export function RemoteThread({
               >
                 {contextBudget && <ComposerContext budget={contextBudget} className="shrink-0" />}
               </SessionStats>
+              </div>
             </div>
           </ThreadPrimitive.Root>
         </StreamingThread>

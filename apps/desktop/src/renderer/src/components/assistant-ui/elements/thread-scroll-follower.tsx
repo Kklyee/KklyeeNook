@@ -11,6 +11,7 @@ import {
 } from 'react'
 import { ThreadPrimitive, useAui, useAuiEvent, useAuiState } from '@assistant-ui/react'
 
+import { scrollPositions } from '@kklyeenook/ui/assistant-ui/scroll-position'
 import type { ChatExtras } from '@/renderer/src/features/chat/runtime/chat-store'
 
 const ScrollFollowerContext = createContext<{ following: boolean; resume(): void; pause(): void; scrollToMessage: RefObject<((id: string) => void) | null> }>({ following: true, resume: () => {}, pause: () => {}, scrollToMessage: { current: null } })
@@ -29,15 +30,17 @@ export function ThreadScrollViewport({
   const scrollToMessage = useRef<((id: string) => void) | null>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
-  const followRef = useRef(true)
+  const threadId = useAuiState((state) => state.threads.mainThreadId)
+  const savedPosition = scrollPositions.get(threadId)
+  const followRef = useRef(savedPosition?.following ?? true)
+  const initialized = useRef(false)
   const smoothRef = useRef(false)
   const initializeRef = useRef(() => {})
   const pauseRef = useRef(() => {})
-  const threadId = useAuiState((state) => state.threads.mainThreadId)
   const isLoading = useAuiState((state) => state.thread.isLoading)
   const hasMessages = useAuiState((state) => state.thread.messages.length > 0)
   const pause = useCallback(() => pauseRef.current(), [])
-  const [following, setFollowing] = useState(true)
+  const [following, setFollowing] = useState(savedPosition?.following ?? true)
   const resume = useCallback(() => {
     initializeRef.current()
   }, [])
@@ -94,6 +97,7 @@ export function ThreadScrollViewport({
       else snapToBottom()
     }
     const scroll = () => {
+      if (initialized.current) scrollPositions.set(threadId, { top: viewport.scrollTop, following: followRef.current })
       if (!followRef.current && viewport.scrollTop <= 120) loadOlder.current()
       const top = viewport.scrollTop
       if (
@@ -129,6 +133,8 @@ export function ThreadScrollViewport({
     const observer = new ResizeObserver(resize)
     observer.observe(content)
     observer.observe(viewport)
+    const mutations = new MutationObserver(resize)
+    mutations.observe(content, { subtree: true, childList: true, characterData: true, attributes: true })
     viewport.addEventListener('scroll', scroll, { passive: true })
     viewport.addEventListener('wheel', wheel, { passive: true })
     viewport.addEventListener('touchstart', touchStart, { passive: true })
@@ -136,7 +142,10 @@ export function ThreadScrollViewport({
     viewport.addEventListener('keydown', keyDown)
     reducedMotion.addEventListener('change', schedule)
     return () => {
+      if (initialized.current) scrollPositions.set(threadId, { top: viewport.scrollTop, following: followRef.current })
+      initialized.current = false
       observer.disconnect()
+      mutations.disconnect()
       cancelAnimationFrame(frame)
       initializeRef.current = () => {}
       pauseRef.current = () => {}
@@ -147,14 +156,21 @@ export function ThreadScrollViewport({
       viewport.removeEventListener('keydown', keyDown)
       reducedMotion.removeEventListener('change', schedule)
     }
-  }, [resume])
+  }, [resume, threadId])
 
   useLayoutEffect(() => {
     smoothRef.current = false
   }, [threadId, isLoading])
 
   useLayoutEffect(() => {
-    initializeRef.current()
+    if (isLoading || initialized.current) return
+    initialized.current = true
+    const saved = scrollPositions.get(threadId)
+    if (saved && !saved.following && viewportRef.current) {
+      followRef.current = false
+      setFollowing(false)
+      viewportRef.current.scrollTop = saved.top
+    } else initializeRef.current()
   }, [threadId, isLoading, hasMessages])
 
   loadOlder.current = () => {

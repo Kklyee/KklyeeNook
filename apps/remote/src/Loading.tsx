@@ -12,3 +12,14 @@ export function HistorySkeleton() {
 export function ListSkeleton() {
   return <div role="status" aria-label="Loading projects and conversations" className="space-y-3">{[0, 1, 2, 3].map(index => <Skeleton key={index} className="h-16 w-full rounded-xl" />)}</div>
 }
+
+
+export function ThreadSkeleton() {
+  return <div className="flex min-h-0 flex-1 flex-col" aria-busy="true">
+    <div className="min-h-0 flex-1 overflow-hidden px-5 pb-4"><div className="mx-auto w-full max-w-3xl"><HistorySkeleton /></div></div>
+    <div className="composer-dock mx-auto w-full max-w-3xl shrink-0 px-3 pt-2">
+      <Skeleton className="h-[134px] rounded-3xl" />
+      <div className="h-7" />
+    </div>
+  </div>
+}
