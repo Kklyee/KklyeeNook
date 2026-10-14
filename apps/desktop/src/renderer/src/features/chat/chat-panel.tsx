@@ -71,7 +71,6 @@ export function ChatPanel({
   const contextUsage = useChatThreadState((state) => state.contextUsage)
   const isCompacting = useChatThreadState((state) => state.compaction.active)
   const {
-    switchingModel,
     modelError,
     session,
     modelOptions,
@@ -161,7 +160,6 @@ export function ChatPanel({
                     models: modelOptions,
                     value: selectedModel?.id ?? settings?.activeModelId,
                     effort: selectedThinkingLevel ?? settings?.thinkingLevel,
-                    disabled: switchingModel || session?.status === 'running',
                     onValueChange: (id) => void switchModel(id),
                     onEffortChange: (level) => void switchThinkingLevel(level),
                   }}
@@ -209,7 +207,6 @@ function useChatModelSelection(
   onSettingsChanged: (() => Promise<void>) | undefined,
   sessionId: string | undefined,
 ) {
-  const [switchingModel, setSwitchingModel] = useState(false)
   const [modelError, setModelError] = useState<string | null>(null)
   const session = useChatSession()
   const { bots, selectedBotId, selectedThreadId } = useChatRuntimeSnapshot()
@@ -285,7 +282,6 @@ function useChatModelSelection(
     if (!model) return
     const thinkingLevel = model.thinkingLevel ?? (model.reasoning ? 'medium' : 'off')
     const piRuntime = aui.thread.getState().extras as ChatExtras
-    setSwitchingModel(true)
     setModelError(null)
     try {
       await saveSelection(model, thinkingLevel)
@@ -296,15 +292,12 @@ function useChatModelSelection(
       await onSettingsChanged?.()
     } catch (error) {
       setModelError(error instanceof Error ? error.message : '模型切换失败')
-    } finally {
-      setSwitchingModel(false)
     }
   }
   const switchThinkingLevel = async (level: string) => {
     if (!isThinkingLevel(level)) return
     if (!selectedModel) return
     const piRuntime = aui.thread.getState().extras as ChatExtras
-    setSwitchingModel(true)
     setModelError(null)
     try {
       await saveSelection(selectedModel, level)
@@ -312,13 +305,10 @@ function useChatModelSelection(
       await onSettingsChanged?.()
     } catch (error) {
       setModelError(error instanceof Error ? error.message : '推理等级切换失败')
-    } finally {
-      setSwitchingModel(false)
     }
   }
 
   return {
-    switchingModel,
     modelError,
     session,
     modelOptions,

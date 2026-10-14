@@ -13,7 +13,6 @@ import { useChatRuntimeSnapshot } from '@/renderer/src/features/chat/runtime/cha
 
 export function PermissionSelector() {
   const sessionId = useAuiState((s) => s.threadListItem.remoteId)
-  const running = useAuiState((s) => s.thread.isRunning)
   const snapshot = useChatRuntimeSnapshot()
   const bot = snapshot.bots.find((bot) => bot.id === snapshot.selectedBotId)
   const {
@@ -50,7 +49,6 @@ export function PermissionSelector() {
     <div className="shrink-0">
       <Select value={mode} onValueChange={(value) => void change(value)}>
         <SelectTrigger
-          disabled={running}
           aria-label="权限模式"
           className="h-7 w-auto gap-1 border-0 px-1.5 text-[11px] font-normal text-muted-foreground"
         >
