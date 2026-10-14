@@ -3,12 +3,29 @@ import { useAui, useAuiState } from '@assistant-ui/react'
 import { createRoot } from 'react-dom/client'
 import { expect, test, vi } from 'vitest'
 import { RemoteThread } from './remote-thread'
+import { Activity } from './Activity'
 import { scrollPositions } from '@kklyeenook/ui/assistant-ui/scroll-position'
 import type { RemoteMessage } from '@kklyeenook/shared/remote/index'
 
 vi.mock('@kklyeenook/ui/assistant-ui/markdown-text', () => ({ MarkdownText: () => {
   return useAuiState((state: any) => state.part.text)
 } }))
+
+test('waiting for the first activity has no empty disclosure button', async () => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+  const element = document.createElement('div')
+  const root = createRoot(element)
+  try {
+    await act(() => root.render(createElement(Activity, { activities: [], waiting: true })))
+    expect(element.querySelector('[role="status"]')).not.toBeNull()
+    expect(element.querySelector('button')).toBeNull()
+    expect(element.querySelector('svg')).toBeNull()
+    await act(() => root.render(createElement(Activity, { activities: [], waiting: false })))
+    expect(element.childElementCount).toBe(0)
+  } finally {
+    await act(() => root.unmount())
+  }
+})
 
 test('remote keeps final reply and file changes visible while completed execution is collapsed', async () => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true, ResizeObserver: class { observe() {} disconnect() {} } })

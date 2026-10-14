@@ -28,6 +28,7 @@ export function InlineActivity({ afterPartIndex }: { afterPartIndex?: number }) 
 
 export function Activity({ activities, waiting = false }: { activities: RemoteActivity[]; waiting?: boolean }) {
   const [open, setOpen] = useState(false)
+  if (!activities.length) return waiting ? <div role="status" aria-label="等待模型响应" className="flex min-h-11 items-center text-muted-foreground"><span className="size-2 animate-pulse rounded-full bg-current motion-reduce:animate-none" /></div> : null
   const current = [...activities].reverse().find(activity => activity.status === 'running' || activity.status === 'waiting') ?? activities.at(-1)
   const running = waiting || activities.some(activity => activity.status === 'running' || activity.status === 'waiting')
   const failed = current?.status === 'failed'

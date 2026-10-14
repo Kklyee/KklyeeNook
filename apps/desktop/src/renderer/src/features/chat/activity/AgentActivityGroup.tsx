@@ -173,7 +173,11 @@ const ActivityTimeline = memo(function ActivityTimeline({ scope }: { scope: Acti
       data-running={running}
       className="agent-activity-slot"
     >
-      {standaloneThinkingId ? (
+      {!ids.length ? (
+        <div role="status" aria-label="等待模型响应" className="flex h-[32px] items-center text-[13px] text-muted-foreground">
+          <ActivityHeader scope={scope} current={current} />
+        </div>
+      ) : standaloneThinkingId ? (
         <AgentActivityRow runId={scope.runId!} activityId={standaloneThinkingId} standalone />
       ) : (
         <ToolTimeline

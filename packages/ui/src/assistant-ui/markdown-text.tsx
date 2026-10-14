@@ -15,7 +15,6 @@ import {
   TextMessagePartProvider,
   type TextMessagePartProps,
   useMessagePartText,
-  useSmooth,
 } from '@assistant-ui/react'
 import { CheckIcon, CopyIcon } from 'lucide-react'
 
@@ -25,7 +24,6 @@ import type { HighlighterProps } from './shiki-highlighter.aui'
 import { resolveCodeLanguage } from './code-language'
 import { useCopyToClipboard } from '../hooks/use-copy-to-clipboard'
 import { cn } from '../lib/utils'
-import { useStreamingMessage } from './streaming-message'
 
 type MarkdownTextProps = Partial<TextMessagePartProps> & {
   components?: Parameters<typeof memoizeMarkdownComponents>[0]
@@ -38,23 +36,20 @@ const MermaidDiagram = (props: MermaidDiagramProps) => <Suspense fallback={<Code
 const SyntaxHighlighter = (props: HighlighterProps) => <Suspense fallback={<CodeFallback code={props.code} />}><LazyHighlighter {...props} /></Suspense>
 
 const remarkPlugins = [remarkGfm]
-const pacing = { drainMs: Infinity, maxCharIntervalMs: 4, maxCharsPerFrame: 4, minCommitMs: 16 }
 const wordFade = { animation: 'nook-word-fade', sep: 'word' as const, duration: 120, stagger: 0 }
 
 const MarkdownTextImpl: FC<MarkdownTextProps> = ({ components }) => {
   const raw = useMessagePartText()
-  const live = useStreamingMessage()
-  const part = useSmooth(live ? { ...raw, status: { type: 'running' } } : raw, pacing)
   return (
-    <PacedMarkdown
-      text={part.text}
-      isRunning={raw.status.type === 'running' || part.text !== raw.text}
+    <MarkdownBody
+      text={raw.text}
+      isRunning={raw.status.type === 'running'}
       components={components}
     />
   )
 }
 
-const PacedMarkdown = memo(function PacedMarkdown({
+const MarkdownBody = memo(function MarkdownBody({
   text,
   isRunning,
   components,
