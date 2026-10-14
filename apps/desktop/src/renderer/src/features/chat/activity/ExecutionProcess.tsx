@@ -27,8 +27,8 @@ export function ExecutionProcess({ children }: { children?: ReactNode }) {
   if (!foldable) return <div className="min-w-0"><div className="flex items-center py-1">{duration}</div>{content}</div>
   return (
     <Collapsible open={manualOpen ?? false} onOpenChange={setManualOpen} className="min-w-0">
-      <CollapsibleTrigger className="text-muted-foreground hover:text-foreground flex w-full items-center gap-2 py-1 text-xs transition-colors">
-        <ChevronRightIcon className="size-3.5 shrink-0 transition-transform [[data-open]>&]:rotate-90" />
+      <CollapsibleTrigger className="group/trigger text-muted-foreground hover:text-foreground flex w-full items-center gap-2 py-1 text-xs transition-colors">
+        <ChevronRightIcon className="size-3.5 shrink-0 transition-transform group-data-panel-open/trigger:rotate-90 motion-reduce:transition-none" />
         <span>执行过程</span>
         <span aria-hidden="true">·</span>
         {duration}

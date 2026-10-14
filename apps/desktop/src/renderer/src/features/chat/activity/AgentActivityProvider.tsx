@@ -48,7 +48,8 @@ const AgentActivityContext = createContext(createActivityStore())
 
 export function useActivitySelector<T>(selector: (groups: readonly ActivityRun[]) => T): T {
   const store = useContext(AgentActivityContext)
-  return useSyncExternalStore(store.subscribe, () => selector(store.getSnapshot()))
+  const groups = useSyncExternalStore(store.subscribe, store.getSnapshot)
+  return selector(groups)
 }
 
 export function useActivityReady() {

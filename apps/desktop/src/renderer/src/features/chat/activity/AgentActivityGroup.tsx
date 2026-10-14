@@ -1,12 +1,12 @@
 import { memo, useMemo, useState } from 'react'
 import { useAui, useAuiState, type ThreadMessage } from '@assistant-ui/react'
-import { CheckIcon, CircleAlertIcon } from 'lucide-react'
+import { CircleAlertIcon } from 'lucide-react'
 import type { AgentActivity } from '@kklyeenook/shared/agent/agentActivity'
 import { ToolTimeline } from '@/renderer/src/components/assistant-ui/elements/tool-timeline'
 import { Button } from '@/renderer/src/components/ui/button'
 import { currentActivity } from '@kklyeenook/shared/agent/agentActivityTiming'
 import { formatActivityLabel } from '@kklyeenook/shared/agent/agentActivityFormatter'
-import { summarizeAgentActivities } from '@kklyeenook/shared/agent/agentActivitySummary'
+import { summarizeAgentActivityGroups } from '@kklyeenook/shared/agent/agentActivitySummary'
 import { ShimmerLabel } from '@/renderer/src/lib/surfaces'
 import {
   ActivityCrossfade,
@@ -204,7 +204,7 @@ function ActivityHeader({
   current?: AgentActivity
 }) {
   const summary = useActivitySelector((groups) =>
-    summarizeAgentActivities(findSegment(groups, scope)?.activities.filter(hasContent) ?? []),
+    summarizeAgentActivityGroups(findSegment(groups, scope)?.activities.filter(hasContent) ?? []),
   )
   const running = useActivitySelector((groups) => isRunning(groups, scope))
   const failed = useActivitySelector((groups) => {
@@ -217,7 +217,7 @@ function ActivityHeader({
     : !current
       ? undefined
       : completed
-        ? summary
+        ? (summary.map((entry) => entry.label).slice(0, 2).join(' · ') || '本轮活动已完成')
         : formatActivityLabel(current)
   const transitionKey = !current
     ? 'waiting'
@@ -236,7 +236,7 @@ function ActivityHeader({
       ) : failed ? (
         <CircleAlertIcon aria-hidden="true" className="size-3.5 shrink-0" />
       ) : completed ? (
-        <CheckIcon aria-hidden="true" className="size-3.5 shrink-0" />
+        <ActivityIcon type={summary[0]?.type ?? current.type} status="completed" />
       ) : (
         <ActivityIcon type={current.type} status={current.status} />
       )}

@@ -130,7 +130,7 @@ export const ThreadListItem: FC = () => {
   return (
     <ThreadListItemPrimitive.Root
       data-slot="aui_thread-list-item"
-      className={cn(threadListRowClassName, 'h-7')}
+      className={cn(threadListRowClassName, 'mb-1 h-8')}
     >
       {isRenaming ? (
         <ThreadListItemRename
@@ -153,7 +153,7 @@ export const ThreadListItem: FC = () => {
             )
           }}
         >
-          <ThreadListRowContent title={<ThreadListItemPrimitive.Title fallback="新对话" />} running={isRunning} waiting={isWaiting} updatedAt={updatedAt} />
+          <ThreadListRowContent title={<ThreadListItemPrimitive.Title fallback="新对话" />} running={isRunning || isWaiting} updatedAt={updatedAt} />
         </ThreadListItemPrimitive.Trigger>
       )}
       <ThreadListItemMore onRename={() => setIsRenaming(true)} />

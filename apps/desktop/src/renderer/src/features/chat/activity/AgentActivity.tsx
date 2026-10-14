@@ -163,7 +163,7 @@ export const AgentActivityRow = memo(function AgentActivityRow({
         <ChevronRightIcon
           aria-hidden="true"
           strokeWidth={1.5}
-          className="size-3.5 shrink-0 text-faint-foreground transition-transform group-data-open/trigger:rotate-90 group-data-panel-open/trigger:rotate-90 motion-reduce:transition-none"
+          className="size-3.5 shrink-0 text-faint-foreground transition-transform group-data-panel-open/trigger:rotate-90 motion-reduce:transition-none"
         />
       </CollapsibleTrigger>
       <CollapsibleContent
