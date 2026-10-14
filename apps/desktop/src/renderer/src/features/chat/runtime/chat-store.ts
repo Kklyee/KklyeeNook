@@ -566,8 +566,14 @@ export class ChatStore {
       })
       if (this.pendingCreation === creation) this.pendingCreation = undefined
       this.threads = [created, ...this.threads.filter((thread) => thread.id !== created.id)]
-      if (!this.disposed && selectionVersion === this.botSelectionVersion)
-        await this.switchToThread(created.id)
+      if (!this.disposed && selectionVersion === this.botSelectionVersion) {
+        this.selectedThreadId = created.id
+        this.draft = undefined
+        this.metadata = created
+        this.loading = false
+        this.emit()
+        this.connect(created.id)
+      }
       notifyWorkspaceChanged()
       return created.id
     } catch (error) {

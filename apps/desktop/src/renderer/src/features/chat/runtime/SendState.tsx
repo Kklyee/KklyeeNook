@@ -6,5 +6,5 @@ export const SendStateContext = createContext<{ creating: boolean; threads: Read
 export function usePendingSend() {
   const state = useContext(SendStateContext)
   const id = useAuiState(s => s.threadListItem.remoteId)
-  return id ? state.threads.has(id) : state.creating
+  return state.creating || (id ? state.threads.has(id) : false)
 }

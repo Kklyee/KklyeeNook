@@ -68,11 +68,12 @@ function SessionActivityProvider({
   sessionId?: string
   children: ReactNode
 }) {
+  const chat = useChatStore()
   const [store] = useState(() => {
     const cached = sessionId ? activityCache.get(sessionId) : undefined
-    return createActivityStore(cached, !sessionId || cached !== undefined)
+    const current = chat.getSnapshot().current
+    return createActivityStore(cached, !sessionId || cached !== undefined || (!current.loading && !current.messages.length))
   })
-  const chat = useChatStore()
   const { refreshFile } = usePreview()
   const refreshPreviewFile = useEffectEvent(refreshFile)
 

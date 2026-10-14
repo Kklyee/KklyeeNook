@@ -89,6 +89,7 @@ import {
   type FC,
   type ReactNode,
   useMemo,
+  useState,
   memo,
 } from 'react'
 
@@ -164,7 +165,13 @@ export const Thread: FC<ThreadProps> = ({
   composerAccessory,
   composerPlaceholder,
 }) => {
-  const isEmpty = useAuiState((state) => !readOnly && isNewChatView(state))
+  const pending = usePendingSend()
+  const threadId = useAuiState((state) => state.threads.mainThreadId)
+  const [submission, setSubmission] = useState({ threadId, started: pending })
+  const started = pending || (submission.threadId === threadId && submission.started)
+  if (submission.threadId !== threadId || submission.started !== started)
+    setSubmission({ threadId, started })
+  const isEmpty = useAuiState((state) => !readOnly && isNewChatView(state)) && !started
   const contextValue = useMemo(() => ({ ...components, readOnly, composerPlaceholder }), [components, readOnly, composerPlaceholder])
   const Root = readOnly ? ThreadRoot : ThreadWithCommands
 
@@ -234,9 +241,7 @@ const ThreadRoot: FC<{
             isEmpty ? 'justify-center py-4' : 'pt-4',
           )}
         >
-          <AuiIf condition={(state) => !readOnly && isNewChatView(state)}>
-            <Welcome />
-          </AuiIf>
+          {isEmpty && <Welcome />}
           <AuiIf condition={() => historyLoading || !activitiesReady}>
             <ThreadHistorySkeleton />
           </AuiIf>

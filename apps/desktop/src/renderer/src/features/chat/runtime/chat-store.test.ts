@@ -585,3 +585,29 @@ test('a background read cannot undo a successful queue mutation before its strea
   expect(store.getSnapshot().extras.queueItems).toEqual([])
   expect(store.getSnapshot().current.loading).toBe(false)
 })
+
+
+test('first send promotes the draft without loading history or hiding the composer', async () => {
+  let historyRequests = 0
+  const store = setup(async (url, init) => {
+    if (url.endsWith('/threads') && init?.method === 'POST')
+      return response(metadata(JSON.parse(String(init.body)).threadId))
+    if (url.endsWith('/threads')) return response([])
+    if (url.endsWith('/submissions')) return response({ accepted: true })
+    historyRequests++
+    return response(snapshot(url.split('/').at(-1)!))
+  })
+  await vi.waitFor(() => expect(store.getSnapshot().threadList.isLoading).toBe(false))
+  const id = await store.createThread()
+  const states: { loading: boolean; creating: boolean; selected?: string }[] = []
+  const unsubscribe = store.subscribe(() => {
+    const state = store.getSnapshot()
+    states.push({ loading: state.current.loading, creating: state.sending.creating, selected: state.selectedThreadId })
+  })
+  await store.submit(message('First message'))
+  unsubscribe()
+  expect(historyRequests).toBe(0)
+  expect(states.every(state => !state.loading)).toBe(true)
+  expect(states.some(state => state.selected === id && state.creating)).toBe(true)
+  expect(Source.instances.at(-1)?.url).toContain(`/threads/${id}/events`)
+})
