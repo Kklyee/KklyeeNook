@@ -611,3 +611,59 @@ test('first send promotes the draft without loading history or hiding the compos
   expect(states.some(state => state.selected === id && state.creating)).toBe(true)
   expect(Source.instances.at(-1)?.url).toContain(`/threads/${id}/events`)
 })
+
+test('a new conversation shows the submitted message before the backend acknowledges it', async () => {
+  let releaseCreation!: () => void
+  let releaseSubmission!: () => void
+  const store = setup(async (url, init) => {
+    if (url.endsWith('/threads') && init?.method === 'POST')
+      return new Promise<Response>((resolve) => {
+        releaseCreation = () => resolve(response(metadata(JSON.parse(String(init.body)).threadId)))
+      })
+    if (url.endsWith('/threads')) return response([])
+    if (url.endsWith('/submissions'))
+      return new Promise<Response>((resolve) => {
+        releaseSubmission = () => resolve(response({ accepted: true }))
+      })
+    return response(snapshot(url.split('/').at(-1)!))
+  })
+  await vi.waitFor(() => expect(store.getSnapshot().threadList.isLoading).toBe(false))
+  const id = await store.createThread()
+  const submission = store.submit(message('First message'))
+  expect(store.getSnapshot().current.messages).toContainEqual(
+    expect.objectContaining({ role: 'user', content: [{ type: 'text', text: 'First message' }] }),
+  )
+  releaseCreation()
+  await vi.waitFor(() => expect(store.getSnapshot().selectedThreadId).toBe(id))
+  expect(store.getSnapshot().current.messages).toContainEqual(
+    expect.objectContaining({ role: 'user', content: [{ type: 'text', text: 'First message' }] }),
+  )
+  releaseSubmission()
+  await submission
+})
+
+test('the optimistic message yields to the stored message once the stream catches up', async () => {
+  const store = setup(async (url) => {
+    if (url.endsWith('/submissions')) return response({ accepted: true })
+    if (url.endsWith('/threads')) return response([metadata('a')])
+    return response(snapshot('a'))
+  })
+  await store.switchToThread('a')
+  await store.submit(message('Hello'))
+  expect(store.getSnapshot().current.messages).toContainEqual(
+    expect.objectContaining({ id: expect.stringContaining('pending-input'), role: 'user' }),
+  )
+  const stored = emptySnapshot()
+  stored.entries = [
+    {
+      id: 1 as never,
+      conversationId: 1 as never,
+      kind: 'pi.user',
+      data: {},
+      model: [{ role: 'user', content: 'Hello', timestamp: 1 }],
+    } as never,
+  ]
+  Source.instances.at(-1)!.send({ type: 'reset', threadId: 'a', epoch: 'live', sequence: 0, events: [stored], approvals: [], queue: [] })
+  expect(store.getSnapshot().current.messages).toHaveLength(1)
+  expect(store.getSnapshot().current.messages[0].id).toBe('durable-msg:1:1:user')
+})

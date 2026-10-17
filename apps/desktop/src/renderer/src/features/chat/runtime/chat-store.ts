@@ -1,6 +1,8 @@
 import type {
   AppendMessage,
   ExternalStoreThreadListAdapter,
+  ImageMessagePart,
+  TextMessagePart,
   ThreadMessageLike,
 } from '@assistant-ui/react'
 import type { ExternalThreadQueueAdapter } from '@assistant-ui/react'
@@ -156,6 +158,9 @@ export class ChatStore {
   private pendingAdmission:
     | { threadId: string; fingerprint: string; input: AgentSubmissionInput }
     | undefined
+  private optimisticInput:
+    | { threadId: string; users: number; message: ThreadMessageLike }
+    | undefined
   private pendingCreation: { fingerprint: string; id: string } | undefined
 
   constructor(baseUrl: string, getCreateOptions: () => CreateOptions, autoStart = true) {
@@ -196,7 +201,7 @@ export class ChatStore {
             this.projection.approvals.some((approval) => approval.state === 'pending'),
           )
         : 'idle',
-      messages: this.projected.messages,
+      messages: this.messages(),
       projected: this.projected,
       approvals: this.projection.approvals,
       loading: this.loading,
@@ -592,7 +597,44 @@ export class ChatStore {
     }
   }
 
+  private viewThreadId() {
+    return this.selectedThreadId ?? this.draft?.threadId
+  }
+
+  private messages(): readonly ThreadMessageLike[] {
+    const optimistic = this.optimisticInput
+    return optimistic && optimistic.threadId === this.viewThreadId()
+      ? [...this.projected.messages, optimistic.message]
+      : this.projected.messages
+  }
+
+  private showOptimisticInput(message: AppendMessage) {
+    const threadId = this.viewThreadId()
+    if (!threadId || this.projected.isRunning) return undefined
+    const optimistic = {
+      threadId,
+      users: userMessageCount(this.projected.messages),
+      message: optimisticUserMessage(message, `pending-input:${crypto.randomUUID()}`),
+    }
+    this.optimisticInput = optimistic
+    this.emit()
+    return optimistic
+  }
+
   async submit(message: AppendMessage, whenBusy: 'steer' | 'followUp' | 'reject' = 'followUp') {
+    const optimistic = this.showOptimisticInput(message)
+    try {
+      await this.admit(message, whenBusy)
+    } catch (error) {
+      if (this.optimisticInput === optimistic) {
+        this.optimisticInput = undefined
+        this.emit()
+      }
+      throw error
+    }
+  }
+
+  private async admit(message: AppendMessage, whenBusy: 'steer' | 'followUp' | 'reject') {
     if (this.draft) await this.persistThread(this.draft)
     else if (!this.selectedThreadId && this.selectedBotId) await this.selectBot(this.selectedBotId)
     const threadId = this.selectedThreadId ?? (await this.persistThread())
@@ -1001,6 +1043,13 @@ export class ChatStore {
   }
 
   private emit() {
+    const optimistic = this.optimisticInput
+    if (
+      optimistic &&
+      (optimistic.threadId !== this.viewThreadId() ||
+        userMessageCount(this.projected.messages) > optimistic.users)
+    )
+      this.optimisticInput = undefined
     if (!this.disposed && this.selectedThreadId && !this.loading && this.metadata && this.projection.snapshot) {
       this.threadCache.delete(this.selectedThreadId)
       this.threadCache.set(this.selectedThreadId, { projection: this.projection, projected: this.projected, metadata: this.metadata, history: this.history })
@@ -1019,6 +1068,38 @@ function toThreadData(thread: AgentThreadSummary) {
     status: 'regular' as const,
     custom: { workspaceId: thread.workspaceId },
   }
+}
+
+function optimisticUserMessage(message: AppendMessage, id: string): ThreadMessageLike {
+  const mentions: BotMention[] = []
+  const content: (TextMessagePart | ImageMessagePart)[] = []
+  let offset = 0
+  for (const part of [
+    ...message.content,
+    ...(message.attachments?.flatMap((attachment) => attachment.content) ?? []),
+  ]) {
+    if (part.type === 'text') {
+      const decoded = decodeBotMentions(part.text)
+      mentions.push(...decoded.mentions.map((mention) => ({ ...mention, start: mention.start + offset, end: mention.end + offset })))
+      offset += decoded.text.length + 1
+      content.push({ type: 'text', text: decoded.text })
+    } else if (part.type === 'image' && typeof part.image === 'string')
+      content.push({ type: 'image', image: part.image })
+  }
+  return {
+    id,
+    role: 'user',
+    createdAt: message.createdAt,
+    content,
+    metadata: {
+      isOptimistic: true,
+      custom: mentions.length ? { botMentions: { mentions } } : {},
+    },
+  }
+}
+
+function userMessageCount(messages: readonly ThreadMessageLike[]): number {
+  return messages.filter((message) => message.role === 'user').length
 }
 
 function agentContent(message: AppendMessage): AgentSubmissionInput['content'] {
