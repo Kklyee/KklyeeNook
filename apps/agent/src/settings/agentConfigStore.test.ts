@@ -26,21 +26,21 @@ test('desktop reads persisted HTTP MCP changes without losing current settings',
   expect(new AgentConfigStore(undefined, path).get().mcpServers).toHaveLength(1)
 })
 
-test('defaults web search to disabled and persists a selected provider', () => {
+test.each(['tavily', 'exa', 'deepseek'] as const)('defaults web search to disabled and persists %s', (provider) => {
   expect(new AgentConfigStore().get().webSearch).toEqual({ provider: 'disabled' })
 
-  const path = join(directory, 'web-search.json')
+  const path = join(directory, `web-search-${provider}.json`)
   const store = new AgentConfigStore(
     {
       model: { provider: 'test', modelID: 'first', thinkingLevel: 'off' },
       tools: { enabled: [] },
-      webSearch: { provider: 'exa' },
+      webSearch: { provider },
     },
     path,
   )
   store.set(store.get())
-  expect(store.get().webSearch).toEqual({ provider: 'exa' })
-  expect(new AgentConfigStore(undefined, path).get().webSearch).toEqual({ provider: 'exa' })
+  expect(store.get().webSearch).toEqual({ provider })
+  expect(new AgentConfigStore(undefined, path).get().webSearch).toEqual({ provider })
 })
 
 test('falls back to disabled when a persisted config carries an unknown web search provider', () => {

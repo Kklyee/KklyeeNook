@@ -75,6 +75,16 @@ test('routes the search to the configured provider and clamps maxResults', async
   credentials.setApiKey('web-search:exa', 'exa-key')
   await service.search({ query: 'third' })
   expect(String(fetchImpl.mock.calls[2]![0])).toBe('https://api.exa.ai/search')
+
+  settings.provider = 'deepseek'
+  credentials.setApiKey('web-search:deepseek', 'deepseek-key')
+  expect(service.isAvailable()).toBe(true)
+  await service.search({ query: '😀'.repeat(129) })
+  expect(String(fetchImpl.mock.calls[3]![0])).toBe('https://api.deepseek.com/v1/tools/search')
+  const deepseekRequest = JSON.parse(String(fetchImpl.mock.calls[3]![1]!.body))
+  expect(Array.from(deepseekRequest.query)).toHaveLength(128)
+  expect(deepseekRequest.query).toBe(`${'😀'.repeat(127)}…`)
+  expect(fetchImpl.mock.calls[3]![1]!.headers).toMatchObject({ Authorization: 'Bearer deepseek-key' })
 })
 
 test('aborts the provider request when the agent run is aborted', async () => {

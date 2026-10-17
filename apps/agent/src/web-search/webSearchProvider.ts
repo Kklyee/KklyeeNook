@@ -4,6 +4,7 @@ import type {
   WebSearchResult,
 } from '@kklyeenook/shared/web-search/webSearch'
 import { ExaWebSearchProvider } from './providers/exaWebSearchProvider'
+import { DeepSeekWebSearchProvider } from './providers/deepseekWebSearchProvider'
 import { TavilyWebSearchProvider } from './providers/tavilyWebSearchProvider'
 import { WebSearchError, webSearchErrorFromStatus } from './webSearchErrors'
 
@@ -20,6 +21,7 @@ export function createWebSearchProvider(
   apiKey: string,
   fetchImpl: typeof fetch = fetch,
 ): WebSearchProvider {
+  if (provider === 'deepseek') return new DeepSeekWebSearchProvider(apiKey, fetchImpl)
   return provider === 'exa'
     ? new ExaWebSearchProvider(apiKey, fetchImpl)
     : new TavilyWebSearchProvider(apiKey, fetchImpl)

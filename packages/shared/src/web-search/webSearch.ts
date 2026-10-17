@@ -1,8 +1,8 @@
-export type WebSearchProviderId = 'disabled' | 'tavily' | 'exa'
+export type WebSearchProviderId = 'disabled' | 'tavily' | 'exa' | 'deepseek'
 
 export type WebSearchProviderName = Exclude<WebSearchProviderId, 'disabled'>
 
-export const WEB_SEARCH_PROVIDER_NAMES: readonly WebSearchProviderName[] = ['tavily', 'exa']
+export const WEB_SEARCH_PROVIDER_NAMES: readonly WebSearchProviderName[] = ['tavily', 'exa', 'deepseek']
 
 export type WebSearchErrorCode =
   | 'web_search_not_configured'
@@ -48,6 +48,7 @@ export const DEFAULT_WEB_SEARCH_SETTINGS: WebSearchSettings = { provider: 'disab
 export const WEB_SEARCH_PROVIDER_LABELS: Record<WebSearchProviderName, string> = {
   tavily: 'Tavily',
   exa: 'Exa',
+  deepseek: 'DeepSeek',
 }
 
 export const WEB_SEARCH_ERROR_LABELS: Record<WebSearchErrorCode, string> = {

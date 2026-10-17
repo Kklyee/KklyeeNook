@@ -74,7 +74,7 @@ export const settingsNavigation: SettingsNavigationItem[] = [
     label: 'Agent 设置',
     description: '配置上下文、网络搜索和操作权限。',
     keywords:
-      'context compaction web search permission tavily exa api key 上下文 自动压缩 高级参数 网络搜索 权限 安全 临时授权',
+      'context compaction web search permission tavily exa deepseek api key 上下文 自动压缩 高级参数 网络搜索 权限 安全 临时授权',
     icon: SlidersHorizontalIcon,
     layout: 'preferences',
   },

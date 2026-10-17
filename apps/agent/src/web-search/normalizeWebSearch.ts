@@ -19,8 +19,14 @@ export function truncateText(value: string, limit: number): string {
   return value.length <= limit ? value : `${value.slice(0, limit - 1).trimEnd()}…`
 }
 
-export function normalizeWebSearchRequest(request: WebSearchRequest): WebSearchRequest {
-  const query = truncateText(stripUntrustedText(request.query ?? ''), MAX_WEB_SEARCH_QUERY_CHARS)
+export function normalizeWebSearchRequest(
+  request: WebSearchRequest,
+  maxQueryChars = MAX_WEB_SEARCH_QUERY_CHARS,
+): WebSearchRequest {
+  const characters = Array.from(stripUntrustedText(request.query ?? ''))
+  const query = characters.length <= maxQueryChars
+    ? characters.join('')
+    : `${characters.slice(0, maxQueryChars - 1).join('').trimEnd()}…`
   const requested = request.maxResults
   const requestedResults =
     typeof requested === 'number' && Number.isFinite(requested)

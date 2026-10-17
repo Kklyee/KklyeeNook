@@ -121,6 +121,7 @@ test('reports web search configuration without returning stored keys', async () 
     providers: [
       { id: 'tavily', name: 'Tavily', hasApiKey: true },
       { id: 'exa', name: 'Exa', hasApiKey: false },
+      { id: 'deepseek', name: 'DeepSeek', hasApiKey: false },
     ],
   })
   expect(JSON.stringify(snapshot)).not.toContain('tvly-secret-value')
@@ -143,6 +144,14 @@ test('switching the web search provider keeps every namespaced credential', asyn
   expect(credentials.getApiKey('web-search:tavily')).toBe('tvly-secret-value')
   expect(credentials.getApiKey('web-search:exa')).toBe('exa-secret-value')
 
+  const deepseekSnapshot = await update(event, {
+    webSearch: { provider: 'deepseek' },
+    webSearchCredential: { provider: 'deepseek', apiKey: 'deepseek-secret-value' },
+  })
+  expect(store.get().webSearch).toEqual({ provider: 'deepseek' })
+  expect(credentials.getApiKey('web-search:deepseek')).toBe('deepseek-secret-value')
+  expect(JSON.stringify(deepseekSnapshot)).not.toContain('deepseek-secret-value')
+
   const snapshot = await update(event, {
     webSearchCredential: { provider: 'tavily', deleteApiKey: true },
   })
@@ -151,8 +160,9 @@ test('switching the web search provider keeps every namespaced credential', asyn
   expect(snapshot.webSearch.providers).toEqual([
     { id: 'tavily', name: 'Tavily', hasApiKey: false },
     { id: 'exa', name: 'Exa', hasApiKey: true },
+    { id: 'deepseek', name: 'DeepSeek', hasApiKey: true },
   ])
-  expect(hooks.commit).toHaveBeenCalledTimes(3)
+  expect(hooks.commit).toHaveBeenCalledTimes(4)
 })
 
 test('rejects unknown web search providers and empty keys', async () => {

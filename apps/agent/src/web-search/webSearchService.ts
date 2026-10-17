@@ -1,5 +1,6 @@
 import {
   WEB_SEARCH_TIMEOUT_MS,
+  MAX_WEB_SEARCH_QUERY_CHARS,
   webSearchCredentialId,
   type WebSearchProviderName,
   type WebSearchRequest,
@@ -38,7 +39,10 @@ export class WebSearchService {
 
   async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult> {
     const provider = this.requireProvider()
-    const normalized = normalizeWebSearchRequest(request)
+    const normalized = normalizeWebSearchRequest(
+      request,
+      provider === 'deepseek' ? 128 : MAX_WEB_SEARCH_QUERY_CHARS,
+    )
     if (!normalized.query) throw new WebSearchError('web_search_failed')
     const adapter = createWebSearchProvider(provider, this.requireApiKey(provider), this.fetchImpl)
     return this.withDeadline(signal, (deadline) => adapter.search(normalized, deadline))

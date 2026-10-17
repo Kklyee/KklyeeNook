@@ -10,7 +10,7 @@ const webSearchSchema = Type.Object(
     query: Type.String({
       minLength: 1,
       maxLength: 1000,
-      description: 'Search query, for example a question, an error message or an exact identifier',
+      description: 'Search query, for example a question, an error message or an exact identifier. Keep queries concise; DeepSeek supports up to 128 Unicode characters.',
     }),
     maxResults: Type.Optional(Type.Integer({ minimum: 1, maximum: MAX_WEB_SEARCH_RESULTS })),
   },

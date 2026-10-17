@@ -10,6 +10,7 @@ const providerLabels: Record<WebSearchProviderId, string> = {
   disabled: '已禁用',
   tavily: 'Tavily',
   exa: 'Exa',
+  deepseek: 'DeepSeek',
 }
 
 export function WebSearchSettings({
